@@ -50,6 +50,17 @@ session-scoped environment variables that vanish with the shell.
    loopback-only, non-privileged port, killed after each testing session.
    No firewall changes, no service, no startup entry.
 
+6. **User-level Hermes context hardening** —
+   `C:\Users\joelf\AppData\Local\hermes\config.yaml` was minimally updated
+   on 2026-08-30 using Hermes' own supported configuration command. The
+   existing `custom:ninfer` provider, `qwen-local` model, NInfer endpoint,
+   authentication reference, and 65,536-token context were preserved. The
+   changes only bound model output, context compression, file reads, and tool
+   output for safer local-Qwen sessions. No secret was copied into this repo.
+   - Backup: `C:\Users\joelf\AppData\Local\hermes\config.yaml.backup-20260830-183818`
+   - Revert: close Hermes, replace `config.yaml` with that backup, and reopen
+     Hermes. See `CLEANUP.md`.
+
 ## Explicitly NOT done
 
 - No Administrator/UAC elevation, ever.

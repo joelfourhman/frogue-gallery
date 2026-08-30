@@ -42,6 +42,18 @@ This removes in one motion:
   uv was needed)
 - `.git/` (the local-only repository)
 
+## 4. Optional: restore the pre-hardening Hermes configuration
+
+This recovery task adjusted only supported user-level context/output limits.
+To undo those settings, close Hermes Desktop and run with the existing Python:
+
+```text
+python -c "import shutil; shutil.copy2(r'C:\Users\joelf\AppData\Local\hermes\config.yaml.backup-20260830-183818', r'C:\Users\joelf\AppData\Local\hermes\config.yaml')"
+```
+
+Then reopen Hermes Desktop. This restores the complete pre-hardening config;
+do not hand-edit or print the configuration because it may reference secrets.
+
 ## What this does NOT remove (and why nothing else exists)
 
 - **No** uv was installed by this mission — it was pre-existing at
