@@ -55,9 +55,13 @@ session-scoped environment variables that vanish with the shell.
    on 2026-08-30 using Hermes' own supported configuration command. The
    existing `custom:ninfer` provider, `qwen-local` model, NInfer endpoint,
    authentication reference, and 65,536-token context were preserved. The
-   changes only bound model output, context compression, file reads, and tool
-   output for safer local-Qwen sessions. No secret was copied into this repo.
-   - Backup: `C:\Users\joelf\AppData\Local\hermes\config.yaml.backup-20260830-183818`
+   changes bound model output, context compression, file reads, and tool
+   output for safer local-Qwen sessions. After a fixed-prompt audit, the CLI
+   toolset was narrowed to `terminal`, `file`, `browser`, and `todo`; these
+   retain local coding, process, browser-test, and task-state capabilities
+   while removing unrelated schemas that consumed Qwen's context before work
+   began. No secret was copied into this repo.
+   - Latest pre-toolset backup: `C:\Users\joelf\AppData\Local\hermes\config.yaml.backup-20260830-185157`
    - Revert: close Hermes, replace `config.yaml` with that backup, and reopen
      Hermes. See `CLEANUP.md`.
 

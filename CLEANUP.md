@@ -44,11 +44,12 @@ This removes in one motion:
 
 ## 4. Optional: restore the pre-hardening Hermes configuration
 
-This recovery task adjusted only supported user-level context/output limits.
+This recovery task adjusted only supported user-level context/output limits
+and selected a lean local-coding toolset.
 To undo those settings, close Hermes Desktop and run with the existing Python:
 
 ```text
-python -c "import shutil; shutil.copy2(r'C:\Users\joelf\AppData\Local\hermes\config.yaml.backup-20260830-183818', r'C:\Users\joelf\AppData\Local\hermes\config.yaml')"
+python -c "import shutil; shutil.copy2(r'C:\Users\joelf\AppData\Local\hermes\config.yaml.backup-20260830-185157', r'C:\Users\joelf\AppData\Local\hermes\config.yaml')"
 ```
 
 Then reopen Hermes Desktop. This restores the complete pre-hardening config;
