@@ -1,0 +1,15 @@
+# ---- Python (generated, project-local) ----
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# ---- Tool caches (generated, session-local) ----
+.cache/
+.tools/
+
+# ---- OS / editor noise ----
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
