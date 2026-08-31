@@ -132,7 +132,8 @@ export class Paint {
 
   _bossPaint(h, pig, amount) {
     // direct paint damage while painting the boss
-    const dmg = paintDamage(this.tuning.swipeDamage, pig, this.tuning, { enemy: h });
+    let dmg = paintDamage(this.tuning.swipeDamage, pig, this.tuning, { enemy: h });
+    if (h.awakened) dmg *= 2; // the shimmer window: double paint damage (see bossStep)
     h.hp -= dmg;
     const res = paintBoss(h, pig, amount, this.tuning);
     if (res === 'awaken') return 'awaken';

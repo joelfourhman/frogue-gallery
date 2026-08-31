@@ -1,63 +1,59 @@
 # Project State
 
-_Last verified: 2026-08-30, end of M2 checkpoint. `node tests/smoke.mjs` = ALL 7 STAGES PASSED. `node --check` clean on every module._
+_Last verified: 2026-08-30, end of M3 checkpoint. `node tests/smoke.mjs` = ALL 8 STAGES PASSED. `node --check` clean on every module._
 
 ## Current Status
 
-Frogue Gallery is a **playable vertical slice with a full between-run loop**:
+Frogue Gallery is a **balanced, playable vertical slice + between-run economy**:
 
-1. **Title screen** — "Begin Expedition" (Enter/Space/click) or "Visit the Atelier" (A/click); drifting swamp backdrop; lifetime stats footer.
-2. **Expedition** — move, paint swipes (directional fan), charged splash (hold RMB), hop (space), 4 pigments (1–4), environmental hazards, pigment orbs, wave banners, camera + zoom + shake, boss fight (3-phase Great Gray Heron), painting restores swamp saturation (core fantasy, verified).
-3. **End screen** — victory/defeat gains, bank totals; primary button **"Rest at the Atelier"** (Enter/Space/click), link "return to the pond" (Esc/click).
-4. **Atelier (NEW in M2)** — between-run sanctuary over the living swamp:
-   - Bank strip (red/blue/green counts + 2-slot loadout preview with generative painting motifs).
-   - Tab 1 "Studio Upgrades": 3 upgrades (Pigment Satchel / Brush Craft / Swamp Vitality), 3 levels each, cost chips, level pips, **predicted stat delta** per purchase, Learn button.
-   - Tab 2 "Paintings": 7 unlocked + 1 sealed (Sir Croaksworth), 2-column cards with generative art, costs, Learn/Hang/Unhang logic, max 2 hung (loadout).
-   - Input: mouse hitboxes (single `_atelierGeom()` + `_atelierRows()` source of truth shared by draw AND click handling), keys 1/2 tabs, A/S/D quick-buy, Enter depart, Esc leave.
-   - All purchases/hang actions persist via `SaveSys.save`.
-5. **Defeat path** — half bank kept, back through end screen.
+- Boot → title → expedition → combat → charged splash → heron boss → victory end screen → **Atelier** → title → defeat run → save persistence. All driven by `tests/smoke.mjs` (real `Game` class, headless Node, no browser needed).
+- The **Atelier** (M2) is the between-run hub: spend bank pigments on 3 upgrades (capacity/power/vitality, 3 levels each) and 8 paintings, choose a 2-slot loadout, watch the living swamp drift behind the UI. Reached from the title ("Visit the Atelier", A key) and from every end screen ("Rest at the Atelier", Enter/Space).
 
-### Key architecture notes
+## M3 Balance Pass (this session)
 
-- **`game.js` is the single load-bearing orchestrator.** ~1460 lines: state machine (`title` / `expedition` / `end` / `atelier`), `_frame` loop, boss logic, full render pass, HUD, input routing.
-- **Atelier geometry contract:** `_atelierGeom()` returns all rects (tabs, rows, cards, depart/leave buttons); `_atelierRows()` returns the clickable map **including `tag` fields** (e.g. `buy:power`, `paint:spring-garden`, `depart`) — smoke test drives real hitboxes through them.
-- **Cost shapes:** `UPGRADES[id].levels[n].cost` and `PAINTINGS[i].cost` are **objects** `{red,blue,green}`; `canAfford`/`payCost` want **arrays** via `costArray()`. The atelier normalizes with `Array.isArray(x) ? x : costArray(x)` at every call site.
-- **`makeTuning(upgrades, loadout)`** is the stat pipeline: upgrades add maxHp/power/capacity; loadout paintings modify tuning (freeze duration, burn dps, heal, splash radius, etc.). The atelier shows the delta by diffing `makeTuning` before/after.
-- **View contract:** `_view()` = `{x, y (world top-left), scale, w, h}`; screen→world is `mouse.x / v.scale + v.x`.
-- **`costArray`** yields `{color, amount}` objects (NOT tuples).
-- **`paperPanel`** saves/returns a clipped ctx; **`paperEnd`** restores. Draw text inside via `_leftText` (left-anchored helper) or `centerText`.
-- Node v22 for syntax checks + headless runtime test; `python -m http.server 8765 --bind 127.0.0.1` for browser checks; `browser_exec` is dead (Chrome popup never surfaced) — verification channels: `node tests/smoke.mjs` + `desktop_preview` visual.
+Applied tuning changes, each verified by smoke test:
 
-## Test Status
+| knob | before | after | why |
+|---|---|---|---|
+| player `maxHp` | 5 | 7 | frog was a one-hit kill vs several enemies; cozy game needs 2+ hits of contact |
+| beetle `dmg` | 9 | 8 | contact should survive ~2 hits now |
+| toad `dmg` | 13 | 9 | was a near-instant kill |
+| green-paint heal rate | `greenHeal*0.5`/s | `greenHeal`/s | "paint yourself into a heal" loop now actually meaningful |
+| heron contact `dmg` | 12/10/13/8 | 9/8/9/6 | scaled with the new HP pool |
+| heron slam/landing | 14/12 | 11/9 | kept harder than contact (telegraphed big hits) but survivable |
+| **awakened 2x damage** | *(documented, never implemented)* | **now real** in `_bossPaint` | the shimmer window was doing normal damage; the boss design hinged on 2x |
+| heron `bossMaxHp` | 520 | 1600 | with 2x real, 520 died in one window; 1600 → ~2 awaken cycles, the cozy range |
 
-`tests/smoke.mjs` — 7 stages, all passing:
-1. boot + title
-2. begin expedition (world build: ripples + pads)
-3. combat (swipe damage, directional fan, color restore)
-4. charged splash (charge, fire, consume)
-5. heron boss → victory (flight, stats, end screen)
-6. **end screen → atelier** (30 clean frames, upgrade purchase via real hitbox + bank debit + localStorage persist, tab switch, painting buy/hang/unhang, Esc to title)
-7. defeat run + save persistence
+**Boss pacing model** (asserted in smoke test): 8 swipes/hue @ 0.2s → ~4.8s fill + 6s window, ~756 dmg/cycle → 1600 hp ≈ **2.1 cycles ≈ ~25s of pure painting**, more with dodging. Smoke test logs this math each run and asserts cycles stay in [1.5, 4].
 
-## Immediate next work (M3, in priority order)
+## Verified This Session
 
-1. **Balance pass**: full simulated playthrough timing — is the first boss reachable in ~4–6 min? Enemy spawn rate, orb values, boss awaken pacing. Adjust `logic.js` tuning.
-2. **Croaksworth story beat**: `flags.croaksworthAsked/Given` exist — the sealed painting unlocks after first victory (ask → give). Wire into atelier/title.
-3. **Options**: `freshOptions`/`migrateOptions` + `SaveSys.loadOptions/saveOptions` exist; add mute/volume + key hints to title or pause.
-4. **Best-run tracking** (`save.bestRun` reserved): record {pigments, time, cleared} on victory; show on title.
-5. **Polish**: pause menu with options; audio unlock on first gesture; banner polish; low-HP vignette.
-6. Optional content only after the above: more enemy types, world variance, more paintings.
+- `node tests/smoke.mjs` — **ALL 8 STAGES PASSED** (boot, expedition, combat, splash, boss victory, 2x awakened damage + pacing assert, atelier loop, defeat/save).
+- `node --check` on all 12 modules + smoke test — clean.
+- HTTP 200 on `http://127.0.0.1:8765/index.html`.## Architecture Notes (for a fresh session)
 
-## Recovery Notes (for a fresh session)
+- **`game.js` is the orchestrator.** All 12 subsystems + `index.html` are complete. It wires the rAF loop, state machine (`title` / `expedition` / `atelier` / `end`), HUD, camera, boss, and the between-run economy.
+- **Camera/view contract:** `view = {x, y (world top-left), scale, w, h}`. `input.setView` + `input.update()` convert mouse screen-px → world via `mouse.x / v.scale + v.x`.
+- **`_screenSpace()`** resets the canvas transform to identity before HUD/screen draws.
+- **Atelier:** `_beginAtelier` / `_updateAtelier` / `_drawAtelier` / `_atelierRows` (the click map, each row has a `tag` for the smoke test) / `_drawPaintingMotif` (little canvas thumbnails). All draw AND click geometry derives from `_atelierGeom()` — one source of truth.
+- **Data layer (`logic.js`):** `UPGRADES` (3×3 levels), `PAINTINGS` (8, one `locked`), `canAfford`/`payCost` take `{color,amount}[]` via `costArray` (returns objects, NOT tuples). `makeTuning(upgrades, loadout)` applies both.
+- **`freshSave.flags`** already has `croaksworthAsked` / `croaksworthGiven` / `intro` / `heronDefeated` — story beats scaffolded, not yet triggered.
+- **Economy:** painting never consumes stock; the swipe cooldown is the only rate-limit. `stock`/`capacity` pips are cosmetic (Satchel upgrade effectively cosmetic too — known limitation).
 
-```bash
-cd /c/Users/joelf/projects/hermes_ninfer_stack/workspace/frogue-gallery
-node tests/smoke.mjs          # full loop test (should print ALL SMOKE TESTS PASSED)
-for f in src/*.js; do node --check "$f"; done
-python -m http.server 8765 --bind 127.0.0.1   # then open http://127.0.0.1:8765/index.html
+## Next Milestone
+
+- **M4:** trigger the Croaksworth story beats (first heron-defeat → `croaksworthAsked`, offer the `croaksworth` painting → `croaksworthGiven` + unlock), record `bestRun` in `_endRun`, and add a mute toggle (audio already has `setMuted`).
+- **M5:** polish — low-HP vignette, first-time intro banner, audio unlock on first input.
+- **M6:** final Definition-of-Done sweep + concise final report.
+
+## How to Launch
+
 ```
+python -m http.server 8765 --bind 127.0.0.1   # (still running in this session)
+# open http://127.0.0.1:8765/index.html
+```
+Test: `node tests/smoke.mjs`
 
-- All game code under `frogue-gallery/` — self-contained, no installs, no build step (ES modules, straight to browser).
-- Git: last commit = `feat: M2 — the Atelier` (verify with `git log --oneline -3`).
-- Do NOT touch anything outside `frogue-gallery/`. No admin/elevation, ever.
-- The mission's Definition of Done includes: playable loop, painting feel, complete gameplay loop, tested, balanced, polished, optional content last. M1 (playable slice) and M2 (atelier) are done; M3+ as above.
+## System Changes / Cleanup
+
+No changes outside `frogue-gallery/`. Nothing installed system-wide. The only running process is the local HTTP server bound to 127.0.0.1.

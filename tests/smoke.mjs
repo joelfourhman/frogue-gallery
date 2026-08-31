@@ -211,6 +211,32 @@ assert(game.save.stats.heronDefeated === true || game.save.flags.heronDefeated =
 frames(90); // end screen must render
 assert(game.state === 'end', 'end screen survived 90 frames');
 
+console.log('== stage 5b: awakened boss takes 2x paint damage ==');
+{
+  const t = game.tuning;
+  const px = game.player.x, py = game.player.y;
+  const mk = () => ({ x: px, y: py, hp: 100, maxHp: 100, hue: { red: 0, blue: 0, green: 0 }, awakened: false, awakenedT: 0, diveH: 0 });
+  const paint = new (await import('../src/paint.js')).Paint(game.player, game.world, t, () => {}, game.particles);
+  game.player.pigment = 'red';
+  const h1 = mk();
+  paint.paintBossHit(h1, 'red', t.bossPaintHit);
+  const normalDmg = 100 - h1.hp;
+  const h2 = mk();
+  h2.awakened = true; h2.awakenedT = 99;
+  paint.paintBossHit(h2, 'red', t.bossPaintHit);
+  const awakeDmg = 100 - h2.hp;
+  assert(awakeDmg === 2 * normalDmg, `awakened boss takes 2x paint damage (normal ${normalDmg}, awakened ${awakeDmg})`);
+  // awakening pace math: ceil(45/6)=8 swipes per hue, one hue per swipe
+  const swipesPerHue = Math.ceil(t.bossAwakenNeed.red / t.bossPaintHit);
+  const fillTime = swipesPerHue * 3 * t.swipeCooldown;   // ~4.8s to paint all three hues
+  const fillDmg = (swipesPerHue * 3) * normalDmg;          // damage dealt while filling
+  const windowDmg = (t.bossAwakenDuration / t.swipeCooldown) * awakeDmg; // 2x hits during the 6s window
+  const cycleTime = fillTime + t.bossAwakenDuration;
+  const cycles = t.bossMaxHp / (fillDmg + windowDmg);
+  console.log(`  info — per cycle: ${Math.round(fillTime)}s fill + ${t.bossAwakenDuration}s window, ${fillDmg + windowDmg} dmg; boss fight ≈ ${Math.max(1, Math.round(cycles))} cycles ≈ ${Math.round(cycles * cycleTime / 60 * 10) / 10}min of pure painting`);
+  assert(cycles >= 1.5 && cycles <= 4, `boss pacing is in the cozy range (${cycles.toFixed(2)} awaken cycles to kill)`);
+}
+
 console.log('== stage 6: end screen -> atelier (the between-run loop) ==');
 fireKey('keydown', 'Enter');
 frames(2);

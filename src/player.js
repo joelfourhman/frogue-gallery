@@ -65,7 +65,7 @@ export class Player {
 
     // fresh-paint residual: standing in green paint heals slowly
     const cell = world.pigmentAt(this.x, this.y);
-    if (cell.green > 0.4 && this.hp < this.maxHp) this._healAcc = (this._healAcc || 0) + dt * (tuning.greenHeal * 0.5);
+    if (cell.green > 0.4 && this.hp < this.maxHp) this._healAcc = (this._healAcc || 0) + dt * (tuning.greenHeal);
     else this._healAcc = (this._healAcc || 0) - dt * 2;
     if (this._healAcc >= 1) { this._healAcc = 0; this.hp = Math.min(this.maxHp, this.hp + 1); }
     return this;

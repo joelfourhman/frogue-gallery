@@ -816,13 +816,13 @@ _drawAtelier(ctx) {
         this.sfx('boss-slam');
         this.particles.splatter(h.targetX, h.y - 20, '#98a19b', 14, 220);
         this.particles.droplets(h.targetX, h.y - 30, 8);
-        this._hitPlayerFromHeron(130, 14, h.targetX, h.y - 40);
-      } else if (name === 'landing') {
-        this.addShake(11);
-        this.sfx('boss-slam');
-        this.particles.splatter(h.x, h.y - 20, '#7fa8c9', 16, 240);
-        this.particles.droplets(h.x, h.y - 30, 10);
-        this._hitPlayerFromHeron(110, 12, h.x, h.y - 40);
+        this._hitPlayerFromHeron(130, 11, h.targetX, h.y - 40);
+              } else if (name === 'landing') {
+                this.addShake(11);
+                this.sfx('boss-slam');
+                this.particles.splatter(h.x, h.y - 20, '#7fa8c9', 16, 240);
+                this.particles.droplets(h.x, h.y - 30, 10);
+                this._hitPlayerFromHeron(110, 9, h.x, h.y - 40);
       } else if (name === 'summon') {
         const n = 2 + (h.phase >= 3 ? 1 : 0);
         for (let i = 0; i < n; i++) {
@@ -852,12 +852,12 @@ _drawAtelier(ctx) {
     // ongoing contact hazards (none while airborne, awakened, or dead)
     const airborne = (h.diveH || 0) > 50;
     if (h.hp > 0 && !airborne && !h.awakened && p.alive) {
-      if (h.state === 'scoop') this._hitPlayerFromHeron(78, 12, h.scoopX, h.y - 30);
-      if (h.state === 'sweep') this._hitPlayerFromHeron(150, 10, h.x + (h.sweepSide || -1) * 85, h.y - 110);
-      if (h.state === 'storm-lunge') this._hitPlayerFromHeron(95, 13, h.x, h.y - 100);
-      if (h.state === 'idle' || h.state === 'flap' || h.state === 'recover') {
-        this._hitPlayerFromHeron(80, 8, h.x, h.y - 120);
-      }
+      if (h.state === 'scoop') this._hitPlayerFromHeron(78, 9, h.scoopX, h.y - 30);
+            if (h.state === 'sweep') this._hitPlayerFromHeron(150, 8, h.x + (h.sweepSide || -1) * 85, h.y - 110);
+            if (h.state === 'storm-lunge') this._hitPlayerFromHeron(95, 9, h.x, h.y - 100);
+            if (h.state === 'idle' || h.state === 'flap' || h.state === 'recover') {
+              this._hitPlayerFromHeron(80, 6, h.x, h.y - 120);
+            }
     }
   }
 
