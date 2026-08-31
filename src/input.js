@@ -47,13 +47,14 @@ export class Input {
     cv.addEventListener('wheel', this._wh, { passive: true });
   }
 
-  // Camera transform: screen <-> world
+  // Camera transform: screen <-> world.
+  // view = { x, y (world coords of screen top-left), scale, w, h }
   setView(view) { this._view = view; }
   update() {
     const v = this._view;
     if (v) {
-      this.mouse.worldX = this.mouse.x / v.scale + v.ox - v.x;
-      this.mouse.worldY = this.mouse.y / v.scale + v.oy - v.y;
+      this.mouse.worldX = this.mouse.x / v.scale + v.x;
+      this.mouse.worldY = this.mouse.y / v.scale + v.y;
     }
   }
   pressed(k) { return this.kb.has(k); }

@@ -1,72 +1,90 @@
 # Project State
 
+_Last verified: 2026-08-30, end of M1 checkpoint. `node tests/smoke.mjs` = ALL 6 STAGES PASSED. `node --check` clean on every module._
+
 ## Current Status
 
-Frogue Gallery is an early, partially integrated browser-game implementation. The repository has one committed foundation milestone and five untracked files left by the interrupted Hermes session. Preserve and review that untracked work; it is not disposable.
+Frogue Gallery is now a **bootable, playable vertical slice** (M1 complete). The full
+expedition loop works and is verified end-to-end by the headless smoke test:
 
-The game does not currently boot: `index.html` imports `src/game.js`, which does not exist. No claim of a playable loop is currently supported.
+title → expedition → directional swipe combat → charged splash → pigment orbs →
+wave spawning → Great Gray Heron boss (3 phases) → victory flight / defeat →
+end screen with bank gains → back to title. Painting restores swamp color
+(the core fantasy), and save persistence round-trips through localStorage.
+
+The Atelier (M2) — spending banked pigments on upgrades/paintings between runs —
+is the next milestone and is **not yet built**. The save schema and
+`canAfford`/`payCost` helpers in `src/logic.js` already support it.
 
 ## Current Milestone
 
-Integrate the existing subsystems into the first bootable vertical slice without restarting or rewriting completed foundation work.
+M2 — Atelier: bank display, upgrade purchase (capacity/power/vitality),
+painting ownership + two-slot loadout, wired between runs (end screen or
+title → Atelier → expedition). Must use existing `logic.js` data
+(`UPGRADES`, `PAINTINGS`, `canAfford`, `payCost`, `SaveSys`) without
+rewriting M1 modules.
 
 ## Completed Milestones
 
-- Initialized the project-local Git repository, environment documentation, and cleanup documentation.
-- Committed pure gameplay rules and tuning in `src/logic.js`.
-- Committed world generation and environmental paint interactions in `src/world.js`.
-- Committed shared math, input, UI, audio, and particle modules.
-- Documented the initial pigments, enemies, paintings, economy, and Great Gray Heron design in `docs/design.md`.
-- Drafted but did not commit `index.html`, `src/player.js`, `src/paint.js`, `src/enemies.js`, and `src/save.js` during the interrupted session.
+- M0 — project-local Git repo, MISSION/PROJECT_STATE/RESUME/SYSTEM_CHANGES/CLEANUP docs,
+  `docs/design.md`, pure rules `src/logic.js`, world gen `src/world.js`,
+  math/input/UI/audio/particles modules (all committed).
+- M1 — **playable vertical slice** (this checkpoint):
+  - `src/game.js` — the orchestrator (was missing): main loop, camera, state
+    machine (title/expedition/end + pause), wave spawning, combat wiring,
+    boss presentation via `bossStep`, HUD (hearts, pigment slots, charge
+    meter, boss bar, swamp-color meter, banners, off-screen boss arrow),
+    title/pause/end screens with mouse + keyboard.
+  - Core-fantasy wiring: every paint stroke accumulates `Paint.restoreAcc`,
+    drained by the game into `world.restoreColor()`; boss paint also restores.
+  - Bug fixes found & fixed this session: `world.js` ripples typo
+    (`this.ripping`), `input.js` screen→world formula (old offset convention →
+    mouse aiming was NaN), `mixColorHex`→`mixColor` typo, undefined `sat01`
+    in HUD, `_updateBoss` early-returned at hp≤0 so the `defeated` event never
+    fired (victory could not trigger), post-victory flight never stepped
+    (expedition kept simulating).
+  - `tests/smoke.mjs` — headless Node harness (stubbed DOM/canvas/rAF) driving
+    the real `Game` class through all 6 stages above. Run: `node tests/smoke.mjs`.
+  - Recovered the 5 interrupted-session files (`index.html`, `save.js`,
+    `player.js`, `paint.js`, `enemies.js`) — reviewed, fixed, and committed.
 
-## Next Milestones
+## Known Bugs / Open Items
 
-1. Review the untracked modules against `MISSION.md`, then implement `src/game.js` to wire only the smallest bootable title/game shell.
-2. Perform a browser boot smoke test and fix integration errors without expanding scope.
-3. Add focused tests for pure logic and save migration; commit the recovered vertical-slice foundation.
-4. Build the playable Atelier and expedition loop in bounded slices.
-5. Integrate enemy encounters, pigment collection, death/return, paintings, and progression.
-6. Integrate and balance the Great Gray Heron, victory, persistence, and final polish.
+- No `README.md` yet (final-deliverable requirement).
+- Atelier missing (M2). No upgrade spending, no painting ownership UI.
+- Balance unverified at scale (M5): tuning values are first-pass.
+- `bestRun` in the save schema is unused (reserved).
+- No `package.json`; tests run via plain `node tests/smoke.mjs`.
+- Mouse-driven UI is click-only (no hover cursor changes on canvas); acceptable
+  for now.
 
-## Important Design Decisions
+## Latest Test Status
 
-- Vanilla HTML/CSS/JavaScript with Canvas 2D and browser APIs; no framework is currently required.
-- Painting is combat and world interaction, not cosmetic projectile tinting.
-- Red emphasizes damage/burning, blue control/freezing, and green growth/rooting/sustain.
-- Pure rules belong in `src/logic.js` so they can be tested separately from rendering.
-- Paintings are a limited two-slot build system; progression uses banked pigments.
-- The repository, this state file, and Git replace long conversational memory.
+2026-08-30: `node --check` clean on all 12 `src/*.js`. `node tests/smoke.mjs`
+passes all 6 stages (boot/title, expedition start, directional swipe combat +
+color restore, charged splash, boss→victory→stats, defeat→save persist).
+Browser boot verified in desktop preview pane (no fallback/crash).
 
 ## Important Files
 
 - `MISSION.md` — permanent requirements and autonomous-work rules.
-- `PROJECT_STATE.md` — current recovery and continuation state.
-- `RESUME_HERMES.md` — small prompt for a fresh Hermes conversation.
-- `docs/design.md` — detailed gameplay decisions already made.
-- `src/logic.js` — pure rules, tuning, boss logic, paintings, and save schema.
-- `src/world.js` — world and environmental painting behavior.
-- `index.html` — untracked browser entry point; currently imports missing `src/game.js`.
-- `src/player.js`, `src/paint.js`, `src/enemies.js`, `src/save.js` — untracked interrupted-session work requiring review, not deletion.
-
-## Known Bugs
-
-- `src/game.js` is missing, so the browser entry point cannot boot.
-- There is no integrated title screen, Atelier, expedition controller, boss presentation, or complete game-state loop yet.
-- The `tests/` directory is empty.
-- `README.md` does not yet exist.
-- The five interrupted-session implementation files are untracked and therefore not protected by a commit.
-
-## Latest Test Status
-
-On 2026-08-30, syntax checks passed for `src/logic.js`, `src/world.js`, `src/player.js`, `src/paint.js`, `src/enemies.js`, and `src/save.js` using the existing Hermes-bundled Node runtime in module mode. No gameplay, browser, or automated test suite passed because `src/game.js` is missing and `tests/` is empty.
-
-## Environment Status
-
-- Development is contained in this repository.
-- Existing user-level Python, uv, Node, Hermes, NInfer, and Qwen installations must not be modified.
-- Any development server must bind to `127.0.0.1` only and be stopped after testing.
-- `SYSTEM_CHANGES.md` and `CLEANUP.md` describe the project-local environment and reversal steps.
+- `PROJECT_STATE.md` — this file.
+- `RESUME_HERMES.md` — fresh-session recovery prompt.
+- `docs/design.md` — gameplay decisions.
+- `src/logic.js` — pure rules, tuning, `UPGRADES`, `PAINTINGS`, boss AI, save
+  schema, `canAfford`/`payCost` (M2's data layer).
+- `src/game.js` — orchestrator; states, HUD, screens, boss presentation.
+- `src/world.js`, `src/player.js`, `src/paint.js`, `src/enemies.js`,
+  `src/save.js`, `src/input.js`, `src/audio.js`, `src/particles.js`,
+  `src/ui.js`, `src/math.js` — subsystem modules.
+- `index.html` — entry point (`new Game(canvas); game.start();`).
+- `tests/smoke.mjs` — headless end-to-end smoke test.
 
 ## Immediate Next Action
 
-Read `MISSION.md`, inspect `git status`, and review only the five untracked implementation files plus their direct committed dependencies. Then create the smallest `src/game.js` integration needed to boot `index.html`, run a focused browser smoke test, update this state file with verified results, and commit the coherent recovery milestone. Continue immediately to the next incomplete Definition of Done item during an active `/goal`; the checkpoint is not a stopping point.
+Build the Atelier (M2): a `src/atelier.js` module with paper-panel UI over the
+existing save data — bank totals, three upgrade rows with costs, painting
+shelf (owned/available), two loadout slots — entered from the title screen and
+after each run's end screen. Wire purchases through `canAfford`/`payCost` +
+`SaveSys.save()`. Verify with a new smoke-test stage (purchase, loadout,
+re-enter expedition), then update this file and commit.

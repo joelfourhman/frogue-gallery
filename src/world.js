@@ -12,7 +12,7 @@ export class World {
     this.seed = seed;
     this.rng = rng;
     this.grass = [];
-    this.ripping = [];
+    this.ripples = [];
     this.obstacles = [];      // rocks/bushes: {x,y,r,seed,kind}
     this.pads = [];           // lily pads: {x,y,r} — safe, regen
     this.veg = [];            // vegetation: {x,y,h,seed,burn,alive}

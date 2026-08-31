@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frogue Gallery</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #efe3cc; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  #wrap { position: relative; }
+  canvas { display: block; image-rendering: auto; cursor: crosshair;
+    border: 10px solid #2b2320; border-radius: 6px; box-shadow: 0 14px 40px rgba(43,35,32,0.35); }
+  #fallback { font-family: Georgia, serif; color: #2b2320; text-align: center; padding: 2em; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="1280" height="800"></canvas>
+  <div id="fallback" hidden>
+    <h1>Frogue Gallery</h1>
+    <p>This game needs a browser with Canvas 2D and ES modules.</p>
+  </div>
+</div>
+<script type="module">
+  import { Game } from './src/game.js';
+  try {
+    const canvas = document.getElementById('game');
+    const game = new Game(canvas);
+    game.start();
+  } catch (e) {
+    console.error('Frogue Gallery failed to boot', e);
+    document.getElementById('game').hidden = true;
+    document.getElementById('fallback').hidden = false;
+  }
+</script>
+</body>
+</html>
