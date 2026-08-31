@@ -367,5 +367,23 @@ game.player.hurt(99, game.tuning);
 frames(140);
 assert(game.state === 'end' && game.endKind === 'defeat', 'run ended cleanly');
 
+console.log('== stage 10: M6 — erase save data (title link, two-click) ==');
+fireKey('keydown', 'Escape'); // end -> title
+frames(2);
+assert(game.state === 'title', 'back at the title');
+assert(game.save.stats.expeditions >= 2, 'precondition: the test runs left stats behind');
+// first click arms the confirm; nothing is erased yet
+fireMouse(canvas, 136, game.ch - 26);
+frames(1);
+assert(store.has('frogue_gallery_save'), 'first click only armed the confirm (save still there)');
+// second click within the window erases
+fireMouse(canvas, 136, game.ch - 26);
+frames(2);
+assert(!store.has('frogue_gallery_save'), 'second click erased the save from (stub) localStorage');
+assert(game.save.stats.expeditions === 0, 'in-memory save was reset to fresh');
+assert(game.save.bank.red === 0 && game.save.owned.length === 0, 'fresh start: empty bank and gallery');
+frames(30);
+assert(game.state === 'title', 'title survived 30 frames after the erase');
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

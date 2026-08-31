@@ -5,7 +5,7 @@ prior state.
 
 ## 1. Stop any running local server
 
-If a dev server is running (only ever `python -m http.server 8000 --bind
+If a dev server is running (only ever `python -m http.server 8765 --bind
 127.0.0.1`, loopback-only):
 
 - Close its terminal window / press `Ctrl+C`, or
@@ -16,9 +16,11 @@ If a dev server is running (only ever `python -m http.server 8000 --bind
 
 All persistent browser data uses the `frogue_gallery_` prefix.
 
-- **In-game (recommended):** Title screen → Options → **Erase Save Data** →
-  confirm. This deletes every `frogue_gallery_*` key.
-- **Manual:** DevTools → Application → Local Storage → `http://127.0.0.1:8000`
+- **In-game (recommended):** Title screen → bottom-left **"erase save data"** link →
+  click it a second time within 3 seconds to confirm. This wipes the
+  progress save (`frogue_gallery_save`); your audio/mute options
+  (`frogue_gallery_options`) are kept.
+- **Manual:** DevTools → Application → Local Storage → `http://127.0.0.1:8765`
   → delete keys:
   - `frogue_gallery_save` — main progress (bank, paintings, loadout, upgrades, flags)
   - `frogue_gallery_options` — volume / mute / display settings

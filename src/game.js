@@ -596,6 +596,21 @@ _drawAtelier(ctx) {
       const cx = this.cw / 2, py = 300, ph = 300;
       const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 18;
       const abw = 200, abh = 44, abx = cx - abw / 2, aby = by + bh + 16;
+      // erase-save link: two clicks within 3 s (see _drawTitle for same rect)
+      if (this._mouseIn(16, this.ch - 40, 240, 28)) {
+        if ((this.now - (this._eraseArm || -99)) < 3) {
+          this._eraseArm = 0;
+          SaveSys.erase();
+          this.save = freshSave(); // fresh save back into memory (load() returns null after erase)
+          this.save.flags.intro = false;
+          this.sfx('ui-back');
+          this.addBanner('Save data erased — a fresh start.', 3, this.ch - 110);
+          return;
+        }
+        this._eraseArm = this.now;
+        this.sfx('ui');
+        return;
+      }
       if (this._mouseIn(bx, by, bw, bh)) { this.sfx('ui'); this._beginExpedition(); }
       else if (this._mouseIn(abx, aby, abw, abh)) { this.sfx('ui'); this._beginAtelier(); }
     }
@@ -1459,6 +1474,10 @@ _drawAtelier(ctx) {
           centerText(ctx, `best run — ${what}`, cx, aby + abh + 38, '700 14px Georgia, serif', '#e8c86a', 0.95);
         }
         centerText(ctx, 'M to mute · A for the atelier', cx, aby + abh + (br ? 58 : 38), '12px Georgia, serif', '#fdf6e9', 0.5);
+        // erase-save link (bottom-left; two-click confirm, see _updateTitle)
+        const ex = 16, ey = this.ch - 40;
+        const armed = (this.now - (this._eraseArm || -99)) < 3;
+        centerText(ctx, armed ? 'click again to erase save data…' : 'erase save data', ex + 120, ey + 14, armed ? '700 12px Georgia, serif' : '11px Georgia, serif', armed ? '#d8543c' : 'rgba(253,246,233,0.45)', armed ? 1 : 0.8);
       }
 
   _drawPause(ctx) {

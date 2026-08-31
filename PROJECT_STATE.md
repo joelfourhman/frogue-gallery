@@ -1,10 +1,10 @@
 # Project State
 
-_Last verified: 2026-08-30, end of M5 checkpoint. `node tests/smoke.mjs` = ALL 10 STAGES / 60 ASSERTIONS PASSED. `node --check` clean on every module._
+_Last verified: 2026-08-30, end of M6 (final Definition-of-Done sweep). `node tests/smoke.mjs` = ALL 11 STAGES / 67 ASSERTIONS PASSED. `node --check` clean on every module. Working tree clean, committed._
 
 ## Current Status
 
-Frogue Gallery is a **balanced, feature-complete cozy action roguelite**:
+Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the full Definition of Done is satisfied (M1–M6, final sweep done):
 
 - **Core fantasy**: paint with 3 pigments (red damages, blue slows/freezes, green heals/restores world color). Every stroke literally restores color to the swamp.
 - **Run loop** (verified by smoke test): title → expedition (waves, swipe + charged-splash combat, orb collection) → boss (Great Gray Heron: 3-hue awaken cycle, 2× paint damage while shimmering) → victory/defeat end screen → **Atelier** (shop) → next run.
@@ -17,7 +17,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite**:
 
 | File | Role |
 |---|---|
-| `index.html` | Canvas 960×540, boot: `new Game(canvas).start()` |
+| `index.html` | Canvas 1280×800, boot: `new Game(canvas).start()` |
 | `src/game.js` (~1500 lines) | **The orchestrator.** State machine (title/expedition/atelier/end/pause), rAF loop, camera, HUD, boss dir, atelier UI, end/title screens, M4 meta features |
 | `src/logic.js` | Pure game logic: tuning, UPGRADES, PAINTINGS, bossStep, bankGain, paintDamage (2× awakened), canAfford/payCost/costArray |
 | `src/world.js` | Procedural swamp, splats, fire/reed growth, `restoreColor()` |
@@ -53,4 +53,4 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite**:
 - **M3** ✅ Balance pass (2× awakened, HP/dmg rebalance, 1600 HP boss) — committed
 - **M4** ✅ Croaksworth story beat + best-run tracking + M-mute — committed
 - **M5** ✅ Polish: low-HP vignette (pulsing red at ≤2 HP), real pause menu (Resume / Quit buttons + M-mute; pause input now lives in the frame router since `_updateExpedition` is skipped while paused), first-run intro banners (`flags.intro`), dead HUD code removed
-- **M6** ⏳ Final Definition-of-Done sweep + final report
+- **M6** ✅ Final Definition-of-Done sweep + erase-save UI (two-click confirm, title bottom-left) + final report
