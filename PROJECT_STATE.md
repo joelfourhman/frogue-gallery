@@ -1,90 +1,63 @@
 # Project State
 
-_Last verified: 2026-08-30, end of M1 checkpoint. `node tests/smoke.mjs` = ALL 6 STAGES PASSED. `node --check` clean on every module._
+_Last verified: 2026-08-30, end of M2 checkpoint. `node tests/smoke.mjs` = ALL 7 STAGES PASSED. `node --check` clean on every module._
 
 ## Current Status
 
-Frogue Gallery is now a **bootable, playable vertical slice** (M1 complete). The full
-expedition loop works and is verified end-to-end by the headless smoke test:
+Frogue Gallery is a **playable vertical slice with a full between-run loop**:
 
-title → expedition → directional swipe combat → charged splash → pigment orbs →
-wave spawning → Great Gray Heron boss (3 phases) → victory flight / defeat →
-end screen with bank gains → back to title. Painting restores swamp color
-(the core fantasy), and save persistence round-trips through localStorage.
+1. **Title screen** — "Begin Expedition" (Enter/Space/click) or "Visit the Atelier" (A/click); drifting swamp backdrop; lifetime stats footer.
+2. **Expedition** — move, paint swipes (directional fan), charged splash (hold RMB), hop (space), 4 pigments (1–4), environmental hazards, pigment orbs, wave banners, camera + zoom + shake, boss fight (3-phase Great Gray Heron), painting restores swamp saturation (core fantasy, verified).
+3. **End screen** — victory/defeat gains, bank totals; primary button **"Rest at the Atelier"** (Enter/Space/click), link "return to the pond" (Esc/click).
+4. **Atelier (NEW in M2)** — between-run sanctuary over the living swamp:
+   - Bank strip (red/blue/green counts + 2-slot loadout preview with generative painting motifs).
+   - Tab 1 "Studio Upgrades": 3 upgrades (Pigment Satchel / Brush Craft / Swamp Vitality), 3 levels each, cost chips, level pips, **predicted stat delta** per purchase, Learn button.
+   - Tab 2 "Paintings": 7 unlocked + 1 sealed (Sir Croaksworth), 2-column cards with generative art, costs, Learn/Hang/Unhang logic, max 2 hung (loadout).
+   - Input: mouse hitboxes (single `_atelierGeom()` + `_atelierRows()` source of truth shared by draw AND click handling), keys 1/2 tabs, A/S/D quick-buy, Enter depart, Esc leave.
+   - All purchases/hang actions persist via `SaveSys.save`.
+5. **Defeat path** — half bank kept, back through end screen.
 
-The Atelier (M2) — spending banked pigments on upgrades/paintings between runs —
-is the next milestone and is **not yet built**. The save schema and
-`canAfford`/`payCost` helpers in `src/logic.js` already support it.
+### Key architecture notes
 
-## Current Milestone
+- **`game.js` is the single load-bearing orchestrator.** ~1460 lines: state machine (`title` / `expedition` / `end` / `atelier`), `_frame` loop, boss logic, full render pass, HUD, input routing.
+- **Atelier geometry contract:** `_atelierGeom()` returns all rects (tabs, rows, cards, depart/leave buttons); `_atelierRows()` returns the clickable map **including `tag` fields** (e.g. `buy:power`, `paint:spring-garden`, `depart`) — smoke test drives real hitboxes through them.
+- **Cost shapes:** `UPGRADES[id].levels[n].cost` and `PAINTINGS[i].cost` are **objects** `{red,blue,green}`; `canAfford`/`payCost` want **arrays** via `costArray()`. The atelier normalizes with `Array.isArray(x) ? x : costArray(x)` at every call site.
+- **`makeTuning(upgrades, loadout)`** is the stat pipeline: upgrades add maxHp/power/capacity; loadout paintings modify tuning (freeze duration, burn dps, heal, splash radius, etc.). The atelier shows the delta by diffing `makeTuning` before/after.
+- **View contract:** `_view()` = `{x, y (world top-left), scale, w, h}`; screen→world is `mouse.x / v.scale + v.x`.
+- **`costArray`** yields `{color, amount}` objects (NOT tuples).
+- **`paperPanel`** saves/returns a clipped ctx; **`paperEnd`** restores. Draw text inside via `_leftText` (left-anchored helper) or `centerText`.
+- Node v22 for syntax checks + headless runtime test; `python -m http.server 8765 --bind 127.0.0.1` for browser checks; `browser_exec` is dead (Chrome popup never surfaced) — verification channels: `node tests/smoke.mjs` + `desktop_preview` visual.
 
-M2 — Atelier: bank display, upgrade purchase (capacity/power/vitality),
-painting ownership + two-slot loadout, wired between runs (end screen or
-title → Atelier → expedition). Must use existing `logic.js` data
-(`UPGRADES`, `PAINTINGS`, `canAfford`, `payCost`, `SaveSys`) without
-rewriting M1 modules.
+## Test Status
 
-## Completed Milestones
+`tests/smoke.mjs` — 7 stages, all passing:
+1. boot + title
+2. begin expedition (world build: ripples + pads)
+3. combat (swipe damage, directional fan, color restore)
+4. charged splash (charge, fire, consume)
+5. heron boss → victory (flight, stats, end screen)
+6. **end screen → atelier** (30 clean frames, upgrade purchase via real hitbox + bank debit + localStorage persist, tab switch, painting buy/hang/unhang, Esc to title)
+7. defeat run + save persistence
 
-- M0 — project-local Git repo, MISSION/PROJECT_STATE/RESUME/SYSTEM_CHANGES/CLEANUP docs,
-  `docs/design.md`, pure rules `src/logic.js`, world gen `src/world.js`,
-  math/input/UI/audio/particles modules (all committed).
-- M1 — **playable vertical slice** (this checkpoint):
-  - `src/game.js` — the orchestrator (was missing): main loop, camera, state
-    machine (title/expedition/end + pause), wave spawning, combat wiring,
-    boss presentation via `bossStep`, HUD (hearts, pigment slots, charge
-    meter, boss bar, swamp-color meter, banners, off-screen boss arrow),
-    title/pause/end screens with mouse + keyboard.
-  - Core-fantasy wiring: every paint stroke accumulates `Paint.restoreAcc`,
-    drained by the game into `world.restoreColor()`; boss paint also restores.
-  - Bug fixes found & fixed this session: `world.js` ripples typo
-    (`this.ripping`), `input.js` screen→world formula (old offset convention →
-    mouse aiming was NaN), `mixColorHex`→`mixColor` typo, undefined `sat01`
-    in HUD, `_updateBoss` early-returned at hp≤0 so the `defeated` event never
-    fired (victory could not trigger), post-victory flight never stepped
-    (expedition kept simulating).
-  - `tests/smoke.mjs` — headless Node harness (stubbed DOM/canvas/rAF) driving
-    the real `Game` class through all 6 stages above. Run: `node tests/smoke.mjs`.
-  - Recovered the 5 interrupted-session files (`index.html`, `save.js`,
-    `player.js`, `paint.js`, `enemies.js`) — reviewed, fixed, and committed.
+## Immediate next work (M3, in priority order)
 
-## Known Bugs / Open Items
+1. **Balance pass**: full simulated playthrough timing — is the first boss reachable in ~4–6 min? Enemy spawn rate, orb values, boss awaken pacing. Adjust `logic.js` tuning.
+2. **Croaksworth story beat**: `flags.croaksworthAsked/Given` exist — the sealed painting unlocks after first victory (ask → give). Wire into atelier/title.
+3. **Options**: `freshOptions`/`migrateOptions` + `SaveSys.loadOptions/saveOptions` exist; add mute/volume + key hints to title or pause.
+4. **Best-run tracking** (`save.bestRun` reserved): record {pigments, time, cleared} on victory; show on title.
+5. **Polish**: pause menu with options; audio unlock on first gesture; banner polish; low-HP vignette.
+6. Optional content only after the above: more enemy types, world variance, more paintings.
 
-- No `README.md` yet (final-deliverable requirement).
-- Atelier missing (M2). No upgrade spending, no painting ownership UI.
-- Balance unverified at scale (M5): tuning values are first-pass.
-- `bestRun` in the save schema is unused (reserved).
-- No `package.json`; tests run via plain `node tests/smoke.mjs`.
-- Mouse-driven UI is click-only (no hover cursor changes on canvas); acceptable
-  for now.
+## Recovery Notes (for a fresh session)
 
-## Latest Test Status
+```bash
+cd /c/Users/joelf/projects/hermes_ninfer_stack/workspace/frogue-gallery
+node tests/smoke.mjs          # full loop test (should print ALL SMOKE TESTS PASSED)
+for f in src/*.js; do node --check "$f"; done
+python -m http.server 8765 --bind 127.0.0.1   # then open http://127.0.0.1:8765/index.html
+```
 
-2026-08-30: `node --check` clean on all 12 `src/*.js`. `node tests/smoke.mjs`
-passes all 6 stages (boot/title, expedition start, directional swipe combat +
-color restore, charged splash, boss→victory→stats, defeat→save persist).
-Browser boot verified in desktop preview pane (no fallback/crash).
-
-## Important Files
-
-- `MISSION.md` — permanent requirements and autonomous-work rules.
-- `PROJECT_STATE.md` — this file.
-- `RESUME_HERMES.md` — fresh-session recovery prompt.
-- `docs/design.md` — gameplay decisions.
-- `src/logic.js` — pure rules, tuning, `UPGRADES`, `PAINTINGS`, boss AI, save
-  schema, `canAfford`/`payCost` (M2's data layer).
-- `src/game.js` — orchestrator; states, HUD, screens, boss presentation.
-- `src/world.js`, `src/player.js`, `src/paint.js`, `src/enemies.js`,
-  `src/save.js`, `src/input.js`, `src/audio.js`, `src/particles.js`,
-  `src/ui.js`, `src/math.js` — subsystem modules.
-- `index.html` — entry point (`new Game(canvas); game.start();`).
-- `tests/smoke.mjs` — headless end-to-end smoke test.
-
-## Immediate Next Action
-
-Build the Atelier (M2): a `src/atelier.js` module with paper-panel UI over the
-existing save data — bank totals, three upgrade rows with costs, painting
-shelf (owned/available), two loadout slots — entered from the title screen and
-after each run's end screen. Wire purchases through `canAfford`/`payCost` +
-`SaveSys.save()`. Verify with a new smoke-test stage (purchase, loadout,
-re-enter expedition), then update this file and commit.
+- All game code under `frogue-gallery/` — self-contained, no installs, no build step (ES modules, straight to browser).
+- Git: last commit = `feat: M2 — the Atelier` (verify with `git log --oneline -3`).
+- Do NOT touch anything outside `frogue-gallery/`. No admin/elevation, ever.
+- The mission's Definition of Done includes: playable loop, painting feel, complete gameplay loop, tested, balanced, polished, optional content last. M1 (playable slice) and M2 (atelier) are done; M3+ as above.

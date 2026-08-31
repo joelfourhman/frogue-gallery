@@ -82,6 +82,16 @@ function fireKey(type, key) {
   }
 }
 
+// A full mouse TAP (down then up) at screen coords (x, y) — fires on the
+// canvas listeners the game registered. `which` = button (0 left, 2 right).
+function fireMouse(canvas, x, y, which = 0) {
+  const base = { clientX: x, clientY: y, button: which, preventDefault() {} };
+  const md = canvas._ev && canvas._ev['mousedown'];
+  const mu = windowListeners['mouseup'];
+  if (md) md({ ...base });
+  if (mu && mu.length) mu.forEach((fn) => fn({ ...base }));
+}
+
 let nowMs = 0;
 function frames(n, stepMs = 16.7) {
   for (let i = 0; i < n; i++) {
@@ -201,11 +211,47 @@ assert(game.save.stats.heronDefeated === true || game.save.flags.heronDefeated =
 frames(90); // end screen must render
 assert(game.state === 'end', 'end screen survived 90 frames');
 
-console.log('== stage 6: back to title, then defeat run ==');
+console.log('== stage 6: end screen -> atelier (the between-run loop) ==');
 fireKey('keydown', 'Enter');
 frames(2);
-assert(game.state === 'title', 'Enter returned to title');
-frames(10);
+assert(game.state === 'atelier', 'Enter from end screen opened the atelier');
+frames(30);
+assert(game.state === 'atelier', 'atelier survived 30 frames (draw pass runs clean)');
+
+// fund the bank deterministically (we are testing atelier logic, not the economy)
+game.save.bank = { red: 20, blue: 20, green: 20 };
+
+// buy the level-1 Brush Craft upgrade by clicking its real hitbox
+const findRow = (tag) => game._atelierRows().find(r => r.tag === tag);
+let row = findRow('buy:power');
+assert(row && row.enabled, 'buy:power row exists and is affordable');
+fireMouse(canvas, row.x + row.w / 2, row.y + row.h / 2);
+frames(1);
+assert(game.save.upgrades.power === 1, 'power upgrade purchased via click');
+assert(game.save.bank.red === 16 && game.save.bank.blue === 18 && game.save.bank.green === 18, `bank debited correctly (got ${JSON.stringify(game.save.bank)})`);
+const rawSave = JSON.parse(store.get('frogue_gallery_save'));
+assert(rawSave.upgrades.power === 1, 'purchase persisted to (stub) localStorage');
+
+// switch to the paintings tab and buy + hang + unhang a painting
+fireKey('keydown', '2');
+frames(1);
+assert(game.atelierTab === 1, 'key 2 switched to the paintings tab');
+row = findRow('paint:spring-garden');
+assert(row && row.enabled, 'spring-garden row exists and is affordable');
+fireMouse(canvas, row.x + row.w / 2, row.y + row.h / 2);
+frames(1);
+assert(game.save.owned.includes('spring-garden'), 'spring-garden purchased');
+assert(game.save.loadout.includes('spring-garden'), 'new painting auto-hung in loadout');
+fireMouse(canvas, row.x + row.w / 2, row.y + row.h / 2); // toggle it off
+frames(1);
+assert(game.save.owned.includes('spring-garden') && !game.save.loadout.includes('spring-garden'), 'unhang removed it from loadout but kept ownership');
+
+// Esc returns to the title
+fireKey('keydown', 'Escape');
+frames(2);
+assert(game.state === 'title', 'Escape returned to the title');
+
+console.log('== stage 7: defeat run, save persistence ==');
 fireKey('keydown', 'Enter');
 frames(2);
 assert(game.state === 'expedition', 'second expedition started');

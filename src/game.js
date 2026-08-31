@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, makeTuning, bossStep, bankGain, freshSave } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, makeTuning, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor } from './ui.js';
 
 const HERON_X = 2050, HERON_Y = 800;
@@ -149,13 +149,21 @@ export class Game {
     } else if (this.state === 'end') {
       this.endT += dt;
       this._stepHeronFlight(dt);
-      // mouse: "Back to the Pond" button (see _drawEnd layout)
+      // buttons: "Rest at the Atelier" (primary) + "Return to the Pond" link
+      // (see _drawEnd layout)
       if (this.endT > 0.6 && this.input.mouse.lPressed) {
         const cx = this.cw / 2, py = this.ch / 2 - 430 / 2, ph = 430;
-        const bw = 280, bh = 54, bx = cx - bw / 2, by = py + ph + 16;
-        if (this._mouseIn(bx, by, bw, bh)) { this.sfx('ui-back'); this._quitToTitle(); }
+        const bw = 300, bh = 54, bx = cx - bw / 2, by = py + ph + 16;
+        if (this._mouseIn(bx, by, bw, bh)) { this.sfx('ui'); this._beginAtelier(); }
+        else if (this._mouseIn(cx - 105, by + bh + 16, 210, 34)) { this.sfx('ui-back'); this._quitToTitle(); }
       }
-      if (this.input.pressed('enter') && this.endT > 0.6) { this.sfx('ui-back'); this._quitToTitle(); }
+      if (this.endT > 0.6) {
+        if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); this._beginAtelier(); }
+        if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._quitToTitle(); }
+      }
+    } else if (this.state === 'atelier') {
+      this.atelierT += dt;
+      this._updateAtelier(dt);
     }
 
     this._drawAll();
@@ -195,6 +203,352 @@ export class Game {
     this.sfx('ui-back');
   }
 
+// ================= part 3: the atelier ===============================
+  // Between-run sanctuary: spend bank pigments on upgrades + paintings,
+  // choose the 2-painting loadout, and watch the swamp breathe below.
+  _beginAtelier() {
+    this.state = 'atelier';
+    this.atelierT = 0;
+    this.atelierTab = 0;            // 0 upgrades, 1 paintings
+    this.paused = false;
+  }
+
+  // ---- layout: single source of truth for BOTH draw and click handling ----
+  _atelierGeom() {
+    const cx = this.cw / 2, ch = this.ch;
+    const listX = cx - 560, listW = 1120;
+    return {
+      cx, ch, listX, listW,
+      tabY: 148, tabW: 220, tabH: 44,
+      rowY0: 204, rowH: 104, rowGap: 12,
+      cardW: (listW - 24) / 2, cardH: 112, cardGap: 12, cols: 2,
+      depart: { x: cx - 150, y: ch - 92, w: 300, h: 54 },
+      leave: { x: cx - 370, y: ch - 82, w: 200, h: 34 },
+    };
+  }
+
+  _atelierRows() {
+    // [{x, y, w, h, enabled?, act()}] — the full click map for this frame.
+    const g = this._atelierGeom();
+    const rows = [
+          { tag: 'tab0', x: g.cx - g.tabW - 10, y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== 0) this.sfx('ui'); this.atelierTab = 0; } },
+          { tag: 'tab1', x: g.cx + 10, y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== 1) this.sfx('ui'); this.atelierTab = 1; } },
+        ];
+    if (this.atelierTab === 0) {
+      Object.keys(UPGRADES).forEach((id, i) => {
+        const u = UPGRADES[id];
+        const lv = this.save.upgrades[id] || 0;
+        const maxed = lv >= u.levels.length;
+        const y = g.rowY0 + i * (g.rowH + g.rowGap);
+        rows.push({ tag: 'buy:' + id, x: g.listX + g.listW - 250, y: y + 21, w: 220, h: 62, enabled: !maxed && canAfford(this.save.bank, Array.isArray(u.levels[lv].cost) ? u.levels[lv].cost : costArray(u.levels[lv].cost)), act: () => this._buyUpgrade(id) });
+      });
+    } else {
+      PAINTINGS.forEach((pt, i) => {
+        if (pt.locked) return; // sealed: nothing to click
+        const col = i % g.cols, row = (i / g.cols) | 0;
+        const x = g.listX + col * (g.cardW + 24);
+        const y = g.rowY0 + row * (g.cardH + g.cardGap);
+        const owned = this.save.owned.includes(pt.id);
+        const inLoadout = this.save.loadout.includes(pt.id);
+        const bw = 160, bh = 44, bx = x + g.cardW - bw - 16, by = y + 34;
+        if (owned) rows.push({ tag: 'paint:' + pt.id, x: bx, y: by, w: bw, h: bh, enabled: inLoadout || this.save.loadout.length < 2, act: () => this._toggleLoadout(pt.id) });
+                else rows.push({ tag: 'paint:' + pt.id, x: bx, y: by, w: bw, h: bh, enabled: canAfford(this.save.bank, Array.isArray(pt.cost) ? pt.cost : costArray(pt.cost)), act: () => this._buyPainting(pt.id) });
+      });
+    }
+    rows.push({ tag: 'depart', x: g.depart.x, y: g.depart.y, w: g.depart.w, h: g.depart.h, act: () => { this.sfx('ui'); this._beginExpedition(); } });
+        rows.push({ tag: 'leave', x: g.leave.x, y: g.leave.y, w: g.leave.w, h: g.leave.h, act: () => { this.sfx('ui-back'); this._quitToTitle(); } });
+    return rows;
+  }
+
+  _updateAtelier(dt) {
+    if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._quitToTitle(); return; }
+    if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); this._beginExpedition(); return; }
+    if (this.input.pressed('1')) { if (this.atelierTab !== 0) this.sfx('ui'); this.atelierTab = 0; }
+    if (this.input.pressed('2')) { if (this.atelierTab !== 1) this.sfx('ui'); this.atelierTab = 1; }
+    if (this.atelierTab === 0) {
+      if (this.input.pressed('a')) this._buyUpgrade('capacity');
+      if (this.input.pressed('s')) this._buyUpgrade('power');
+      if (this.input.pressed('d')) this._buyUpgrade('vitality');
+    }
+    if (this.input.mouse.lPressed) {
+      const m = this.input.mouse;
+      for (const r of this._atelierRows()) {
+        if (m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y && m.y <= r.y + r.h) {
+          if (r.enabled === false) { this.sfx('hurt'); continue; }
+          r.act();
+          break;
+        }
+      }
+    }
+  }
+
+  _buyUpgrade(id) {
+    const u = UPGRADES[id];
+    const lv = this.save.upgrades[id] || 0;
+    if (lv >= u.levels.length) return;
+    const cost = u.levels[lv].cost;
+    const cc = Array.isArray(cost) ? cost : costArray(cost);
+    if (!canAfford(this.save.bank, cc)) { this.sfx('hurt'); return; }
+    this.save.bank = payCost(this.save.bank, cc);
+    this.save.upgrades[id] = lv + 1;
+    this.sfx('paint-create');
+    SaveSys.save(this.save);
+  }
+
+  _buyPainting(id) {
+    const pt = PAINTINGS.find(p => p.id === id);
+    if (!pt || pt.locked || this.save.owned.includes(id)) return;
+    const cc = Array.isArray(pt.cost) ? pt.cost : costArray(pt.cost);
+    if (!canAfford(this.save.bank, cc)) { this.sfx('hurt'); return; }
+    this.save.bank = payCost(this.save.bank, cc);
+    this.save.owned.push(id);
+    if (this.save.loadout.length < 2) this.save.loadout.push(id); // new art hangs right away
+    this.sfx('paint-create');
+    SaveSys.save(this.save);
+  }
+
+  _toggleLoadout(id) {
+    const i = this.save.loadout.indexOf(id);
+    if (i >= 0) { this.save.loadout.splice(i, 1); this.sfx('ui-back'); }
+    else {
+      if (this.save.loadout.length >= 2) return;
+      this.save.loadout.push(id);
+      this.sfx('ui');
+    }
+    SaveSys.save(this.save);
+  }
+
+  _leftText(ctx, text, x, y, font, color = INK, alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.font = font;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  _costChips(ctx, costObj, x, y) {
+    // little pigment chips + amounts, left-anchored at (x, y)
+        let cx0 = x;
+        for (const piece of costArray(costObj)) {
+          const pig = PIGMENTS[piece.color];
+          ctx.beginPath();
+          ctx.arc(cx0, y, 9, 0, TAU);
+          ctx.fillStyle = pig.color;
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = INK;
+          ctx.stroke();
+          centerText(ctx, String(piece.amount), cx0 + 19, y, '700 15px Georgia, serif', INK, 1);
+          cx0 += 44;
+        }
+        return cx0;
+  }
+
+_drawAtelier(ctx) {
+    const g = this._atelierGeom();
+    // backdrop: dim drift over the living swamp (world keeps ticking below)
+    ctx.save();
+    ctx.fillStyle = 'rgba(30,25,22,0.52)';
+    ctx.fillRect(0, 0, this.cw, this.ch);
+    ctx.restore();
+
+    const cx = g.cx;
+    outlineText(ctx, 'The Atelier', cx, 40, '700 40px Georgia, serif', '#f4ead8', INK, 6);
+    centerText(ctx, 'a quiet studio above the water — spend your pigments well', cx, 78, 'italic 15px Georgia, serif', '#fdf6e9', 0.85);
+
+    // bank strip with loadout preview
+    const stripW = 640, stripH = 40, sx = cx - stripW / 2, sy = 96;
+    ctx.save();
+    ctx.fillStyle = 'rgba(244,234,216,0.92)';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(sx, sy, stripW, stripH, 20);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+    const b = this.save.bank;
+    centerText(ctx, 'Bank', sx + 44, sy + stripH / 2, '700 15px Georgia, serif', INK, 0.9);
+    PIGMENT_ORDER.filter(c => c !== 'dry').forEach((color, i) => {
+      const pig = PIGMENTS[color];
+      const px = sx + 110 + i * 90;
+      ctx.beginPath();
+      ctx.arc(px, sy + stripH / 2, 9, 0, TAU);
+      ctx.fillStyle = pig.color;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = INK;
+      ctx.stroke();
+      centerText(ctx, String(b[color]), px + 20, sy + stripH / 2, '700 16px Georgia, serif', INK, 1);
+    });
+    centerText(ctx, `loadout ${this.save.loadout.length}/2`, sx + stripW - 210, sy + stripH / 2, '700 13px Georgia, serif', INK, 0.7);
+    for (let s = 0; s < 2; s++) {
+      const id = this.save.loadout[s];
+      const fx = sx + stripW - 96 + s * 32, fy = sy + 7, fs = 26;
+      ctx.save();
+      ctx.fillStyle = '#e9dcc3';
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(fx, fy, fs, fs, 4);
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+      const pt = id ? PAINTINGS.find(p => p.id === id) : null;
+      if (pt) this._drawPaintingMotif(ctx, pt, fx + 3, fy + 3, fs - 6);
+      else centerText(ctx, '·', fx + fs / 2, fy + fs / 2 + 1, '700 14px Georgia, serif', INK, 0.35);
+    }
+
+    // tabs
+    [['Studio Upgrades', 0], ['Paintings', 1]].forEach(([label, idx]) => {
+      const active = this.atelierTab === idx;
+      const bx = idx === 0 ? cx - g.tabW - 10 : cx + 10;
+      uiButton(ctx, bx, g.tabY, g.tabW, g.tabH, label, this._mouseIn(bx, g.tabY, g.tabW, g.tabH) && !active, active, { seed: 30 + idx, size: 17 });
+    });
+
+    // list
+    if (this.atelierTab === 0) {
+      Object.keys(UPGRADES).forEach((id, i) => {
+        const u = UPGRADES[id];
+        const lv = this.save.upgrades[id] || 0;
+        const maxed = lv >= u.levels.length;
+        const buyable = !maxed && canAfford(this.save.bank, Array.isArray(u.levels[lv].cost) ? u.levels[lv].cost : costArray(u.levels[lv].cost));
+        const y = g.rowY0 + i * (g.rowH + g.rowGap);
+        const c = paperPanel(ctx, g.listX, y, g.listW, g.rowH, { seed: 40 + i });
+        this._leftText(c, u.name, g.listX + 36, y + 30, '700 20px Georgia, serif', INK, 1);
+        this._leftText(c, u.desc, g.listX + 36, y + 58, '14px Georgia, serif', INK, 0.75);
+        drawPips(c, g.listX + 44, y + 84, 6, u.levels.length, lv, PIGMENTS.green.color);
+        this._leftText(c, `level ${lv}/${u.levels.length}`, g.listX + 130, y + 84, '13px Georgia, serif', INK, 0.6);
+        if (maxed) {
+          this._leftText(c, 'fully learned — the frog hums with it', g.listX + 400, y + 30, 'italic 13px Georgia, serif', INK, 0.5);
+        } else {
+          const tNow = makeTuning(this.save.upgrades, this.save.loadout);
+          const tNext = makeTuning({ ...this.save.upgrades, [id]: lv + 1 }, this.save.loadout);
+          const diffs = [];
+          if (tNext.maxHp !== tNow.maxHp) diffs.push(`health ${tNow.maxHp} → ${tNext.maxHp}`);
+          if (Math.abs(tNext.power - tNow.power) > 1e-9) diffs.push(`power ${tNow.power.toFixed(2)} → ${tNext.power.toFixed(2)}`);
+          if (tNext.capacity !== tNow.capacity) diffs.push(`capacity ${tNow.capacity} → ${tNext.capacity}`);
+          if (diffs.length) this._leftText(c, diffs.join('   ·   '), g.listX + 400, y + 30, '700 14px Georgia, serif', '#4c8a34', 0.95);
+          this._costChips(c, u.levels[lv].cost, g.listX + 400, y + 84);
+        }
+        const bw = 220, bh = 62, bx = g.listX + g.listW - 250, by = y + 21;
+        uiButton(c, bx, by, bw, bh, maxed ? 'MAX' : buyable ? 'Learn' : 'Cannot afford', this._mouseIn(bx, by, bw, bh), false, { seed: 60 + i, size: 16 });
+        paperEnd(ctx);
+      });
+    } else {
+      PAINTINGS.forEach((pt, i) => {
+        const col = i % g.cols, row = (i / g.cols) | 0;
+        const x = g.listX + col * (g.cardW + 24);
+        const y = g.rowY0 + row * (g.cardH + g.cardGap);
+        const owned = this.save.owned.includes(pt.id);
+        const inLoadout = this.save.loadout.includes(pt.id);
+        const costC = Array.isArray(pt.cost) ? pt.cost : costArray(pt.cost);
+        const buyable = !owned && canAfford(this.save.bank, costC);
+        const c = paperPanel(ctx, x, y, g.cardW, g.cardH, { seed: 70 + i, fill: inLoadout ? '#f7f1e2' : PAPER });
+        // art tile
+        const artS = 72, artX = x + 16, artY = y + 20;
+        c.fillStyle = pt.art.bg;
+        c.beginPath(); c.roundRect(artX, artY, artS, artS, 8); c.fill();
+        c.lineWidth = 2.5;
+        c.strokeStyle = INK;
+        c.stroke();
+        this._drawPaintingMotif(c, pt, artX, artY, artS);
+        // text
+        const tx = artX + artS + 16;
+        this._leftText(c, pt.locked ? '???' : pt.name, tx, y + 32, '700 16px Georgia, serif', INK, 1);
+        c.save();
+        c.globalAlpha = pt.locked ? 0.5 : 0.78;
+        c.fillStyle = INK;
+        c.font = '12px Georgia, serif';
+        c.textBaseline = 'middle';
+        c.fillText(pt.locked ? 'a portrait someone must earn' : pt.desc, tx, y + 58, 256);
+        c.restore();
+        if (!pt.locked) this._costChips(c, pt.cost, tx, y + 88);
+        // action button
+        const bw = 160, bh = 44, bx = x + g.cardW - bw - 16, by = y + 34;
+        let label = buyable ? 'Learn' : 'Cannot afford', enabled = buyable;
+        if (owned) { label = inLoadout ? 'Unhang' : 'Hang'; enabled = inLoadout || this.save.loadout.length < 2; }
+        if (pt.locked) { label = 'Sealed'; enabled = false; }
+        uiButton(c, bx, by, bw, bh, label, this._mouseIn(bx, by, bw, bh), false, { seed: 90 + i, size: 14 });
+        if (inLoadout) centerText(c, '★', x + g.cardW - 26, y + 22, '700 16px Georgia, serif', '#c9922a', 1);
+        paperEnd(ctx);
+      });
+    }
+
+    // footer
+    const d = g.depart;
+    uiButton(ctx, d.x, d.y, d.w, d.h, 'Begin Expedition', this._mouseIn(d.x, d.y, d.w, d.h), false, { seed: 80, size: 18 });
+    const l = g.leave;
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#fdf6e9';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(l.x, l.y, l.w, l.h, 17);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+    centerText(ctx, '← back to the pond', l.x + l.w / 2, l.y + l.h / 2 + 1, '14px Georgia, serif', '#fdf6e9', 0.9);
+    centerText(ctx, 'Enter — depart the studio   ·   Esc — return to the pond', cx, d.y + d.h + 16, 'italic 11px Georgia, serif', '#fdf6e9', 0.55);
+  }
+
+  // tiny generative art per painting (keeps it light, no assets)
+  _drawPaintingMotif(c, pt, x, y, s) {
+    c.save();
+    c.beginPath();
+    c.rect(x, y, s, s);
+    c.clip();
+    const a = pt.art.accent;
+    c.strokeStyle = a;
+    c.fillStyle = a;
+    c.lineWidth = Math.max(2, s * 0.05);
+    const kind = pt.art.shape;
+    if (kind === 'pond') {
+      c.beginPath(); c.arc(x + s * 0.5, y + s * 0.45, s * 0.22, 0, TAU); c.fill();
+      c.beginPath(); c.arc(x + s * 0.3, y + s * 0.7, s * 0.1, 0, TAU); c.stroke();
+      c.beginPath(); c.arc(x + s * 0.72, y + s * 0.66, s * 0.14, 0, TAU); c.stroke();
+    } else if (kind === 'salamander') {
+      c.beginPath(); c.moveTo(x + s * 0.2, y + s * 0.6);
+      c.bezierCurveTo(x + s * 0.4, y + s * 0.2, x + s * 0.6, y + s * 0.8, x + s * 0.8, y + s * 0.4);
+      c.stroke();
+      c.beginPath(); c.arc(x + s * 0.8, y + s * 0.35, s * 0.09, 0, TAU); c.fill();
+    } else if (kind === 'garden') {
+      for (let i = 0; i < 3; i++) {
+        const fx = x + s * (0.25 + i * 0.25);
+        c.beginPath(); c.moveTo(fx, y + s * 0.75); c.lineTo(fx, y + s * 0.4); c.stroke();
+        c.beginPath(); c.arc(fx, y + s * 0.34, s * 0.11, 0, TAU); c.fill();
+      }
+    } else if (kind === 'portrait') {
+      c.beginPath(); c.arc(x + s * 0.5, y + s * 0.38, s * 0.2, 0, TAU); c.stroke();
+      c.beginPath(); c.arc(x + s * 0.5, y + s * 0.72, s * 0.28, Math.PI, TAU); c.stroke();
+    } else if (kind === 'king') {
+      c.beginPath();
+      c.moveTo(x + s * 0.25, y + s * 0.45); c.lineTo(x + s * 0.38, y + s * 0.28);
+      c.lineTo(x + s * 0.5, y + s * 0.45); c.lineTo(x + s * 0.62, y + s * 0.28);
+      c.lineTo(x + s * 0.75, y + s * 0.45); c.closePath(); c.fill();
+      c.beginPath(); c.arc(x + s * 0.5, y + s * 0.66, s * 0.2, 0, TAU); c.stroke();
+    } else if (kind === 'storm') {
+      c.beginPath(); c.arc(x + s * 0.4, y + s * 0.4, s * 0.22, 0, TAU); c.stroke();
+      c.beginPath(); c.arc(x + s * 0.62, y + s * 0.5, s * 0.18, 0, TAU); c.stroke();
+      c.beginPath(); c.moveTo(x + s * 0.55, y + s * 0.55); c.lineTo(x + s * 0.45, y + s * 0.78); c.lineTo(x + s * 0.6, y + s * 0.72); c.lineTo(x + s * 0.52, y + s * 0.95); c.stroke();
+    } else if (kind === 'armor') {
+      c.beginPath();
+      c.moveTo(x + s * 0.5, y + s * 0.15);
+      c.lineTo(x + s * 0.78, y + s * 0.3); c.lineTo(x + s * 0.7, y + s * 0.8);
+      c.lineTo(x + s * 0.3, y + s * 0.8); c.lineTo(x + s * 0.22, y + s * 0.3);
+      c.closePath(); c.stroke();
+      c.beginPath(); c.moveTo(x + s * 0.5, y + s * 0.15); c.lineTo(x + s * 0.5, y + s * 0.8); c.stroke();
+    } else if (kind === 'knight') {
+      c.beginPath(); c.arc(x + s * 0.5, y + s * 0.4, s * 0.18, 0, TAU); c.stroke();
+      c.fillRect(x + s * 0.3, y + s * 0.62, s * 0.4, s * 0.14);
+      c.beginPath(); c.moveTo(x + s * 0.5, y + s * 0.18); c.lineTo(x + s * 0.5, y + s * 0.05); c.lineTo(x + s * 0.6, y + s * 0.1); c.closePath(); c.fill();
+    } else {
+      c.beginPath(); c.arc(x + s * 0.5, y + s * 0.5, s * 0.3, 0, TAU); c.stroke();
+    }
+    c.restore();
+  }
+
   // ================= part 2: expedition update ===========================
   _updateTitle(dt) {
     if (this.input.pressed('enter') || this.input.pressed(' ')) {
@@ -202,14 +556,14 @@ export class Game {
       this._beginExpedition();
       return;
     }
-    // mouse: "Begin Expedition" button (see _drawTitle layout)
+    if (this.input.pressed('a')) { this.sfx('ui'); this._beginAtelier(); return; }
+    // mouse buttons (see _drawTitle layout)
     if (this.input.mouse.lPressed) {
       const cx = this.cw / 2, py = 300, ph = 300;
       const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 18;
-      if (this._mouseIn(bx, by, bw, bh)) {
-        this.sfx('ui');
-        this._beginExpedition();
-      }
+      const abw = 200, abh = 44, abx = cx - abw / 2, aby = by + bh + 16;
+      if (this._mouseIn(bx, by, bw, bh)) { this.sfx('ui'); this._beginExpedition(); }
+      else if (this._mouseIn(abx, aby, abw, abh)) { this.sfx('ui'); this._beginAtelier(); }
     }
   }
 
@@ -736,6 +1090,7 @@ export class Game {
       this._drawBanners(ctx);
     }
     if (this.state === 'title') this._drawTitle(ctx);
+    if (this.state === 'atelier') this._drawAtelier(ctx);
     if (this.paused && this.state === 'expedition') this._drawPause(ctx);
     if (this.state === 'end') this._drawEnd(ctx);
   }
@@ -1010,13 +1365,16 @@ export class Game {
     paperEnd(ctx);
 
     // start button (visual; Enter/Space handled in _updateTitle)
-    const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 18;
-    uiButton(ctx, bx, by, bw, bh, 'Begin Expedition', this._mouseIn(bx, by, bw, bh), false, { seed: 5, size: 20, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 18;
+        uiButton(ctx, bx, by, bw, bh, 'Begin Expedition', this._mouseIn(bx, by, bw, bh), false, { seed: 5, size: 20, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        // atelier button (visual; A / click handled in _updateTitle)
+        const abw = 200, abh = 44, abx = cx - abw / 2, aby = by + bh + 16;
+        uiButton(ctx, abx, aby, abw, abh, 'Visit the Atelier', this._mouseIn(abx, aby, abw, abh), false, { seed: 6, size: 15 });
 
-    // little footer stats
-    const s = this.save.stats;
-    centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, by + bh + 26, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
-  }
+        // little footer stats
+        const s = this.save.stats;
+        centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, aby + abh + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
+      }
 
   _drawPause(ctx) {
     ctx.save();
@@ -1079,10 +1437,22 @@ export class Game {
     centerText(c, `expeditions ${s.expeditions} · victories ${s.victories} · herons painted ${s.heronsPainted}`, cx, py + 274, '13px Georgia, serif', INK, 0.65);
 
     // spend hint
-    centerText(c, 'Spend pigments in the Atelier (upcoming).', cx, py + 298, 'italic 12px Georgia, serif', INK, 0.55);
-    paperEnd(ctx);
+        centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + 298, 'italic 12px Georgia, serif', INK, 0.55);
+        paperEnd(ctx);
 
-    const bw = 280, bh = 54, bx = cx - bw / 2, by = py + ph + 16;
-    uiButton(ctx, bx, by, bw, bh, 'Back to the Pond', this._mouseIn(bx, by, bw, bh), false, { seed: 9, size: 18, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-  }
+        // primary: to the atelier (see end-state input routing for the same rects)
+        const bw = 300, bh = 54, bx = cx - bw / 2, by = py + ph + 16;
+        uiButton(ctx, bx, by, bw, bh, 'Rest at the Atelier', this._mouseIn(bx, by, bw, bh), false, { seed: 9, size: 18, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        const lw = 210, lh = 34, lx = cx - lw / 2, ly = by + bh + 16;
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = '#fdf6e9';
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(lx, ly, lw, lh, 17);
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+        centerText(ctx, 'return to the pond (Esc)', cx, ly + lh / 2 + 1, '13px Georgia, serif', '#fdf6e9', 0.9);
+      }
 }
