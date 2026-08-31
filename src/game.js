@@ -145,6 +145,25 @@ export class Game {
         this._stepHeronFlight(dt);
       } else if (!this.paused) {
         this._updateExpedition(dt);
+      } else if (!this.dying) {
+        // M5: the pause menu owns input while paused — _updateExpedition is
+        // skipped in that state, so its own pause block never ran.
+        if (this.input.pressed('p')) {
+          this.paused = false;
+          this.sfx('ui');
+        } else if (this.input.pressed('escape')) {
+          this.sfx('ui-back');
+          this._quitToTitle();
+        } else {
+          if (this.input.pressed('m')) this._muteToggle();
+          if (this.input.mouse.lPressed) {
+            // geometry must match _drawPause (M5)
+            const cx = this.cw / 2, cy = this.ch / 2;
+            const pw = 340, px = cx - pw / 2, py = cy - 130;
+            if (this._mouseIn(px, py + 108, pw, 44)) { this.paused = false; this.sfx('ui'); }
+            else if (this._mouseIn(px, py + 160, pw, 44)) { this.sfx('ui-back'); this._quitToTitle(); }
+          }
+        }
       }
     } else if (this.state === 'end') {
       this.endT += dt;
@@ -613,22 +632,30 @@ _drawAtelier(ctx) {
     this.state = 'expedition';
     this.audio.ensure();
     this.sfx('ui');
-    this.addBanner('Paint the swamp back to color… then face the Great Gray Heron.', 4.2);
+    if (!this.save.flags.intro) {
+      this.save.flags.intro = true;
+      SaveSys.save(this.save);
+      this.addBanner('WASD to hop - aim the brush with the mouse', 4.6, this.ch * 0.3);
+      this.addBanner('Left-click swipes paint - hold right-click for a splash', 4.6, this.ch * 0.3 + 36);
+      this.addBanner('Paint the swamp back to color… then face the Great Gray Heron.', 5.4, this.ch * 0.42);
+    } else {
+      this.addBanner('Paint the swamp back to color… then face the Great Gray Heron.', 4.2);
+    }
   }
 
   _updateExpedition(dt) {
     this.runT += dt;
 
-    // ----- pause toggle -----
-    if (this.input.pressed('p') || this.input.pressed('escape')) {
+    // ----- pause toggle (open only; menu input lives in the frame router) -----
+    if (this.input.pressed('p')) {
       this.paused = !this.paused;
       this.sfx(this.paused ? 'ui-back' : 'ui');
-    } else if (this.paused && this.input.mouse.lPressed) {
-      const cx = this.cw / 2;
-      if (this._mouseIn(cx - 110, 415, 220, 44) || this._mouseIn(cx - 110, 473, 220, 44)) {
-        this.paused = false;
-        this.sfx('ui');
-      }
+      return;
+    }
+    if (this.input.pressed('escape')) {
+      this.paused = true;
+      this.sfx('ui-back');
+      return;
     }
 
     // ----- brush charge (hold RMB) -----
@@ -1135,6 +1162,19 @@ _drawAtelier(ctx) {
     if (this.state === 'atelier') this._drawAtelier(ctx);
     if (this.paused && this.state === 'expedition') this._drawPause(ctx);
     if (this.state === 'end') this._drawEnd(ctx);
+
+    // ---- M5: low-HP vignette (soft red pulse when at <= 2 hp) ----
+    if (this.state === 'expedition' && !this.paused && this.player && this.player.alive
+        && this.player.hp <= 2 && this.player.iframes <= 0) {
+      const pulse = 0.26 + 0.12 * Math.sin(this.now * 5);
+      const g = ctx.createRadialGradient(this.cw / 2, this.ch / 2, this.ch * 0.42, this.cw / 2, this.ch / 2, this.ch * 0.78);
+      g.addColorStop(0, 'rgba(122,32,22,0)');
+      g.addColorStop(1, 'rgba(122,32,22,' + pulse.toFixed(3) + ')');
+      ctx.save();
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, this.cw, this.ch);
+      ctx.restore();
+    }
   }
 
   _drawOrbs(ctx) {
@@ -1237,9 +1277,6 @@ _drawAtelier(ctx) {
       // stock pips
       const n = Math.min(t.capacity, this.stock[c]);
       const pr = 2.6;
-      for (let j = 0; j < t.capacity; j++) {
-        const px = x + 12 + j * ((36 - (t.capacity - 1) * 0) / Math.max(1, t.capacity - 1) * 2.2);
-      }
       drawPips(ctx, x + 12, y + 36, pr, Math.min(8, t.capacity), n, pig.color);
       ctx.restore();
     }
@@ -1426,14 +1463,17 @@ _drawAtelier(ctx) {
 
   _drawPause(ctx) {
     ctx.save();
-    ctx.fillStyle = 'rgba(30,25,22,0.5)';
+    ctx.fillStyle = 'rgba(30,25,22,0.55)';
     ctx.fillRect(0, 0, this.cw, this.ch);
     ctx.restore();
     const cx = this.cw / 2, cy = this.ch / 2;
-    const pw = 360, ph = 150, px = cx - pw / 2, py = cy - ph / 2;
+    const pw = 340, ph = 260, px = cx - pw / 2, py = cy - 130;
     const c = paperPanel(ctx, px, py, pw, ph, { seed: 21 });
-    centerText(c, 'Paused', cx, py + 40, '700 30px Georgia, serif');
-    centerText(c, 'P or Esc to resume', cx, py + 82, '15px Georgia, serif', INK, 0.75);
+    centerText(c, 'Paused', cx, py + 44, '700 30px Georgia, serif');
+    centerText(c, 'P to resume - Esc quits to the pond', cx, py + 76, '13px Georgia, serif', INK, 0.7);
+    uiButton(ctx, px, py + 108, pw, 44, 'Resume', this._mouseIn(px, py + 108, pw, 44), false, { seed: 41, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+    uiButton(ctx, px, py + 160, pw, 44, 'Quit to the Pond', this._mouseIn(px, py + 160, pw, 44), false, { seed: 42, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+    centerText(c, 'M to mute', cx, py + 226, 'italic 12px Georgia, serif', INK, 0.6);
     paperEnd(ctx);
   }
 

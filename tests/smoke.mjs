@@ -325,5 +325,47 @@ assert(game.save.flags.croaksworthGiven, 'Croaksworth story beat fired');
 assert(game.save.bank.red === 20 && game.save.bank.blue === 20 && game.save.bank.green === 20, `cost + coin balanced (got ${JSON.stringify(game.save.bank)})`);
 assert(game.banners.some(b => String(b.text).includes('Croaksworth')), 'Croaksworth banner is showing');
 
+console.log('== stage 9: M5 polish — pause, vignette, intro ==');
+fireKey('keydown', 'Escape'); // atelier -> back to the title
+frames(2);
+assert(game.state === 'title', 'Escape from the atelier returned to the title');
+game.save.flags.intro = false;
+fireKey('keydown', 'Enter');
+frames(2);
+assert(game.state === 'expedition', 'fresh expedition started');
+assert(game.save.flags.intro, 'first-run intro flag set after the intro banners');
+frames(120); // let intro banners expire
+assert(game.state === 'expedition', 'intro banners expired without breaking the run');
+
+// pause: P opens, resume button works, Esc from pause quits
+fireKey('keydown', 'p');
+frames(1);
+assert(game.paused, 'P opened the pause menu');
+frames(30);
+assert(game.paused, 'pause survived 30 frames (draw pass clean)');
+// click the Resume button (geometry shared with _drawPause)
+fireMouse(canvas, game.cw / 2, game.ch / 2 - 130 + 108 + 22);
+frames(1);
+assert(!game.paused, 'Resume button unpaused');
+fireKey('keydown', 'p');
+frames(1);
+assert(game.paused, 'P paused again');
+fireKey('keydown', 'Escape');
+frames(2);
+assert(game.state === 'title', 'Esc from the pause menu quit to the title');
+
+// low-HP vignette: draw the HUD at 1 hp without crashing
+fireKey('keydown', 'Enter');
+frames(2);
+assert(game.state === 'expedition', 'final expedition started');
+game.player.hp = 1;
+game.player.iframes = 0;
+frames(90); // vignette pulses across ~1.5s of frames
+assert(game.state === 'expedition' && game.player.alive, 'low-HP vignette rendered without crashing the run');
+game.player.iframes = 0;
+game.player.hurt(99, game.tuning);
+frames(140);
+assert(game.state === 'end' && game.endKind === 'defeat', 'run ended cleanly');
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

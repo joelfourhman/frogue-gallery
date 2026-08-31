@@ -1,6 +1,6 @@
 # Project State
 
-_Last verified: 2026-08-30, end of M4 checkpoint. `node tests/smoke.mjs` = ALL STAGES PASSED (8 stages, 40+ assertions). `node --check` clean on every module._
+_Last verified: 2026-08-30, end of M5 checkpoint. `node tests/smoke.mjs` = ALL 10 STAGES / 60 ASSERTIONS PASSED. `node --check` clean on every module._
 
 ## Current Status
 
@@ -52,5 +52,5 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite**:
 - **M2** ✅ Atelier between-run economy — committed
 - **M3** ✅ Balance pass (2× awakened, HP/dmg rebalance, 1600 HP boss) — committed
 - **M4** ✅ Croaksworth story beat + best-run tracking + M-mute — committed
-- **M5** ⏳ Polish: low-HP vignette, pause menu polish (audio note + quit), first-run intro banner polish, boss-HP bar shimmer during awaken
+- **M5** ✅ Polish: low-HP vignette (pulsing red at ≤2 HP), real pause menu (Resume / Quit buttons + M-mute; pause input now lives in the frame router since `_updateExpedition` is skipped while paused), first-run intro banners (`flags.intro`), dead HUD code removed
 - **M6** ⏳ Final Definition-of-Done sweep + final report
