@@ -291,5 +291,39 @@ assert((store.get('frogue_gallery_save') || '').length > 0, 'save persisted to (
 frames(60);
 assert(game.state === 'end', 'defeat end screen survived 60 frames');
 
+console.log('== stage 8: M4 — best run, mute, Croaksworth beat ==');
+assert(game.save.bestRun && game.save.bestRun.cleared, 'best run recorded from the stage-5 victory');
+
+// mute toggle (M key) persists to options
+const wasMuted = game.audio.muted;
+fireKey('keydown', 'm');
+frames(2);
+assert(game.audio.muted === !wasMuted, 'M toggled audio mute state');
+const rawOpts = JSON.parse(store.get('frogue_gallery_options') || '{}');
+assert(rawOpts.muted === game.audio.muted, 'mute choice persisted to (stub) localStorage options');
+fireKey('keydown', 'm');
+frames(2);
+assert(game.audio.muted === wasMuted, 'M again restored the previous state');
+
+// Croaksworth story beat: seal lifts after the first victory
+game.save.flags.heronDefeated = true; // the stage-5 victory already earned it
+game.save.bank = { red: 20, blue: 20, green: 20 };
+game.save.flags.croaksworthGiven = false;
+fireKey('keydown', 'Enter'); // end screen -> atelier
+frames(2);
+assert(game.state === 'atelier', 'back in the atelier for the portrait purchase');
+fireKey('keydown', '2');
+frames(1);
+const croakRow = findRow('paint:croaksworth');
+assert(croakRow && croakRow.enabled, `Croaksworth portrait unlocked + affordable after first victory (got ${croakRow ? JSON.stringify(croakRow.tag) : 'missing row'})`);
+fireMouse(canvas, croakRow.x + croakRow.w / 2, croakRow.y + croakRow.h / 2);
+frames(1);
+assert(game.save.owned.includes('croaksworth'), 'Croaksworth portrait purchased');
+assert(game.save.flags.croaksworthGiven, 'Croaksworth story beat fired');
+// cost (5 each) and the silver coin (+5 each) net to zero — bank unchanged proves BOTH fired;
+// a missing bonus would leave 15/15/15
+assert(game.save.bank.red === 20 && game.save.bank.blue === 20 && game.save.bank.green === 20, `cost + coin balanced (got ${JSON.stringify(game.save.bank)})`);
+assert(game.banners.some(b => String(b.text).includes('Croaksworth')), 'Croaksworth banner is showing');
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

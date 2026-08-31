@@ -160,6 +160,7 @@ export class Game {
       if (this.endT > 0.6) {
         if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); this._beginAtelier(); }
         if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._quitToTitle(); }
+        if (this.input.pressed('m')) this._muteToggle();
       }
     } else if (this.state === 'atelier') {
       this.atelierT += dt;
@@ -244,7 +245,7 @@ export class Game {
       });
     } else {
       PAINTINGS.forEach((pt, i) => {
-        if (pt.locked) return; // sealed: nothing to click
+        if (this._ptLocked(pt)) return; // sealed: nothing to click
         const col = i % g.cols, row = (i / g.cols) | 0;
         const x = g.listX + col * (g.cardW + 24);
         const y = g.rowY0 + row * (g.cardH + g.cardGap);
@@ -295,15 +296,27 @@ export class Game {
     SaveSys.save(this.save);
   }
 
+  _ptLocked(pt) {
+    // Sir Croaksworth's portrait stays sealed until the first heron is painted
+    return !!(pt.locked && !this.save.flags.heronDefeated && !this.save.owned.includes(pt.id));
+  }
+
   _buyPainting(id) {
     const pt = PAINTINGS.find(p => p.id === id);
-    if (!pt || pt.locked || this.save.owned.includes(id)) return;
+    if (!pt || this._ptLocked(pt) || this.save.owned.includes(id)) return;
     const cc = Array.isArray(pt.cost) ? pt.cost : costArray(pt.cost);
     if (!canAfford(this.save.bank, cc)) { this.sfx('hurt'); return; }
     this.save.bank = payCost(this.save.bank, cc);
     this.save.owned.push(id);
     if (this.save.loadout.length < 2) this.save.loadout.push(id); // new art hangs right away
     this.sfx('paint-create');
+    if (id === 'croaksworth' && !this.save.flags.croaksworthGiven) {
+      this.save.flags.croaksworthGiven = true;
+      this.sfx('awaken');
+      this.addBanner('Sir Croaksworth smiles. "Well done, little one. The world thanks you."', 5.2, this.ch * 0.34);
+      this.addBanner('He tucks a silver coin into your pocket. (+5 of every pigment)', 5.2, this.ch * 0.34 + 34);
+      for (const k of ['red', 'blue', 'green']) this.save.bank[k] += 5;
+    }
     SaveSys.save(this.save);
   }
 
@@ -456,20 +469,21 @@ _drawAtelier(ctx) {
         this._drawPaintingMotif(c, pt, artX, artY, artS);
         // text
         const tx = artX + artS + 16;
-        this._leftText(c, pt.locked ? '???' : pt.name, tx, y + 32, '700 16px Georgia, serif', INK, 1);
+        const sealed = this._ptLocked(pt);
+        this._leftText(c, sealed ? '???' : pt.name, tx, y + 32, '700 16px Georgia, serif', INK, 1);
         c.save();
-        c.globalAlpha = pt.locked ? 0.5 : 0.78;
+        c.globalAlpha = sealed ? 0.5 : 0.78;
         c.fillStyle = INK;
         c.font = '12px Georgia, serif';
         c.textBaseline = 'middle';
-        c.fillText(pt.locked ? 'a portrait someone must earn' : pt.desc, tx, y + 58, 256);
+        c.fillText(sealed ? 'a portrait someone must earn' : pt.desc, tx, y + 58, 256);
         c.restore();
-        if (!pt.locked) this._costChips(c, pt.cost, tx, y + 88);
+        if (!sealed) this._costChips(c, pt.cost, tx, y + 88);
         // action button
         const bw = 160, bh = 44, bx = x + g.cardW - bw - 16, by = y + 34;
         let label = buyable ? 'Learn' : 'Cannot afford', enabled = buyable;
         if (owned) { label = inLoadout ? 'Unhang' : 'Hang'; enabled = inLoadout || this.save.loadout.length < 2; }
-        if (pt.locked) { label = 'Sealed'; enabled = false; }
+        if (sealed) { label = 'Sealed'; enabled = false; }
         uiButton(c, bx, by, bw, bh, label, this._mouseIn(bx, by, bw, bh), false, { seed: 90 + i, size: 14 });
         if (inLoadout) centerText(c, '★', x + g.cardW - 26, y + 22, '700 16px Georgia, serif', '#c9922a', 1);
         paperEnd(ctx);
@@ -557,6 +571,7 @@ _drawAtelier(ctx) {
       return;
     }
     if (this.input.pressed('a')) { this.sfx('ui'); this._beginAtelier(); return; }
+    if (this.input.pressed('m')) { this._muteToggle(); return; }
     // mouse buttons (see _drawTitle layout)
     if (this.input.mouse.lPressed) {
       const cx = this.cw / 2, py = 300, ph = 300;
@@ -797,9 +812,20 @@ _drawAtelier(ctx) {
     if (victory) { this.save.stats.victories += 1; this.save.flags.heronDefeated = true; }
     else this.save.stats.deaths += 1;
     this.save.stats.treasures += 0; // reserved for future content
-    SaveSys.save(this.save);
-    this.endGains = gains;
-    this.sfx(victory ? 'victory' : 'defeat');
+        // best run: a cleared victory with more pigments beats everything;
+        // otherwise the longer un-cleared run is the "furthest you got" record
+        const total = gains.red + gains.blue + gains.green;
+        const cand = { pigments: total, time: Math.round(this.runT), cleared: victory };
+        const prev = this.save.bestRun;
+        if (!prev
+          || (cand.cleared && !prev.cleared)
+          || (cand.cleared === prev.cleared &&
+             (victory ? total > prev.pigments : cand.time > prev.time))) {
+          this.save.bestRun = cand;
+        }
+        SaveSys.save(this.save);
+        this.endGains = gains;
+        this.sfx(victory ? 'victory' : 'defeat');
   }
 
   // ================= part 3: boss ========================================
@@ -875,16 +901,32 @@ _drawAtelier(ctx) {
     }
   }
 
+  // M4: mute toggle (M key) — works from any screen, saved to options
+  _muteToggle() {
+    const m = !this.audio.muted;
+    this.audio.setMuted(m);
+    this.options.muted = m;
+    SaveSys.saveOptions(this.options);
+    if (!m) this.sfx('ui'); // unmuting plays a confirm blip; muting stays silent
+    this.addBanner(m ? 'Sound muted - M to restore' : 'Sound on', 1.6, this.ch - 90);
+  }
+
   _onHeronDefeated() {
     const h = this.heron;
     this.save.stats.heronsPainted += 1;
     SaveSys.save(this.save);
     this.sfx('awaken');
-    this.addShake(16);
-    this.addBanner('The Great Gray Heron blooms and takes flight!', 4, 200);
-    for (const c of ORB_COLORS) this.particles.sparkles(h.x, h.y - 160, PIGMENTS[c].light, 10);
-    h.flying = 0.001; // hand off to the victory flight
-  }
+        this.addShake(16);
+        this.addBanner('The Great Gray Heron blooms and takes flight!', 4, 200);
+        for (const c of ORB_COLORS) this.particles.sparkles(h.x, h.y - 160, PIGMENTS[c].light, 10);
+        h.flying = 0.001; // hand off to the victory flight
+        // story beat: the first heron ever painted summons the swamp's critic
+        if (!this.save.flags.croaksworthAsked) {
+          this.save.flags.croaksworthAsked = true;
+          this.addBanner('Somewhere in the reeds, Sir Croaksworth takes notice…', 3.6, 230);
+          SaveSys.save(this.save);
+        }
+      }
 
   // ---------------- heron rendering (world space) ------------------------
   _drawHeron(ctx, h, now) {
@@ -1374,6 +1416,12 @@ _drawAtelier(ctx) {
         // little footer stats
         const s = this.save.stats;
         centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, aby + abh + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
+        const br = this.save.bestRun;
+        if (br) {
+          const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
+          centerText(ctx, `best run — ${what}`, cx, aby + abh + 38, '700 14px Georgia, serif', '#e8c86a', 0.95);
+        }
+        centerText(ctx, 'M to mute · A for the atelier', cx, aby + abh + (br ? 58 : 38), '12px Georgia, serif', '#fdf6e9', 0.5);
       }
 
   _drawPause(ctx) {
@@ -1436,8 +1484,15 @@ _drawAtelier(ctx) {
     const s = this.save.stats;
     centerText(c, `expeditions ${s.expeditions} · victories ${s.victories} · herons painted ${s.heronsPainted}`, cx, py + 274, '13px Georgia, serif', INK, 0.65);
 
+    // best run
+    const br = this.save.bestRun;
+    if (br) {
+      const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
+      centerText(c, `best run — ${what}`, cx, py + 296, '700 13px Georgia, serif', INK, 0.8);
+    }
+
     // spend hint
-        centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + 298, 'italic 12px Georgia, serif', INK, 0.55);
+        centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + 320, 'italic 12px Georgia, serif', INK, 0.55);
         paperEnd(ctx);
 
         // primary: to the atelier (see end-state input routing for the same rects)
