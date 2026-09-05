@@ -14,7 +14,7 @@ export const PIGMENT_ORDER = ['red', 'blue', 'green', 'dry'];
 // ---------------------------------------------------------------- enemies
 export const ENEMIES = {
   beetle: {
-    id: 'beetle', name: 'Mud Beetle', hp: 36, speed: 40, dmg: 8, radius: 16,
+    id: 'beetle', name: 'Mud Beetle', hp: 36, speed: 40, dmg: 6, radius: 16,
     armor: 0.35,          // fraction of physical damage blocked (burn ignores it)
     burnArmor: false,     // burns fully pierce armor
     fly: false, score: 20, paintTintDecay: 0.25,
@@ -24,7 +24,7 @@ export const ENEMIES = {
     armor: 0, fly: true, score: 10, paintTintDecay: 0.4,
   },
   toad: {
-    id: 'toad', name: 'Grumpy Toad', hp: 52, speed: 58, dmg: 9, radius: 19,
+    id: 'toad', name: 'Grumpy Toad', hp: 52, speed: 58, dmg: 6, radius: 19,
     armor: 0.08, score: 30, paintTintDecay: 0.2,
     dizzyPaintChance: 0.22,  // chance a paint hit stuns the toad (sits, +50% dmg)
     dizzyDuration: 2.2,
@@ -100,7 +100,7 @@ export function paintDamage(base, pigmentId, tuning, opts = {}) {
 export function makeTuning(upgrades = {}, loadout = []) {
   const t = {
     // player
-    maxHp: 7 + (upgrades.vitality || 0),
+    maxHp: 10 + (upgrades.vitality || 0),
     power: 1 + 0.15 * (upgrades.power || 0),
     capacity: 6 + 3 * (upgrades.capacity || 0),
     iframes: 0.9,
@@ -120,7 +120,9 @@ export function makeTuning(upgrades = {}, loadout = []) {
     freezeDuration: 1.3,
     slowFactor: 0.45,
     rootDuration: 1.6,
-    greenHeal: 1,
+    // P4: green mends 3 HP per paint — meaningful early, still slow to
+    // refill a full pool (keeps the heron fight from being a free medkit).
+    greenHeal: 3,
     // economy
     pickupValue: 1,
     pickupMagnet: 70,

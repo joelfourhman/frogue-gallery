@@ -1,6 +1,6 @@
 # Project State
 
-_Last verified: 2026-09-05, P3 (atelier onboarding). `node tests/smoke.mjs` = ALL 13 STAGES / 96 ASSERTIONS PASSED. `node --check` clean on every module. P1–P3 all committed (see git log)._
+_Last verified: 2026-09-05, P4 (balance re-pass). `node tests/smoke.mjs` = ALL 13 STAGES / 96 ASSERTIONS PASSED. `node --check` clean on every module. P1–P4 committed (see git log). Next: P5 run-length pacing (DoD #9)._
 
 ## Current Status
 
@@ -9,7 +9,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 - **Core fantasy**: paint with 3 pigments (red damages, blue slows/freezes, green heals/restores world color). Every stroke literally restores color to the swamp.
 - **Run loop** (verified by smoke test): title → expedition (waves, swipe + charged-splash combat, orb collection) → boss (Great Gray Heron: 3-hue awaken cycle, 2× paint damage while shimmering) → victory/defeat end screen → **Atelier** (shop) → next run.
 - **Between-run economy** (M2): bank pigments, 9 upgrades, 8 paintings (2-slot loadout), persisted via localStorage.
-- **Balance** (M3): 7 HP frog, ~2-hits-to-kill enemies, boss 1600 HP ≈ 2.1 awaken cycles, green heal 1.0 HP/s on thick moss.
+- **Balance** (M3 + P4): 10 HP frog, ~2-hits-to-kill enemies, boss 1600 HP ≈ 2.1 awaken cycles, green heal 3 HP/paint-tick on thick moss (P4: maxHp 7→10, beetle/toad contact dmg 8/9→6 — before P4 a single beetle hit *one-shot* a first-time player at 7 HP before they learned green heals).
 - **Meta/charm** (M4): best-run record (title + end screens), M-mute (persisted), **Croaksworth story beat** (portrait unseals after first victory; buying it triggers his thanks + silver coin +5/each pigment).
 - **Pause** (P/Esc) works; audio unlock on first gesture; banners for story beats.
 - **New-player guidance** (P1): staged 5-step first-run tutorial (one banner at a time, timed), one-time contextual tips (first hit / first orb / first atelier / first defeat), pigment roles stated on the title card, banners render on all screens.
@@ -23,7 +23,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/logic.js` | Pure game logic: tuning, UPGRADES, PAINTINGS, bossStep, bankGain, paintDamage (2× awakened), canAfford/payCost/costArray |
 | `src/world.js` | Procedural swamp, splats, fire/reed growth, `restoreColor()` |
 | `src/paint.js` | Brush: swipe fan, charged splash, `_bossPaint` (2× while awakened), restoreAcc |
-| `src/player.js` | Frog: hop, iframes, green-heal tick (1.0× greenHeal), satchel stock (cosmetic) |
+| `src/player.js` | Frog: hop, iframes, green-heal tick (3× greenHeal), satchel stock (cosmetic) |
 | `src/enemies.js` | beetle / mosquito / toad spawners + AI |
 | `src/input.js` | Keys (kb/pressed), mouse→world via `setView` |
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
@@ -59,4 +59,5 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 - **Post-M6 (P1)** ✅ New-player guidance: staged first-run tutorial (5 timed single-step banners), one-time contextual teaching banners (first hit, first orb, first atelier visit, first defeat, heron-reveal wording), improved title-card rows (pigment roles explicit), banners now render on every screen (was expedition/end only — title "save erased" banner was invisible), first-run heron reveal delayed to 6.5s. New save flags: `firstOrb/firstHurt/firstAtelier/firstDefeat` (merged via `migrateSave`).
 - **Post-M6 (P2)** ✅ Juice: floating pigment-colored damage numbers on every paint hit (enemies + heron, showing true 2× awakened values), orb-pickup "+N" text, off-screen enemy edge arrows (tinted when the enemy is currently painted; heron keeps its own arrow), note cap 14→24.
 - **Post-M6 (P3)** ✅ Atelier onboarding: first-visit "Welcome to the Atelier" paper panel (gated by `firstAtelier`, any tab/buy/action dismisses it, drawn above the shelves), persistent one-line legends under each tab (upgrades = permanent training paid in pigments; paintings = buy once, hang up to 2, real passives).
-- **Next (P4)**: balance re-pass for new players who now understand green = heal; simulated fresh-save run; docs + final commit
+- **Post-M6 (P4)** ✅ Balance re-pass for the now-taught first-time player: maxHp 7→10, beetle/toad contact dmg 8/9→6 (no more one-shot by the first beetle), greenHeal 1→3 per paint tick (meaningful early, still slow vs a full pool). All 13 smoke stages green.
+- **Next (P5)**: DoD #9 — measure a simulated full run's length headless; if it lands well under 15 min, widen the world (scale padSpots/obstacles/veg/soil to the new width, heron at `world.w - 350`) to stretch a run toward the 15–20 min target; also verify DoD #2 "Continue" (title auto-loads save; footer shows stats — decide if an explicit affordance is needed).
