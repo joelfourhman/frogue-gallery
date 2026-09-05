@@ -49,6 +49,49 @@ export function traceBlob(ctx, cx, cy, r, seed, amp = 0.12, points = 14) {
   ctx.closePath();
 }
 
+// Hand-drawn rounded-rect path: perimeter samples (4 edges + 4 corner arcs),
+// each nudged outward by a stable wobble. x,y = top-left; r = corner radius.
+export function traceWobblyRect(ctx, x, y, w, h, r, seed, amp = 0.02, nPts = 30) {
+  const rr = Math.min(r, w / 2, h / 2);
+  const A = Math.PI / 2;
+  // Clockwise from the top edge: ['l', x0, y0, x1, y1] | ['a', cx, cy, a0, a1]
+  const segs = [
+    ['l', x + rr, y, x + w - rr, y],
+    ['a', x + w - rr, y + rr, 1.5 * Math.PI, 2 * Math.PI],
+    ['l', x + w, y + rr, x + w, y + h - rr],
+    ['a', x + w - rr, y + h - rr, 0, A],
+    ['l', x + w - rr, y + h, x + rr, y + h],
+    ['a', x + rr, y + h - rr, A, 2 * A],
+    ['l', x, y + h - rr, x, y + rr],
+    ['a', x + rr, y + rr, 2 * A, 2.5 * Math.PI],
+  ];
+  const lens = segs.map((s) => (s[0] === 'l' ? Math.hypot(s[3] - s[1], s[4] - s[2]) : rr * A));
+  const total = lens.reduce((a, b) => a + b, 0) || 1;
+  const pts = [];
+  segs.forEach((s, si) => {
+    const count = Math.max(2, Math.round((lens[si] / total) * nPts));
+    for (let i = 0; i < count; i++) {
+      const t = i / count;
+      let px, py, nx, ny;
+      if (s[0] === 'l') {
+        const dx = s[3] - s[1], dy = s[4] - s[2];
+        const l = Math.hypot(dx, dy) || 1;
+        px = s[1] + dx * t; py = s[2] + dy * t;
+        nx = dy / l; ny = -dx / l; // outward (left of travel, clockwise)
+      } else {
+        const a = s[3] + (s[4] - s[3]) * t;
+        px = s[1] + Math.cos(a) * rr; py = s[2] + Math.sin(a) * rr;
+        nx = Math.cos(a); ny = Math.sin(a);
+      }
+      const off = wobble(seed, pts.length, amp) * Math.min(w, h);
+      pts.push([px + nx * off, py + ny * off]);
+    }
+  });
+  ctx.beginPath();
+  pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1])));
+  ctx.closePath();
+}
+
 // Open wobbly polyline (used for reeds, ripples).
 export function traceWobblyLine(ctx, x0, y0, x1, y1, seed, segs = 6, amp = 4) {
   ctx.beginPath();
