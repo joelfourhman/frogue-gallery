@@ -846,6 +846,7 @@ _drawAtelier(ctx) {
           this.stock[o.color] += v;
           this.sfx('pickup');
           this.particles.sparkles(o.x, o.y, PIGMENTS[o.color].light, 4);
+          this.paint.note(o.x, o.y - 10, '+' + v, o.color);
           if (!this.save.flags.firstOrb) {
             this.save.flags.firstOrb = true;
             SaveSys.save(this.save);
@@ -1214,6 +1215,7 @@ _drawAtelier(ctx) {
     this._screenSpace();
     if (this.state === 'expedition' || this.state === 'end') {
       this._drawOffscreenHeronArrow(ctx, v);
+      this._drawOffscreenEnemyArrows(ctx, v);
       this._drawHud(ctx);
     }
     if (this.state === 'title') this._drawTitle(ctx);
@@ -1286,6 +1288,33 @@ _drawAtelier(ctx) {
     ctx.closePath();
     ctx.fill(); ctx.stroke();
     ctx.restore();
+  }
+
+  // P2: little ink arrows at the screen edge point at off-screen enemies,
+  // so newcomers stop wondering where the mosquito went.
+  _drawOffscreenEnemyArrows(ctx, v) {
+    if (this.state !== 'expedition' || this.dying) return;
+    const p = this.player;
+    let shown = 0;
+    for (const e of this.enemies) {
+      if (e.dead || shown >= 6) continue;
+      const sx = (e.x - v.x) * v.scale;
+      const sy = (e.y - v.y) * v.scale;
+      if (sx > 40 && sx < this.cw - 40 && sy > 40 && sy < this.ch - 40) continue;
+      const cx = clamp(sx, 40, this.cw - 40), cy = clamp(sy, 56, this.ch - 40);
+      const a = Math.atan2(sy - cy, sx - cx);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(a);
+      ctx.globalAlpha = 0.55 + Math.sin(this.now * 5 + e.x) * 0.15;
+      ctx.fillStyle = e.tint && e.tintT > 0 ? PIGMENTS[e.tint].color : INK;
+      ctx.beginPath();
+      ctx.moveTo(10, 0); ctx.lineTo(-6, -7); ctx.lineTo(-2, 0); ctx.lineTo(-6, 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      shown++;
+    }
   }
 
   _drawHud(ctx) {

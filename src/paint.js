@@ -99,6 +99,8 @@ export class Paint {
     for (const e of hits) {
       const dmg = paintDamage(base, pig, this.tuning, { enemy: e });
       e.hp -= dmg;
+      // floating damage number (pigment-colored)
+      this.note(e.x, e.y - e.r - 18, '-' + Math.round(dmg), pig);
       // toad special: any non-dry paint can dizzy instead of the normal status
       if (e.dizzyPaintChance && pig !== 'dry' && Math.random() < e.dizzyPaintChance) {
         e.status = { type: 'dizzy', t: e.dizzyDuration || 1.2, appliedAt: e._now || 0 };
@@ -127,6 +129,11 @@ export class Paint {
     const res = (pig === 'dry') ? null : this._bossPaint(heron, pig, amount);
     if (res) this._restoreAcc = (this._restoreAcc || 0) + 0.012;
     this.particles.splatter(heron.x, heron.y - (heron.diveH || 0), PIGMENTS[pig].color, 5, 140);
+    if (res && pig !== 'dry') {
+      let d = paintDamage(this.tuning.swipeDamage, pig, this.tuning, { enemy: heron });
+      if (heron.awakened) d *= 2;
+      this.note(heron.x, heron.y - 150, '-' + Math.round(d), pig);
+    }
     return res;
   }
 
@@ -142,7 +149,7 @@ export class Paint {
 
   // (logic.js paintBoss imported at module level to keep this stateless)
   note(x, y, text, pig) {
-    if (this.hitNotes.length > 14) return;
+    if (this.hitNotes.length > 24) return;
     this.hitNotes.push({ x, y, text, t: 0.9, max: 0.9, pig });
   }
 

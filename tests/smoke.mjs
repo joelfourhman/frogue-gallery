@@ -433,5 +433,45 @@ assert(game.banners.some(b => b.text.includes('half your pigments')), 'defeat te
 frames(150); // let the dying sequence finish
 assert(game.state === 'end', 'run ended cleanly after the test kill');
 
+console.log('== stage 12: P2 — juice (damage numbers, pickup text, enemy arrows) ==');
+// damage numbers: swipe a pinned beetle, expect a floating "-N" note
+fireKey('keydown', 'Enter'); // end -> atelier (route around)
+frames(2);
+fireKey('keydown', 'Escape');
+frames(2);
+fireKey('keydown', 'Enter'); // new expedition
+frames(2);
+game.player.iframes = 99;
+const { spawnEnemy: mk } = await import('../src/enemies.js');
+const target = mk('beetle', game.player.x + 45, game.player.y, game.tuning);
+game.enemies.length = 0;
+game.enemies.push(target);
+const v2 = game._view();
+game.input.mouse.x = (target.x - v2.x) * v2.scale;
+game.input.mouse.y = (target.y - v2.y) * v2.scale;
+game.input.update();
+const hp0 = target.hp;
+game.input.mouse.lDown = true;
+frames(3);
+game.input.mouse.lDown = false;
+assert(target.hp < hp0, `swipe landed in P2 stage (hp ${hp0} -> ${target.hp})`);
+assert(game.paint.hitNotes.some(n => n.text.startsWith('-') && !isNaN(Number(n.text.slice(1)))), 'damage number note spawned on hit');
+// pickup text: orb on the frog
+game.orbs.push({ x: game.player.x, y: game.player.y, color: 'blue', t: 0 });
+frames(2);
+assert(game.paint.hitNotes.some(n => n.text.startsWith('+')), 'orb pickup "+N" note spawned');
+// off-screen enemy arrows: draw path runs without crashing with an off-screen enemy
+game.enemies.length = 0;
+const far = mk('mosquito', game.player.x + 900, game.player.y, game.tuning);
+far.speed = 0;
+game.enemies.push(far);
+frames(30); // ~0.5s of frames: arrows draw while the mosquito sits off-screen
+assert(game.state === 'expedition', 'off-screen enemy arrows rendered without crashing');
+game.enemies.length = 0;
+game.player.iframes = 0;
+game.player.hurt(99, game.tuning);
+frames(140);
+assert(game.state === 'end', 'run ended cleanly after the P2 stage');
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
