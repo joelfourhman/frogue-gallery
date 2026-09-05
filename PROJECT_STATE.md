@@ -78,7 +78,7 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 
 | ID | Item | Status |
 |---|---|---|
-| B1 | Commit the uncommitted release-sweep work (game.js start-button fix, smoke stages 15–16, doc corrections) | ⬜ first — git history currently lags the verified state |
+| B1 | Commit the uncommitted release-sweep work (game.js start-button fix, smoke stages 15–16, doc corrections) | ✅ 2026-09-05 — two commits (`fix: DoD #2 title affordance...`, `docs: v1.1 plan...`), tree clean |
 | B2 | Corrupt-save handling: detect on load, "keep what we can" vs "start fresh", never crash boot | ⬜ |
 | B3 | Dry-brush softlock audit: probe proving a pigment-starved frog can beat the heron | ⬜ |
 | B4 | Tab-hidden time spike: verify dt cap / pause behavior on long hidden-tab gaps | ⬜ |

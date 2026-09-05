@@ -11,8 +11,9 @@ consequential decisions in `docs/DECISIONS.md`.
 - Release DoD: **all 12 items satisfied** (final audit 2026-09-05).
 - Active phase: **v1.1 — M7 bug fixes & robustness**, then M8 improvements.
 - Smoke suite: **16 stages, ALL PASSED** (verified by PM on 2026-09-05).
-- Git: 6 modified files uncommitted (release sweep + v1.1 plan docs) — first
-  action is committing them (B1). Nothing to discard.
+- Git: tree **clean** (B1 done 2026-09-05: release-sweep code committed as
+  `fix: DoD #2 title affordance...`, v1.1 plan + PM docs as `docs: v1.1 plan...`).
+- Active: **B2** (corrupt-save handling) — delegated to `@hermes` 2026-09-05.
 
 ## Active work (M7, in order)
 
