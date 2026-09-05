@@ -373,7 +373,7 @@ export function freshSave() {
     owned: [],            // painting ids
     loadout: [],          // up to 2 painting ids
     upgrades: { capacity: 0, power: 0, vitality: 0 },
-    flags: { intro: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false },
+    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false },
     stats: { expeditions: 0, victories: 0, deaths: 0, heronsPainted: 0, treasures: 0 },
     bestRun: null,        // {pigments, time, cleared}
   };

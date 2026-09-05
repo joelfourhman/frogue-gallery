@@ -1,6 +1,6 @@
 # Project State
 
-_Last verified: 2026-08-30, end of M6 (final Definition-of-Done sweep). `node tests/smoke.mjs` = ALL 11 STAGES / 67 ASSERTIONS PASSED. `node --check` clean on every module. Working tree clean, committed._
+_Last verified: 2026-08-30, P1 (new-player guidance). `node tests/smoke.mjs` = ALL 12 STAGES / 84 ASSERTIONS PASSED. `node --check` clean on every module._
 
 ## Current Status
 
@@ -12,6 +12,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 - **Balance** (M3): 7 HP frog, ~2-hits-to-kill enemies, boss 1600 HP ≈ 2.1 awaken cycles, green heal 1.0 HP/s on thick moss.
 - **Meta/charm** (M4): best-run record (title + end screens), M-mute (persisted), **Croaksworth story beat** (portrait unseals after first victory; buying it triggers his thanks + silver coin +5/each pigment).
 - **Pause** (P/Esc) works; audio unlock on first gesture; banners for story beats.
+- **New-player guidance** (P1): staged 5-step first-run tutorial (one banner at a time, timed), one-time contextual tips (first hit / first orb / first atelier / first defeat), pigment roles stated on the title card, banners render on all screens.
 
 ## File Map (all under `frogue-gallery/`)
 
@@ -28,7 +29,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 8 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 12 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
 
@@ -54,3 +55,8 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 - **M4** ✅ Croaksworth story beat + best-run tracking + M-mute — committed
 - **M5** ✅ Polish: low-HP vignette (pulsing red at ≤2 HP), real pause menu (Resume / Quit buttons + M-mute; pause input now lives in the frame router since `_updateExpedition` is skipped while paused), first-run intro banners (`flags.intro`), dead HUD code removed
 - **M6** ✅ Final Definition-of-Done sweep + erase-save UI (two-click confirm, title bottom-left) + final report
+- **Post-M6** ✅ Shape fix: paper panels/buttons were drawn as giant wobbly *circles* (`traceBlob` radius `max(w,h)·0.62`) — now `traceWobblyRect` (math.js); button labels centered. Fixed the title-screen overlap.
+- **Post-M6 (P1)** ✅ New-player guidance: staged first-run tutorial (5 timed single-step banners), one-time contextual teaching banners (first hit, first orb, first atelier visit, first defeat, heron-reveal wording), improved title-card rows (pigment roles explicit), banners now render on every screen (was expedition/end only — title "save erased" banner was invisible), first-run heron reveal delayed to 6.5s. New save flags: `firstOrb/firstHurt/firstAtelier/firstDefeat` (merged via `migrateSave`).
+- **Next (P2)**: juice — brush-hit pop, orb-pickup floating text, off-screen *enemy* edge arrows (heron arrow exists; enemies don't)
+- **Next (P3)**: Atelier onboarding — one-time panel explaining bank/upgrades/loadout (currently zero explanation)
+- **Next (P4)**: balance re-pass for new players who now understand green = heal; simulated fresh-save run; docs + final commit

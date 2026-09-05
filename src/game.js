@@ -231,6 +231,11 @@ export class Game {
     this.atelierT = 0;
     this.atelierTab = 0;            // 0 upgrades, 1 paintings
     this.paused = false;
+    if (!this.save.flags.firstAtelier) {
+      this.save.flags.firstAtelier = true;
+      SaveSys.save(this.save);
+      this.addBanner('The Atelier — spend pigments on upgrades (1) and paintings (2). Equip up to 2.', 5.6, this.ch * 0.24);
+    }
   }
 
   // ---- layout: single source of truth for BOTH draw and click handling ----
@@ -647,19 +652,38 @@ _drawAtelier(ctx) {
     this.state = 'expedition';
     this.audio.ensure();
     this.sfx('ui');
-    if (!this.save.flags.intro) {
+    this._prevHp = this.tuning.maxHp;
+    const firstRun = !this.save.flags.intro;
+    if (firstRun) {
       this.save.flags.intro = true;
       SaveSys.save(this.save);
-      this.addBanner('WASD to hop - aim the brush with the mouse', 4.6, this.ch * 0.3);
-      this.addBanner('Left-click swipes paint - hold right-click for a splash', 4.6, this.ch * 0.3 + 36);
-      this.addBanner('Paint the swamp back to color… then face the Great Gray Heron.', 5.4, this.ch * 0.42);
+      // Staged first-run tutorial: one step at a time on a runT schedule, so
+      // a newcomer reads a single instruction per beat instead of a wall of
+      // text (the M1 version fired three banners simultaneously).
+      this._tut = [
+        { at: 0.3, dur: 5.5, text: 'WASD to move — aim the brush with your mouse' },
+        { at: 7, dur: 5.5, text: 'Hold left-click to paint — it hurts bugs and colors the swamp' },
+        { at: 14, dur: 6.5, text: 'Pigments: 1 red burns · 2 blue chills · 3 green heals (stand in fresh moss)' },
+        { at: 22, dur: 6.5, text: 'Hold right-click to charge a splash — space-hop to dodge' },
+        { at: 30, dur: 6.0, text: 'Paint the swamp back to color… the gray arrow marks the Great Gray Heron' },
+      ];
+      this._tutI = 0;
     } else {
+      this._tut = null;
       this.addBanner('Paint the swamp back to color… then face the Great Gray Heron.', 4.2);
     }
+    // give first-timers a longer head start before the heron's reveal + banners
+    this.heron._intro = firstRun ? 6.5 : 3.2;
   }
 
   _updateExpedition(dt) {
     this.runT += dt;
+
+    // ----- staged first-run tutorial (one step at a time) -----
+    if (this._tut && this._tutI < this._tut.length && this.runT >= this._tut[this._tutI].at) {
+      const step = this._tut[this._tutI++];
+      this.addBanner(step.text, step.dur, this.ch * 0.42);
+    }
 
     // ----- pause toggle (open only; menu input lives in the frame router) -----
     if (this.input.pressed('p')) {
@@ -760,11 +784,21 @@ _drawAtelier(ctx) {
       if (this.heron._intro <= 0) {
         this.sfx('boss-growl');
         this.addBanner('THE GREAT GRAY HERON', 3.2, 150);
-        this.addBanner('Paint all three colors onto it to wake it from grayness.', 4.0, 195);
+        this.addBanner('Paint red, blue, and green to wake it — then paint fast while it shimmers!', 4.4, 195);
         this.zoomTarget = 0.92;
       }
     }
     if (this.heron._intro <= 0) this._updateBoss(dt);
+
+    // ----- first-hit teaching (once per lifetime) -----
+    if (p.alive && p.hp < this._prevHp) {
+      if (!this.save.flags.firstHurt) {
+        this.save.flags.firstHurt = true;
+        SaveSys.save(this.save);
+        this.addBanner('Ouch! Touch hurts — paint enemies first, or space-hop through them', 4.8, this.ch * 0.58);
+      }
+    }
+    this._prevHp = p.hp;
 
     // ----- camera follows the frog (or the fleeing heron) -----
     this._updateCamera(dt);
@@ -812,6 +846,11 @@ _drawAtelier(ctx) {
           this.stock[o.color] += v;
           this.sfx('pickup');
           this.particles.sparkles(o.x, o.y, PIGMENTS[o.color].light, 4);
+          if (!this.save.flags.firstOrb) {
+            this.save.flags.firstOrb = true;
+            SaveSys.save(this.save);
+            this.addBanner('Pigment collected! Bank it at the Atelier to buy upgrades and paintings', 5.2, this.ch * 0.58);
+          }
         }
       }
     }
@@ -837,6 +876,11 @@ _drawAtelier(ctx) {
     this.sfx('defeat');
     this.particles.splatter(this.player.x, this.player.y, '#69a24e', 18, 220);
     this.addShake(10);
+    if (!this.save.flags.firstDefeat) {
+      this.save.flags.firstDefeat = true;
+      SaveSys.save(this.save);
+      this.addBanner('Keep half your pigments — rest at the Atelier and come back stronger', 5.0, this.ch * 0.5);
+    }
     // the heron takes flight and the world starts to heal — even in defeat
     if (this.heron && !this.heron.flying) { this.heron.flying = 0.001; }
   }
@@ -1171,12 +1215,14 @@ _drawAtelier(ctx) {
     if (this.state === 'expedition' || this.state === 'end') {
       this._drawOffscreenHeronArrow(ctx, v);
       this._drawHud(ctx);
-      this._drawBanners(ctx);
     }
     if (this.state === 'title') this._drawTitle(ctx);
     if (this.state === 'atelier') this._drawAtelier(ctx);
     if (this.paused && this.state === 'expedition') this._drawPause(ctx);
     if (this.state === 'end') this._drawEnd(ctx);
+    // banners render last so they sit above every screen (incl. the title,
+    // where the erase-save confirm banner appears)
+    this._drawBanners(ctx);
 
     // ---- M5: low-HP vignette (soft red pulse when at <= 2 hp) ----
     if (this.state === 'expedition' && !this.paused && this.player && this.player.alive
@@ -1444,11 +1490,11 @@ _drawAtelier(ctx) {
     centerText(c, 'The swamp is fading to gray.', cx, py + 34, '600 17px Georgia, serif');
     centerText(c, 'Paint it back to color — then face the Great Gray Heron.', cx, py + 58, '600 17px Georgia, serif');
     const rows = [
-      ['Move', 'WASD / arrows'],
-      ['Paint swipe', 'hold left mouse (aim with the cursor)'],
+      ['Move', 'WASD / arrow keys'],
+      ['Paint', 'hold left mouse, aim with the cursor'],
       ['Splash burst', 'hold right mouse, release'],
-      ['Hop / dodge', 'space (brief invulnerability)'],
-      ['Switch pigment', '1–4 (red / blue / green / dry)'],
+      ['Dodge hop', 'space — brief invulnerability'],
+      ['Pigments', '1 red burns · 2 blue chills · 3 green heals'],
       ['Pause', 'P or Esc'],
     ];
     rows.forEach((r, i) => {

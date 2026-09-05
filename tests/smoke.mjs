@@ -385,5 +385,53 @@ assert(game.save.bank.red === 0 && game.save.owned.length === 0, 'fresh start: e
 frames(30);
 assert(game.state === 'title', 'title survived 30 frames after the erase');
 
+console.log('== stage 11: P1 — new-player guidance ==');
+assert(!game.save.flags.intro, 'precondition: fresh save (erase in stage 10)');
+fireKey('keydown', 'Enter'); // first expedition ever for this save
+frames(2);
+assert(game.state === 'expedition', 'first expedition started');
+assert(game.save.flags.intro, 'intro flag set on the first expedition');
+frames(20); // ~0.33s: step 1 (at 0.3) fires; step 3 (pigments, at 14s) must not
+assert(game.banners.some(b => b.text.startsWith('WASD to move')), 'tutorial step 1 (movement) shows within the first second');
+assert(!game.banners.some(b => b.text.includes('red burns')), 'pigment step held back until its scheduled time');
+assert(game.heron._intro > 3, `first-run heron reveal delayed (got ${game.heron._intro.toFixed(1)}s remaining)`);
+frames(400); // ~6.7s more (runT ≈ 7s): step 2 fires
+assert(game.banners.some(b => b.text.includes('left-click')), 'tutorial step 2 (painting) fired on schedule');
+// first-hit teaching: take a hit directly (player survives: 2 dmg)
+game.player.iframes = 0;
+game.player.hurt(2, game.tuning);
+game.player.iframes = 99; // shield from wave-spawned enemies while the stage continues
+frames(2);
+assert(game.save.flags.firstHurt, 'first-hit tip flagged');
+assert(game.banners.some(b => b.text.includes('Ouch')), 'first-hit teaching banner shown');
+// first-orb teaching: drop an orb on the frog
+game.orbs.push({ x: game.player.x, y: game.player.y, color: 'red', t: 0 });
+game.player.iframes = 99; // survive the rest of this stage
+frames(2);
+assert(game.save.flags.firstOrb, 'first-orb tip flagged on pickup');
+assert(game.banners.some(b => b.text.includes('Atelier')), 'first-orb teaching banner shown');
+// first-atelier teaching
+fireKey('keydown', 'Escape'); // pause
+frames(1);
+fireKey('keydown', 'Escape'); // quit to the title
+frames(2);
+assert(game.state === 'title', 'quit to the title for the atelier visit');
+fireKey('keydown', 'a');
+frames(2);
+assert(game.state === 'atelier', 'atelier opened from the title');
+assert(game.save.flags.firstAtelier, 'first-atelier tip flagged');
+// first-defeat teaching
+fireKey('keydown', 'Escape');
+frames(2);
+fireKey('keydown', 'Enter');
+frames(2);
+game.player.iframes = 0;
+game.player.hurt(99, game.tuning);
+frames(2);
+assert(game.save.flags.firstDefeat, 'first-defeat tip flagged');
+assert(game.banners.some(b => b.text.includes('half your pigments')), 'defeat teaching banner shown');
+frames(150); // let the dying sequence finish
+assert(game.state === 'end', 'run ended cleanly after the test kill');
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
