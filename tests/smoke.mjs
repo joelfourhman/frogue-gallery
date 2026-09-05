@@ -623,6 +623,38 @@ console.log('== stage 17: B2 — corrupt-save handling, never crash, keep what w
   const rt = S.SaveSys.load();
   assert(S.SaveSys.save(rt) && rt.bank.green === 5 && rt._case === 'migrated', 'migrated save round-trips through save()/load()');
   store.delete(KEY);
+
+  // ---- B3 (folded into stage 17): dry-brush softlock audit -----------------
+  // The heron's ONLY damage source is wet paint (paint.js paintBossHit: dry
+  // short-circuits to null; logic.js paintBoss: dry returns 0). Real softlock
+  // question: can a pigment-starved frog (bank {0,0,0}, no upgrades, empty
+  // loadout — worst case) still win? In-run paint is unlimited — the bank is
+  // atelier currency only (paid on purchases, topped up by bankGain at run end;
+  // nothing drains pigments mid-run) — so "starved" reduces to "can win on base
+  // tuning with wet brushes alone".
+  {
+    const t = L.makeTuning({}, []);
+    // wet-paint damage per swipe on base tuning: must be at least 1 on every
+    // wet color (a 0 would be the softlock)
+    for (const pig of ['red', 'blue', 'green']) {
+      assert(L.paintDamage(t.swipeDamage, pig, t) >= 1, `base tuning: ${pig} swipe damage >= 1 (got ${L.paintDamage(t.swipeDamage, pig, t)})`);
+    }
+    // dry brush: paintDamage itself returns a physical min of 1 for enemies,
+    // but the heron is only ever damaged via paintBossHit, which short-circuits
+    // dry to null (verified by code path above) — so dry never chips the boss.
+    const need = t.bossAwakenNeed;
+    for (const c of ['red', 'blue', 'green']) {
+      const hits = Math.ceil(need[c] / t.bossPaintHit);
+      assert(Number.isFinite(hits) && hits >= 1, `awaken reachable for ${c} in ${hits} wet hits`);
+    }
+    // the fight has a finite length: the awakened window doubles wet damage,
+    // so the 30000 HP heron dies in a bounded number of swipes
+    const wetDmg = Math.min(...['red', 'blue', 'green'].map(p => L.paintDamage(t.swipeDamage, p, t)));
+    const dmgInWindow = wetDmg * 2 * (t.bossAwakenDuration / t.swipeCooldown);
+    assert(dmgInWindow >= 1, `awakened window deals >= 1 damage per cycle (got ${dmgInWindow.toFixed(1)})`);
+    const cyclesNeeded = Math.ceil(t.bossMaxHp / Math.max(1, dmgInWindow));
+    assert(cyclesNeeded > 0 && Number.isFinite(cyclesNeeded), `30000 HP heron falls in ${cyclesNeeded} awaken cycles — no softlock`);
+  }
 }
 
 console.log('\nALL SMOKE TESTS PASSED');
