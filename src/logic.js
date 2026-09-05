@@ -381,18 +381,49 @@ export function freshSave() {
   };
 }
 
+// B2: corrupt-save handling. migrateSave never throws and always returns a
+// schema-complete save. The non-enumerable `_case` property documents which
+// outcome applied (non-enumerable so it is never persisted by JSON.stringify):
+//   'migrated' — parsed object with recognizable save fields; those fields are
+//                merged into a fresh schema (keep what we can)
+//   'fresh'    — parsed but no recognizable fields, or non-object JSON
+//                (string/number/array/null); fresh save, nothing preserved
+// (The unparseable-JSON and missing-key cases are handled one level up in
+// SaveSys.load(), which returns null so the caller starts a fresh game.)
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun'];
+
+function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
+
+function withCase(save, caseName) {
+  Object.defineProperty(save, '_case', { value: caseName, enumerable: false, writable: true, configurable: true });
+  return save;
+}
+
 export function migrateSave(raw) {
-  if (!raw || typeof raw !== 'object') return freshSave();
+  if (!isPlainObj(raw)) return withCase(freshSave(), 'fresh');
+  const recognizable = SAVE_FIELDS.some(k => k in raw);
+  if (!recognizable) return withCase(freshSave(), 'fresh'); // junk object: drop everything
   const f = freshSave();
-  const out = { ...f, ...raw };
+  const out = { ...f };
   out.v = 1;
-  out.bank = { ...f.bank, ...(raw.bank || {}) };
+  // bank: keep per-color values, coerce/clip the rest
+  if (isPlainObj(raw.bank)) {
+    for (const c of ['red', 'blue', 'green']) out.bank[c] = Math.max(0, Number(raw.bank[c]) || 0);
+  }
+  // owned: keep only known painting ids
   out.owned = Array.isArray(raw.owned) ? raw.owned.filter(id => PAINTINGS.some(p => p.id === id)) : [];
   out.loadout = (Array.isArray(raw.loadout) ? raw.loadout : []).filter(id => out.owned.includes(id)).slice(0, 2);
-  out.upgrades = { ...f.upgrades, ...(raw.upgrades || {}) };
-  out.flags = { ...f.flags, ...(raw.flags || {}) };
-  out.stats = { ...f.stats, ...(raw.stats || {}) };
-  return out;
+  if (isPlainObj(raw.upgrades)) {
+    for (const k of Object.keys(f.upgrades)) out.upgrades[k] = Math.max(0, Number(raw.upgrades[k]) || 0);
+  }
+  if (isPlainObj(raw.flags)) {
+    for (const k of Object.keys(f.flags)) out.flags[k] = !!raw.flags[k];
+  }
+  if (isPlainObj(raw.stats)) {
+    for (const k of Object.keys(f.stats)) out.stats[k] = Math.max(0, Number(raw.stats[k]) || 0);
+  }
+  out.bestRun = isPlainObj(raw.bestRun) ? raw.bestRun : f.bestRun;
+  return withCase(out, 'migrated');
 }
 
 export function freshOptions() {

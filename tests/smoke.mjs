@@ -562,5 +562,68 @@ assert(game.state === 'title', 'end screen returned to the title');
   assert(game.state === 'title', 'title renders cleanly with the continue/new-game affordance (label + footer)');
 }
 
+console.log('== stage 17: B2 — corrupt-save handling, never crash, keep what we can ==');
+{
+  const L = await import('../src/logic.js');
+  const S = await import('../src/save.js');
+  const KEY = 'frogue_gallery_save';
+  // expectNoThrow(fn) — run fn, fail the stage if it throws.
+  const expectNoThrow = (fn, what) => {
+    let threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(!threw, `${what} does not throw`);
+  };
+  // (c) unparseable JSON → load() returns null (caller boots fresh), no throw
+  for (const bad of ['{definitely not json', '{"bank":', 'null-but-not']) {
+    store.set(KEY, bad);
+    let loaded = 'sentinel';
+    expectNoThrow(() => { loaded = S.SaveSys.load(); }, `SaveSys.load on corrupt JSON ${JSON.stringify(bad)}`);
+    assert(loaded === null, `unparseable JSON ${JSON.stringify(bad)} → null → caller starts a fresh save`);
+  }
+  store.delete(KEY);
+  // (a) parses to an object with recognizable fields → migrate/merge: keep them, fill the rest
+  const mig = L.migrateSave({ bank: { red: 3 }, flags: { intro: true } });
+  assert(mig._case === 'migrated', 'object with recognizable fields is tagged _case=migrated');
+  assert(mig.bank.red === 3 && mig.flags.intro === true && mig.bank.blue === 0 && mig.flags.firstOrb === false,
+    'recognizable fields preserved, missing fields default to fresh');
+  // object with only bank → bank preserved, rest fresh
+  const onlyBank = L.migrateSave({ bank: { red: 7, blue: 2, green: 1 } });
+  assert(onlyBank._case === 'migrated' && onlyBank.bank.red === 7 && onlyBank.bank.blue === 2 && onlyBank.bank.green === 1,
+    'object with only bank → bank preserved');
+  assert(onlyBank.owned.length === 0 && onlyBank.upgrades.power === 0 && onlyBank.stats.expeditions === 0 &&
+    onlyBank.flags.intro === false && onlyBank.loadout.length === 0 && onlyBank.bestRun === null,
+    'everything else fresh defaults when only bank survived');
+  // (b) parses to an object with no recognizable fields → fresh save, nothing preserved
+  const junk = L.migrateSave({ foo: 1, bar: 'baz' });
+  assert(junk._case === 'fresh' && junk.bank.green === 0 && junk.owned.length === 0 && junk.flags.intro === false,
+    'object with no recognizable save fields → fresh save (_case=fresh)');
+  // unknown painting ids → filtered (known + unknown mix keeps only the known one)
+  const bogus = L.migrateSave({ owned: ['not-a-painting', 'also-bogus'], loadout: ['not-a-painting'] });
+  assert(bogus._case === 'migrated' && bogus.owned.length === 0 && bogus.loadout.length === 0,
+    'unknown painting ids are filtered from owned/loadout');
+  const knownId = L.PAINTINGS[0].id;
+  const mixed = L.migrateSave({ owned: [knownId, 'nope'], loadout: ['nope', knownId] });
+  assert(mixed.owned.length === 1 && mixed.owned[0] === knownId && mixed.loadout.length === 1 && mixed.loadout[0] === knownId,
+    'known painting id survives alongside unknown ids, which are dropped');
+  // non-object JSON (string/number/array/boolean/null) → fresh, no throw, via both migrateSave and load()
+  for (const nonObj of ['"hello"', '123', '[1,2,3]', 'true', 'null']) {
+    let r;
+    expectNoThrow(() => { r = L.migrateSave(JSON.parse(nonObj)); }, `migrateSave on non-object JSON ${nonObj}`);
+    assert(r._case === 'fresh' && r.bank.red === 0 && r.owned.length === 0, `non-object parse ${nonObj} → fresh save (_case=fresh)`);
+    store.set(KEY, nonObj);
+    let l;
+    expectNoThrow(() => { l = S.SaveSys.load(); }, `SaveSys.load on non-object JSON ${nonObj}`);
+    assert(l._case === 'fresh' && l.flags.intro === false, `SaveSys.load on ${nonObj} returns a clean fresh save`);
+  }
+  store.delete(KEY);
+  // _case documents the case in the return but is never persisted into the save blob
+  assert(!JSON.stringify(onlyBank).includes('_case'), '_case is non-enumerable and never written to localStorage');
+  // a migrated save round-trips through save()/load() cleanly
+  store.set(KEY, JSON.stringify(L.migrateSave({ bank: { green: 5 } })));
+  const rt = S.SaveSys.load();
+  assert(S.SaveSys.save(rt) && rt.bank.green === 5 && rt._case === 'migrated', 'migrated save round-trips through save()/load()');
+  store.delete(KEY);
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

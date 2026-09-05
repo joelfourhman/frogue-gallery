@@ -4,13 +4,21 @@
 import { SAVE_KEY, OPTIONS_KEY, freshSave, freshOptions, migrateSave, migrateOptions } from './logic.js';
 
 export const SaveSys = {
+  // B2 contract: load() never throws and never returns a partial/garbled save,
+  // for ANY localStorage content.
+  //   key missing        → null (caller falls back to freshSave())
+  //   unparseable JSON   → null (logged), caller starts fresh
+  //   parseable JSON     → migrateSave(parsed): merges recognizable fields
+  //                        into a fresh schema, or a pure fresh save; the
+  //                        non-enumerable `_case` property ('migrated'|'fresh')
+  //                        documents which outcome applied.
   load() {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return null;
       return migrateSave(JSON.parse(raw));
     } catch (e) {
-      console.warn('Frogue Gallery: save load failed', e);
+      console.warn('Frogue Gallery: corrupt save (' + SAVE_KEY + ') — starting fresh', e);
       return null;
     }
   },
