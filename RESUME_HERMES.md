@@ -24,5 +24,5 @@ Keep active context small. Do not reread the entire repository or print large so
 ## Then run this as a separate Hermes command
 
 ```text
-/goal Continue autonomously developing the existing Frogue Gallery project until the full Definition of Done in MISSION.md is satisfied. Treat PROJECT_STATE.md and Git as persistent memory. Work in bounded chunks. At each milestone: test, update PROJECT_STATE.md, commit, and immediately continue. Never stop merely at a checkpoint. Keep context small by reading only files required for the active milestone. Only stop when the complete project is genuinely finished or a safety-critical blocker requires user input.
+/goal Continue autonomously developing the existing Frogue Gallery project until the full v1.1 plan in MISSION.md ("Post-release v1.1 — Improvements & bug fixes") is satisfied: all Track B bug fixes (B1–B6) and all Track A improvements (P6–P12) implemented, tested, and committed per the v1.1 acceptance criteria. Treat PROJECT_STATE.md and Git as persistent memory. Work in bounded chunks. At each milestone: test, update PROJECT_STATE.md, commit, and immediately continue. Never stop merely at a checkpoint. Keep context small by reading only files required for the active milestone. Only stop when the complete v1.1 plan is genuinely finished or a safety-critical blocker requires user input.
 ```

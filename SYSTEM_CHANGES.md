@@ -46,9 +46,14 @@ session-scoped environment variables that vanish with the shell.
    - Revert: delete `.git/`.
 
 5. **Temporary local dev server (during testing only)** —
-   `python -m http.server 8000 --bind 127.0.0.1` run from `frogue-gallery/`,
+   `python -m http.server 8765 --bind 127.0.0.1` run from `frogue-gallery/`,
    loopback-only, non-privileged port, killed after each testing session.
    No firewall changes, no service, no startup entry.
+
+   **Documented launch workflow** (the DoD #1 boot path): from `frogue-gallery/`,
+   run the server above, then open `http://127.0.0.1:8765/index.html` in any
+   modern browser. Click once anywhere to unlock audio; press **Enter** (or click
+   "Begin Expedition") to start. No build step, no packages, no network fetches.
 
 6. **User-level Hermes context hardening** —
    `C:\Users\joelf\AppData\Local\hermes\config.yaml` was minimally updated

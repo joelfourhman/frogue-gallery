@@ -64,9 +64,10 @@ Run locally on loopback only. Keep dependencies minimal. Use `uv` for any Python
 
 Develop playable vertical slices early. Test constantly, then playtest and balance existing content before expanding scope. Performance should remain appropriate for an ordinary modern browser: avoid uncontrolled allocations, particles, entities, or persistent paint data.
 
-## Definition of Done
+## Definition of Done (release — ✅ all 12 satisfied)
 
-Frogue Gallery is complete only when all of the following are true:
+The original release scope. All items verified in the 2026-09-05 final
+audit. v1.1 (below) continues from that release state.
 
 1. The game boots from its documented localhost workflow with no missing modules or fatal console errors.
 2. New Game, Continue, and Erase Save Data work with localStorage.
@@ -80,6 +81,77 @@ Frogue Gallery is complete only when all of the following are true:
 10. UI, audio, animation, feedback, and balance receive a deliberate polish pass.
 11. Save migration/failure behavior and core pure logic have focused tests.
 12. `PROJECT_STATE.md`, `SYSTEM_CHANGES.md`, and `CLEANUP.md` accurately describe the delivered repository and environment.
+
+## Post-release v1.1 — Improvements & bug fixes (active plan)
+
+The original Definition of Done above is satisfied. v1.1 continues from that
+release state with two tracks. Work in bounded chunks: implement, test
+(add/extend a smoke stage), update `PROJECT_STATE.md`, commit, continue.
+
+### Track A — Game improvements (prioritized in order)
+
+1. **P6 — In-game “?” reference overlay.** A compact parchment card
+   (toggle, not modal-blocking) showing the three pigment roles, enemy
+   counterplay, and the heron three-color hint, plus a controls reminder.
+   Reachable at any time so first-time players can re-read it mid-run
+   without opening the pause menu.
+2. **P7 — Difficulty selection.** Easy / Normal / Hard choice on the title
+   screen (persisted in the save). Scales enemy HP/damage, boss HP, and
+   pigment-drop generosity; Normal matches the current balance values.
+3. **P8 — The Gallery Wall.** In the Atelier, owned paintings are displayed
+   as framed, titled artworks on a gallery wall (the “Gallery” in Frogue
+   Gallery), each with a hover/tap tooltip of its passive. The existing
+   shop list remains the purchase surface; the wall is the collection
+   display.
+4. **P9 — Audio & options polish.** Separate music/SFX volume sliders in the
+   pause menu (persisted to the existing options save), plus a screen-shake
+   / low-HP vignette toggle for accessibility.
+5. **P10 — Performance pass.** Cull off-screen enemy AI and decoration
+   updates beyond a distance threshold; verify a stable 60fps with the full
+   5400px world populated.
+6. **P11 — Human-pace pacing probe.** Extend the pacing probes to model a
+   human walker (≈260 px/s) so run-time and boss-fight estimates reflect
+   real players, not bot ceilings.
+7. **P12 — Zone character.** Give each of the four expedition zones a
+   distinct visual accent and one signature encounter motif, so the world
+   feels authored rather than one long corridor.
+
+Optional (only after the items above are done and green): fourth “gold”
+pigment with its own counterplay, gamepad support, New Game+ with persistent
+prestige.
+
+### Track B — Bug fixes & robustness (fix + regression test each)
+
+1. **B1 — Commit the uncommitted release-sweep work** in the working tree
+   (start-button Continue/New Game fix, smoke stages 15–16, doc
+   corrections) so git history matches the verified state.
+2. **B2 — Corrupt-save handling.** A broken `frogue_gallery_save` (bad JSON
+   / missing fields) must fail gracefully: detect on load, offer “keep what
+   we can” vs “start fresh”, and never crash the boot.
+3. **B3 — Dry-brush softlock audit.** Prove via a probe that a
+   pigment-starved frog (dry brush only) can still beat the heron, so the
+   guaranteed fallback holds in the boss fight, not just in normal combat.
+4. **B4 — Tab-hidden time spike.** Verify the dt cap and pause behavior when
+   the browser tab is hidden for a long time, so enemies don’t move into
+   the player while the player is away.
+5. **B5 — Storage-failure fallback.** If localStorage is unavailable
+   (private mode / quota), degrade to in-memory with a one-time notice
+   instead of failing on save.
+6. **B6 — Save schema versioning.** Record a `version` field on every save
+   write so future migrations have an anchor, and assert the migration path
+   in a smoke stage.
+
+### v1.1 acceptance criteria
+
+1. Every implemented improvement (P6+) has a passing smoke stage that drives
+   it headlessly, and every bug fix (B+) has a regression test.
+2. The full smoke suite passes with zero failures in one command.
+3. The 15–20 minute run target still holds on Normal difficulty after all
+   changes (human-pace probe where available, bot-ceiling probe otherwise).
+4. `PROJECT_STATE.md`, `SYSTEM_CHANGES.md` (if the environment changed),
+   and `CLEANUP.md` are accurate; no stale claims remain.
+5. Git history is clean and complete: no uncommitted work, conventional
+   commit messages per chunk.
 
 ## Safety and environment boundaries
 
