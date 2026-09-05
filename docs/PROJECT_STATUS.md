@@ -10,10 +10,10 @@ consequential decisions in `docs/DECISIONS.md`.
 
 - Release DoD: **all 12 items satisfied** (final audit 2026-09-05).
 - Active phase: **v1.1 — M7 bug fixes & robustness**, then M8 improvements.
-- Smoke suite: **16 stages, ALL PASSED** (verified by PM on 2026-09-05).
-- Git: tree **clean** (B1 done 2026-09-05: release-sweep code committed as
-  `fix: DoD #2 title affordance...`, v1.1 plan + PM docs as `docs: v1.1 plan...`).
-- Active: **B2** (corrupt-save handling) — delegated to `@hermes` 2026-09-05.
+- Smoke suite: **17 stages, ALL PASSED** (PM re-verified 2026-09-05 after B2).
+- Git: tree **clean**. B1 ✅ (sweep committed), **B2 ✅** (commit `14b50a3`,
+  PM-verified: diff review + full suite + pacing probes green).
+- Active: **B3** (dry-brush softlock audit) — delegated to `@hermes` 2026-09-05.
 
 ## Active work (M7, in order)
 

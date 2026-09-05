@@ -22,8 +22,8 @@ release v1.1.
 
 | ID | Item | Status |
 |---|---|---|
-| B1 | Commit the uncommitted release-sweep work (git lags the verified state) | ⬜ |
-| B2 | Corrupt-save handling: detect, "keep what we can" vs fresh start, never crash boot | ⬜ |
+| B1 | Commit the uncommitted release-sweep work (git lags the verified state) | ✅ 2 commits |
+| B2 | Corrupt-save handling: detect, "keep what we can" vs fresh start, never crash boot | ✅ `14b50a3` |
 | B3 | Dry-brush softlock audit: prove a pigment-starved frog can still beat the heron | ⬜ |
 | B4 | Tab-hidden time-spike verification (dt cap exists: 0.05s; confirm no physics blowups) | ⬜ |
 | B5 | localStorage unavailable → in-memory fallback + one-time notice | ⬜ |

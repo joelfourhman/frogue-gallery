@@ -79,7 +79,7 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 | ID | Item | Status |
 |---|---|---|
 | B1 | Commit the uncommitted release-sweep work (game.js start-button fix, smoke stages 15–16, doc corrections) | ✅ 2026-09-05 — two commits (`fix: DoD #2 title affordance...`, `docs: v1.1 plan...`), tree clean |
-| B2 | Corrupt-save handling: detect on load, "keep what we can" vs "start fresh", never crash boot | ⬜ |
+| B2 | Corrupt-save handling: detect on load, "keep what we can" vs "start fresh", never crash boot | ✅ 2026-09-05 — commit `14b50a3`: `migrateSave` merges recognizable fields (bank/owned/loadout/upgrades/flags/stats/bestRun) into a fresh schema, coerces/clips numbers, filters unknown painting ids; non-object or unrecognizable → pure fresh; unparseable → null (fresh boot). `_case` tag (migrated\|fresh) non-enumerable, never persisted. Smoke stage 17 (17 stages total). PM-verified: diff + full suite green. |
 | B3 | Dry-brush softlock audit: probe proving a pigment-starved frog can beat the heron | ⬜ |
 | B4 | Tab-hidden time spike: verify dt cap / pause behavior on long hidden-tab gaps | ⬜ |
 | B5 | Storage-failure fallback: localStorage unavailable → in-memory + one-time notice | ⬜ |
