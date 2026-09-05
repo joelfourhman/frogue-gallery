@@ -10,10 +10,11 @@ consequential decisions in `docs/DECISIONS.md`.
 
 - Release DoD: **all 12 items satisfied** (final audit 2026-09-05).
 - Active phase: **v1.1 — M7 bug fixes & robustness**, then M8 improvements.
-- Smoke suite: **17 stages, ALL PASSED** (PM re-verified 2026-09-05 after B2).
-- Git: tree **clean**. B1 ✅ (sweep committed), **B2 ✅** (commit `14b50a3`,
-  PM-verified: diff review + full suite + pacing probes green).
-- Active: **B3** (dry-brush softlock audit) — delegated to `@hermes` 2026-09-05.
+- Smoke suite: **17 stages, ALL PASSED** (PM re-verified after B3).
+- Git: tree **clean**. B1 ✅, **B2 ✅** (`14b50a3`), **B3 ✅** (`a32a721`,
+  dry-softlock audit: verdict = no softlock, no code change; regression
+  guard in stage 17).
+- Active: **B4** (tab-hidden time-spike verification) — delegated to `@hermes`.
 
 ## Active work (M7, in order)
 
