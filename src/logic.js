@@ -129,7 +129,7 @@ export function makeTuning(upgrades = {}, loadout = []) {
     deathKeepFraction: 0.5,
     victoryBonus: 2,         // per pigment color
     // boss
-    bossMaxHp: 1600,
+    bossMaxHp: 30000,  // P5: ≈ 2.5–3 min human fight (bot ceiling ~773 DPS → ~39s; human ~40% → ~150s)
     bossAwakenNeed: { red: 45, blue: 45, green: 45 },
     bossAwakenDuration: 6,
     bossPaintHit: 6,         // hue per paint hit

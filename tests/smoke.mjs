@@ -233,8 +233,8 @@ console.log('== stage 5b: awakened boss takes 2x paint damage ==');
   const windowDmg = (t.bossAwakenDuration / t.swipeCooldown) * awakeDmg; // 2x hits during the 6s window
   const cycleTime = fillTime + t.bossAwakenDuration;
   const cycles = t.bossMaxHp / (fillDmg + windowDmg);
-  console.log(`  info — per cycle: ${Math.round(fillTime)}s fill + ${t.bossAwakenDuration}s window, ${fillDmg + windowDmg} dmg; boss fight ≈ ${Math.max(1, Math.round(cycles))} cycles ≈ ${Math.round(cycles * cycleTime / 60 * 10) / 10}min of pure painting`);
-  assert(cycles >= 1.5 && cycles <= 4, `boss pacing is in the cozy range (${cycles.toFixed(2)} awaken cycles to kill)`);
+  console.log(`  info — per cycle: ${Math.round(fillTime)}s fill + ${t.bossAwakenDuration}s window, ${fillDmg + windowDmg} dmg; model ≈ ${Math.max(1, Math.round(cycles))} cycles. (Ground truth: tests/bosspace.mjs bot simulation — the model is deliberately conservative.)`);
+  assert(cycles >= 10 && cycles <= 60, `boss pacing is in the epic range (${cycles.toFixed(1)} awaken cycles by the conservative model; bosspace bot measures the real fight)`);
 }
 
 console.log('== stage 6: end screen -> atelier (the between-run loop) ==');
@@ -488,6 +488,33 @@ assert(game.state === 'expedition', 'departing from the atelier starts a run');
 game.player.hurt(99, game.tuning);
 frames(140);
 assert(game.state === 'end', 'run ended cleanly after the P3 stage');
+
+console.log('== stage 14: P5 — named zones + rest checkpoints + longer run ==');
+fireKey('keydown', 'Enter'); // end -> atelier
+frames(2);
+assert(game.state === 'atelier', 'end screen routed to the atelier');
+fireKey('keydown', 'Enter'); // atelier -> new expedition
+frames(2);
+assert(game.state === 'expedition', 'run restarted');
+const W = game.world.w;
+assert(W >= 5000, `world widened for run pacing (w=${W}px)`);
+const p5 = game.player;
+p5.iframes = 999;
+p5.x = W * 0.25; p5.y = 760; // step across the first zone boundary
+frames(2);
+assert(game.banners.some(b => b.text.includes('Reed Flats')), 'zone 1 (Reed Flats) banner fired on entry');
+assert(game._zoneI === 1, 'zone 1 consumed, next zone pending');
+assert(game.enemies.length >= 4, `zone beat staged enemies ahead (enemies=${game.enemies.length})`);
+const pool = game.world.pigmentAt(p5.x + 560, p5.y);
+assert(pool.green >= 0.4, `rest checkpoint painted thick green paint ahead (green=${pool.green.toFixed(1)})`);
+p5.x = W * 0.45; // second boundary
+frames(2);
+assert(game.banners.some(b => b.text.includes('Slick Hollow')), 'zone 2 (Slick Hollow) fires as the journey continues');
+assert(game._zoneI === 2, 'two zones consumed');
+p5.iframes = 0;
+p5.hurt(99, game.tuning);
+frames(140);
+assert(game.state === 'end', 'run ended cleanly after the P5 stage');
 
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

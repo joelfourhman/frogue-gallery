@@ -7,8 +7,7 @@ const WSCALE = 0.5; // paint layer resolution factor
 
 export class World {
   constructor(rng, seed) {
-    this.w = 2400;
-    this.h = 1500;
+    this.w = 5400; this.h = 1500;   // P5: widened for 15–20 min run pacing (was 2400)
     this.seed = seed;
     this.rng = rng;
     this.grass = [];
@@ -32,18 +31,19 @@ export class World {
 
   build() {
     const rng = this.rng;
+    const k = this.w / 2400; // P5: decoration density follows world width
     // grass tufts
-    for (let i = 0; i < 260; i++) {
+    for (let i = 0; i < Math.round(260 * k); i++) {
       this.grass.push({ x: rng() * this.w, y: rng() * this.h, s: 2 + rng() * 4, seed: (i * 31) % 97 });
     }
     // ripples
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < Math.round(40 * k); i++) {
       this.ripples.push({ x: rng() * this.w, y: rng() * this.h, r: 8 + rng() * 26, seed: (i * 17) % 89 });
     }
     // obstacles — clustered away from the central corridor
     const corridor = (x, y) => (y > 480 && y < 980 && x > 200 && x < this.w - 200);
     let tries = 0;
-    while (this.obstacles.length < 26 && tries++ < 400) {
+    while (this.obstacles.length < Math.round(26 * k) && tries++ < 600) {
       const x = 80 + rng() * (this.w - 160);
       const y = 80 + rng() * (this.h - 160);
       if (corridor(x, y) && rng() < 0.75) continue;
@@ -52,19 +52,20 @@ export class World {
     }
     // lily pads along the corridor + pockets
     const padSpots = [
-      [300, 720], [620, 760], [940, 700], [1260, 760], [1580, 700], [1900, 760],
-      [500, 480], [1400, 1000], [1700, 480], [800, 1020],
+      [300, 720], [1000, 760], [1700, 700], [2400, 760], [3100, 700], [3800, 760],
+      [4500, 700], [5100, 760],
+      [600, 480], [1800, 1100], [3000, 480], [4200, 1100], [5000, 480], [1200, 1120],
     ];
     padSpots.forEach(([x, y], i) => this.pads.push({ x: x + wobble(this.seed, i, 30), y: y + wobble(this.seed, i + 50, 30), r: 46 + rng() * 14 }));
     // vegetation clusters (burnable, paintable)
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < Math.round(24 * k); i++) {
       const x = 100 + rng() * (this.w - 200);
       const y = 100 + rng() * (this.h - 200);
       if (this.obstacles.some(o => dist2(o.x, o.y, x, y) < (o.r + 30) * (o.r + 30))) continue;
       this.veg.push({ x, y, h: 40 + rng() * 30, seed: (i * 71) % 991, burn: 0, alive: true });
     }
     // soil patches (green-grow spots)
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < Math.round(12 * k); i++) {
       const x = 120 + rng() * (this.w - 240);
       const y = 120 + rng() * (this.h - 240);
       this.soil.push({ x, y, r: 34 + rng() * 22 });

@@ -13,7 +13,16 @@ import { SaveSys } from './save.js';
 import { PIGMENTS, PIGMENT_ORDER, makeTuning, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor } from './ui.js';
 
-const HERON_X = 2050, HERON_Y = 800;
+// P5: 4 named expedition zones + a rest checkpoint between each — structure
+// the run so a full expedition reads as a journey, not one long hallway.
+const ZONES = [
+  { x: 0.24, name: 'Reed Flats',   tip: 'Reed Flats — the swamp breathes. Beetles chew through the reeds.',   mix: { beetle: 3, mosquito: 1 } },
+  { x: 0.44, name: 'Slick Hollow', tip: 'Slick Hollow — mosquitos swarm the still water. Blue paint chills them.', mix: { mosquito: 4, beetle: 2 } },
+  { x: 0.64, name: 'Bramble Thicket', tip: 'Bramble Thicket — toads lurk in the bramble. Paint them dizzy (green) for open shots.', mix: { toad: 2, mosquito: 3 } },
+  { x: 0.82, name: 'The Gray Shore', tip: 'The Gray Shore — everything the swamp kept gathers here. Rest, then finish.', mix: { toad: 2, beetle: 3, mosquito: 3 } },
+];
+
+const HERON_Y = 800; // heron x is set per-run at world.w - 350 (P5)
 const PLAYER_START_X = 260, PLAYER_START_Y = 750;
 const ORB_COLORS = ['red', 'blue', 'green'];
 
@@ -655,10 +664,10 @@ _drawAtelier(ctx) {
     this.enemies = [];
     this.orbs = [];
     this.heron = {
-      x: HERON_X, y: HERON_Y, hp: this.tuning.bossMaxHp, maxHp: this.tuning.bossMaxHp,
+      x: this.world.w - 350, y: HERON_Y, hp: this.tuning.bossMaxHp, maxHp: this.tuning.bossMaxHp,
       phase: 1, state: 'idle', stateT: 2.2, hue: { red: 0, blue: 0, green: 0 },
       awakened: false, awakenedT: 0, summonT: 9, lungeDir: -1,
-      targetX: HERON_X - 300, diveH: 0, facing: -1,
+      targetX: this.world.w - 650, diveH: 0, facing: -1,
       flying: 0, _intro: 3.2,
     };
     this.cam.x = PLAYER_START_X; this.cam.y = PLAYER_START_Y;
@@ -666,6 +675,7 @@ _drawAtelier(ctx) {
     this.shake = 0;
     this.runT = 0;
     this.spawnT = 3.5;
+    this._zoneI = 0;
     this.score = 0;
     this.stock = { red: 0, blue: 0, green: 0 };
     this.collected = { red: 0, blue: 0, green: 0 };
@@ -726,6 +736,14 @@ _drawAtelier(ctx) {
     if (this.input.mouse.rDown && p.splashCharge < 1) {
       p.splashCharge = Math.min(1, p.splashCharge + dt / this.tuning.splashCharge);
       if (p.splashCharge >= 1) this.sfx('charge-ready');
+    }
+
+    // ----- named expedition zones (P5): banner + staged spawn + rest checkpoint -----
+    if (p.alive) {
+      while (this._zoneI < ZONES.length && p.x >= this.world.w * ZONES[this._zoneI].x) {
+        const z = ZONES[this._zoneI++];
+        this._zoneBeat(z);
+      }
     }
 
     // ----- pigment switching (1-4) -----
@@ -826,6 +844,31 @@ _drawAtelier(ctx) {
 
     // ----- camera follows the frog (or the fleeing heron) -----
     this._updateCamera(dt);
+  }
+
+  // P5: named zone entry — banner, a staged combat beat ahead of the frog,
+  // and a rest checkpoint: a pool of healing green paint + a couple of orbs.
+  _zoneBeat(z) {
+    const p = this.player;
+    const W = this.world.w;
+    this.sfx('ui');
+    this.addBanner(z.tip, 5.2, this.ch * 0.3);
+    // combat beat, staged ahead of the frog so it plays out gradually
+    for (const [kind, n] of Object.entries(z.mix)) {
+      for (let i = 0; i < n; i++) {
+        const x = clamp(p.x + 240 + Math.random() * 520, 60, W - 60);
+        const y = clamp(p.y + (Math.random() - 0.5) * 500, 100, this.world.h - 100);
+        this.enemies.push(spawnEnemy(kind, x, y, this.tuning));
+      }
+    }
+    // rest checkpoint: thick green paint mends 3 HP per tick when you rest in it
+    const rx = clamp(p.x + 560, 0, W - 60);
+    const ry = clamp(p.y, 120, this.world.h - 120);
+    this.world.paintSplash(rx, ry, 110, 'green');
+    this.particles.leafPuff(rx, ry - 40, '#9ed483', 3);
+    for (let i = 0; i < 2; i++) {
+      this.orbs.push({ x: rx + (Math.random() - 0.5) * 160, y: ry + (Math.random() - 0.5) * 120, color: ORB_COLORS[(Math.random() * 3) | 0], t: 0 });
+    }
   }
 
   _spawnWave(dt) {
