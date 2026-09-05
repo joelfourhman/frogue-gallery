@@ -1600,9 +1600,15 @@ _drawAtelier(ctx) {
     });
     paperEnd(ctx);
 
-    // start button (visual; Enter/Space handled in _updateTitle)
+    // start button (visual; Enter/Space handled in _updateTitle).
+    // DoD #2: "Continue" when a valid save exists, "New Game" otherwise —
+    // a returning player should see the difference without reading the footer.
+    const b = this.save.bank;
+    const hasProgress = this.save.stats.expeditions > 0 || this.save.owned.length > 0 ||
+      b.red > 0 || b.blue > 0 || b.green > 0 || this.save.loadout.length > 0 ||
+      (this.save.upgrades && (this.save.upgrades.power > 0 || this.save.upgrades.vitality > 0 || this.save.upgrades.capacity > 0));
         const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 18;
-        uiButton(ctx, bx, by, bw, bh, 'Begin Expedition', this._mouseIn(bx, by, bw, bh), false, { seed: 5, size: 20, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        uiButton(ctx, bx, by, bw, bh, hasProgress ? 'Continue Expedition' : 'Begin Expedition', this._mouseIn(bx, by, bw, bh), false, { seed: 5, size: 20, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
         // atelier button (visual; A / click handled in _updateTitle)
         const abw = 200, abh = 44, abx = cx - abw / 2, aby = by + bh + 16;
         uiButton(ctx, abx, aby, abw, abh, 'Visit the Atelier', this._mouseIn(abx, aby, abw, abh), false, { seed: 6, size: 15 });
@@ -1615,7 +1621,7 @@ _drawAtelier(ctx) {
           const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
           centerText(ctx, `best run — ${what}`, cx, aby + abh + 38, '700 14px Georgia, serif', '#e8c86a', 0.95);
         }
-        centerText(ctx, 'M to mute · A for the atelier', cx, aby + abh + (br ? 58 : 38), '12px Georgia, serif', '#fdf6e9', 0.5);
+        centerText(ctx, hasProgress ? 'M to mute · A for the atelier · "New Game" = erase save data (bottom left)' : 'M to mute · A for the atelier', cx, aby + abh + (br ? 58 : 38), '12px Georgia, serif', '#fdf6e9', 0.5);
         // erase-save link (bottom-left; two-click confirm, see _updateTitle)
         const ex = 16, ey = this.ch - 40;
         const armed = (this.now - (this._eraseArm || -99)) < 3;

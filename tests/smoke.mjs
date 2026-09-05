@@ -512,9 +512,55 @@ frames(2);
 assert(game.banners.some(b => b.text.includes('Slick Hollow')), 'zone 2 (Slick Hollow) fires as the journey continues');
 assert(game._zoneI === 2, 'two zones consumed');
 p5.iframes = 0;
-p5.hurt(99, game.tuning);
+p5.hurt(99, p5.tuning || game.tuning);
 frames(140);
 assert(game.state === 'end', 'run ended cleanly after the P5 stage');
+
+console.log('== stage 15: save migration + failure behavior (DoD #11) ==');
+{
+  const L = await import('../src/logic.js');
+  const S = await import('../src/save.js');
+  // corrupt JSON must not crash boot — load() falls back to null (fresh game)
+  store.set('frogue_gallery_save', '{definitely not json');
+  assert(S.SaveSys.load() === null, 'corrupt JSON save fails safely to null (fresh game)');
+  store.delete('frogue_gallery_save');
+  // migrateSave: null / non-object → fresh default save
+  assert(L.migrateSave(null).flags.firstAtelier === false, 'migrateSave(null) yields fresh flags');
+  assert(L.migrateSave('garbage').bank.green === 0, 'migrateSave(non-object) yields fresh bank');
+  // old save (pre-P1 flags, unknown painting id) migrates without losing valid data
+  const old = L.migrateSave({
+    v: 1,
+    bank: { red: 5, blue: 0 }, // no green key at all
+    owned: ['spring-garden', 'bogus-painting'],
+    loadout: ['bogus-painting', 'spring-garden', 'moonlit-pond'], // bogus + not-owned entries
+    upgrades: { power: 2 },
+    flags: { intro: true },
+  });
+  assert(old.bank.green === 0, 'missing bank colors default to 0');
+  assert(old.bank.red === 5, 'valid bank values survive migration');
+  assert(old.owned.includes('spring-garden') && !old.owned.includes('bogus-painting'), 'unknown painting ids filtered from owned');
+  assert(old.loadout.includes('spring-garden') && !old.loadout.includes('bogus-painting') && !old.loadout.includes('moonlit-pond'), 'loadout keeps only owned paintings');
+  assert(old.flags.intro === true && old.flags.firstOrb === false && old.flags.firstAtelier === false, 'old flags keep their values, new flags default to false');
+  assert(old.upgrades.power === 2 && old.upgrades.capacity === 0, 'upgrades keep valid levels, missing ones default');
+  // options: missing → defaults; out-of-range clamped
+  assert(L.migrateOptions(null).volume === 0.7, 'missing options fall back to defaults');
+  const o = L.migrateOptions({ volume: 99, muted: 1 });
+  assert(o.volume === 1 && o.muted === true, 'out-of-range volume clamped, truthy mute coerced');
+}
+
+console.log('== stage 16: DoD #2 — title Continue / New Game affordance ==');
+fireKey('keydown', 'Escape'); // end -> title
+frames(2);
+assert(game.state === 'title', 'end screen returned to the title');
+{
+  const s = game.save;
+  const hasProgress = s.stats.expeditions > 0 || s.owned.length > 0 ||
+    s.bank.red > 0 || s.bank.blue > 0 || s.bank.green > 0 || s.loadout.length > 0 ||
+    s.upgrades.power > 0 || s.upgrades.vitality > 0 || s.upgrades.capacity > 0;
+  assert(hasProgress, 'earlier test runs left progress (bank/paintings/upgrades) in the save');
+  frames(6); // render the title a few frames on the "Continue Expedition" label path
+  assert(game.state === 'title', 'title renders cleanly with the continue/new-game affordance (label + footer)');
+}
 
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
