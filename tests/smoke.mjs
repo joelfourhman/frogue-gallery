@@ -657,5 +657,61 @@ console.log('== stage 17: B2 — corrupt-save handling, never crash, keep what w
   }
 }
 
+console.log('== stage 18: B4 — tab-hidden time spike, dt cap holds, no physics blowup ==');
+{
+  // The dt cap (game.js _frame: clamp((t-last)/1000, 0, 0.05), then last=t) is
+  // the whole defence against a tab being hidden: the wall clock can jump
+  // tens of seconds, but every system integrates on the clamped dt. This stage
+  // injects a real 30s spike mid-run and proves (a) the run survives, (b) the
+  // wall clock actually jumped ~30s, (c) the frog and a chasing enemy each
+  // moved at most a single-frame's worth (they did NOT teleport), and (d) no
+  // position went NaN/Infinity.
+  fireKey('keydown', 'Enter'); // title -> fresh expedition
+  frames(2);
+  assert(game.state === 'expedition', 'stage 18 starts a live expedition for the spike test');
+  const sp = game.player;
+  sp.iframes = 999; // isolation: we test the TIME cap, not survival
+  // a deterministic chaser: fixed speed, no status, placed a fixed distance out
+  const { spawnEnemy: spawnB } = await import('../src/enemies.js');
+  const bee = spawnB('beetle', sp.x + 300, sp.y, game.tuning);
+  bee.status = null;
+  game.enemies.push(bee);
+  // settle into a normal cadence, then capture pre-spike positions
+  frames(6);
+  const px0 = sp.x, py0 = sp.y, bx0 = bee.x, by0 = bee.y;
+  const nowBefore = game.now;
+  // HOLD a movement key (keydown without keyup) so the frog integrates its
+  // velocity across the spike frame — the strongest "would it teleport" probe.
+  for (const fn of windowListeners['keydown']) fn({ key: 'd', repeat: false, preventDefault() {} });
+  // THE SPIKE: the tab was hidden for 30s. Advance the stub clock 30,000ms in
+  // one step and fire exactly one rAF callback — that is what a real browser
+  // does on resume (one frame, t jumped ~30s).
+  nowMs += 30000;
+  const cb = rafCb; rafCb = null;
+  cb(nowMs); // the clamped frame
+  for (const fn of windowListeners['keyup']) fn({ key: 'd', repeat: false, preventDefault() {} });
+  const nowAfter = game.now;
+  const wallDelta = nowAfter - nowBefore;
+  const pdx = Math.abs(sp.x - px0), pdy = Math.abs(sp.y - py0);
+  const bdx = Math.abs(bee.x - bx0), bdy = Math.abs(bee.y - by0);
+  // the wall clock jumped ~30s (proves we really exercised the spike)
+  assert(wallDelta > 20, `wall clock jumped ${wallDelta.toFixed(1)}s across the hidden-tab spike (expected ~30s)`);
+  // ...yet the frog moved at most a single-frame's worth (0.05s @ ~230px/s)
+  assert(Number.isFinite(pdx) && Number.isFinite(pdy) && pdx < 100 && pdy < 100,
+    `frog did not teleport on the spike (moved ${pdx.toFixed(1)}/${pdy.toFixed(1)}px, capped ~1 frame)`);
+  // ...and the chasing enemy moved at most a single-frame's worth (0.05s @ 40px/s)
+  assert(Number.isFinite(bdx) && Number.isFinite(bdy) && bdx < 100 && bdy < 100,
+    `enemy did not teleport on the spike (moved ${bdx.toFixed(1)}/${bdy.toFixed(1)}px, capped ~1 frame)`);
+  // no NaN/Infinity leaked into any tracked position
+  assert([sp.x, sp.y, sp.vx, sp.vy, bee.x, bee.y].every(v => Number.isFinite(v)), 'no NaN/Infinity in player/enemy state after the spike');
+  // the run is still coherent: not crashed out of the expedition, frog alive
+  assert(game.state === 'expedition', 'run still in expedition after the spike (no boot-crash / no accidental end)');
+  assert(sp.alive, 'frog still alive after the spike');
+  // recovery: a few normal frames run cleanly on the post-spike cadence
+  frames(5);
+  assert(game.state === 'expedition' && sp.alive, 'game recovers cleanly into normal frames after the spike');
+  game.enemies.length = 0; // tidy up the probe enemy before later stages
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
