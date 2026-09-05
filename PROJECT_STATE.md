@@ -1,6 +1,6 @@
 # Project State
 
-_Last verified: 2026-08-30, P1 (new-player guidance). `node tests/smoke.mjs` = ALL 12 STAGES / 84 ASSERTIONS PASSED. `node --check` clean on every module._
+_Last verified: 2026-09-05, P3 (atelier onboarding). `node tests/smoke.mjs` = ALL 13 STAGES / 96 ASSERTIONS PASSED. `node --check` clean on every module. P1–P3 all committed (see git log)._
 
 ## Current Status
 
@@ -29,7 +29,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 12 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 13 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
 
@@ -57,6 +57,6 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 - **M6** ✅ Final Definition-of-Done sweep + erase-save UI (two-click confirm, title bottom-left) + final report
 - **Post-M6** ✅ Shape fix: paper panels/buttons were drawn as giant wobbly *circles* (`traceBlob` radius `max(w,h)·0.62`) — now `traceWobblyRect` (math.js); button labels centered. Fixed the title-screen overlap.
 - **Post-M6 (P1)** ✅ New-player guidance: staged first-run tutorial (5 timed single-step banners), one-time contextual teaching banners (first hit, first orb, first atelier visit, first defeat, heron-reveal wording), improved title-card rows (pigment roles explicit), banners now render on every screen (was expedition/end only — title "save erased" banner was invisible), first-run heron reveal delayed to 6.5s. New save flags: `firstOrb/firstHurt/firstAtelier/firstDefeat` (merged via `migrateSave`).
-- **Next (P2)**: juice — brush-hit pop, orb-pickup floating text, off-screen *enemy* edge arrows (heron arrow exists; enemies don't)
-- **Next (P3)**: Atelier onboarding — one-time panel explaining bank/upgrades/loadout (currently zero explanation)
+- **Post-M6 (P2)** ✅ Juice: floating pigment-colored damage numbers on every paint hit (enemies + heron, showing true 2× awakened values), orb-pickup "+N" text, off-screen enemy edge arrows (tinted when the enemy is currently painted; heron keeps its own arrow), note cap 14→24.
+- **Post-M6 (P3)** ✅ Atelier onboarding: first-visit "Welcome to the Atelier" paper panel (gated by `firstAtelier`, any tab/buy/action dismisses it, drawn above the shelves), persistent one-line legends under each tab (upgrades = permanent training paid in pigments; paintings = buy once, hang up to 2, real passives).
 - **Next (P4)**: balance re-pass for new players who now understand green = heal; simulated fresh-save run; docs + final commit

@@ -234,7 +234,7 @@ export class Game {
     if (!this.save.flags.firstAtelier) {
       this.save.flags.firstAtelier = true;
       SaveSys.save(this.save);
-      this.addBanner('The Atelier — spend pigments on upgrades (1) and paintings (2). Equip up to 2.', 5.6, this.ch * 0.24);
+      this._atelierIntro = true;   // one-time how-it-works panel (drawn on the first visit only)
     }
   }
 
@@ -286,20 +286,22 @@ export class Game {
   }
 
   _updateAtelier(dt) {
+    const dismissIntro = () => { this._atelierIntro = false; };
     if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._quitToTitle(); return; }
     if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); this._beginExpedition(); return; }
-    if (this.input.pressed('1')) { if (this.atelierTab !== 0) this.sfx('ui'); this.atelierTab = 0; }
-    if (this.input.pressed('2')) { if (this.atelierTab !== 1) this.sfx('ui'); this.atelierTab = 1; }
+    if (this.input.pressed('1')) { if (this.atelierTab !== 0) this.sfx('ui'); this.atelierTab = 0; dismissIntro(); }
+    if (this.input.pressed('2')) { if (this.atelierTab !== 1) this.sfx('ui'); this.atelierTab = 1; dismissIntro(); }
     if (this.atelierTab === 0) {
-      if (this.input.pressed('a')) this._buyUpgrade('capacity');
-      if (this.input.pressed('s')) this._buyUpgrade('power');
-      if (this.input.pressed('d')) this._buyUpgrade('vitality');
+      if (this.input.pressed('a')) { this._buyUpgrade('capacity'); dismissIntro(); }
+      if (this.input.pressed('s')) { this._buyUpgrade('power'); dismissIntro(); }
+      if (this.input.pressed('d')) { this._buyUpgrade('vitality'); dismissIntro(); }
     }
     if (this.input.mouse.lPressed) {
       const m = this.input.mouse;
       for (const r of this._atelierRows()) {
         if (m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y && m.y <= r.y + r.h) {
           if (r.enabled === false) { this.sfx('hurt'); continue; }
+          dismissIntro();
           r.act();
           break;
         }
@@ -443,6 +445,12 @@ _drawAtelier(ctx) {
       const bx = idx === 0 ? cx - g.tabW - 10 : cx + 10;
       uiButton(ctx, bx, g.tabY, g.tabW, g.tabH, label, this._mouseIn(bx, g.tabY, g.tabW, g.tabH) && !active, active, { seed: 30 + idx, size: 17 });
     });
+    // persistent one-line legends, so returning players never have to guess
+    if (this.atelierTab === 0) {
+      centerText(ctx, 'training is paid in banked pigments — it is permanent, even after a defeat', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
+    } else {
+      centerText(ctx, 'buy once, then hang up to 2 — hung paintings are real passive bonuses on your runs', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
+    }
 
     // list
     if (this.atelierTab === 0) {
@@ -512,6 +520,22 @@ _drawAtelier(ctx) {
         if (inLoadout) centerText(c, '★', x + g.cardW - 26, y + 22, '700 16px Georgia, serif', '#c9922a', 1);
         paperEnd(ctx);
       });
+    }
+
+    // first-visit how-it-works panel (one-time; any tab/buy/action dismisses it)
+    if (this._atelierIntro) {
+      const pw = 660, ph = 300, px = cx - pw / 2, py = 250;
+      const c = paperPanel(ctx, px, py, pw, ph, { seed: 120 });
+      centerText(c, 'Welcome to the Atelier', cx, py + 40, '700 24px Georgia, serif', INK, 1);
+      const lines = [
+        'Between your runs, spent and gathered pigments settle into the bank above.',
+        'Studio upgrades are training for the frog — permanent, kept even after a defeat.',
+        'Paintings are bought once, then hung: up to 2 at a time, and a hung painting is a real bonus on future runs.',
+        'Ready when you are — Depart sends you back out to the swamp.',
+      ];
+      lines.forEach((ln, i) => centerText(c, ln, cx, py + 84 + i * 32, '15px Georgia, serif', INK, 0.85));
+      centerText(c, 'press 1 / 2 to browse the shelves — any action closes this note', cx, py + ph - 24, 'italic 12px Georgia, serif', INK, 0.55);
+      paperEnd(ctx);
     }
 
     // footer

@@ -473,5 +473,21 @@ game.player.hurt(99, game.tuning);
 frames(140);
 assert(game.state === 'end', 'run ended cleanly after the P2 stage');
 
+console.log('== stage 13: P3 — atelier onboarding ==');
+game.save.flags.firstAtelier = false; // simulate a player who has never been here
+game._beginAtelier();
+frames(2);
+assert(game._atelierIntro === true, 'first-visit how-it-works panel is shown');
+fireKey('keydown', '2');
+frames(2);
+assert(game.atelierTab === 1, 'Paintings tab switches over');
+assert(game._atelierIntro === false, 'any action dismisses the intro panel');
+fireKey('keydown', 'Enter');
+frames(3);
+assert(game.state === 'expedition', 'departing from the atelier starts a run');
+game.player.hurt(99, game.tuning);
+frames(140);
+assert(game.state === 'end', 'run ended cleanly after the P3 stage');
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
