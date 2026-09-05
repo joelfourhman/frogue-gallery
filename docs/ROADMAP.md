@@ -25,12 +25,29 @@ release v1.1.
 | B1 | Commit the uncommitted release-sweep work (git lags the verified state) | ✅ 2 commits |
 | B2 | Corrupt-save handling: detect, "keep what we can" vs fresh start, never crash boot | ✅ `14b50a3` |
 | B3 | Dry-brush softlock audit: prove a pigment-starved frog can still beat the heron | ✅ `a32a721` |
-| B4 | Tab-hidden time-spike verification (dt cap exists: 0.05s; confirm no physics blowups) | ⬜ |
+| B4 | Tab-hidden time-spike verification (dt cap exists: 0.05s; confirm no physics blowups) | ✅ `2ed1c9a` |
 | B5 | localStorage unavailable → in-memory fallback + one-time notice | ⬜ |
 | B6 | Save schema versioning: `saveVersion` in the save, migration test (foundations in logic.js) | ⬜ |
 
 Acceptance: each item has a passing test; smoke suite green; no behavior
 change to Normal difficulty.
+
+### M7.5 — Playtest feedback pass (ACTIVE — user-reported, 2026-09-05)
+
+Player-tested the game; five issues to fix as one cohesive UX pass
+(implemented in order, each reported + verified):
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| PT1 | Painting consumption | painting effects must actually consume (check cost/rate) | ⬜ |
+| PT2 | Onboarding | tighten/clarify first-run flow | ⬜ |
+| PT3 | Fly fairness | frog fly mechanic judged unfair — audit + rebalance | ⬜ |
+| PT4 | Early-economy safety net | new players can soft-lock the bank early | ⬜ |
+| PT5 | Grey box in the swamp | visible rendering artifact | ⬜ |
+
+Acceptance: each fix shipped with a test or documented manual check; full
+suite green; Normal-difficulty baseline preserved (balance numbers logged
+in PROJECT_STATE.md before/after).
 
 ### M8 — Player-facing improvements (after M7)
 

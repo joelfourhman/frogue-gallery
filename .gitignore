@@ -13,3 +13,6 @@ __pycache__/
 Thumbs.db
 desktop.ini
 *.log
+
+# ---- Node tooling (session-local; game itself is zero-dependency) ----
+node_modules/
