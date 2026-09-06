@@ -359,6 +359,38 @@ export function bankGain(collected, { died, victory, tuning }) {
   return gain;
 }
 
+// ---------------------------------------------------------------- orb streak bonus (E4, v1.2 M10)
+// Chaining pigment-orb collection WITHOUT taking a hit builds a small streak
+// multiplier on orb/pickup value. It rewards the dodge/hop skill the PT3
+// fly-fairness rebalance introduced. Deliberately modest so the Normal 15-20
+// min pacing is untouched (a scoring bonus adds no run time — it only makes
+// clean streaks pay a little more pigment). Pure + testable; game.js owns the
+// streak counter (in-run, not persisted) and resets it on a hit.
+export const ORB_STREAK = {
+  min: 4,        // streaks of this many clean orbs unlock the bonus
+  per: 0.10,     // +10% orb value per tier
+  tiers: 4,      // up to 4 tiers
+};
+export function orbStreakMax() { return ORB_STREAK.min - 1 + ORB_STREAK.tiers; }
+// The streak multiplier on pickup value for a given clean-orb streak count.
+// Below `min` there is no bonus; beyond the tier cap it plateaus. Pure.
+export function orbStreakMult(streak) {
+  const s = Math.max(0, Math.floor(streak || 0));
+  if (s < ORB_STREAK.min) return 1;
+  const tiers = Math.min(ORB_STREAK.tiers, s - (ORB_STREAK.min - 1));
+  return 1 + tiers * ORB_STREAK.per;
+}
+// Effective orb/pickup value at this streak, for a base tuning pickup value.
+export function orbValueAt(streak, baseValue) {
+  return baseValue * orbStreakMult(streak);
+}
+// Full streak state for the HUD (count, tiers lit, whether the bonus is live).
+export function orbStreakState(streak) {
+  const s = Math.max(0, Math.floor(streak || 0));
+  const tiers = s < ORB_STREAK.min ? 0 : Math.min(ORB_STREAK.tiers, s - (ORB_STREAK.min - 1));
+  return { streak: s, tiers, active: tiers > 0, mult: orbStreakMult(s), max: orbStreakMax() };
+}
+
 // ----------------------------------------------------------------
 // E1 (v1.2 M10): the Painted Heron — a mid-expedition "half-heron" set-piece.
 // A small re-use of the existing bossStep + 3-hue awaken machinery at reduced

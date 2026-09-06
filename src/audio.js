@@ -192,6 +192,12 @@ export class AudioSys {
         this._tone(t + 0.07, 'sine', 990, 1320, 0.12, 0.18);
         break;
       }
+      case 'pickup-streak': { // E4: a brighter two-note chime for streaked orbs
+        this._tone(t, 'sine', 880, 1180, 0.08, 0.2);
+        this._tone(t + 0.06, 'sine', 1180, 1560, 0.09, 0.18);
+        this._tone(t + 0.13, 'sine', 1560, 1900, 0.1, 0.14);
+        break;
+      }
       case 'hurt': {
         this._tone(t, 'sawtooth', 220, 110, 0.18, 0.4);
         this._noise(t, 0.1, 'lowpass', 600, 0.8, 0.3);

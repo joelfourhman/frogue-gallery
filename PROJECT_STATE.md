@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 36 STAGES PASSED** (…stage 34 = v1.2 M10 E1 Painted Heron mid-run set-piece, stage 35 = v1.2 M10 E2 weather/tide phases, stage 36 = v1.2 M10 E3 Bold-only zone hazards). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.6 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **55s**, heron **125s**, full-run **18.8 min** — in the 15–20 min band (E1 mid-heron is non-blocking; E2 weather phases are informational buffs). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ — next E4 (orb streak) / M10.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 37 STAGES PASSED** (…stage 35 = v1.2 M10 E2 weather/tide phases, stage 36 = v1.2 M10 E3 Bold-only zone hazards, stage 37 = v1.2 M10 E4 orb-streak bonus). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **54s**, heron **156s**, full-run **19.2 min** — in the 15–20 min band (E1 mid-heron non-blocking; E2 weather phases informational; E4 streak is a scoring bonus that adds no run time). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ — next V1 (color-reveal bar) / M11.**_
 
 ## Current Status
 
@@ -35,7 +35,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 36 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 37 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss) |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
@@ -131,7 +131,7 @@ accessibility deferred).
 **Batch order (one commit per item, docs + suite green per commit):**
 1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 ✅ (Curator's Ledger). **Batch 1 (A1–A3) COMPLETE.**
 2. M9: **A4 ✅ (Rehung Frame)** → M10: **E1 ✅ (Painted Heron)** → **E2 ✅ (weather/tide phases)**. **Batch 2 (A4/E1/E2) COMPLETE — suite 35/35, pacing in band on Normal.**
-3. M10: **E3 ✅ (Bold-only zone hazards)** → E4 (orb streak) → M11: V1 (color-reveal bar)
+3. M10: **E3 ✅ (Bold-only zone hazards)** → **E4 ✅ (orb-streak bonus)** → M11: V1 (color-reveal bar)
 4. M11: V2 (heron bloom beat) → V3 (zone audio) → V4 (exhibition end-screen)
 5. M13: T1 (guided first expedition) → T2 (pigment drills)
 6. M13: T3 (mini heron) → T4 (tutorial progress + re-entry)
@@ -225,6 +225,28 @@ Bold-only, placement is deterministic + in-corridor + varies by zone, **hazards
 SPAWN on Bold when crossing a zone and NOT on Normal**, thorn reed roots
 (speedFactor 0), mud pool slows (speedFactor 0.55) and wears off. Suite green:
 36/36.
+
+**M10 E4 (orb-streak bonus) — implemented + tested (v1.2 Batch 3, item 2).**
+A **clean-orb streak** — collect pigment orbs without taking a hit — builds a
+small multiplier on orb/pickup value. It rewards the dodge/hop skill the PT3
+fly-fairness rebalance introduced. The rules are **pure + unit-testable in
+`logic.js`**: `ORB_STREAK` (threshold **4 clean orbs**, **+10% per tier, capped
+at 4 tiers = ×1.40**) with `orbStreakMult(streak)`, `orbValueAt(streak,
+base)`, and `orbStreakState(streak)`. Deliberately modest — a **scoring bonus
+adds no run time**, so the Normal 15–20 min pacing is untouched. Because E4 is
+an **in-run** change, the pacing probes were **re-run after the change** and
+confirm no regression: `pace.mjs` ~18.7 min (analytic), `humance.mjs` **19.2
+min full-run / 54s cross-swamp** (real sim) — both in the 15–20 band. `game.js`
+stays thin: it owns the in-run counter `orbStreak` (not persisted), applies
+`orbStreakMult` to the bankable `collected` total in `_updateOrbs` (floating
+`+v ×N.NN` note + a distinct `pickup-streak` chime), and **resets the streak to
+0 on any hit** at the central `_prevHp` damage hook. A top-right HUD chip shows
+`streak N/4` then `streak ×N.NN` when the bonus is live — it reads the same
+pure `orbStreakState`, so the HUD always matches the scoring. A distinct
+3-note `pickup-streak` chime (`audio.js`) marks boosted orbs. Smoke stage 37
+(E4): no bonus below 4, +10% at 4, plateau at the cap, and in the real loop the
+streak **builds on collect, boosts orb value (1.21 vs base 1.10), and resets on
+a hit** (then pays base again). Suite green: 37/37.
 
 **M9 A3 (Curator's Ledger) — implemented + tested (v1.2 Batch 1, item 3).**
 A 4th atelier tab, "Curator's Ledger" (key `4`), lists all 8 paintings in a

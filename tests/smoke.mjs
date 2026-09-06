@@ -1798,5 +1798,73 @@ console.log('== stage 36: v1.2 M10 E3 — Bold-only zone hazards ==');
   g36b._onPlayerDead(); g36b._endRun('defeat');
 }
 
+// stage 37 — v1.2 M10 E4: orb "streak" bonus. Chaining clean orbs (no hit)
+// builds a small multiplier on orb/pickup value; a hit resets it to zero.
+// Pure logic in logic.js (orbStreakMult/State/Value), game.js owns the counter.
+console.log('== stage 37: v1.2 M10 E4 — orb streak bonus ==');
+{
+  const L = await import('../src/logic.js');
+
+  // --- pure: below threshold no bonus, above it grows, plateaus at the cap ---
+  const min = L.ORB_STREAK.min;
+  assert(L.orbStreakMult(0) === 1 && L.orbStreakMult(min - 1) === 1,
+    `E4: below ${min} clean orbs there is no bonus (mult=1.0)`);
+  const m4 = L.orbStreakMult(min);
+  assert(Math.abs(m4 - (1 + 0.1)) < 1e-9, `E4: at ${min} orbs the bonus is +10% (mult=${m4.toFixed(2)})`);
+  const mHigh = L.orbStreakMult(min + L.ORB_STREAK.tiers);
+  assert(Math.abs(mHigh - (1 + L.ORB_STREAK.tiers * L.ORB_STREAK.per)) < 1e-9,
+    `E4: the bonus plateaus at the tier cap (mult=${mHigh.toFixed(2)})`);
+  assert(L.orbValueAt(min, 1.5) > 1.5, 'E4: orbValueAt scales a base pickup value by the streak');
+  const st = L.orbStreakState(min);
+  assert(st.active === true && st.tiers >= 1 && st.mult > 1, 'E4: orbStreakState reports the active bonus');
+
+  // --- the REAL loop: streak builds, boosts orb value, resets on a hit ---
+  const cv37 = makeCanvas();
+  const g37 = new Game(cv37);
+  g37.start();
+  fireKey('keydown', 'Enter'); frames(3);
+  const P37 = g37.player;
+  P37.alive = true; P37.hp = 99; P37.iframes = 999; // god-mode: testing the streak, not survival
+  const base = g37.tuning.pickupValue;
+
+  // drop one orb right on the frog, let it be collected, and read the result.
+  const collectedBefore = g37.collected.red;
+  g37.orbs.push({ x: P37.x, y: P37.y, color: 'red', t: 0 });
+  frames(2);
+  assert(g37.orbStreak === 1, `E4: collecting an orb builds the streak (orbStreak=${g37.orbStreak})`);
+  const firstGain = g37.collected.red - collectedBefore;
+  assert(Math.abs(firstGain - base) < 1e-9, `E4: the 1st orb pays the base value (gain=${firstGain.toFixed(2)} === base ${base})`);
+
+  // keep chaining until the streak clears the threshold and the bonus is live
+  while (g37.orbStreak < min) {
+    g37.orbs.push({ x: P37.x, y: P37.y, color: 'red', t: 0 });
+    frames(2);
+  }
+  const boostedBefore = g37.collected.red;
+  g37.orbs.push({ x: P37.x, y: P37.y, color: 'red', t: 0 });
+  frames(2);
+  const boostedGain = g37.collected.red - boostedBefore;
+  const expectedBoost = base * L.orbStreakMult(g37.orbStreak - 1);
+  assert(boostedGain > base, `E4: with a live streak the orb value is BOOSTED (gain=${boostedGain.toFixed(2)} > base ${base})`);
+  assert(Math.abs(boostedGain - expectedBoost) < 1e-6,
+    `E4: the boosted gain matches the pure mult (got ${boostedGain.toFixed(3)} === ${expectedBoost.toFixed(3)} at streak ${g37.orbStreak - 1})`);
+  assert(g37.orbStreak >= min, `E4: the streak built past the threshold (orbStreak=${g37.orbStreak})`);
+
+  // a hit resets the streak to zero; the next orb pays the base value again
+  const streakBeforeHit = g37.orbStreak;
+  P37.hp -= 1;                       // simulate taking a hit
+  frames(2);                          // the _prevHp hook runs and clears the streak
+  assert(g37.orbStreak === 0 && streakBeforeHit > 0,
+    `E4: taking a hit RESETS the streak to zero (was ${streakBeforeHit}, now ${g37.orbStreak})`);
+  const afterReset = g37.collected.red;
+  g37.orbs.push({ x: P37.x, y: P37.y, color: 'red', t: 0 });
+  frames(2);
+  assert(Math.abs((g37.collected.red - afterReset) - base) < 1e-9,
+    `E4: after the reset the next orb pays the base value again (gain=${(g37.collected.red - afterReset).toFixed(2)})`);
+
+  // cleanup
+  g37._onPlayerDead(); g37._endRun('defeat');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

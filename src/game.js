@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -182,6 +182,7 @@ export class Game {
     this.enemies = [];
     this.orbs = [];
     this.hazards = [];
+    this.orbStreak = 0;
     this.heron = null;
     this.runT = 0;
     this.spawnT = 3;
@@ -372,6 +373,7 @@ export class Game {
     this.enemies = [];
     this.orbs = [];
     this.hazards = [];
+    this.orbStreak = 0;
     this.sfx('ui-back');
   }
 
@@ -1084,6 +1086,7 @@ _drawAtelier(ctx) {
     this.enemies = [];
     this.orbs = [];
     this.hazards = []; // E3: Bold-only environmental hazards (thorn reeds / mud pools)
+    this.orbStreak = 0; // E4: clean-orb streak (resets on a hit) — in-run only, not persisted
     this.heron = {
       x: this.world.w - 350, y: HERON_Y, hp: this.tuning.bossMaxHp, maxHp: this.tuning.bossMaxHp,
       phase: 1, state: 'idle', stateT: 2.2, hue: { red: 0, blue: 0, green: 0 },
@@ -1380,6 +1383,8 @@ _drawAtelier(ctx) {
         SaveSys.save(this.save);
         this.addBanner('Ouch! Touch hurts — paint enemies first, or space-hop through them', 4.8, this.ch * 0.58);
       }
+      // E4: any damage taken breaks the clean-orb streak.
+      if (this.orbStreak > 0) this.orbStreak = 0;
     }
     this._prevHp = p.hp;
 
@@ -1591,19 +1596,27 @@ _drawAtelier(ctx) {
       }
       if (d < 30) {
         this.orbs.splice(i, 1);
-        const v = this.tuning.pickupValue;
+        // E4: streak bonus — a clean-orb streak (no hit taken) multiplies orb
+        // value. The bonus applies to the bankable `collected` total (and to
+        // `stock` when it fits the paint jar), then the streak builds.
+        const base = this.tuning.pickupValue;
+        const mult = orbStreakMult(this.orbStreak);
+        const v = base * mult;
+        const boosted = mult > 1;
         this.collected[o.color] += v;
         if (this.stock[o.color] < this.tuning.capacity) {
           this.stock[o.color] += v;
-          this.sfx('pickup');
+          this.sfx(boosted ? 'pickup-streak' : 'pickup');
           this.particles.sparkles(o.x, o.y, PIGMENTS[o.color].light, 4);
-          this.paint.note(o.x, o.y - 10, '+' + v, o.color);
+          this.paint.note(o.x, o.y - 10, '+' + v.toFixed(boosted ? 1 : 0) + (boosted ? ' ×' + mult.toFixed(2) : ''), o.color);
           if (!this.save.flags.firstOrb) {
             this.save.flags.firstOrb = true;
             SaveSys.save(this.save);
             this.addBanner('Pigment collected! Bank it at the Atelier to buy upgrades and paintings', 5.2, this.ch * 0.58);
           }
+          if (boosted) this.paint.note(o.x, o.y - 30, `streak ×${mult.toFixed(2)}`, 'red');
         }
+        this.orbStreak += 1; // E4: every collected orb extends the clean streak
       }
     }
   }
@@ -2176,6 +2189,22 @@ _drawAtelier(ctx) {
     this._paperChip(ctx, 14, 14, w + 20, 26);
     drawPips(ctx, 24, 27, r, maxP, Math.max(0, Math.ceil(p.hp)), '#d8543c');
     ctx.restore();
+
+    // ---- E4: orb streak indicator (top-right) ----
+    // A thin "×N.NN" chip that appears once a clean-orb streak earns a bonus.
+    // Reads the pure orbStreakState() so it always matches the scoring.
+    const ss = orbStreakState(this.orbStreak);
+    if (ss.streak > 0) {
+      const chipW = 78, chipH = 22, cx = this.cw - chipW - 14, cy = 14;
+      ctx.save();
+      ctx.globalAlpha = ss.active ? 0.95 : 0.7;
+      this._paperChip(ctx, cx, cy, chipW, chipH, 6);
+      ctx.globalAlpha = 1;
+      const label = ss.active ? `streak ×${ss.mult.toFixed(2)}` : `streak ${ss.streak}/${ORB_STREAK.min}`;
+      centerText(ctx, label, cx + chipW / 2, cy + chipH / 2 + 1,
+        '700 12px Georgia, serif', ss.active ? '#b8741f' : INK, ss.active ? 1 : 0.7);
+      ctx.restore();
+    }
 
     // ---- pigment slots (under hearts) ----
     const order = ['red', 'blue', 'green', 'dry'];
