@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -128,6 +128,35 @@ const HERON_Y = 800; // heron x is set per-run at world.w - 350 (P5)
 const PLAYER_START_X = 260, PLAYER_START_Y = 750;
 const ORB_COLORS = ['red', 'blue', 'green'];
 
+// T1/T2 (v1.2 M13): the guided first expedition — a low-stakes teaching run on
+// the opening zone, ONLY for a fresh save (no finished run, never skipped). It
+// is a SEPARATE pre-run layer: it freezes the timed expedition clock (runT) and
+// never touches the timed run's pacing. Coaxed goals are shown as on-screen
+// chips (not text walls); each advances only when the player actually causes
+// the real status/death. A SKIP button dismisses the whole run and persists
+// save.flags.tutorialSkipped so it never reappears.
+//   phase 'learn'  — T1: teach the three pigment effects, one at a time.
+//   phase 'drills' — T2: explicit per-pigment "do it" drills; each advancement
+//                    predicate reads the enemy's REAL status/death (see
+//                    logic.tutorialDrillSatisfied) and persists
+//                    save.tutorialDrills so "Watch me" (T3/T4) can reference it.
+// `pigment` is the brush color the player is asked to use; `enemy` the target
+// kind; `drill` maps to save.tutorialDrills (persisted by the T2 drills phase).
+// T1 ships the three 'learn' goals below; T2 appends the three 'drills' goals
+// (a later phase of the SAME guided run) that gate on the enemy's real
+// death/status and record each into save.tutorialDrills.
+const TUTORIAL_PHASES = [
+  // T1 — learn the tools (coaxed goals; the enemy is placed close and pinned so
+  // a first-timer can land the stroke without chasing it across the swamp).
+  // Each goal advances only when the player actually causes the real effect.
+  { phase: 'learn', pigment: 'red',   enemy: 'beetle',   drill: 'burn',
+    chip: 'Paint the beetle with RED — watch it catch fire and burn away', done: 'The beetle burned away — red is your fire pigment.' },
+  { phase: 'learn', pigment: 'blue',  enemy: 'mosquito', drill: 'freeze',
+    chip: 'Paint the mosquito with BLUE twice — freeze it mid-air', done: 'Frozen solid — blue chains into a freeze on a slowed target.' },
+  { phase: 'learn', pigment: 'green', enemy: 'toad',     drill: 'root',
+    chip: 'Paint the toad with GREEN — root it in place', done: 'Rooted to the spot — green holds a target still.' },
+];
+
 export class Game {
   constructor(canvas) {
     this.canvas = canvas;
@@ -174,6 +203,10 @@ export class Game {
     this.endGains = null;
     this._bloom = null;      // V2 (v1.2 M11): { x, y, t, dur } — heron awaken bloom
     this._bloomSurge = 0;    // V2: timed saturation surge (0..~0.14), decays to 0
+    // T1 (v1.2 M13): guided first expedition (tutorial) runtime state. A fresh
+    // save (tutorialEligible) may enter it; it is fully skippable and is NOT
+    // part of the timed expedition (the clock freezes while it runs).
+    this.tutorial = null;    // null = not active; else { idx, target, frozen, done }
     this.now = 0;
     this.last = 0;
     this.titleT = 0;
@@ -1082,13 +1115,16 @@ _drawAtelier(ctx) {
         return;
       }
       for (const p of g.diff) if (this._mouseIn(p.x, p.y, p.w, p.h)) { this._setDifficulty(p.id); return; }
+      // T1 (v1.2 M13): the guided first expedition (fresh save only). A
+      // dedicated button so the timed "Begin Expedition" path is untouched.
+      if (tutorialEligible(this.save) && this._mouseIn(g.tx, g.ty, g.tw, g.th)) { this.sfx('ui'); this._beginExpedition(true); return; }
       if (this._mouseIn(g.bx, g.by, g.bw, g.bh)) { this.sfx('ui'); this._beginExpedition(); }
       else if (this._mouseIn(g.abx, g.aby, g.abw, g.abh)) { this.sfx('ui'); this._beginAtelier(); }
       else if (this._mouseIn(g.ox, g.oy, g.ow, g.oh)) { this.sfx('ui'); this.optionsOpen = true; }
     }
   }
 
-  _beginExpedition() {
+  _beginExpedition(guided = false) {
     // fresh world each run (title keeps drifting over whatever is left)
     const seed = (Math.random() * 2 ** 31) | 0;
     this.runSeed = seed; // E2: weather phases derive deterministically from this
@@ -1096,6 +1132,7 @@ _drawAtelier(ctx) {
     this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0);
     this.player = new Player(PLAYER_START_X, PLAYER_START_Y, this.tuning);
     this.paint = new Paint(this.player, this.world, this.tuning, (n, o) => this.sfx(n, o), this.particles);
+    this.tutorial = null;   // T1 (v1.2 M13): fresh state each run; set below if guided
     this.enemies = [];
     this.orbs = [];
     this.hazards = []; // E3: Bold-only environmental hazards (thorn reeds / mud pools)
@@ -1201,33 +1238,216 @@ _drawAtelier(ctx) {
     // reveal to 38s — just after the last tutorial step — so the boss lands as
     // a clean "now you know the tools" moment. Returning players: 3.2s (unchanged).
     this.heron._intro = firstRun ? 38 : 3.2;
+    // T1 (v1.2 M13): a fresh save may start the guided first expedition. It is
+    // a SEPARATE pre-run layer — the timed clock is frozen and the boss deferred
+    // for its duration, so it never inflates the 15-20 min expedition timing.
+    // Returning players (a finished run OR a skip) never enter it: the title
+    // button only appears when tutorialEligible(save) is true, and this guard
+    // keeps the guided path out of play even if it is ever called otherwise.
+    if (guided && tutorialEligible(this.save)) this._startTutorial();
+  }
+
+  // ================= T1/T2 (v1.2 M13): the guided first expedition ==========
+  // Coaxed goals shown as on-screen chips (not text walls). Each goal advances
+  // ONLY when the player actually causes the real effect (reads the enemy's real
+  // status/death via logic.tutorialDrillSatisfied). A SKIP button (or Escape)
+  // dismisses the whole run and persists save.flags.tutorialSkipped so it never
+  // reappears. While active: the timed clock (runT) is frozen, the boss is
+  // deferred, and normal wave spawning is suppressed — so this is a low-stakes
+  // teaching layer, not part of the timed expedition.
+  _tutorialActive() { return !!(this.tutorial && !this.tutorial.done && this.tutorial.idx < TUTORIAL_PHASES.length); }
+  _tutorialPhase() { const t = this.tutorial; return (t && t.idx < TUTORIAL_PHASES.length) ? TUTORIAL_PHASES[t.idx] : null; }
+
+  // Start the guided run: freeze the clock, defer the boss, place goal #1.
+  _startTutorial() {
+    this.tutorial = { idx: 0, target: null, targetPos: null, done: false, frozen: 0 };
+    this.runT = 0;                 // the teaching run is NOT timed
+    this.heron._intro = 999;       // the heron waits until the practice ends
+    this.addBanner('A quiet little practice — give each bug its lesson. Skip anytime.', 4.5, this.ch * 0.26);
+    this._tutorialSpawnTarget();
+  }
+
+  // Place the current goal's target just within brush reach (a first-timer
+  // lands the stroke without chasing a bug across the swamp).
+  _tutorialSpawnTarget() {
+    const ph = this._tutorialPhase();
+    if (!ph || !this.player) return;
+    const p = this.player;
+    const pos = { x: p.x + 52, y: p.y - 10 };
+    const e = spawnEnemy(ph.enemy, pos.x, pos.y, this.tuning);
+    e.vx = 0; e.vy = 0;
+    this.enemies.push(e);
+    this.tutorial.target = e;
+    this.tutorial.targetPos = pos;
+  }
+
+  // Advance once the current goal's real-state predicate is satisfied.
+  _tutorialAdvance() {
+    const t = this.tutorial;
+    const ph = TUTORIAL_PHASES[t.idx];
+    this.enemies = this.enemies.filter(e => e !== t.target);
+    t.target = null; t.targetPos = null;
+    t.idx += 1;
+    if (t.idx >= TUTORIAL_PHASES.length) {
+      t.done = true;
+      this.heron._intro = 3.2;     // practice over — the timed expedition resumes
+      this.addBanner('Well painted. Off into the swamp — the Great Gray Heron waits in the gray east.', 4.6, this.ch * 0.3);
+      this.sfx('victory');
+      return;
+    }
+    this.addBanner(ph.done, 3.4, this.ch * 0.3);
+    this.sfx('ui');
+    this._tutorialSpawnTarget();
+  }
+
+  // Skip the whole tutorial at any time. Persists the skip so it never returns.
+  _skipTutorial() {
+    if (!this.tutorial || this.tutorial.done) return;
+    this.tutorial.done = true;
+    if (!this.save.flags.tutorialSkipped) {
+      this.save.flags.tutorialSkipped = true;
+      SaveSys.save(this.save);
+    }
+    this.enemies = this.enemies.filter(e => e && e !== this.tutorial.target);
+    this.tutorial.target = null; this.tutorial.targetPos = null;
+    this.runT = 0;
+    this.heron._intro = 3.2;       // the timed expedition begins
+    this.addBanner('Practice skipped — the expedition begins.', 3.2, this.ch * 0.3);
+    this.sfx('ui-back');
+  }
+
+  // Per-frame driver (called from _updateExpedition while active): check skip
+  // input, keep the target within reach, and advance only when the real effect
+  // has happened. The advancement predicate reads the enemy's real status/death
+  // (logic.tutorialDrillSatisfied), never "a brush stroke happened".
+  _tutorialTick() {
+    const t = this.tutorial;
+    if (!t || t.done) return;
+    const ph = this._tutorialPhase();
+    if (!ph) return;
+    // skip: click the SKIP button or press Escape — dismisses + persists.
+    const lay = this._tutorialLayout();
+    const m = this.input.mouse;
+    if (m.lPressed && this._mouseIn(lay.skip.x, lay.skip.y, lay.skip.w, lay.skip.h)) { this._skipTutorial(); return; }
+    if (this.input.pressed('escape')) { this._skipTutorial(); return; }
+    // keep the target in reach (low-stakes: pinned near the starting point)
+    const e = t.target;
+    if (e && !e.dead && t.targetPos) {
+      e.x = t.targetPos.x; e.y = t.targetPos.y; e.vx = 0; e.vy = 0; e._now = this.now;
+    }
+    // the timed clock (runT) is frozen, but the heron intro counts down by
+    // real dt — hold it so the boss can never wake mid-practice.
+    if (this.heron) this.heron._intro = Math.max(this.heron._intro, 1);
+    if (e && tutorialDrillSatisfied(ph.drill, e)) this._tutorialAdvance();
+  }
+
+  // Geometry shared by the chip drawing and the skip-button hit test (so the
+  // visual and the click target can't drift apart).
+  _tutorialLayout() {
+    const w = 560, h = 64, x = 16, y = this.ch - h - 18;
+    return { x, y, w, h, skip: { x: x + w - 96, y: y + 14, w: 80, h: 36 } };
+  }
+
+  // T1/T2 (v1.2 M13): the on-screen goal chip for the guided first expedition.
+  // Renders at the bottom-left (above the HUD's pigment slots) as a paper card
+  // with a pigment swatch, the current goal text, and a SKIP button.
+  _drawTutorialChip(ctx) {
+    const ph = this._tutorialPhase();
+    if (!ph) return;
+    const t = this.tutorial;
+    const lay = this._tutorialLayout();
+    const { x, y, w, h, skip } = lay;
+
+    ctx.save();
+
+    // paper card
+    ctx.globalAlpha = 0.94;
+    this._paperChip(ctx, x, y, w, h, 12);
+    ctx.globalAlpha = 1;
+
+    // pigment swatch (a small rounded circle in the top-left of the card)
+    const pig = PIGMENTS[ph.pigment];
+    const swX = x + 20, swY = y + h / 2, swR = 9;
+    ctx.fillStyle = pig.color;
+    ctx.beginPath();
+    ctx.arc(swX, swY, swR, 0, TAU);
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+
+    // goal text
+    const textX = swX + swR + 10;
+    const textMaxW = w - (skip.x - x) - (textX - x) - 12;
+    centerText(ctx, ph.chip, textX + textMaxW / 2, y + h / 2, '12px Georgia, serif', INK, 0.88);
+
+    // step counter (e.g. "1/3")
+    const total = TUTORIAL_PHASES.length;
+    const stepLabel = `step ${t.idx + 1} / ${total}`;
+    ctx.globalAlpha = 0.5;
+    centerText(ctx, stepLabel, textX + textMaxW / 2, y + 12, '10px Georgia, serif', INK, 0.5);
+    ctx.globalAlpha = 1;
+
+    // SKIP button
+    const hov = this._mouseIn(skip.x, skip.y, skip.w, skip.h);
+    ctx.save();
+    ctx.globalAlpha = hov ? 0.95 : 0.8;
+    roundRectPath(ctx, skip.x, skip.y, skip.w, skip.h, 6);
+    ctx.fillStyle = hov ? '#d8543c' : '#e8dcc4';
+    ctx.fill();
+    ctx.lineWidth = hov ? 2 : 1.2;
+    ctx.strokeStyle = hov ? '#a03020' : INK;
+    ctx.stroke();
+    centerText(ctx, 'SKIP', skip.x + skip.w / 2, skip.y + skip.h / 2 + 4, '700 11px Georgia, serif', hov ? '#fdf6e9' : INK, 1);
+    ctx.restore();
+
+    ctx.restore();
   }
 
   _updateExpedition(dt) {
     this.runT += dt;
 
+    // ----- T1 (v1.2 M13): the guided first expedition --------------------------
+    // While the tutorial runs the timed expedition clock is FROZEN (runT holds
+    // steady) and the staged first-run banners are suppressed, so the tutorial
+    // is a separate pre-run layer that never inflates the measured run length.
+    // The player still moves and paints (below); only pacing/progress stops.
+    const tut = this.tutorial;
+    if (tut && !tut.done) {
+      this.runT = tut.frozen;
+      if (this.input.pressed('escape') || this.input.pressed('backspace')) { this._skipTutorial(); return; }
+      if (this.input.mouse.lPressed) {
+        const g = this._tutorialLayout();
+        if (g.skip && this._mouseIn(g.skip.x, g.skip.y, g.skip.w, g.skip.h)) { this._skipTutorial(); return; }
+      }
+    }
+
     // ----- staged first-run tutorial (one step at a time) -----
-    if (this._tut && this._tutI < this._tut.length && this.runT >= this._tut[this._tutI].at) {
+    if (!tut && this._tut && this._tutI < this._tut.length && this.runT >= this._tut[this._tutI].at) {
       const step = this._tut[this._tutI++];
       this.addBanner(step.text, step.dur, this.ch * 0.42);
     }
 
     // ----- pause toggle (open only; menu input lives in the frame router) -----
-    if (this.input.pressed('p')) {
-      this.paused = !this.paused;
-      this.sfx(this.paused ? 'ui-back' : 'ui');
-      return;
-    }
-    // M8 P6: "?" field guide — pauses the run so you can read it safely.
-    if (this.input.pressed('h') || this.input.pressed('?')) {
-      this.help = !this.help;
-      this.sfx(this.help ? 'ui-back' : 'ui');
-      return;
-    }
-    if (this.input.pressed('escape')) {
-      this.paused = true;
-      this.sfx('ui-back');
-      return;
+    // While the tutorial runs these are suppressed (Escape skips instead of
+    // pausing; the run stays focused on the on-screen goal chip).
+    if (!tut) {
+      if (this.input.pressed('p')) {
+        this.paused = !this.paused;
+        this.sfx(this.paused ? 'ui-back' : 'ui');
+        return;
+      }
+      // M8 P6: "?" field guide — pauses the run so you can read it safely.
+      if (this.input.pressed('h') || this.input.pressed('?')) {
+        this.help = !this.help;
+        this.sfx(this.help ? 'ui-back' : 'ui');
+        return;
+      }
+      if (this.input.pressed('escape')) {
+        this.paused = true;
+        this.sfx('ui-back');
+        return;
+      }
     }
 
     // ----- brush charge (hold RMB) -----
@@ -1343,6 +1563,11 @@ _drawAtelier(ctx) {
       }
       if (e.dead) { this._onEnemyDead(e); this.enemies.splice(i, 1); }
     }
+
+    // ----- T1/T2 (v1.2 M13): advance the tutorial once the REAL effect lands.
+    // The target is held by reference (survives the splice above), so its
+    // death/status is read live — a brush stroke alone never advances it.
+    if (tut && !tut.done && p.alive) this._tutorialTick();
 
     if (this.dying) {
       this.world.update(dt);
@@ -2095,6 +2320,9 @@ _drawAtelier(ctx) {
       this._drawOffscreenEnemyArrows(ctx, v);
       this._drawHud(ctx);
     }
+    // T1 (v1.2 M13): the on-screen goal chip + SKIP button for the guided first
+    // expedition (rendered above the HUD so it reads as the active instruction).
+    if (this.state === 'expedition' && this.tutorial && !this.tutorial.done) this._drawTutorialChip(ctx);
     if (this.state === 'title') this._drawTitle(ctx);
     if (this.state === 'title' && this.optionsOpen) this._drawOptions(ctx);
     if (this.state === 'atelier') this._drawAtelier(ctx);
@@ -2503,7 +2731,13 @@ _drawAtelier(ctx) {
     const cx = this.cw / 2;
     const pw = 520, ph = 254, px = cx - pw / 2, py = 300;
     const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 18;
-    const dy = by + bh + 12, dH = 30, dW = 88, dGap = 10;
+    // T1 (v1.2 M13): the guided first expedition button (shown only to a fresh
+    // save — see tutorialEligible). Sits just under the start button and pushes
+    // the difficulty + secondary rows down one row ONLY for a fresh save, so a
+    // returning player's title keeps its original layout (no dead button).
+    const eligible = tutorialEligible(this.save);
+    const tw = 260, th = 40, tx = cx - tw / 2, ty = by + bh + 14;
+    const dy = (eligible ? ty + th + 12 : by + bh + 12), dH = 30, dW = 88, dGap = 10;
     const dTotal = dW * 3 + dGap * 2, dStartX = cx - dTotal / 2;
     const diff = ['gentle', 'normal', 'bold'].map((id, i) => ({ id, x: dStartX + i * (dW + dGap), y: dy, w: dW, h: dH, label: (DIFFICULTIES[id] || {}).label }));
     const abw = 200, abh = 44, aby = dy + dH + 12;
@@ -2512,7 +2746,7 @@ _drawAtelier(ctx) {
     // directly), so this pair layout is free to tune.
     const gap = 24;
     const abx = cx - (abw + gap / 2), ox = cx + gap / 2, ow = abw, oh = abh, oy = aby;
-    return { cx, pw, ph, px, py, bx, by, bw, bh, diff, abx, aby, abw, abh, ox, oy, ow, oh };
+    return { cx, pw, ph, px, py, bx, by, bw, bh, tw, th, tx, ty, diff, abx, aby, abw, abh, ox, oy, ow, oh };
   }
   _setDifficulty(id) {
     if (!DIFFICULTIES[id] || this.options.difficulty === id) return;
@@ -2690,6 +2924,12 @@ _drawAtelier(ctx) {
       b.red > 0 || b.blue > 0 || b.green > 0 || this.save.loadout.length > 0 ||
       (this.save.upgrades && (this.save.upgrades.power > 0 || this.save.upgrades.vitality > 0 || this.save.upgrades.capacity > 0));
         uiButton(ctx, g.bx, g.by, g.bw, g.bh, hasProgress ? 'Continue Expedition' : 'Begin Expedition', this._mouseIn(g.bx, g.by, g.bw, g.bh), false, { seed: 5, size: 20, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        // T1 (v1.2 M13): the guided first expedition — shown only to a fresh
+        // save (no finished run, never skipped). Clicking it begins a low-stakes
+        // teaching run on the opening zone instead of the timed expedition.
+        if (tutorialEligible(this.save)) {
+          uiButton(ctx, g.tx, g.ty, g.tw, g.th, 'Guided First Expedition', this._mouseIn(g.tx, g.ty, g.tw, g.th), false, { seed: 55, size: 14, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        }
         // M8 P7: difficulty pills (Gentle / Normal / Bold) between the two buttons.
         centerText(ctx, 'difficulty', cx - g.diff[0].x + 34, g.diff[0].y + 20, '11px Georgia, serif', INK, 0.55);
         for (const p of g.diff) {

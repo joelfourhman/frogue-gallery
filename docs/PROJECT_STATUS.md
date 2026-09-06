@@ -49,10 +49,10 @@ consequential decisions in `docs/DECISIONS.md`.
   endT; reuses the P8 Gallery Wall frame look + painting data, no new art; the
   victory card grows to 540px via _endCardH() shared by draw + click rects;
   pure presentation, so pacing is untouched).**
-  - Smoke suite: **41 stages, ALL PASSED** (stage 34 = v1.2 M10 E1 Painted Heron; stage 35 = v1.2 M10 E2 weather/tide phases; stage 36 = v1.2 M10 E3 Bold-only zone hazards; stage 37 = v1.2 M10 E4 orb-streak bonus; stage 38 = v1.2 M11 V1 color-reveal bar; stage 39 = v1.2 M11 V2 heron awaken bloom; stage 40 = v1.2 M11 V3 per-zone ambient audio bed; stage 41 = v1.2 M11 V4 end-screen exhibition). Pacing
+  - Smoke suite: **42 stages, ALL PASSED** (stage 34 = v1.2 M10 E1 Painted Heron; stage 35 = v1.2 M10 E2 weather/tide phases; stage 36 = v1.2 M10 E3 Bold-only zone hazards; stage 37 = v1.2 M10 E4 orb-streak bonus; stage 38 = v1.2 M11 V1 color-reveal bar; stage 39 = v1.2 M11 V2 heron awaken bloom; stage 40 = v1.2 M11 V3 per-zone ambient audio bed; stage 41 = v1.2 M11 V4 end-screen exhibition; **stage 42 = v1.2 M13 T1 guided first expedition**). Pacing
   probes green on Normal: `pace.mjs` (analytic ~18.7 min) + `humance.mjs` (simulated
   human, ~19.2 min full-run / 54s cross-swamp) + `bosspace.mjs`. Real-browser: 60 fps title / full world.
-- Git: v1.1 fully committed; v1.2 A1 committed; v1.2 roadmap + M13 tutorial
+- Git: v1.1 fully committed; v1.2 roadmap + M13 tutorial
   swap committed (`5258d13`, `543d1cd`).
 
 ## Active work
@@ -60,7 +60,7 @@ consequential decisions in `docs/DECISIONS.md`.
 **v1.2 "The Collection" — in progress, driven in bounded batches of ~3 items.**
 Batch order (one conventional commit per item, docs + suite green per commit):
 M9 A1→A2→A3 → A4 / M10 E1→E2 → E3→E4 / M11 V1 → V2→V3→V4 → M13 T1→T2→T3→T4.
-**Batch 1 (A1–A3) COMPLETE. Batch 2 (A4 Rehung Frame ✅ + E1 Painted Heron ✅ + E2 weather/tide phases ✅) COMPLETE — suite 35/35, pacing in band on Normal. Batch 3 (E3 Bold-only zone hazards ✅ → E4 orb-streak bonus ✅ → V1 color-reveal bar ✅) COMPLETE — suite 38/38, pacing 18.7/19.2 min in band. Batch 4 (M11 Presentation, presentation-only — pacing untouched): V2 ✅ (heron awaken bloom) + V3 ✅ (per-zone ambient audio) + V4 ✅ (end-screen exhibition) COMPLETE — suite 41/41.** See
+**Batch 1 (A1–A3) COMPLETE. Batch 2 (A4 Rehung Frame ✅ + E1 Painted Heron ✅ + E2 weather/tide phases ✅) COMPLETE — suite 35/35, pacing in band on Normal. Batch 3 (E3 Bold-only zone hazards ✅ → E4 orb-streak bonus ✅ → V1 color-reveal bar ✅) COMPLETE — suite 38/38, pacing 18.7/19.2 min in band. Batch 4 (M11 Presentation, presentation-only — pacing untouched): V2 ✅ (heron awaken bloom) + V3 ✅ (per-zone ambient audio) + V4 ✅ (end-screen exhibition) COMPLETE — suite 41/41. Batch 5 (M13 Tutorial) IN PROGRESS: T1 ✅ (guided first expedition) committed — suite 42/42.** See
 `PROJECT_STATE.md` → Immediate Next Action.
 
 ## Blockers

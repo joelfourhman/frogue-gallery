@@ -675,7 +675,7 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // version, written into every save and read back on load. Legacy saves stored
 // it under the field `v`; migrateSave() accepts both and re-stamps to the
 // current version.
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
@@ -684,10 +684,19 @@ export const SAVE_VERSION = 2;
 // A4 (v1.2 M9): v2 adds the `galleryBonus` counter (the 'Rehung Frame'
 // prestige-lite level). Old v1 saves (no such field) migrate forward with the
 // bonus defaulted to 0, so they keep loading unchanged.
+// T1 (v1.2 M13): v3 adds the tutorial layer — `save.flags.tutorialSkipped`
+// (dismissed the guided first expedition) and `save.tutorialDrills`
+// ({burn,freeze,root}), the per-pigment drill completion map. A v2 save
+// (no tutorialDrills) migrates forward with the drills defaulted to all-false,
+// so returning players keep loading unchanged.
 const SAVE_MIGRATIONS = [
   {
     from: 1, to: 2,
     fn: (out) => { out.galleryBonus = Math.max(0, Math.floor(Number(out.galleryBonus) || 0)); },
+  },
+  {
+    from: 2, to: 3,
+    fn: (out) => { out.tutorialDrills = normalizeDrills(out.tutorialDrills); },
   },
 ];
 
@@ -698,11 +707,65 @@ export function freshSave() {
     owned: [],            // painting ids
     loadout: [],          // up to 2 painting ids
     upgrades: { capacity: 0, power: 0, vitality: 0 },
-    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false },
+    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false, tutorialSkipped: false },
     stats: { expeditions: 0, victories: 0, deaths: 0, heronsPainted: 0, treasures: 0 },
     bestRun: null,        // {pigments, time, cleared}
     galleryBonus: 0,      // A4 (v1.2 M9): 'Rehung Frame' prestige-lite level
+    tutorialDrills: { burn: false, freeze: false, root: false }, // T1 (v1.2 M13)
   };
+}
+
+// T1 (v1.2 M13): normalize the per-pigment drill completion map so a legacy
+// save (no field, or a partial/garbled one) always reads back as a complete
+// {burn,freeze,root} booleans object. Pure — testable headless.
+function normalizeDrills(raw) {
+  const base = { burn: false, freeze: false, root: false };
+  if (!isPlainObj(raw)) return base;
+  for (const k of ['burn', 'freeze', 'root']) base[k] = !!raw[k];
+  return base;
+}
+
+// T1 (v1.2 M13): a player is eligible for the guided first expedition when they
+// have NOT finished a run (heron never defeated) AND have not explicitly
+// skipped the tutorial. A returning player (either condition true) never sees
+// it. Pure — driven by save state only.
+export function tutorialEligible(save) {
+  if (!save || !isPlainObj(save.flags)) return false;
+  return !save.flags.heronDefeated && !save.flags.tutorialSkipped;
+}
+
+// T2 (v1.2 M13): has a specific drill been completed+persisted? `id` is one of
+// 'burn' | 'freeze' | 'root'. Pure.
+export function tutorialDrillDone(save, id) {
+  if (!save || !isPlainObj(save.tutorialDrills)) return false;
+  return !!save.tutorialDrills[id];
+}
+
+// T2 (v1.2 M13): are all three per-pigment drills complete?
+export function tutorialDrillsAllDone(save) {
+  return tutorialDrillDone(save, 'burn') && tutorialDrillDone(save, 'freeze') && tutorialDrillDone(save, 'root');
+}
+
+// T2 (v1.2 M13): the per-drill advancement predicates. These are the CORE of
+// the interactive drills: each reads the enemy's REAL status/death state, not
+// "a brush stroke happened" (Paint never sets these). `drill` is 'burn' |
+// 'freeze' | 'root'. `enemy` is a live-or-just-dead Enemy-like: { status,
+// _burnedOut, deathCause }.
+//   burn   — the target actually died WHILE burning (burn tick carried it to
+//            0, or the burn status lapsed after it was already down).
+//   freeze — the mosquito is currently frozen (blue-on-blue chain).
+//   root   — the toad is currently rooted (green).
+// Pure — driven by the enemy's real state only.
+export function tutorialDrillSatisfied(drill, enemy) {
+  if (!enemy) return false;
+  const st = enemy.status && enemy.status.type;
+  if (drill === 'burn') {
+    const burnedOut = !!enemy._burnedOut || enemy.deathCause === 'burn';
+    return (enemy.hp <= 0 || enemy.dead) && (burnedOut || st === 'burn');
+  }
+  if (drill === 'freeze') return st === 'freeze';
+  if (drill === 'root') return st === 'root';
+  return false;
 }
 
 // B2: corrupt-save handling. migrateSave never throws and always returns a
@@ -714,7 +777,7 @@ export function freshSave() {
 //                (string/number/array/null); fresh save, nothing preserved
 // (The unparseable-JSON and missing-key cases are handled one level up in
 // SaveSys.load(), which returns null so the caller starts a fresh game.)
-const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus'];
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills'];
 
 function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
 
@@ -750,6 +813,10 @@ export function migrateSave(raw) {
   // A4 (v1.2 M9): galleryBonus is a top-level scalar counter; normalize so an
   // old-format save (no field) defaults to 0 instead of leaking undefined.
   out.galleryBonus = Math.max(0, Math.floor(Number(raw.galleryBonus) || 0));
+  // T1 (v1.2 M13): carry the per-pigment drill map forward (default all-false
+  // for a legacy v2 save, real values for a v3 save). The v2->v3 migration
+  // step re-normalizes defensively.
+  out.tutorialDrills = normalizeDrills(raw.tutorialDrills);
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks

@@ -2120,5 +2120,123 @@ console.log('== stage 41: V4 — end-screen exhibition ==');
   assert(g41._endCardH() === 430, 'V4: the defeat card keeps its compact height');
 }
 
+console.log('== stage 42: T1 — guided first expedition (tutorial) ==');
+{
+  const S42 = await import('../src/save.js');
+  const L42 = await import('../src/logic.js');
+
+  // a self-contained fresh Game (its own canvas + time base), independent of the
+  // run-driven `game` used by the earlier stages.
+  let t42 = 1000;
+  const g42 = new Game(makeCanvas());
+  g42.start();
+  const fr42 = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t42 += step; g42._frame(t42); } };
+  const aim42 = (e) => { const v = g42._view(); g42.input.mouse.x = (e.x - v.x) * v.scale; g42.input.mouse.y = (e.y - v.y) * v.scale; };
+
+  // ---- eligibility (pure): a fresh save offers the tutorial; a returning
+  // save (finished run OR previously skipped) does not. ----
+  assert(L42.tutorialEligible(L42.freshSave()) === true, 'T1: a fresh save is eligible for the guided expedition');
+  const returning = L42.freshSave(); returning.flags.heronDefeated = true;
+  assert(L42.tutorialEligible(returning) === false, 'T1: a returning save (heron defeated) is NOT eligible');
+  const skipped = L42.freshSave(); skipped.flags.tutorialSkipped = true;
+  assert(L42.tutorialEligible(skipped) === false, 'T1: a previously-skipped save is NOT eligible');
+  // a fresh save's title carries the guided button; a returning save's does not.
+  g42.save = L42.freshSave(); fr42(2);
+  assert(L42.tutorialEligible(g42.save), 'T1: title shows the guided button for a fresh save');
+  g42.save = returning; fr42(2);
+  assert(!L42.tutorialEligible(g42.save), 'T1: title hides the guided button for a returning save');
+
+  // ---- enter the guided expedition on a fresh save ----
+  g42.save = L42.freshSave();
+  g42._beginExpedition(true);
+  fr42(6);
+  assert(g42.state === 'expedition', 'T1: the guided expedition starts in the expedition state');
+  assert(g42.tutorial && !g42.tutorial.done, 'T1: the tutorial runtime is active for a fresh save');
+  assert(g42.tutorial.idx === 0 && g42.tutorial.target && g42.tutorial.target.kind === 'beetle', 'T1: goal #1 targets a beetle (red / burn)');
+  const runT0 = g42.runT;
+  assert(g42.runT < 1, `T1: the timed clock is frozen while the tutorial runs (runT ${g42.runT})`);
+  assert(g42.heron._intro > 100, 'T1: the heron boss is deferred until the practice ends');
+  g42.player.iframes = 99; // low-stakes: the target never hurts the frog
+
+  // ---- each goal advances ONLY when the player causes the real effect.
+  // We drive real swipes (paint.trySwipe path): aim at the pinned target and
+  // hold LMB; the advancement predicate reads the enemy's real status/death. ----
+  const advance = (drill, pigment, framesCap = 400) => {
+    g42.player.pigment = pigment;
+    const before = g42.tutorial.idx;
+    const pred0 = L42.tutorialDrillSatisfied(drill, g42.tutorial.target);
+    assert(pred0 === false, `T1: the ${drill} predicate is unsatisfied before the action`);
+    let f = 0;
+    while (g42.tutorial.idx === before && f < framesCap) {
+      const e = g42.tutorial.target;
+      if (e) e.dizzyPaintChance = 0; // keep the toad drill deterministic (no random dizzy)
+      aim42(g42.tutorial.target);
+      g42.input.mouse.lDown = true; fr42(1); f++;
+    }
+    g42.input.mouse.lDown = false;
+    assert(g42.tutorial.idx === before + 1, `T1: the ${drill} goal advanced after the real effect (idx ${before} -> ${g42.tutorial.idx}, ${f} frames)`);
+    assert(g42.tutorial.idx < 3 || g42.tutorial.done, `T1: no spurious advancement past the ${drill} goal`);
+  };
+
+  advance('burn', 'red');    // a beetle that actually burned to death
+  advance('freeze', 'blue'); // a mosquito that actually froze (blue-on-slow chain)
+  advance('root', 'green');  // a toad that actually rooted
+
+  assert(g42.tutorial.done, 'T1: all three guided goals complete the practice');
+  assert(Math.abs(g42.runT - runT0) < 0.5, `T1: the timed clock stayed frozen through the practice (runT ${runT0} -> ${g42.runT})`);
+  assert(g42.heron._intro < 10 && g42.heron._intro > 0, 'T1: the heron resumes once the practice ends (intro reset)');
+
+  // ---- a wrong-pigment brush stroke does NOT advance a goal (reads real
+  // status, not "a brush stroke happened") ----
+  const g42b = new Game(makeCanvas());
+  g42b.start();
+  let t42b = 1000;
+  const fr42b = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t42b += step; g42b._frame(t42b); } };
+  const aim42b = (e) => { const v = g42b._view(); g42b.input.mouse.x = (e.x - v.x) * v.scale; g42b.input.mouse.y = (e.y - v.y) * v.scale; };
+  g42b.save = L42.freshSave();
+  g42b._beginExpedition(true);
+  fr42b(6);
+  g42b.player.iframes = 99;
+  assert(g42b.tutorial.idx === 0 && g42b.tutorial.target.kind === 'beetle', 'T1: g42b is on goal 1 (burn the beetle)');
+  // Paint the beetle with BLUE: blue applies a slow/freeze, never a burn. So
+  // no matter how many strokes land, the burn goal must NOT advance — proof the
+  // predicate reads the enemy's real status, not "a brush stroke happened".
+  // (Re-aim every frame, matching the working paint loop; blue can't burn the
+  // beetle so a longer hold is safe.)
+  g42b.player.pigment = 'blue';
+  let wf = 0;
+  while (g42b.tutorial.idx === 0 && wf < 20) { aim42b(g42b.tutorial.target); g42b.input.mouse.lDown = true; fr42b(1); wf++; }
+  g42b.input.mouse.lDown = false;
+  fr42b(3);
+  assert(g42b.tutorial.idx === 0, 'T1: blue strokes (no burn) never advance the burn goal');
+  assert(L42.tutorialDrillSatisfied('burn', g42b.tutorial.target) === false, 'T1: the burn predicate is false after blue strokes');
+  assert(!(g42b.tutorial.target.dead && g42b.tutorial.target._burnedOut), 'T1: the beetle was never burned to death by the blue strokes');
+
+  // ---- skip dismisses the whole tutorial and persists ----
+  g42b._skipTutorial();
+  assert(g42b.tutorial.done, 'T1: SKIP dismisses the whole tutorial at once');
+  assert(g42b.save.flags.tutorialSkipped === true, 'T1: SKIP persists flags.tutorialSkipped on the in-memory save');
+  assert(S42.SaveSys.load().flags.tutorialSkipped === true, 'T1: SKIP persists tutorialSkipped to disk (survives a reload)');
+  assert(L42.tutorialEligible(S42.SaveSys.load()) === false, 'T1: after a skip the player is no longer eligible (never sees it again)');
+
+  // ---- a returning save (skip OR finished run) can never enter the tutorial,
+  // even on the guided path — the eligibility guard in _beginExpedition holds. ----
+  const g42c = new Game(makeCanvas());
+  g42c.start();
+  g42c.save = L42.freshSave(); g42c.save.flags.tutorialSkipped = true;
+  g42c._beginExpedition(true); // guided path on an ineligible (skipped) save
+  let t42c = 1000;
+  const fr42c = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t42c += step; g42c._frame(t42c); } };
+  fr42c(6);
+  assert(g42c.tutorial === null, 'T1: a skipped save is refused the guided run (guard) and starts straight in');
+  assert(g42c.state === 'expedition', 'T1: the skipped save is in the timed expedition');
+  // and a finished-run save is refused too
+  const g42d = new Game(makeCanvas());
+  g42d.start();
+  g42d.save = L42.freshSave(); g42d.save.flags.heronDefeated = true;
+  g42d._beginExpedition(true); // guided path on an ineligible (finished) save
+  assert(g42d.tutorial === null, 'T1: a finished-run save is refused the guided run (guard)');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
