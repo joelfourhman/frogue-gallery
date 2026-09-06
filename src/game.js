@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -225,6 +225,7 @@ export class Game {
     this.endKind = null;
     this.endT = 0;
     this.endGains = null;
+    this._modPrompt = null;   // N4 (v1.3 M14): { sel } — the open expedition-modifier picker
     this._bloom = null;      // V2 (v1.2 M11): { x, y, t, dur } — heron awaken bloom
     this._bloomSurge = 0;    // V2: timed saturation surge (0..~0.14), decays to 0
     // T1 (v1.2 M13): guided first expedition (tutorial) runtime state. A fresh
@@ -403,19 +404,27 @@ export class Game {
     } else if (this.state === 'end') {
       this.endT += dt;
       this._stepHeronFlight(dt);
-      // buttons: "Rest at the Atelier" (primary) + "Return to the Pond" link
-      // (see _drawEnd layout). The card is taller on a victory (it carries the
-      // V4 exhibition), so both the draw and the click rects use _endCardH().
-      if (this.endT > 0.6 && this.input.mouse.lPressed) {
-        const b = this._endButtons();
-        if (this._mouseIn(b.primary.x, b.primary.y, b.primary.w, b.primary.h)) { this.sfx('ui'); this._beginAtelier(); }
-        else if (b.ng && this._mouseIn(b.ng.x, b.ng.y, b.ng.w, b.ng.h)) { this._beginNextExpedition(); }
-        else if (this._mouseIn(b.ret.x, b.ret.y, b.ret.w, b.ret.h)) { this.sfx('ui-back'); this._quitToTitle(); }
-      }
-      if (this.endT > 0.6) {
-        if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); this._beginAtelier(); }
-        if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._quitToTitle(); }
-        if (this.input.pressed('m')) this._muteToggle();
+      // N4 (v1.3 M14): the expedition-modifier picker, when open, owns this
+      // frame's input (it is an overlay on the end screen). Otherwise the
+      // normal end-screen buttons route.
+      if (this._modPrompt) {
+        this._updateModPrompt();
+      } else {
+        // buttons: "Rest at the Atelier" (primary) + "Next Expedition" (NG+)
+        // + "Return to the Pond" link. The card is taller on a victory (it
+        // carries the V4 exhibition), so both the draw and the click rects
+        // use _endCardH().
+        if (this.endT > 0.6 && this.input.mouse.lPressed) {
+          const b = this._endButtons();
+          if (this._mouseIn(b.primary.x, b.primary.y, b.primary.w, b.primary.h)) { this.sfx('ui'); this._beginAtelier(); }
+          else if (b.ng && this._mouseIn(b.ng.x, b.ng.y, b.ng.w, b.ng.h)) { this._beginNextExpedition(); }
+          else if (this._mouseIn(b.ret.x, b.ret.y, b.ret.w, b.ret.h)) { this.sfx('ui-back'); this._quitToTitle(); }
+        }
+        if (this.endT > 0.6) {
+          if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); this._beginAtelier(); }
+          if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._quitToTitle(); }
+          if (this.input.pressed('m')) this._muteToggle();
+        }
       }
     } else if (this.state === 'atelier') {
       this.atelierT += dt;
@@ -462,18 +471,146 @@ export class Game {
     this.sfx('ui-back');
   }
 
-  // N1 (v1.3 M14): the "Next Expedition" action. Only reachable once a victory
-  // has been earned (ngUnlocked). It advances the persisted New Game+ cycle by
-  // one (a base-game victory is at ngCycle 0, so the first choice enters
-  // cycle 1), persists it, and starts the run. NG+ scaling (N2) and the second
-  // boss (N3) then key off the run's ngCycle. A first-time save (ngCycle 0,
-  // no victory) never sees this path because the button is hidden.
+  // N1 (v1.3 M14) / N4 (v1.3 M14): the "Next Expedition" action. Only reachable
+  // once a victory has been earned (ngUnlocked). It opens the expedition-MODIFIER
+  // picker (N4) — the player chooses one MODIFIERS entry for the coming cycle —
+  // and the picker's confirm advances the persisted New Game+ cycle and starts
+  // the run. NG+ scaling (N2), the second boss (N3), and the modifier (N4) then
+  // key off the run's ngCycle. A first-time save (ngCycle 0, no victory) never
+  // sees this path because the button is hidden.
   _beginNextExpedition() {
     if (!ngUnlocked(this.save)) return; // defensive: nothing to escalate yet
+    this._openModPrompt();
+  }
+
+  // N4 (v1.3 M14): open the expedition-modifier picker (an overlay on the end
+  // screen). The current saved modifier (if any) is pre-selected so a returning
+  // player can re-confirm it with a single Enter. The cycle is NOT advanced
+  // here — that happens on the picker's confirm (_confirmNextExpedition), so
+  // quitting from the prompt leaves the save untouched.
+  _openModPrompt() {
+    const saved = saveModifier(this.save);
+    const i = saved ? (MODIFIER_ORDER.indexOf(saved) + 1) : 0;
+    this._modPrompt = { sel: Math.min(Math.max(i, 0), MODIFIER_ORDER.length) };
+    this.sfx('ui');
+  }
+
+  // N4 (v1.3 M14): advance the NG+ cycle and start the expedition (the picker's
+  // confirm, and the direct path once a modifier is chosen). The modifier (if
+  // any) was already persisted by _chooseModPrompt on selection.
+  _confirmNextExpedition() {
+    this._modPrompt = null;
     this.save.ngCycle = (Math.floor(this.save.ngCycle) || 0) + 1;
     SaveSys.save(this.save);
     this.sfx('ui');
     this._beginExpedition();
+  }
+
+  // N4 (v1.3 M14): the picker's selection index (0 = no modifier; 1..N = the
+  // MODIFIER_ORDER entries).
+  _modSelId() {
+    const i = this._modPrompt ? this._modPrompt.sel : 0;
+    return i <= 0 ? null : MODIFIER_ORDER[i - 1];
+  }
+
+  // N4 (v1.3 M14): persist the currently-selected modifier to the save
+  // (null when the "no modifier" card is selected). Idempotent.
+  _chooseModPrompt() {
+    const id = this._modSelId();
+    if ((this.save.ngModifier || null) === (id || null)) return;
+    this.save.ngModifier = id || null;
+    SaveSys.save(this.save);
+  }
+
+  // N4 (v1.3 M14): the picker's geometry — 4 cards (No modifier + the 3
+  // modifiers) in a centered row, plus a Continue button.
+  _modPromptGeom() {
+    const cx = this.cw / 2, cy = this.ch / 2;
+    const n = MODIFIER_ORDER.length + 1; // +1 for the "no modifier" card
+    const cw = 232, gap = 18, ch = 150;
+    const totalW = n * cw + (n - 1) * gap;
+    const x0 = cx - totalW / 2, y0 = cy - ch / 2 - 14;
+    const cards = [];
+    for (let i = 0; i < n; i++) cards.push({ x: x0 + i * (cw + gap), y: y0, w: cw, h: ch, id: i <= 0 ? null : MODIFIER_ORDER[i - 1] });
+    return { cx, y0, cards, cont: { x: cx - 130, y: y0 + ch + 26, w: 260, h: 50 } };
+  }
+
+  // N4 (v1.3 M14): the picker's input — arrow keys / number keys + clicks move
+  // the selection (persisting it), Enter/Space/click-Continue advances the cycle
+  // and begins the run, Esc reverts to the end screen (cycle untouched).
+  _updateModPrompt() {
+    if (!this._modPrompt) return;
+    const n = MODIFIER_ORDER.length + 1;
+    const sel = this._modPrompt.sel;
+    if (this.input.pressed('arrowleft') || this.input.pressed('a')) this._modPrompt.sel = (sel + n - 1) % n;
+    if (this.input.pressed('arrowright') || this.input.pressed('d')) this._modPrompt.sel = (sel + 1) % n;
+    for (let i = 1; i <= n; i++) {
+      const k = String(i);
+      if (this.input.pressed(k)) this._modPrompt.sel = i - 1;
+    }
+    // clicks: a card selects it; the Continue button (or clicking the selected
+    // card) confirms and begins.
+    if (this.input.mouse.lPressed) {
+      const g = this._modPromptGeom();
+      for (const c of g.cards) {
+        if (this._mouseIn(c.x, c.y, c.w, c.h)) {
+          this._modPrompt.sel = g.cards.indexOf(c);
+          this._chooseModPrompt();
+          this.sfx('ui');
+        }
+      }
+      if (this._mouseIn(g.cont.x, g.cont.y, g.cont.w, g.cont.h)) { this._chooseModPrompt(); this._confirmNextExpedition(); return; }
+    }
+    if (this.input.pressed('enter') || this.input.pressed(' ')) { this._chooseModPrompt(); this._confirmNextExpedition(); return; }
+    if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._modPrompt = null; }
+    // always persist the current selection so a quit saves the last choice
+    this._chooseModPrompt();
+  }
+
+  // N4 (v1.3 M14): draw the picker overlay (dim + 4 cards + Continue).
+  _drawModPrompt(ctx) {
+    if (!this._modPrompt) return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(20,18,16,0.62)';
+    ctx.fillRect(0, 0, this.cw, this.ch);
+    const g = this._modPromptGeom();
+    const pw = 1000, px = g.cx - pw / 2, py = g.y0 - 64, ph = g.cards[0].y + g.cards[0].h + 26 + 50 + 30;
+    const c = paperPanel(ctx, px, py, pw, ph, { seed: 55 });
+    outlineText(c, 'Choose your Expedition', g.cx, py + 40, '700 26px Georgia, serif', '#5a9e3d', INK, 4);
+    centerText(c, 'each New Game+ cycle wears one condition — pick the season you will swim through (Esc to back out)', g.cx, py + 64, 'italic 13px Georgia, serif', INK, 0.72);
+    const sel = this._modPrompt.sel;
+    g.cards.forEach((card, i) => {
+      const active = i === sel;
+      const cc = paperPanel(ctx, card.x, card.y, card.w, card.h, { seed: 60 + i, fill: active ? '#f3ead2' : '#efe8d6' });
+      cc.save();
+      cc.lineWidth = active ? 4 : 2;
+      cc.strokeStyle = active ? '#5a9e3d' : '#b7ab8c';
+      cc.beginPath(); cc.roundRect(card.x + 8, card.y + 8, card.w - 16, card.h - 16, 6); cc.stroke();
+      cc.restore();
+      // number key hint
+      centerText(cc, String(i + 1), card.x + 24, card.y + 28, '700 15px Georgia, serif', active ? '#5a9e3d' : INK, 0.8);
+      const titleY = card.y + 54;
+      centerText(cc, card.id ? MODIFIERS[card.id].name : 'No Modifier', card.x + card.w / 2, titleY, '700 16px Georgia, serif', active ? '#5a9e3d' : INK, 1);
+      // description — centered word-wrap within the card (measureText-driven so
+      // it never overflows the card regardless of how long the line is).
+      const desc = card.id ? MODIFIERS[card.id].desc : 'the plain swamp — no condition this cycle';
+      cc.save();
+      cc.fillStyle = INK; cc.globalAlpha = 0.68; cc.font = 'italic 11px Georgia, serif';
+      cc.textAlign = 'center'; cc.textBaseline = 'middle';
+      const maxW = card.w - 30, words = desc.split(' ');
+      let line = '', yy = card.y + 80;
+      for (const w of words) {
+        const test = line ? line + ' ' + w : w;
+        if (cc.measureText(test).width > maxW && line) { cc.fillText(line, card.x + card.w / 2, yy); line = w; yy += 14; }
+        else line = test;
+      }
+      if (line) cc.fillText(line, card.x + card.w / 2, yy);
+      cc.restore();
+      paperEnd(ctx);
+    });
+    // Continue button
+    uiButton(ctx, g.cont.x, g.cont.y, g.cont.w, g.cont.h, 'Swim On', this._mouseIn(g.cont.x, g.cont.y, g.cont.w, g.cont.h), false, { seed: 5, size: 18 });
+    ctx.restore();
   }
 
 // ================= part 3: the atelier ===============================
@@ -1136,6 +1273,10 @@ _drawAtelier(ctx) {
 
   // ================= part 2: expedition update ===========================
   _updateTitle(dt) {
+    // N4 (v1.3 M14): the expedition-modifier picker (opened from the title's
+    // "Next Expedition" button) owns input while it is open — intercept BEFORE
+    // the title's own Enter/Space/A/O/M/difficulty hotkeys so they don't leak.
+    if (this._modPrompt) { this._updateModPrompt(); return; }
     if (this.input.pressed('enter') || this.input.pressed(' ')) {
       this.sfx('ui');
       this._beginExpedition();
@@ -1194,6 +1335,14 @@ _drawAtelier(ctx) {
     // N2 (v1.3 M14): NG+ per-cycle scaling — applied ONLY when ngCycle >= 1 so
     // a first-time (cycle 0) run's tuning stays byte-identical to pre-NG+.
     if (this.ngCycle >= 1) applyNGPlus(this.tuning, this.ngCycle);
+    // N4 (v1.3 M14): the player-chosen expedition modifier (chosen at the
+    // "Next Expedition" prompt) — applied ONLY on NG+ cycles, AFTER the NG+
+    // scaling, through the standard tuning path. A cycle-0 run never reaches
+    // this (ngCycle < 1), so a first-time run's tuning is byte-identical.
+    if (this.ngCycle >= 1) applyModifier(this.tuning, saveModifier(this.save));
+    // N4: High Tide widens the water — hand the render-side multiplier to the
+    // fresh per-run world (defaults to 1; a cycle-0 run never carries it).
+    this.world.waterWidthMult = this.tuning.waterWidthMult || 1;
     this.player = new Player(PLAYER_START_X, PLAYER_START_Y, this.tuning);
     this.paint = new Paint(this.player, this.world, this.tuning, (n, o) => this.sfx(n, o), this.particles);
     this.tutorial = null;   // T1 (v1.2 M13): fresh state each run; set below if guided
@@ -2608,7 +2757,14 @@ _drawAtelier(ctx) {
     // V2 (v1.2 M11): the awaken saturation surge is a RENDER-ONLY boost. The
     // world's paint/bar keep reading worldColorSat() (the single source of
     // truth); this just nudges how saturated the world is drawn for ~1s.
-    const drawSat = Math.min(1, sat01 + (this._bloomSurge || 0));
+    const drawSatRaw = Math.min(1, sat01 + (this._bloomSurge || 0));
+    // N4 (v1.3 M14): Grey Morning desaturates the world — a render-only
+    // saturation CAP (tuning.satFloor), active only during the run it was
+    // chosen for (expedition). No modifier / not in-run -> no cap -> the
+    // first-time (cycle-0) render and every other screen are byte-identical.
+    const drawSat = (this.state === 'expedition' && this.tuning && this.tuning.satFloor != null)
+      ? Math.min(drawSatRaw, this.tuning.satFloor)
+      : drawSatRaw;
 
     // ---- world space ----
     ctx.save();
@@ -2643,6 +2799,7 @@ _drawAtelier(ctx) {
     if (this.state === 'expedition' && this.tutorial && !this.tutorial.done) this._drawTutorialChip(ctx);
     if (this.state === 'title') this._drawTitle(ctx);
     if (this.state === 'title' && this.optionsOpen) this._drawOptions(ctx);
+    if (this.state === 'title' && this._modPrompt) this._drawModPrompt(ctx);  // N4
     if (this.state === 'atelier') this._drawAtelier(ctx);
     if (this.paused && this.state === 'expedition') this._drawPause(ctx);
     if (this.help && this.state === 'expedition') this._drawHelp(ctx);   // M8 P6
@@ -3580,5 +3737,7 @@ _drawAtelier(ctx) {
         ctx.fill(); ctx.stroke();
         ctx.restore();
         centerText(ctx, 'return to the pond (Esc)', cx, ly + lh / 2 + 1, '13px Georgia, serif', '#fdf6e9', 0.9);
+        // N4 (v1.3 M14): the expedition-modifier picker overlays the end screen.
+        if (this._modPrompt) this._drawModPrompt(ctx);
       }
 }

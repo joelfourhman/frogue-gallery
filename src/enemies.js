@@ -15,8 +15,13 @@ export class Enemy {
     this.vx = 0; this.vy = 0;
     this.hp = Math.round(base.hp * (tuning.enemyHp || 1));
     this.maxHp = this.hp;
-    this.speed = base.speed;
-    this.dmg = base.dmg * (tuning.enemyDmg || 1); // N2: NG+ contact-damage multiplier (1 on cycle 0)
+    // N4 (v1.3 M14): expedition modifiers feed the EXISTING spawn path. An
+    // NG+ cycle's chosen modifier may widen the enemy speed / contact-damage
+    // multipliers (High Tide: +10% speed, Grey Morning: +20% contact). Both
+    // default to 1 for any save without a modifier, so a first-time (cycle-0)
+    // run — which never carries these fields — is byte-identical.
+    this.speed = base.speed * (tuning.enemySpeedMult || 1);
+    this.dmg = base.dmg * (tuning.enemyDmg || 1) * (tuning.contactDmgMult || 1); // N2: NG+ contact-damage multiplier (1 on cycle 0); N4: modifier contact-damage on top
     this.r = base.radius;
     this.armor = base.armor;
     this.fly = !!base.fly;

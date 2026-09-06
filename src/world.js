@@ -259,13 +259,15 @@ export class World {
     const cx1 = view.x + view.w / view.scale + m, cy1 = view.y + view.h / view.scale + m;
     const inView = (x, y) => x >= cx0 && x <= cx1 && y >= cy0 && y <= cy1;
 
-    // deep patches
+    // deep patches (N4: High Tide widens water via this.waterWidthMult —
+    // render-only, defaults to 1 so the first-time render is byte-identical)
+    const wm = this.waterWidthMult || 1;
     for (const rp of this.ripples) {
       if (!inView(rp.x, rp.y)) continue;
       ctx.strokeStyle = `rgba(30,60,55,${0.14 * colorSat + 0.04})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.ellipse(rp.x, rp.y, rp.r, rp.r * 0.5, 0, 0, TAU);
+      ctx.ellipse(rp.x, rp.y, rp.r * wm, rp.r * 0.5 * wm, 0, 0, TAU);
       ctx.stroke();
     }
     // grass tufts
@@ -295,12 +297,12 @@ export class World {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.paintCanvas, 0, 0, this.w, this.h);
     ctx.globalAlpha = 1;
-    // slicks (blue wet shine)
+    // slicks (blue wet shine) — N4: High Tide widens these too
     for (const s of this.slick) {
       if (!inView(s.x, s.y)) continue;
       ctx.fillStyle = `rgba(120,170,240,${0.14 * Math.min(1, s.t)})`;
       ctx.beginPath();
-      ctx.ellipse(s.x, s.y, s.r, s.r * 0.6, 0, 0, TAU);
+      ctx.ellipse(s.x, s.y, s.r * wm, s.r * 0.6 * wm, 0, 0, TAU);
       ctx.fill();
     }
   }

@@ -2521,9 +2521,9 @@ console.log('== stage 46: N1 — NG+ unlock + Next Expedition flow ==');
   const KEY46 = 'frogue_gallery_save';
 
   // ---- (0) SAVE_VERSION bumped 3 -> 4; fresh save carries ngCycle 0 ----
-  assert(L46.SAVE_VERSION === 4, `N1: SAVE_VERSION is now 4 (got ${L46.SAVE_VERSION})`);
+  assert(Number.isInteger(L46.SAVE_VERSION) && L46.SAVE_VERSION >= 5, `N1: SAVE_VERSION is at least 5 (NG+ era; got ${L46.SAVE_VERSION})`);
   assert(L46.freshSave().ngCycle === 0, 'N1: a fresh save has ngCycle 0 (first-time player)');
-  assert(L46.freshSave().saveVersion === 4, 'N1: a fresh save is stamped saveVersion 4');
+  assert(L46.freshSave().saveVersion === L46.SAVE_VERSION, 'N1: a fresh save is stamped the current saveVersion');
 
   // ---- (1) a v3 save (no ngCycle field) migrates forward unchanged (ngCycle 0) ----
   store.set(KEY46, JSON.stringify({
@@ -2581,13 +2581,18 @@ console.log('== stage 46: N1 — NG+ unlock + Next Expedition flow ==');
   gN1b.save = L46.freshSave();
   gN1b.save.stats.victories = 1; gN1b.save.flags.heronDefeated = true; gN1b.save.ngCycle = 0;
   gN1b._beginNextExpedition();
-  assert(gN1b.state === 'expedition', 'N1: choosing Next Expedition starts a run');
+  // N4 (v1.3 M14): the "Next Expedition" button now OPENS the expedition-
+  // modifier picker (instead of immediately advancing the cycle); the run
+  // starts when the picker is confirmed. A fresh save has no modifier yet.
+  assert(gN1b._modPrompt && gN1b.state === 'title', 'N1/N4: choosing Next Expedition opens the modifier picker (state stays on the title)');
+  gN1b._confirmNextExpedition();
+  assert(gN1b.state === 'expedition', 'N1: confirming the picker starts a run');
   assert(gN1b.save.ngCycle === 1, `N1: the NG+ cycle advances to 1 and is persisted (got ${gN1b.save.ngCycle})`);
   assert(gN1b.ngCycle === 1, 'N1: the run carries ngCycle 1 (drives NG+ scaling / boss selection)');
   // the persisted on-disk blob carries ngCycle 1 at the current schema version
   const persisted46 = JSON.parse(store.get(KEY46));
   assert(persisted46 && persisted46.ngCycle === 1 && persisted46.saveVersion === L46.SAVE_VERSION,
-    `N1: ngCycle 1 is persisted on disk at saveVersion 4 (got ${persisted46 && persisted46.ngCycle} / ${persisted46 && persisted46.saveVersion})`);
+    `N1: ngCycle 1 is persisted on disk at the current saveVersion (got ${persisted46 && persisted46.ngCycle} / ${persisted46 && persisted46.saveVersion})`);
   // round-trip through the real loader: the persisted blob reads back as ngCycle 1
   const roundtrip46 = L46.migrateSave(persisted46);
   assert(roundtrip46 && roundtrip46.ngCycle === 1, 'N1: the persisted NG+ save round-trips through the loader with ngCycle intact');
@@ -2779,6 +2784,124 @@ console.log('== stage 48: N3 — The Great Green Heron (NG+ second boss) ==');
   assert(gGreen.state === 'atelier', 'N3: defeat -> victory -> the atelier (the NG+ loop closes)');
   assert(gGreen._endButtons !== undefined, 'N3: the end-screen button layout (incl. the Next Expedition button) is present');
   console.log('ok — N3: the Great Green Heron appears on NG+ cycles, reuses the heron AI, its reed pin pins it + deals 2x, it is damageable/awakenable/defeatable, and defeat ends the run into victory with NG+ intact');
+}
+
+console.log('== stage 49: N4 — Player-chosen expedition modifiers ==');
+{
+  const L49 = await import('../src/logic.js');
+  const { spawnEnemy } = await import('../src/enemies.js');
+  const { Game } = await import('../src/game.js');
+
+  // ---- (0) the MODIFIERS table: exactly 3 data entries, each with name/desc/apply ----
+  assert(Object.keys(L49.MODIFIERS).length === 3, `N4: the MODIFIERS table has 3 entries (got ${Object.keys(L49.MODIFIERS).length})`);
+  assert(L49.MODIFIER_ORDER.length === 3, `N4: MODIFIER_ORDER lists the 3 modifier ids (got ${L49.MODIFIER_ORDER.length})`);
+  for (const id of L49.MODIFIER_ORDER) {
+    const m = L49.MODIFIERS[id];
+    assert(m && m.id === id && typeof m.name === 'string' && typeof m.desc === 'string' && typeof m.apply === 'function',
+      `N4: modifier '${id}' is a data entry (id/name/desc/apply)`);
+  }
+
+  // ---- (1) cycle-0 (first-time) is COMPLETELY untouched: no modifier may be applied ----
+  // applyModifier is guarded by the caller (ngCycle >= 1) and the save default is
+  // null, so a fresh-save run's tuning must deep-equal a plain makeTuning.
+  const g49a = new Game(makeCanvas()); g49a.start();
+  g49a.save = L49.freshSave();                 // ngCycle 0, ngModifier null
+  g49a._beginExpedition();
+  const base49 = g49a.tuning;
+  assert(g49a.ngCycle === 0, 'N4: the fresh-save run is cycle 0');
+  assert(!base49.waterWidthMult && !base49.enemySpeedMult && !base49.contactDmgMult && base49.satFloor == null,
+    'N4: a cycle-0 run adds NO modifier tuning fields (first-time is byte-identical)');
+  const plain49 = L49.makeTuning(g49a.save.upgrades, g49a.save.loadout, g49a.options.difficulty, g49a.save.galleryBonus || 0);
+  assert(JSON.stringify(base49) === JSON.stringify(plain49), 'N4: cycle-0 tuning deep-equals a plain makeTuning (no modifier delta)');
+
+  // ---- (2) each modifier is selectable and mutates the tuning as specified ----
+  // (a) High Tide: water zones wider (waterWidthMult > 1) + enemies 10% faster (enemySpeedMult == 1.1)
+  const g49ht = new Game(makeCanvas()); g49ht.start();
+  const htSave = L49.freshSave(); htSave.ngCycle = 1; htSave.ngModifier = 'high-tide'; htSave.stats.victories = 1; htSave.flags.heronDefeated = true;
+  g49ht.save = htSave;
+  g49ht._beginExpedition();
+  assert(g49ht.tuning.waterWidthMult === 1.25, `N4: High Tide widens the water (waterWidthMult ×${g49ht.tuning.waterWidthMult})`);
+  assert(g49ht.tuning.enemySpeedMult === 1.1, `N4: High Tide makes enemies 10% faster (enemySpeedMult ×${g49ht.tuning.enemySpeedMult})`);
+  assert(g49ht.world.waterWidthMult === 1.25, 'N4: High Tide hands the water-width multiplier to the fresh per-run world');
+  assert(!g49ht.tuning.satFloor, 'N4: High Tide does NOT desaturate (no satFloor)');
+
+  // (b) Grey Morning: desaturated world (satFloor < 1) + enemy contact dmg +20% (contactDmgMult == 1.2)
+  const g49gm = new Game(makeCanvas()); g49gm.start();
+  const gmSave = L49.freshSave(); gmSave.ngCycle = 1; gmSave.ngModifier = 'grey-morning'; gmSave.stats.victories = 1; gmSave.flags.heronDefeated = true;
+  g49gm.save = gmSave;
+  g49gm._beginExpedition();
+  assert(g49gm.tuning.satFloor == null || (g49gm.tuning.satFloor > 0 && g49gm.tuning.satFloor < 1), `N4: Grey Morning desaturates the world (satFloor=${g49gm.tuning.satFloor})`);
+  assert(g49gm.tuning.contactDmgMult === 1.2, `N4: Grey Morning raises enemy contact dmg +20% (contactDmgMult ×${g49gm.tuning.contactDmgMult})`);
+
+  // (c) Dry Brush Season: brush splash charge +35% slower (splashCharge ×1.35) + orb value +25% (pickupValue ×1.25)
+  const g49db = new Game(makeCanvas()); g49db.start();
+  const dbSave = L49.freshSave(); dbSave.ngCycle = 1; dbSave.ngModifier = 'dry-brush-season'; dbSave.stats.victories = 1; dbSave.flags.heronDefeated = true;
+  g49db.save = dbSave;
+  g49db._beginExpedition();
+  const baseSplash = L49.makeTuning({ capacity: 1, power: 0, vitality: 0 }, [], 'normal', 0).splashCharge;
+  assert(g49db.tuning.splashCharge === Math.round(baseSplash * 1.35 * 100) / 100,
+    `N4: Dry Brush slows the splash charge +35% (splashCharge ${baseSplash} -> ${g49db.tuning.splashCharge})`);
+  assert(g49db.tuning.pickupValue === 1.25, `N4: Dry Brush raises orb value +25% (pickupValue ×${g49db.tuning.pickupValue})`);
+  assert(!g49db.tuning.waterWidthMult && !g49db.tuning.enemySpeedMult, 'N4: Dry Brush does NOT widen water or speed enemies');
+
+  // ---- (3) the modifiers reach the enemies (High Tide speed + Grey Morning contact dmg) ----
+  // All three games use a fresh save (identical base upgrades), so the only delta
+  // between them is the modifier itself — a relative comparison isolates it.
+  const htBeetle = spawnEnemy('beetle', 200, 100, g49ht.tuning);
+  const gmBeetle = spawnEnemy('beetle', 200, 100, g49gm.tuning);
+  const gmNoModTuning = L49.makeTuning(g49gm.save.upgrades, g49gm.save.loadout, g49gm.options.difficulty, 0);
+  L49.applyNGPlus(gmNoModTuning, 1); // same NG+ cycle 1 scaling as g49gm (isolates the modifier delta)
+  const gmNoModBeetle = spawnEnemy('beetle', 200, 100, gmNoModTuning);
+  assert(gmBeetle.speed === gmNoModBeetle.speed, 'N4: Grey Morning does NOT speed enemies (beetle speed unchanged)');
+  const noModTuning = L49.makeTuning(g49ht.save.upgrades, g49ht.save.loadout, g49ht.options.difficulty, 0);
+  L49.applyNGPlus(noModTuning, 1); // same NG+ cycle 1 scaling as g49ht (isolates the modifier delta)
+  const noModBeetle = spawnEnemy('beetle', 200, 100, noModTuning);
+  // no-modifier base tuning (same NG+ cycle 1 scaling) for a clean relative read
+  assert(Math.round(htBeetle.speed / noModBeetle.speed * 1000) / 1000 === 1.1,
+    `N4: High Tide enemies move 10% faster than a no-modifier enemy (beetle ${noModBeetle.speed} -> ${htBeetle.speed})`);
+  assert(Math.round(gmBeetle.dmg / noModBeetle.dmg * 1000) / 1000 === 1.2,
+    `N4: Grey Morning enemies deal +20% contact dmg vs no-modifier (beetle ${noModBeetle.dmg} -> ${gmBeetle.dmg})`);
+
+  // ---- (4) the picker UI: Next Expedition opens it; each modifier is selectable ----
+  const g49p = new Game(makeCanvas()); g49p.start();
+  const pSave = L49.freshSave(); pSave.stats.victories = 1; pSave.flags.heronDefeated = true; pSave.ngCycle = 0;
+  g49p.save = pSave;
+  g49p._beginNextExpedition();
+  assert(g49p._modPrompt && g49p._modPrompt.sel === 0, `N4: "Next Expedition" opens the modifier picker (pre-selects 'no modifier', sel=${g49p._modPrompt && g49p._modPrompt.sel})`);
+  // select each of the 3 modifiers by its card index and confirm the choice persists
+  const order = L49.MODIFIER_ORDER;
+  for (let i = 1; i <= order.length; i++) {
+    g49p._modPrompt.sel = i;
+    g49p._chooseModPrompt();
+    assert(g49p.save.ngModifier === order[i - 1], `N4: selecting card ${i} persists the modifier '${order[i - 1]}' to the save`);
+    // and a fresh NG+ run with that save carries the modifier's tuning
+    const run = new Game(makeCanvas()); run.start(); run.save = L49.freshSave(); run.save.ngCycle = 1; run.save.ngModifier = order[i - 1]; run.save.stats.victories = 1; run.save.flags.heronDefeated = true;
+    run._beginExpedition();
+    assert(run.tuning, `N4: a run with modifier '${order[i - 1]}' begins cleanly`);
+  }
+  // the "no modifier" card (sel 0) clears the choice
+  g49p._modPrompt.sel = 0;
+  g49p._chooseModPrompt();
+  assert(g49p.save.ngModifier === null, 'N4: the "no modifier" card clears the saved modifier to null');
+
+  // ---- (5) confirming the picker advances the cycle AND begins the expedition ----
+  const g49c = new Game(makeCanvas()); g49c.start();
+  const cSave = L49.freshSave(); cSave.stats.victories = 1; cSave.flags.heronDefeated = true; cSave.ngCycle = 0; cSave.ngModifier = 'high-tide';
+  g49c.save = cSave;
+  g49c._beginNextExpedition();
+  g49c._confirmNextExpedition();
+  assert(g49c.state === 'expedition', 'N4: confirming the picker starts the expedition');
+  assert(g49c.save.ngCycle === 1, `N4: confirming advances ngCycle 0 -> 1 (got ${g49c.save.ngCycle})`);
+  assert(g49c.save.ngModifier === 'high-tide', 'N4: the chosen modifier is preserved through the cycle advance');
+  assert(g49c.tuning.waterWidthMult === 1.25 && g49c.tuning.enemySpeedMult === 1.1, 'N4: the confirmed run carries the chosen High Tide tuning');
+
+  // ---- (6) old saves load as no-modifier; a bad/unknown modifier normalizes to null ----
+  const legacy = L49.migrateSave({ v: 4, bank: { red: 3, blue: 0, green: 0 }, owned: ['moonlit-pond'], loadout: ['moonlit-pond'], upgrades: { capacity: 1, power: 0, vitality: 0 }, flags: { heronDefeated: true }, stats: { victories: 1 }, bestRun: { pigments: { red: 0, blue: 0, green: 0 }, time: 100, cleared: true }, ngCycle: 1 });
+  assert(legacy.ngModifier === null, 'N4: a v4 save (no ngModifier field) migrates forward as no-modifier (null)');
+  const badMod = L49.migrateSave({ v: 5, bank: { red: 0, blue: 0, green: 0 }, owned: [], loadout: [], upgrades: { capacity: 1, power: 0, vitality: 0 }, flags: {}, stats: {}, bestRun: { pigments: { red: 0, blue: 0, green: 0 }, time: 0, cleared: false }, ngCycle: 1, ngModifier: 'not-a-real-modifier' });
+  assert(badMod.ngModifier === null, 'N4: an unknown ngModifier value normalizes to null (no crash, no phantom tuning)');
+
+  console.log('ok — N4: 3 data-driven modifiers feed the existing tuning/spawn/render paths, are selectable + persist, and a cycle-0 (first-time) run stays byte-identical');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

@@ -273,6 +273,78 @@ export function applyNGPlus(t, cycle) {
 }
 
 // ----------------------------------------------------------------
+// N4 (v1.3 M14): Player-chosen expedition modifiers — PURE.
+//
+// At the "Next Expedition" (New Game+) prompt the player picks ONE modifier
+// for the cycle. Modifiers are DATA (a MODIFIERS table of id -> {name, desc,
+// apply(t)}) that mutate an already-built tuning object through the EXISTING
+// tuning paths — no new systems. Each `apply(t)` sets only the few fields it
+// touches and leaves every other field (and, for an unknown/null id, the WHOLE
+// tuning) untouched, so a cycle-0 (first-time) run — which never runs a
+// modifier — stays byte-identical to pre-N4.
+//
+// The tuning fields these feed:
+//   waterWidthMult  — the world's water (ripples/slicks) draw radius multiplier
+//                     (High Tide: wider water). Render + test surface only.
+//   enemySpeedMult  — multiplied onto every enemy's base speed at spawn (High
+//                     Tide: +10% enemy speed).
+//   contactDmgMult  — multiplied onto enemy contact damage at spawn (Grey
+//                     Morning: +20% contact dmg) — combat-only, no HP/spawn.
+//   satFloor        — a render-only saturation floor so the world reads as a
+//                     flat gray morning (Grey Morning). Render-only, zero
+//                     gameplay effect.
+//   splashCharge    — the right-click splash charge TIME; longer = slower
+//                     charge (Dry Brush Season: +35% slower).
+//   pickupValue     — the per-orb/pickup value, already gallery-bonus-scaled;
+//                     the modifier multiplies it (Dry Brush Season: +25%).
+//
+// MODIFIERS is exported so tests + the atelier can read it without a browser.
+export const MODIFIERS = {
+  'high-tide': {
+    id: 'high-tide',
+    name: 'High Tide',
+    desc: 'the water runs wide and the swamp moves faster — water zones wider, enemies 10% faster',
+    apply(t) { t.waterWidthMult = 1.25; t.enemySpeedMult = 1.1; },
+  },
+  'grey-morning': {
+    id: 'grey-morning',
+    name: 'Grey Morning',
+    desc: 'a flat grey light over the water — the world desaturates, enemy contact does +20% damage',
+    apply(t) { t.contactDmgMult = 1.2; t.satFloor = 0.35; },
+  },
+  'dry-brush-season': {
+    id: 'dry-brush-season',
+    name: 'Dry Brush Season',
+    desc: 'the paint is thin this season — splashes charge +35% slower, but every orb is worth +25%',
+    apply(t) {
+      // the splash charge is a TIME (base 0.55): +35% slower = 35% longer.
+      t.splashCharge = Math.round(t.splashCharge * 1.35 * 100) / 100;
+      // +25% orb value — stacked onto the already-final pickupValue (which
+      // includes the gallery bonus), so it composes multiplicatively.
+      t.pickupValue = Math.round(t.pickupValue * 1.25 * 100) / 100;
+    },
+  },
+};
+export const MODIFIER_ORDER = ['high-tide', 'grey-morning', 'dry-brush-season'];
+// The active modifier for a save: a valid MODIFIERS id, or null (no modifier).
+// Unknown/empty/garbled values normalize to null so old saves (pre-N4) and
+// a "no modifier" choice both read as no-op. Pure (no DOM).
+export function saveModifier(save) {
+  const id = save && typeof save.ngModifier === 'string' ? save.ngModifier : '';
+  return MODIFIERS[id] ? id : null;
+}
+// Apply a save's chosen modifier to a tuning object (in place, returns it).
+// No-op for a null/unknown id, so a first-time (cycle 0) run that passes no
+// modifier is byte-identical. Pure. Called by _beginExpedition ONLY on NG+
+// cycles (ngCycle >= 1) — the base game never runs a modifier.
+export function applyModifier(t, id) {
+  const m = MODIFIERS[id];
+  if (!m) return t;
+  m.apply(t);
+  return t;
+}
+
+// ----------------------------------------------------------------
 // N3 (v1.3 M14): The Great Green Heron — the New Game+ final boss.
 //
 // A *second* final boss that appears on NG+ cycles (ngCycle >= 1) INSTEAD of the
@@ -786,7 +858,7 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // version, written into every save and read back on load. Legacy saves stored
 // it under the field `v`; migrateSave() accepts both and re-stamps to the
 // current version.
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
@@ -804,6 +876,11 @@ export const SAVE_VERSION = 4;
 // first-time player who has never cleared a victory, no NG+ UI visible). Old
 // v3 saves (no such field) migrate forward with ngCycle defaulted to 0, so a
 // first-time save keeps loading unchanged and shows zero new UI.
+// N4 (v1.3 M14): v5 adds `save.ngModifier` — the player-chosen expedition
+// modifier for the current NG+ cycle (one of MODIFIERS' ids, or null/empty for
+// "no modifier"). A v4 save (no such field) migrates forward with the modifier
+// defaulted to null (no modifier), so old NG+ saves keep loading unchanged and
+// run their cycle with no modifier.
 const SAVE_MIGRATIONS = [
   {
     from: 1, to: 2,
@@ -817,6 +894,10 @@ const SAVE_MIGRATIONS = [
     from: 3, to: 4,
     fn: (out) => { out.ngCycle = normalizeNGCycle(out.ngCycle); },
   },
+  {
+    from: 4, to: 5,
+    fn: (out) => { out.ngModifier = normalizeNGModifier(out.ngModifier); },
+  },
 ];
 
 // N1 (v1.3 M14): normalize the New Game+ cycle index — a non-negative integer
@@ -825,6 +906,14 @@ const SAVE_MIGRATIONS = [
 function normalizeNGCycle(v) {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+// N4 (v1.3 M14): normalize the player-chosen expedition modifier. A valid
+// MODIFIERS id is kept as-is; anything else (missing, non-string, unknown)
+// normalizes to null (no modifier) so a corrupt/legacy field never breaks a
+// load. Pure.
+function normalizeNGModifier(v) {
+  return typeof v === 'string' && MODIFIERS[v] ? v : null;
 }
 
 // N1 (v1.3 M14): a save has earned the New Game+ unlock when at least one
@@ -848,6 +937,7 @@ export function freshSave() {
     galleryBonus: 0,      // A4 (v1.2 M9): 'Rehung Frame' prestige-lite level
     tutorialDrills: { burn: false, freeze: false, root: false, awaken: false }, // T1/T3 (v1.2 M13)
     ngCycle: 0,           // N1 (v1.3 M14): New Game+ cycle index (0 = first-time player, no NG+ UI)
+    ngModifier: null,     // N4 (v1.3 M14): chosen expedition modifier for the NG+ cycle (MODIFIERS id or null)
   };
 }
 
@@ -937,7 +1027,7 @@ export function retrainAllowed(save) {
 //                (string/number/array/null); fresh save, nothing preserved
 // (The unparseable-JSON and missing-key cases are handled one level up in
 // SaveSys.load(), which returns null so the caller starts a fresh game.)
-const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle'];
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier'];
 
 function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
 
@@ -981,6 +1071,10 @@ export function migrateSave(raw) {
   // with no field, the real value for a v4 save). The v3->v4 migration step
   // re-normalizes defensively on the way up.
   out.ngCycle = normalizeNGCycle(raw.ngCycle);
+  // N4 (v1.3 M14): carry the chosen expedition modifier forward (default null
+  // for a legacy v4 save with no field, the real id for a v5 save). The
+  // v4->v5 migration step re-normalizes defensively on the way up.
+  out.ngModifier = normalizeNGModifier(raw.ngModifier);
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks
