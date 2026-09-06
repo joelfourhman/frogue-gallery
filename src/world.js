@@ -243,13 +243,12 @@ export class World {
 
   // ------------------------------------------------------------- rendering
   drawBackground(ctx, view, colorSat) {
-    // swamp floor: layered warm water
+    // Swamp floor: layered warm water. Fills the whole world in world-space.
+    // The caller (_drawAll) already applied the single camera transform, so no
+    // inner camera transform is applied here — the old double-transform pushed
+    // all terrain off-screen and left the cream page background showing.
     ctx.fillStyle = sat('#6f9e8e', colorSat);
-    ctx.fillRect(0, 0, view.w, view.h);
-    const { x: cx, y: cy, scale } = view;
-    ctx.save();
-    ctx.translate(-cx * scale, -cy * scale);
-    ctx.scale(scale, scale);
+    ctx.fillRect(0, 0, this.w, this.h);
 
     // deep patches
     for (const rp of this.ripples) {
@@ -291,14 +290,11 @@ export class World {
       ctx.ellipse(s.x, s.y, s.r, s.r * 0.6, 0, 0, TAU);
       ctx.fill();
     }
-    ctx.restore();
   }
 
   drawProps(ctx, view, colorSat, now) {
-    const { x: cx, y: cy, scale } = view;
-    ctx.save();
-    ctx.translate(-cx * scale, -cy * scale);
-    ctx.scale(scale, scale);
+    // vegetation, reeds, lily pads — in world space (caller applies the single
+    // camera transform). No inner camera transform.
 
     // vegetation (behind actors)
     for (const v of this.veg) {
@@ -398,14 +394,10 @@ export class World {
       }
       ctx.restore();
     }
-    ctx.restore();
   }
 
   drawObstacles(ctx, view, colorSat) {
-    const { x: cx, y: cy, scale } = view;
-    ctx.save();
-    ctx.translate(-cx * scale, -cy * scale);
-    ctx.scale(scale, scale);
+    // rocks/bushes in world space (caller applies the single camera transform).
     for (const o of this.obstacles) {
       ctx.save();
       ctx.translate(o.x, o.y);
@@ -443,7 +435,6 @@ export class World {
       }
       ctx.restore();
     }
-    ctx.restore();
   }
 
   // color "health" of the world: 0 gray -> 1 full
