@@ -697,7 +697,7 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // version, written into every save and read back on load. Legacy saves stored
 // it under the field `v`; migrateSave() accepts both and re-stamps to the
 // current version.
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
@@ -711,6 +711,10 @@ export const SAVE_VERSION = 3;
 // ({burn,freeze,root}), the per-pigment drill completion map. A v2 save
 // (no tutorialDrills) migrates forward with the drills defaulted to all-false,
 // so returning players keep loading unchanged.
+// N1 (v1.3 M14): v4 adds `save.ngCycle` (the New Game+ cycle index; 0 = a
+// first-time player who has never cleared a victory, no NG+ UI visible). Old
+// v3 saves (no such field) migrate forward with ngCycle defaulted to 0, so a
+// first-time save keeps loading unchanged and shows zero new UI.
 const SAVE_MIGRATIONS = [
   {
     from: 1, to: 2,
@@ -720,7 +724,27 @@ const SAVE_MIGRATIONS = [
     from: 2, to: 3,
     fn: (out) => { out.tutorialDrills = normalizeDrills(out.tutorialDrills); },
   },
+  {
+    from: 3, to: 4,
+    fn: (out) => { out.ngCycle = normalizeNGCycle(out.ngCycle); },
+  },
 ];
+
+// N1 (v1.3 M14): normalize the New Game+ cycle index — a non-negative integer
+// (0 = first-time player). Non-finite / non-integer / negative values fall back
+// to 0 so a corrupt field never breaks a load (the loader never throws).
+function normalizeNGCycle(v) {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+// N1 (v1.3 M14): a save has earned the New Game+ unlock when at least one
+// victory is recorded. Gating NG+ behind a completed victory keeps it out of the
+// first-time run's pace band; a first-time player (ngCycle 0, no victory) sees
+// no NG+ UI. A pure predicate so tests can import it without a browser.
+export function ngUnlocked(save) {
+  return !!(save && save.stats && Number(save.stats.victories) > 0);
+}
 
 export function freshSave() {
   return {
@@ -734,6 +758,7 @@ export function freshSave() {
     bestRun: null,        // {pigments, time, cleared}
     galleryBonus: 0,      // A4 (v1.2 M9): 'Rehung Frame' prestige-lite level
     tutorialDrills: { burn: false, freeze: false, root: false, awaken: false }, // T1/T3 (v1.2 M13)
+    ngCycle: 0,           // N1 (v1.3 M14): New Game+ cycle index (0 = first-time player, no NG+ UI)
   };
 }
 
@@ -823,7 +848,7 @@ export function retrainAllowed(save) {
 //                (string/number/array/null); fresh save, nothing preserved
 // (The unparseable-JSON and missing-key cases are handled one level up in
 // SaveSys.load(), which returns null so the caller starts a fresh game.)
-const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills'];
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle'];
 
 function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
 
@@ -863,6 +888,10 @@ export function migrateSave(raw) {
   // for a legacy v2 save, real values for a v3 save). The v2->v3 migration
   // step re-normalizes defensively.
   out.tutorialDrills = normalizeDrills(raw.tutorialDrills);
+  // N1 (v1.3 M14): carry the NG+ cycle forward (default 0 for a legacy v3 save
+  // with no field, the real value for a v4 save). The v3->v4 migration step
+  // re-normalizes defensively on the way up.
+  out.ngCycle = normalizeNGCycle(raw.ngCycle);
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks

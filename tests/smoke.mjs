@@ -2514,5 +2514,95 @@ console.log('== stage 45: T4 — tutorial progress + "Watch me" re-entry ==');
   assert(g45c.tutorial.idx === 0 && g45c.tutorial.retrain !== true, 'T4: _startRetrain is a no-op while a guided run is active (no nesting / no hijack)');
 }
 
+console.log('== stage 46: N1 — NG+ unlock + Next Expedition flow ==');
+{
+  const L46 = await import('../src/logic.js');
+  const S46 = await import('../src/save.js');
+  const KEY46 = 'frogue_gallery_save';
+
+  // ---- (0) SAVE_VERSION bumped 3 -> 4; fresh save carries ngCycle 0 ----
+  assert(L46.SAVE_VERSION === 4, `N1: SAVE_VERSION is now 4 (got ${L46.SAVE_VERSION})`);
+  assert(L46.freshSave().ngCycle === 0, 'N1: a fresh save has ngCycle 0 (first-time player)');
+  assert(L46.freshSave().saveVersion === 4, 'N1: a fresh save is stamped saveVersion 4');
+
+  // ---- (1) a v3 save (no ngCycle field) migrates forward unchanged (ngCycle 0) ----
+  store.set(KEY46, JSON.stringify({
+    v: 3,
+    bank: { red: 7, blue: 3, green: 9 },
+    owned: ['moonlit-pond'], loadout: ['moonlit-pond'],
+    upgrades: { capacity: 2, power: 1, vitality: 0 },
+    flags: { intro: true, heronDefeated: true },
+    stats: { expeditions: 4, victories: 1, deaths: 0, heronsPainted: 1, treasures: 0 },
+    bestRun: { pigments: { red: 5, blue: 0, green: 0 }, time: 900, cleared: true },
+    galleryBonus: 1,
+    tutorialDrills: { burn: true, freeze: true, root: true, awaken: true },
+    // NOTE: no ngCycle field on purpose — this is the old v3 schema.
+  }));
+  const migrated46 = S46.SaveSys.load();
+  assert(migrated46 !== null, 'N1: a v3 save (no ngCycle) still loads');
+  assert(migrated46.saveVersion === L46.SAVE_VERSION, 'N1: the v3 save re-stamps to the current schema version');
+  assert(migrated46.ngCycle === 0, 'N1: a v3 save migrates with ngCycle defaulted to 0 (first-time player)');
+  assert(migrated46.galleryBonus === 1 && migrated46.tutorialDrills.burn === true, 'N1: v3 legacy fields survive the migration');
+  // a corrupt/garbled ngCycle normalizes back to 0 (the loader never throws)
+  store.set(KEY46, JSON.stringify({ v: 4, ngCycle: 'not-a-number', bank: { red: 1, blue: 0, green: 0 }, stats: { victories: 1 } }));
+  const corrupt46 = S46.SaveSys.load();
+  assert(corrupt46 && corrupt46.ngCycle === 0, 'N1: a garbled ngCycle field normalizes to 0 on load');
+  // restore the migrated save for the run-flow tests below
+  S46.SaveSys.save(migrated46);
+
+  // ---- (2) a returning first-time player (ngCycle 0) sees ZERO new UI ----
+  const freshTitle = makeCanvas();
+  const gN1a = new Game(freshTitle);
+  gN1a.start();
+  gN1a.save = L46.freshSave();            // ngCycle 0, no victory
+  assert(gN1a._titleLayout().ng === null, 'N1: a fresh save (ngCycle 0) shows NO Next Expedition button on the title');
+  assert(gN1a._endButtons().ng === null, 'N1: a fresh save (ngCycle 0) shows NO Next Expedition button on the end screen');
+  // ngUnlocked is the shared gate: false with no victory, true after one
+  assert(L46.ngUnlocked(L46.freshSave()) === false, 'N1: ngUnlocked is false for a save with no victory');
+  const withVic = L46.freshSave(); withVic.stats.victories = 1;
+  assert(L46.ngUnlocked(withVic) === true, 'N1: ngUnlocked is true once a victory is recorded');
+
+  // ---- (3) a save with a completed victory offers Next Expedition ----
+  const gN1b = new Game(makeCanvas());
+  gN1b.start();
+  const saved46 = L46.freshSave();
+  saved46.stats.victories = 1; saved46.flags.heronDefeated = true; saved46.ngCycle = 0;
+  gN1b.save = saved46;
+  const tng = gN1b._titleLayout().ng;
+  assert(tng && typeof tng.x === 'number', 'N1: a save with a victory shows the Next Expedition button on the title');
+  // the end screen offers it too (drive a victory end screen)
+  gN1b._endRun('victory');
+  frames(20);
+  const eng = gN1b._endButtons().ng;
+  assert(eng && typeof eng.x === 'number', 'N1: a completed-victory end screen shows the Next Expedition button');
+
+  // ---- (4) choosing Next Expedition starts a run with ngCycle 1 + persists ----
+  gN1b.state = 'title';
+  gN1b.save = L46.freshSave();
+  gN1b.save.stats.victories = 1; gN1b.save.flags.heronDefeated = true; gN1b.save.ngCycle = 0;
+  gN1b._beginNextExpedition();
+  assert(gN1b.state === 'expedition', 'N1: choosing Next Expedition starts a run');
+  assert(gN1b.save.ngCycle === 1, `N1: the NG+ cycle advances to 1 and is persisted (got ${gN1b.save.ngCycle})`);
+  assert(gN1b.ngCycle === 1, 'N1: the run carries ngCycle 1 (drives NG+ scaling / boss selection)');
+  // the persisted on-disk blob carries ngCycle 1 at the current schema version
+  const persisted46 = JSON.parse(store.get(KEY46));
+  assert(persisted46 && persisted46.ngCycle === 1 && persisted46.saveVersion === L46.SAVE_VERSION,
+    `N1: ngCycle 1 is persisted on disk at saveVersion 4 (got ${persisted46 && persisted46.ngCycle} / ${persisted46 && persisted46.saveVersion})`);
+  // round-trip through the real loader: the persisted blob reads back as ngCycle 1
+  const roundtrip46 = L46.migrateSave(persisted46);
+  assert(roundtrip46 && roundtrip46.ngCycle === 1, 'N1: the persisted NG+ save round-trips through the loader with ngCycle intact');
+
+  // ---- (5) the button is NOT reachable on a first-time save (no accidental NG+) ----
+  const gN1c = new Game(makeCanvas());
+  gN1c.start();
+  gN1c.save = L46.freshSave();   // no victory -> _beginNextExpedition is a no-op
+  const before46 = gN1c.save.ngCycle;
+  gN1c._beginNextExpedition();
+  assert(gN1c.state === 'title', 'N1: _beginNextExpedition is a no-op for a first-time save (no victory)');
+  assert(gN1c.save.ngCycle === before46 && gN1c.save.ngCycle === 0, 'N1: a first-time save cannot accidentally advance ngCycle');
+  // restore the migrated save so any later stage sees a consistent save
+  S46.SaveSys.save(migrated46);
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

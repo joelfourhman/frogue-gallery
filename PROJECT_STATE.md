@@ -5,7 +5,9 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 45 STAGES PASSED** (…stage 41 = v1.2 M11 V4 end-screen exhibition, **stage 42 = v1.2 M13 T1 guided first expedition, stage 43 = v1.2 M13 T2 interactive pigment drills, stage 44 = v1.2 M13 T3 mini sketch heron, stage 45 = v1.2 M13 T4 tutorial progress + "Watch me" re-entry**). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): full-run **18.8 min** — in the 15–20 min band (the M13 tutorial + "Watch me" retraining are a **separate frozen layer** — the timed clock is frozen while they run — so they add no timed-run time; `pace.mjs`/`humance.mjs` re-verified after T1/T2/T3/T4 and unchanged from the ~18.7/18.8 min baseline). DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 COMPLETE: M9 (A1–A4) ✅ + M10 (E1–E4) ✅ + M11 (V1–V4) ✅ + M13 (T1–T4) ✅ — all four milestones done; Batch 6 (M13 T3+T4) committed.**_
+Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 46 STAGES PASSED** (…stage 42 = v1.2 M13 T1 guided first expedition, stage 43 = v1.2 M13 T2 interactive pigment drills, stage 44 = v1.2 M13 T3 mini sketch heron, stage 45 = v1.2 M13 T4 tutorial progress + "Watch me" re-entry, **stage 46 = v1.3 M14 N1 NG+ unlock + Next Expedition flow**). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): full-run **18.8 min** — in the 15–20 min band (the M13 tutorial + "Watch me" retraining are a **separate frozen layer** — the timed clock is frozen while they run — so they add no timed-run time; `pace.mjs`/`humance.mjs` re-verified after T1/T2/T3/T4 and unchanged from the ~18.7/18.8 min baseline). DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 COMPLETE: M9 (A1–A4) ✅ + M10 (E1–E4) ✅ + M11 (V1–V4) ✅ + M13 (T1–T4) ✅ — all four milestones done; Batch 6 (M13 T3+T4) committed.**
+
+**v1.3 M14 N1 (NG+ unlock + Next Expedition flow) — implemented + tested (2026-09-06, Batch 7, item 1).** `SAVE_VERSION` 3→4 with a `SAVE_MIGRATIONS` v3→v4 step + `normalizeNGCycle` (a v3 save with no `ngCycle` loads as `ngCycle: 0`, unchanged, no NG+ UI visible). A flat `save.ngCycle` field (0 = first-time player) persists the New Game+ cycle. `ngUnlocked(save)` (pure, `stats.victories > 0`) gates all NG+ UI. A "Next Expedition (New Game+)" button appears on the **title** (shared slot with the fresh-save-only guided button — they never coexist) and the **end screen** (slotted between "Rest at the Atelier" and "Return to the Pond") **only when a victory is recorded**; a returning first-time player (ngCycle 0) sees ZERO new UI. Choosing it (`_beginNextExpedition()`) advances `save.ngCycle` by 1, persists it, and starts a run that carries `ngCycle` (drives NG+ scaling N2 + boss selection N3). Smoke stage 46 (fresh save shows no NG+ UI; a completed-victory save shows the button; choosing it starts a run with `ngCycle 1`, persisted on disk at saveVersion 4 + round-trips through the loader; a first-time save cannot accidentally advance). **Suite now 46/46. First-time pacing unchanged (N1 adds no timed-run time — NG+ is gated behind a victory).**
 
 ## Current Status
 
@@ -35,8 +37,8 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 43 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
-| `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss) |
+| `tests/smoke.mjs` | **Headless runtime test — 46 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs`, `tests/ngpace.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss); ngpace.mjs (v1.3 N2) = simulated NG+ cycle-1 run (its own 15–20 min target) |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
 
@@ -129,10 +131,13 @@ each session MUST end clean: committed + docs + suite green). Read
 longer DRAFT).
 
 **Fixed batch order** (each fresh session resumes losslessly from here):
-1. N1 → N2 → N3 (NG+ unlock, scaling + ngpace probe, second boss)
+1. ~~N1 ✅~~ → N2 → N3 (NG+ unlock, scaling + ngpace probe, second boss)
 2. N4 → G1 → G2 (modifiers, gold economy core, 2 gold paintings)
 3. G3 → G4 → C1 (gilded frame, gold UI + ledger, one-liner batch 2)
 4. C2 → C3 → C4 (season summary, paper-grain toggle, regression + audit)
+
+**Next up: N2 (NG+ scaling in `logic.js` + `tests/ngpace.mjs` probe + smoke
+stage).** Then N3 (second boss — The Great Green Heron).
 
 **Per-item discipline:** one conventional commit per item; add a passing
 smoke stage (or documented headless check for pure presentation); update
@@ -167,6 +172,7 @@ band on Normal). Full scope + per-item status in `docs/ROADMAP.md` §v1.2.
 4. M11: **V2 ✅ (heron bloom beat)** → **V3 ✅ (zone ambient audio)** → **V4 ✅ (exhibition end-screen)** — **Batch 4 (M11) COMPLETE — suite 41/41**
 5. M13: **T1 ✅ (guided first expedition)** → **T2 ✅ (interactive pigment drills)** — **Batch 5 (M13 T1+T2) COMPLETE — suite 43/43, pacing 18.7/18.9 min (the frozen tutorial pre-run layer adds no timed-run time)**
 6. M13: **T3 ✅ (mini sketch heron)** → **T4 ✅ (tutorial progress + "Watch me" re-entry)** — **Batch 6 (M13 T3+T4) COMPLETE**
+7. M14: **N1 ✅ (NG+ unlock + Next Expedition flow)** — v1.3 batch 7 in progress (N2, N3 to follow)
 
 Each item's Notes column in the roadmap says which existing system to reuse.
 Acceptance (per batch): suite green, pace/humance probes still in the

@@ -4,7 +4,7 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 (A1–A4), M10 (E1–E4), M11 (V1–V4), M13 (T1–T4) — **v1.2 COMPLETE**; v1.3 "The Second Expedition" roadmap APPROVED by Joel — executing in bounded batches)**
+**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 (A1–A4), M10 (E1–E4), M11 (V1–V4), M13 (T1–T4) — **v1.2 COMPLETE**; v1.3 "The Second Expedition" roadmap APPROVED by Joel — executing in bounded batches; **v1.3 batch 7 in flight: N1 ✅ done**)**
 
 ## Current state
 
@@ -13,7 +13,7 @@ consequential decisions in `docs/DECISIONS.md`.
 - **v1.2 "The Collection" COMPLETE** (2026-09-06): M9 Atelier/collection,
   M10 Expedition depth, M11 Presentation, M13 Tutorial (accessibility
   deferred). Batches 1–6 all done; suite 45/45; pacing 18.7/18.8 min.
-- **Active phase: v1.3 "The Second Expedition" — APPROVED by Joel (2026-09-06), executing** (NG+ loop M14 N1–N4, gold meta economy M15 G1–G4, season wrap M16 C1–C4 — 12 TODO items in `docs/ROADMAP.md`). Driven in bounded batches of ~3 items — see `PROJECT_STATE.md` → Immediate Next Action for the batch order: 1) N1→N2→N3, 2) N4→G1→G2, 3) G3→G4→C1, 4) C2→C3→C4. First-time Normal run stays ~15–20 min; NG+ cycles measured by the new `tests/ngpace.mjs` probe.
+- **Active phase: v1.3 "The Second Expedition" — APPROVED by Joel (2026-09-06), executing** (NG+ loop M14 N1–N4, gold meta economy M15 G1–G4, season wrap M16 C1–C4). Batch 7 (N1→N2→N3) in flight: **N1 NG+ unlock + Next Expedition flow ✅ done** (SAVE_VERSION 3→4, `save.ngCycle`, "Next Expedition (New Game+)" button on title + end screen gated behind a victory — first-time players see zero new UI; suite 46/46; first-time pacing unchanged). Next: N2 (`ngPlusScaling(cycle)` + `tests/ngpace.mjs`), then N3 (second boss — The Great Green Heron). Full plan + acceptance criteria in `docs/ROADMAP.md` §v1.3; batch order in `PROJECT_STATE.md` → Immediate Next Action. First-time Normal run stays ~15–20 min; NG+ cycles measured by the new `tests/ngpace.mjs` probe.
 - Git: v1.1 + v1.2 fully committed (v1.2 complete at `08b954a`); v1.3
   approved and executing (batch order in PROJECT_STATE.md).
 
@@ -22,7 +22,9 @@ consequential decisions in `docs/DECISIONS.md`.
 **v1.2 "The Collection" — COMPLETE.**
 Batch order (one conventional commit per item, docs + suite green per commit):
 M9 A1→A2→A3 → A4 / M10 E1→E2 → E3→E4 / M11 V1 → V2→V3→V4 → M13 T1→T2→T3→T4.
-**Batch 1 (A1–A3) COMPLETE. Batch 2 (A4 Rehung Frame ✅ + E1 Painted Heron ✅ + E2 weather/tide phases ✅) COMPLETE — suite 35/35, pacing in band on Normal. Batch 3 (E3 Bold-only zone hazards ✅ → E4 orb-streak bonus ✅ → V1 color-reveal bar ✅) COMPLETE — suite 38/38, pacing 18.7/19.2 min in band. Batch 4 (M11 Presentation, presentation-only — pacing untouched): V2 ✅ (heron awaken bloom) + V3 ✅ (per-zone ambient audio) + V4 ✅ (end-screen exhibition) COMPLETE — suite 41/41. Batch 5 (M13 Tutorial): T1 ✅ (guided first expedition) + T2 ✅ (interactive pigment drills) COMPLETE — suite 43/43, pacing 18.7/18.9 min (the tutorial is a frozen pre-run layer that adds no timed-run time). Batch 6 (M13 Tutorial): T3 ✅ (mini sketch heron) + T4 ✅ (tutorial progress + "Watch me" re-entry) COMPLETE — suite 45/45, pacing 18.7/18.8 min. All four v1.2 milestones (M9/M10/M11/M13) are done.** See
+**Batch 1 (A1–A3) COMPLETE. Batch 2 (A4 Rehung Frame ✅ + E1 Painted Heron ✅ + E2 weather/tide phases ✅) COMPLETE — suite 35/35, pacing in band on Normal. Batch 3 (E3 Bold-only zone hazards ✅ → E4 orb-streak bonus ✅ → V1 color-reveal bar ✅) COMPLETE — suite 38/38, pacing 18.7/19.2 min in band. Batch 4 (M11 Presentation, presentation-only — pacing untouched): V2 ✅ (heron awaken bloom) + V3 ✅ (per-zone ambient audio) + V4 ✅ (end-screen exhibition) COMPLETE — suite 41/41. Batch 5 (M13 Tutorial): T1 ✅ (guided first expedition) + T2 ✅ (interactive pigment drills) COMPLETE — suite 43/43, pacing 18.7/18.9 min (the tutorial is a frozen pre-run layer that adds no timed-run time). Batch 6 (M13 Tutorial): T3 ✅ (mini sketch heron) + T4 ✅ (tutorial progress + "Watch me" re-entry) COMPLETE — suite 45/45, pacing 18.7/18.8 min. All four v1.2 milestones (M9/M10/M11/M13) are done.**
+
+**v1.3 "The Second Expedition" — Batch 7 (M14 NG+ loop) in flight: N1 ✅ (NG+ unlock + Next Expedition flow, SAVE_VERSION 3→4, `save.ngCycle`, gated "Next Expedition (New Game+)" button on title + end screen; smoke stage 46) — suite 46/46, first-time pacing unchanged. N2 (NG+ scaling + `tests/ngpace.mjs`) + N3 (second boss — The Great Green Heron) to follow.** See
 `PROJECT_STATE.md` → Immediate Next Action.
 
 ## Blockers
@@ -49,7 +51,7 @@ None. Loopback dev server, Node, and all tests are healthy.
 
 ## Next priority
 
-**v1.3 "The Second Expedition" — Batch 1 in flight (N1 → N2 → N3):** N1 NG+ unlock + "Next Expedition" flow (save v4), N2 `ngPlusScaling(cycle)` + `tests/ngpace.mjs` probe, N3 second boss (The Great Green Heron, reuses heron AI with a swapped pinning mechanic). Full plan + acceptance criteria in `docs/ROADMAP.md` §v1.3; batch order in `PROJECT_STATE.md` → Immediate Next Action.
+**v1.3 "The Second Expedition" — Batch 7 in flight (N1 → N2 → N3):** N1 NG+ unlock + "Next Expedition" flow (SAVE_VERSION 3→4, `save.ngCycle`) **✅ done (smoke stage 46)**. Next: **N2** `ngPlusScaling(cycle)` in `logic.js` + `tests/ngpace.mjs` probe + smoke stage, then **N3** second boss (The Great Green Heron, reuses heron AI with a swapped pinning mechanic). Full plan + acceptance criteria in `docs/ROADMAP.md` §v1.3; batch order in `PROJECT_STATE.md` → Immediate Next Action.
 
 ## Release readiness
 

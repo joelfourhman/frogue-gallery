@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -250,6 +250,7 @@ export class Game {
     this.orbStreak = 0;
     this.heron = null;
     this.runT = 0;
+    this.ngCycle = 0;    // N1 (v1.3 M14): this run's New Game+ cycle (0 = base game)
     this.spawnT = 3;
     this.score = 0;
     // E2 (v1.2 M10): weather/tide phases — a pending phase for the current zone
@@ -406,11 +407,10 @@ export class Game {
       // (see _drawEnd layout). The card is taller on a victory (it carries the
       // V4 exhibition), so both the draw and the click rects use _endCardH().
       if (this.endT > 0.6 && this.input.mouse.lPressed) {
-        const H = this._endCardH();
-        const cx = this.cw / 2, py = this.ch / 2 - H / 2, ph = H;
-        const bw = 300, bh = 54, bx = cx - bw / 2, by = py + ph + 16;
-        if (this._mouseIn(bx, by, bw, bh)) { this.sfx('ui'); this._beginAtelier(); }
-        else if (this._mouseIn(cx - 105, by + bh + 16, 210, 34)) { this.sfx('ui-back'); this._quitToTitle(); }
+        const b = this._endButtons();
+        if (this._mouseIn(b.primary.x, b.primary.y, b.primary.w, b.primary.h)) { this.sfx('ui'); this._beginAtelier(); }
+        else if (b.ng && this._mouseIn(b.ng.x, b.ng.y, b.ng.w, b.ng.h)) { this._beginNextExpedition(); }
+        else if (this._mouseIn(b.ret.x, b.ret.y, b.ret.w, b.ret.h)) { this.sfx('ui-back'); this._quitToTitle(); }
       }
       if (this.endT > 0.6) {
         if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); this._beginAtelier(); }
@@ -460,6 +460,20 @@ export class Game {
     this.hazards = [];
     this.orbStreak = 0;
     this.sfx('ui-back');
+  }
+
+  // N1 (v1.3 M14): the "Next Expedition" action. Only reachable once a victory
+  // has been earned (ngUnlocked). It advances the persisted New Game+ cycle by
+  // one (a base-game victory is at ngCycle 0, so the first choice enters
+  // cycle 1), persists it, and starts the run. NG+ scaling (N2) and the second
+  // boss (N3) then key off the run's ngCycle. A first-time save (ngCycle 0,
+  // no victory) never sees this path because the button is hidden.
+  _beginNextExpedition() {
+    if (!ngUnlocked(this.save)) return; // defensive: nothing to escalate yet
+    this.save.ngCycle = (Math.floor(this.save.ngCycle) || 0) + 1;
+    SaveSys.save(this.save);
+    this.sfx('ui');
+    this._beginExpedition();
   }
 
 // ================= part 3: the atelier ===============================
@@ -1157,6 +1171,10 @@ _drawAtelier(ctx) {
       // T1 (v1.2 M13): the guided first expedition (fresh save only). A
       // dedicated button so the timed "Begin Expedition" path is untouched.
       if (tutorialEligible(this.save) && this._mouseIn(g.tx, g.ty, g.tw, g.th)) { this.sfx('ui'); this._beginExpedition(true); return; }
+      // N1 (v1.3 M14): the "Next Expedition" (New Game+) button — shown only
+      // after a victory (g.ng set only when ngUnlocked). It shares the guided
+      // slot but that button is fresh-save-only, so the two never coexist.
+      if (g.ng && this._mouseIn(g.ng.x, g.ng.y, g.ng.w, g.ng.h)) { this._beginNextExpedition(); return; }
       if (this._mouseIn(g.bx, g.by, g.bw, g.bh)) { this.sfx('ui'); this._beginExpedition(); }
       else if (this._mouseIn(g.abx, g.aby, g.abw, g.abh)) { this.sfx('ui'); this._beginAtelier(); }
       else if (this._mouseIn(g.ox, g.oy, g.ow, g.oh)) { this.sfx('ui'); this.optionsOpen = true; }
@@ -1167,6 +1185,10 @@ _drawAtelier(ctx) {
     // fresh world each run (title keeps drifting over whatever is left)
     const seed = (Math.random() * 2 ** 31) | 0;
     this.runSeed = seed; // E2: weather phases derive deterministically from this
+    // N1 (v1.3 M14): the run's New Game+ cycle (0 = the base, first-time game;
+    // >= 1 = an NG+ cycle). Read from the save so a "Next Expedition" (which
+    // advances save.ngCycle) drives NG+ scaling (N2) and boss selection (N3).
+    this.ngCycle = Math.max(0, Math.floor(this.save.ngCycle) || 0);
     this.world = new World(mulberry32(seed), seed % 99991);
     this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0);
     this.player = new Player(PLAYER_START_X, PLAYER_START_Y, this.tuning);
@@ -2945,7 +2967,16 @@ _drawAtelier(ctx) {
     // returning player's title keeps its original layout (no dead button).
     const eligible = tutorialEligible(this.save);
     const tw = 260, th = 40, tx = cx - tw / 2, ty = by + bh + 14;
-    const dy = (eligible ? ty + th + 12 : by + bh + 12), dH = 30, dW = 88, dGap = 10;
+    // N1 (v1.3 M14): the "Next Expedition" (New Game+) button. Shown ONLY when
+    // a victory has been earned (ngUnlocked) so a first-time save (ngCycle 0)
+    // sees ZERO new UI. It occupies the same slot as the guided button (which
+    // only shows to a fresh save) — they never both appear, so the slot is
+    // unambiguous. It pushes the difficulty + secondary rows down one row only
+    // while visible, mirroring how the guided button already behaves.
+    const ngShow = ngUnlocked(this.save);
+    const ng = ngShow ? { x: cx - tw / 2, y: ty, w: tw, h: th } : null;
+    const slotPush = (eligible || ngShow) ? (ty + th + 12) : (by + bh + 12);
+    const dy = slotPush, dH = 30, dW = 88, dGap = 10;
     const dTotal = dW * 3 + dGap * 2, dStartX = cx - dTotal / 2;
     const diff = ['gentle', 'normal', 'bold'].map((id, i) => ({ id, x: dStartX + i * (dW + dGap), y: dy, w: dW, h: dH, label: (DIFFICULTIES[id] || {}).label }));
     const abw = 200, abh = 44, aby = dy + dH + 12;
@@ -2954,7 +2985,7 @@ _drawAtelier(ctx) {
     // directly), so this pair layout is free to tune.
     const gap = 24;
     const abx = cx - (abw + gap / 2), ox = cx + gap / 2, ow = abw, oh = abh, oy = aby;
-    return { cx, pw, ph, px, py, bx, by, bw, bh, tw, th, tx, ty, diff, abx, aby, abw, abh, ox, oy, ow, oh };
+    return { cx, pw, ph, px, py, bx, by, bw, bh, tw, th, tx, ty, diff, abx, aby, abw, abh, ox, oy, ow, oh, ng };
   }
   _setDifficulty(id) {
     if (!DIFFICULTIES[id] || this.options.difficulty === id) return;
@@ -3138,6 +3169,12 @@ _drawAtelier(ctx) {
         if (tutorialEligible(this.save)) {
           uiButton(ctx, g.tx, g.ty, g.tw, g.th, 'Guided First Expedition', this._mouseIn(g.tx, g.ty, g.tw, g.th), false, { seed: 55, size: 14, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
         }
+        // N1 (v1.3 M14): the "Next Expedition" (New Game+) button — shown only
+        // after a victory (g.ng set only when ngUnlocked). It shares the guided
+        // slot (which is fresh-save-only), so the two never coexist.
+        if (g.ng) {
+          uiButton(ctx, g.ng.x, g.ng.y, g.ng.w, g.ng.h, 'Next Expedition  (New Game+)', this._mouseIn(g.ng.x, g.ng.y, g.ng.w, g.ng.h), false, { seed: 56, size: 14, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        }
         // M8 P7: difficulty pills (Gentle / Normal / Bold) between the two buttons.
         centerText(ctx, 'difficulty', cx - g.diff[0].x + 34, g.diff[0].y + 20, '11px Georgia, serif', INK, 0.55);
         for (const p of g.diff) {
@@ -3313,6 +3350,29 @@ _drawAtelier(ctx) {
   // stay in the same place on screen in both.
   _endCardH() { return this.endKind === 'victory' ? 540 : 430; }
 
+  // N1 (v1.3 M14): the end-screen button geometry — single source of truth shared
+  // by the end-state click routing (input) and _drawEnd, so the buttons never
+  // drift. "Rest at the Atelier" (primary) and "Return to the Pond" (link) keep
+  // their exact original positions; a "Next Expedition (New Game+)" button is
+  // slotted between them ONLY when NG+ is unlocked (a victory has been earned),
+  // so a first-time save sees the identical two-button end screen as before.
+  _endButtons() {
+    const H = this._endCardH();
+    const cx = this.cw / 2, py = this.ch / 2 - H / 2, ph = H;
+    const bw = 300, bh = 54, bx = cx - bw / 2, by = py + ph + 16;
+    const primary = { x: bx, y: by, w: bw, h: bh };
+    const ngShow = ngUnlocked(this.save);
+    let ng = null;
+    let retY = by + bh + 16;
+    if (ngShow) {
+      const nbh = 44;
+      ng = { x: cx - bw / 2, y: by + bh + 14, w: bw, h: nbh };
+      retY = ng.y + ng.h + 14;
+    }
+    const ret = { x: cx - 105, y: retY, w: 210, h: 34 };
+    return { primary, ng, ret };
+  }
+
   _drawEnd(ctx) {
     const victory = this.endKind === 'victory';
     const a = Math.min(1, this.endT / 0.5);
@@ -3414,10 +3474,14 @@ _drawAtelier(ctx) {
         centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + (victory ? 420 : 320), 'italic 12px Georgia, serif', INK, 0.55);
         paperEnd(ctx);
 
-        // primary: to the atelier (see end-state input routing for the same rects)
-        const bw = 300, bh = 54, bx = cx - bw / 2, by = py + ph + 16;
-        uiButton(ctx, bx, by, bw, bh, 'Rest at the Atelier', this._mouseIn(bx, by, bw, bh), false, { seed: 9, size: 18, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-        const lw = 210, lh = 34, lx = cx - lw / 2, ly = by + bh + 16;
+        // primary: to the atelier (+ the N1 "Next Expedition" NG+ button, see
+        // end-state input routing and _endButtons for the shared rects)
+        const eb = this._endButtons();
+        uiButton(ctx, eb.primary.x, eb.primary.y, eb.primary.w, eb.primary.h, 'Rest at the Atelier', this._mouseIn(eb.primary.x, eb.primary.y, eb.primary.w, eb.primary.h), false, { seed: 9, size: 18, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        if (eb.ng) {
+          uiButton(ctx, eb.ng.x, eb.ng.y, eb.ng.w, eb.ng.h, 'Next Expedition  (New Game+)', this._mouseIn(eb.ng.x, eb.ng.y, eb.ng.w, eb.ng.h), false, { seed: 90, size: 15, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        }
+        const lw = eb.ret.w, lh = eb.ret.h, lx = eb.ret.x, ly = eb.ret.y;
         ctx.save();
         ctx.globalAlpha = 0.85;
         ctx.fillStyle = '#fdf6e9';
