@@ -1563,6 +1563,7 @@ _drawAtelier(ctx) {
     this.hazards = []; // E3: Bold-only environmental hazards (thorn reeds / mud pools)
     this.orbStreak = 0; // E4: clean-orb streak (resets on a hit) — in-run only, not persisted
     this.runOrbs = 0;   // G1 (v1.3 M15): this expedition's collected orbs (milestone is per-run)
+    this.runGold = Math.max(0, Math.floor(this.save.gold) || 0); // C2 (v1.3 M16): the gold total at run start (delta at the end = "gold earned this expedition"; in-run only, not persisted)
     // N3 (v1.3 M14): on NG+ cycles (ngCycle >= 1) the final boss is the Great
     // GREEN Heron instead of the Great Gray Heron (the gray heron stays the
     // first-time boss). The green heron reuses the same bossStep AI / 3-hue
@@ -3867,6 +3868,29 @@ _drawAtelier(ctx) {
     return { primary, ng, ret };
   }
 
+  // C2 (v1.3 M16): the victory end-screen "Season" summary — a compact read of
+  // the NG+ season a victory belongs to. Pure display (no new persistence):
+  // every value is read from the run (ngCycle) and the save (ngModifier, gold,
+  // gildedFrame, loadout) exactly once at draw time. `goldThisRun` is the delta
+  // since run start (runGold captured in _beginExpedition; falls back to the
+  // full total if a run never started, as in headless end screens).
+  _seasonSummary() {
+    const gold = Math.max(0, Math.floor(this.save.gold) || 0);
+    const modId = saveModifier(this.save);
+    const names = (this.save.loadout || [])
+      .map((id) => PAINTINGS.find((p) => p.id === id))
+      .filter(Boolean)
+      .map((p) => p.name);
+    return {
+      cycle: Math.max(0, Math.floor(this.ngCycle) || 0),
+      mod: modId ? MODIFIERS[modId].name : 'none',
+      goldThisRun: Math.max(0, gold - (Number.isFinite(this.runGold) ? this.runGold : 0)),
+      goldTotal: gold,
+      gilded: isGilded(this.save) ? 'hung' : 'not yet',
+      paintings: names,
+    };
+  }
+
   _drawEnd(ctx) {
     const victory = this.endKind === 'victory';
     const a = Math.min(1, this.endT / 0.5);
@@ -3966,7 +3990,29 @@ _drawAtelier(ctx) {
 
     // spend hint
         centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + (victory ? 420 : 320), 'italic 12px Georgia, serif', INK, 0.55);
-        paperEnd(ctx);
+
+    // C2 (v1.3 M16): the "Season" summary (VICTORY ONLY) — a compact read of the
+    // NG+ season this victory belongs to: the cycle, the modifier chosen for it,
+    // the gold earned this expedition + the career total, the Gilded Frame
+    // state, and the paintings carried. Reuses the V4 card's existing empty
+    // bottom band (the card is 540 tall and the spend hint ends at py+420), so
+    // NOTHING below it moves — the end-screen buttons (driven by _endButtons)
+    // keep their exact rects on a first-time save. Pure display: no new
+    // persistence, every value read live from the run/save at draw time.
+    if (victory) {
+      const ss = this._seasonSummary();
+      const sy = py + 450;
+      c.save();
+      c.strokeStyle = 'rgba(43,35,32,0.30)';
+      c.lineWidth = 1;
+      c.beginPath(); c.moveTo(cx - 175, sy - 16); c.lineTo(cx + 175, sy - 16); c.stroke();
+      centerText(c, 'Season', cx, sy, '700 13px Georgia, serif', '#a3762a', 0.9);
+      centerText(c, `cycle ${ss.cycle} · modifier ${ss.mod} · Gilded Frame ${ss.gilded}`, cx, sy + 22, '13px Georgia, serif', INK, 0.75);
+      centerText(c, `gold earned this expedition +${ss.goldThisRun} · gold total ${ss.goldTotal}`, cx, sy + 40, '13px Georgia, serif', INK, 0.75);
+      centerText(c, `paintings from this expedition: ${ss.paintings.length ? ss.paintings.join(', ') : 'none'}`, cx, sy + 58, '12.5px Georgia, serif', INK, 0.65);
+      c.restore();
+    }
+    paperEnd(ctx);
 
         // primary: to the atelier (+ the N1 "Next Expedition" NG+ button, see
         // end-state input routing and _endButtons for the shared rects)

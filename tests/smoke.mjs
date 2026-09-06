@@ -3391,5 +3391,95 @@ console.log('== stage 54: v1.3 M16 C1 — atelier one-liner batch 2 (NG+) ==');
   console.log('ok — C1: the atelier one-liner system gains a SECOND, NG+-context line pool (drawn only when ngCycle >= 1, above the cycle-0 victory/defeat/general pools but below the just-made-purchase hook) — reusing the EXACT A1 machinery (rotating pools, no-repeat-last, typewriter reveal, context priority) with NO new persistent state');
 }
 
+// stage 55 — v1.3 M16 C2: the victory end-screen "Season" summary block.
+// On a VICTORY end card (below the V4 exhibition, in the card's spare bottom
+// band) a compact season read renders: the NG+ cycle, the modifier chosen for
+// the run, the gold earned this expedition (the delta since run start) + the
+// career gold total, the Gilded Frame state, and the paintings carried this
+// expedition. Pure display — every value is read live from the run/save;
+// nothing new is persisted. We verify with a fillText-recording canvas:
+//   (a) a representative NG+ save renders the correct cycle/modifier/gold/
+//       gilded/paintings values;
+//   (b) the "gold earned this expedition" delta tracks the run-start capture
+//       (runGold) — 17 earned on top of a 53g start reads +17 / total 70;
+//   (c) a first-time (cycle-0) victory still renders the block with its own
+//       correct values (cycle 0, no modifier, 0 gold, no frame);
+//   (d) a DEFEAT end screen renders NO Season block (victory only);
+//   (e) NO new persistence: the end screen touches nothing new in the save.
+console.log('== stage 55: v1.3 M16 C2 — victory end-screen "Season" summary ==');
+{
+  const L55 = await import('../src/logic.js');
+  const recCanvas = makeCanvas();
+  const drawn = [];
+  const baseCtx = makeCtx(recCanvas);
+  const recCtx = new Proxy(baseCtx, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas.getContext = () => recCtx;
+
+  // ---- (a)+(b) a representative NG+ save: cycle 2, High Tide modifier,
+  // 53g at run start -> 70g now, Gilded Frame hung, 2-painting loadout.
+  const gA = new Game(recCanvas); gA.start();
+  const saveA = L55.freshSave();
+  saveA.ngCycle = 2; saveA.stats.victories = 2; saveA.flags.heronDefeated = true;
+  saveA.ngModifier = 'high-tide';
+  saveA.gold = 70; saveA.gildedFrame = true;
+  saveA.owned = ['moonlit-pond', 'storm-cloud'];
+  saveA.loadout = ['moonlit-pond', 'storm-cloud'];
+  gA.save = saveA;
+  gA.ngCycle = 2; gA.runGold = 53;            // the run-start gold capture (17 earned in-run)
+  gA.endKind = 'victory'; gA.endT = 5;        // fully revealed
+  gA.endGains = { red: 5, blue: 5, green: 5 };
+  gA.state = 'end';
+  gA.input.mouse.lPressed = false; gA.input.mouse.lDown = false;
+  // the helper reads the right values for this representative save
+  const ssA = gA._seasonSummary();
+  assert(ssA.cycle === 2, 'C2: the summary reports the NG+ cycle (2)');
+  assert(ssA.mod === 'High Tide', `C2: the summary reports the chosen modifier name (got "${ssA.mod}")`);
+  assert(ssA.goldThisRun === 17, `C2: "gold earned this expedition" is the delta since run start (70 - 53 = 17; got ${ssA.goldThisRun})`);
+  assert(ssA.goldTotal === 70, `C2: the summary reports the career gold total (70; got ${ssA.goldTotal})`);
+  assert(ssA.gilded === 'hung', `C2: the summary reports the Gilded Frame state (got "${ssA.gilded}")`);
+  assert(ssA.paintings.join(',') === 'Moonlit Pond,Storm Cloud', `C2: the summary lists the carried paintings (got "${ssA.paintings}")`);
+  // and the end screen actually DRAWS them
+  drawn.length = 0; gA._frame(gA.now * 1000 + 5000);
+  const joinedA = drawn.join('\u0001');
+  assert(joinedA.includes('Season'), 'C2: the victory end screen renders the "Season" heading');
+  assert(joinedA.includes('cycle 2 · modifier High Tide · Gilded Frame hung'), 'C2: the summary renders cycle + modifier + frame state for the representative save');
+  assert(joinedA.includes('gold earned this expedition +17 · gold total 70'), 'C2: the summary renders the earned-this-run delta + the career gold total');
+  assert(joinedA.includes('paintings from this expedition: Moonlit Pond, Storm Cloud'), 'C2: the summary renders the paintings carried this expedition');
+  // the block sits INSIDE the existing card (below the exhibition, above the
+  // unchanged buttons): the card height is untouched and the buttons keep
+  // their original geometry
+  assert(gA._endCardH() === 540, 'C2: the victory card height is unchanged (540)');
+  const ebA = gA._endButtons();
+  assert(ebA.primary.y === gA.ch / 2 - 540 / 2 + 540 + 16, 'C2: the primary button keeps its original rect (nothing below it moved)');
+
+  // ---- (c) a first-time (cycle-0) victory: the block still renders, with
+  // its own correct values (cycle 0, no modifier, 0 gold, no frame).
+  const saveC = L55.freshSave();
+  saveC.stats.victories = 1; saveC.flags.heronDefeated = true;
+  saveC.owned = ['moonlit-pond']; saveC.loadout = ['moonlit-pond'];
+  gA.save = saveC; gA.ngCycle = 0; gA.runGold = 0;
+  drawn.length = 0; gA._frame(gA.now * 1000 + 5100);
+  const joinedC = drawn.join('\u0001');
+  assert(joinedC.includes('cycle 0 · modifier none · Gilded Frame not yet'), 'C2: a first-time victory renders the Season block with its own values (cycle 0, no modifier, no frame)');
+  assert(joinedC.includes('gold earned this expedition +0 · gold total 0'), 'C2: a first-time victory reports 0 gold earned / 0 total');
+  assert(joinedC.includes('paintings from this expedition: Moonlit Pond'), 'C2: a first-time victory lists its carried painting');
+
+  // ---- (d) a defeat end screen renders NO Season block (victory only) ----
+  gA.endKind = 'defeat';
+  drawn.length = 0; gA._frame(gA.now * 1000 + 5200);
+  assert(!drawn.join('\u0001').includes('Season'), 'C2: the Season block is victory-only (absent on a defeat)');
+
+  // ---- (e) NO new persistence: the end screen touches nothing new in the save
+  gA.endKind = 'victory';
+  const before55 = JSON.stringify(store.get('frogue_gallery_save'));
+  gA._frame(gA.now * 1000 + 5300);
+  assert(JSON.stringify(store.get('frogue_gallery_save')) === before55, 'C2: the Season summary persists nothing new to the save');
+
+  console.log('ok — C2: the victory end screen gains a compact "Season" summary block (cycle / modifier / gold earned this expedition + total / Gilded Frame state / paintings carried) in the V4 card\'s spare bottom band — pure display, no new persistence, button geometry untouched');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
