@@ -105,18 +105,31 @@ the suite green, and docs updated per commit.
 | V3 | Audio: a per-zone ambient bed shift (4 subtle Web Audio drones cross-faded as you cross zone boundaries) | extends P9's music bus into the run; loopback-local synth, no assets; reuses the `musicBus` bed system | ⬜ |
 | V4 | End-screen "exhibition": frame the heron + your 2-slot loadout as a titled, signed piece for the run, with a shareable title string | ties combat to the collection theme; data-only (no new rendering engine), reuses the P8 frame renderer | ⬜ |
 
-### M12 — Accessibility & input (bounded)
+### M13 — Tutorial (the taught journey)
+
+The game has first-run banners + a Field Guide overlay (P1, P6), but they're
+passive: they tell the player what things *are*, not how to *use* them in a
+moment of pressure. M13 turns that into an active, hands-on, **skippable**
+tutorial that teaches the pigment roles and the heron's color mechanic *by
+doing*, so the first real run starts confident instead of confused. Design
+pillar: the tutorial must teach "painting is the game" — not just "move and
+shoot." It is **opt-out** (a "Skip" button on the first screen) so return
+players are never forced through it.
 
 | ID | Item | Notes | Status |
 |---|---|---|---|
-| X1 | Colorblind assist toggle: pigment roles get a shape/letter glyph on the HUD + on swatches (R/B/G), not just hue | P9's Options overlay is the natural home; pure HUD change, no logic | ⬜ |
-| X2 | Remappable paint keys (1–4) + swap the hop/pause defaults, persisted | low-risk QoL; reuses the `pressed()` key-map indirection in `game.js` | ⬜ |
-| X3 | Text size toggle (S/M/L) for banners + Field Guide | a11y; pure layout multiplier on the shared text helpers | ⬜ |
+| T1 | Guided first expedition: a scripted, low-stakes opening zone where the player is coaxed to paint a beetle (red = burn), a mosquito (blue = slow/freeze), and a toad (green = root) — each with an on-screen goal + a "try it" prompt, not a wall of text | reuses the existing tutorial/banner state machine (P1) but makes it interactive; a dedicated `tutorial` expedition flag so it can be re-entered from the Field Guide ("Watch me") | ⬜ |
+| T2 | Interactive pigment-mechanic drills: three micro-moments, one per pigment, where the player must *achieve* the status effect (burn a beetle to death, freeze a mosquito, root a toad) before the tutorial advances — teaches the "colors change how you approach" pillar directly | each drill is a tiny deterministic scene (a few enemies, god-mode frog); success = the status applies, so the player learns the *interaction* (red→fire, blue→freeze on 2nd coat, green→root) by causing it | ⬜ |
+| T3 | Mini heron: a small, low-HP "sketch" heron that teaches the color-awaken loop (paint all three hues → it Awakens → paint hard while it shimmers) in under 30s, with a clear win/lose and a "you got it — now the real one" handoff to the full boss | reuses `bossStep` + the 3-hue awaken logic at a reduced HP/tuning; the payoff that the real 30k-HP heron fight is a *known* pattern, not a surprise | ⬜ |
+| T4 | Tutorial progress + re-entry: track which drills are done (persisted in the save), show a "✓ learned" state, and let the player re-open any drill from the Field Guide ("Watch me" per topic) | extends the save schema (new `tutorial` field, migrated by `migrateSave`); makes the Field Guide (P6) a real reference+retraining tool instead of a static cheat sheet | ⬜ |
 
 Acceptance (v1.2): each item ships with a smoke stage or a documented probe;
-full suite green in one command; the 15–20 min Normal run target still holds
-(re-check with `pace.mjs` + `humance.mjs` after any in-run change); docs
-accurate; zero new dependencies; loopback-only.
+the tutorial is fully skippable and never blocks a return player (fresh-save
+players get it once, then it's off unless re-opened); full suite green in one
+command; the 15–20 min **real** run target still holds (the tutorial is a
+separate, opt-in layer — it does not inflate the measured expedition length,
+verified with `pace.mjs` + `humance.mjs`); docs accurate; zero new
+dependencies; loopback-only.
 
 ### Explicitly deferred past v1.2 (revisit later)
 
@@ -126,3 +139,5 @@ accurate; zero new dependencies; loopback-only.
 - Multiplayer / local co-op
 - CRT / paper-texture visual filters
 - Procedural (infinite) expedition generation
+- Accessibility & input (deprioritized by Joel 2026-09-05): colorblind pigment
+  glyphs, remappable paint keys, text-size toggle — revisit after v1.2
