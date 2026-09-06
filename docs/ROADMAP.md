@@ -1,8 +1,7 @@
 # Frogue Gallery — Roadmap
 
 Milestones only — see `docs/PROJECT_STATUS.md` for live status, bugs, and
-debt. Release DoD (all 12 items) is satisfied; this roadmap covers post-
-release v1.1.
+debt.
 
 ## Release (✅ shipped — 2026-09-05)
 
@@ -16,7 +15,7 @@ release v1.1.
 | M6 | Final sweep: erase-save UI, docs accuracy, 11-stage smoke suite |
 | P1–P5 | Post-release polish: first-run tutorial, combat juice, atelier onboarding, first-time balance, run pacing (5400px world, 4 zones, real 30k-HP heron) |
 
-## v1.1 — Improvements & bug fixes (ACTIVE)
+## v1.1 — Improvements & bug fixes (✅ COMPLETE — 2026-09-05)
 
 ### M7 — Bug fixes & robustness (current)
 
@@ -70,3 +69,60 @@ full suite green; 15–20 min run target still holds on Normal; docs accurate.
 - Gamepad support
 - New Game+ (post-victory loop)
 - CRT/paper-texture visual filters beyond current style
+
+## v1.2 — "The Collection" (PLANNED — next milestone after v1.1)
+
+Theme: make the *meta* as fun as the run. v1.1 proved the expedition; v1.2
+gives the player something to collect, master, and show off — while keeping
+the 15–20 min run, the "painting is the game" pillar, and the zero-dependency
+boundary intact. Every item lands with a smoke stage (or documented probe),
+the suite green, and docs updated per commit.
+
+### M9 — Atelier & collection depth
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| A1 | Atelier characters come alive: Mabel / Giuseppe / Monet get short, rotating one-liners (contextual: reacts to your last run, purchases, best run) | design.md already lists them; today they're unimplemented. Reuse the banner/string system; no new art, typewriter-style text | ⬜ |
+| A2 | Painting synergy pairs: certain 2-slot loadout combos unlock a named "duo" effect (e.g. Moonlit Pond + Storm Cloud = "Flooded Night": blue splash also slows) | 2-slot loadout tension is the build pillar; synergy makes slot choice *creative*, not just additive. Small table in `logic.js` (pure, unit-testable); Gallery Wall surfaces the active duo name; ~6 pairs at launch | ⬜ |
+| A3 | Curator's Ledger: a persistent per-painting "story" unlocked on first purchase + first victory with it (short prose, 1–2 lines each) | gives the collection a "why"; ties to Croaksworth/Atelier lore. Data-only (strings), no mechanics; viewable from Gallery Wall placard hover/click | ⬜ |
+| A4 | Atelier prestige-lite "Rehung Frame": retire an owned painting to a bonus for its next tier (e.g. +1 capacity) without erasing the collection | opt-in endgame loop; reuses the existing upgrade-economy and never removes cosmetics. Gated behind N victories to protect early game | ⬜ |
+
+### M10 — Expedition depth (in-run, not meta)
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| E1 | A second boss: the "Painted Heron" — a mid-run guardian of a chosen zone that uses the same 3-hue Awaken mechanic at ~30% scale | design.md's pillar is the paint-the-boss mechanic; one mid-boss makes the 15–20 min journey have two beats instead of one. Reuses `bossStep` + `paintBossHit` with a scale factor; new zone accent | ⬜ |
+| E2 | Weather / tide phase per expedition: a light environmental modifier (e.g. "Mist": enemies telegraph longer; "Ember tide": red fire spreads faster) chosen from a small pool, shown on the title + first banner | adds run-to-run variety with *tunable*, non-punishing modifiers (Gentle/Normal/Bolt stay the reference). Data table + `applyDifficulty`-style hook in `logic.js`; documented in `DECISIONS.md` | ⬜ |
+| E3 | Zone-specific hazard on Bold only: one signature set-piece per zone (e.g. Slick Hollow = a slick patch that slows the frog unless hopped) | gives Bold a reason to exist beyond numbers; off by default (Gentle/Normal unchanged). Reuses existing status/telegraph systems | ⬜ |
+| E4 | Orb "streak" bonus: 3+ orbs collected without taking a hit grant a small bank bump + a distinct chime | rewards the dodge/hop skill the PT3 fly-fairness rebalance introduced; scales with the existing `bankGain` (pure fn, testable) | ⬜ |
+
+### M11 — Presentation & feel
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| V1 | Painted-world "reveal": the swamp literally gains color as you paint it this run — a visible saturation bar + a subtle end-of-run "how much color did you restore?" tally on the end screen | the design pillar ("every stroke restores color to the swamp") is currently invisible; surfacing it makes the fantasy legible. Reuses `worldColorSat` + `restoreColor` (already tracked); tally feeds best-run | ⬜ |
+| V2 | Heron Awaken "bloom" beat: a short, dramatic full-screen color bloom + screen shake when the heron enters Awakened, and a bloom on victory (already in design.md, currently under-sold) | sells the single most important moment of the fight; particle-budget aware (≤220 cap holds) | ⬜ |
+| V3 | Audio: a per-zone ambient bed shift (4 subtle Web Audio drones cross-faded as you cross zone boundaries) | extends P9's music bus into the run; loopback-local synth, no assets; reuses the `musicBus` bed system | ⬜ |
+| V4 | End-screen "exhibition": frame the heron + your 2-slot loadout as a titled, signed piece for the run, with a shareable title string | ties combat to the collection theme; data-only (no new rendering engine), reuses the P8 frame renderer | ⬜ |
+
+### M12 — Accessibility & input (bounded)
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| X1 | Colorblind assist toggle: pigment roles get a shape/letter glyph on the HUD + on swatches (R/B/G), not just hue | P9's Options overlay is the natural home; pure HUD change, no logic | ⬜ |
+| X2 | Remappable paint keys (1–4) + swap the hop/pause defaults, persisted | low-risk QoL; reuses the `pressed()` key-map indirection in `game.js` | ⬜ |
+| X3 | Text size toggle (S/M/L) for banners + Field Guide | a11y; pure layout multiplier on the shared text helpers | ⬜ |
+
+Acceptance (v1.2): each item ships with a smoke stage or a documented probe;
+full suite green in one command; the 15–20 min Normal run target still holds
+(re-check with `pace.mjs` + `humance.mjs` after any in-run change); docs
+accurate; zero new dependencies; loopback-only.
+
+### Explicitly deferred past v1.2 (revisit later)
+
+- Gold pigment / fourth brush color (needs a full pigment-system pass)
+- Gamepad support (needs an input-abstraction layer + a test rig)
+- New Game+ / post-victory campaign loop
+- Multiplayer / local co-op
+- CRT / paper-texture visual filters
+- Procedural (infinite) expedition generation
