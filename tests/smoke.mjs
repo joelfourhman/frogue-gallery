@@ -2904,5 +2904,103 @@ console.log('== stage 49: N4 — Player-chosen expedition modifiers ==');
   console.log('ok — N4: 3 data-driven modifiers feed the existing tuning/spawn/render paths, are selectable + persist, and a cycle-0 (first-time) run stays byte-identical');
 }
 
+// ---- stage 50: G1 — Gold pigment meta economy (core) ----------------------
+console.log('== stage 50: G1 — Gold pigment meta economy (core) ==');
+{
+  const L50 = await import('../src/logic.js');
+
+  // ---- (0) schema: SAVE_VERSION bumped to 6; a fresh save starts gold 0 / empty latch ----
+  assert(L50.SAVE_VERSION === 6, `G1: SAVE_VERSION is now 6 (gold era; got ${L50.SAVE_VERSION})`);
+  const f50 = L50.freshSave();
+  assert(f50.gold === 0, 'G1: a fresh save starts with 0 gold');
+  assert(typeof f50.goldEarned === 'object' && f50.goldEarned !== null && Object.keys(f50.goldEarned).length === 0, 'G1: a fresh save starts with an empty goldEarned latch');
+
+  // ---- (1) each earn RULE fires EXACTLY ONCE (idempotent) ----
+  const s = L50.freshSave();
+  const gray1 = L50.goldEarn(s, L50.goldEventBoss('gray'));
+  const gray2 = L50.goldEarn(s, L50.goldEventBoss('gray'));
+  assert(gray1 === 15, `G1: the first Gray Heron kill pays 15 gold (got ${gray1})`);
+  assert(gray2 === 0, 'G1: the Gray Heron kill does NOT pay again (latched)');
+  assert(s.goldEarned['boss:gray'] === true, 'G1: the gray-boss latch is set after the first kill');
+
+  const green1 = L50.goldEarn(s, L50.goldEventBoss('green'));
+  const green2 = L50.goldEarn(s, L50.goldEventBoss('green'));
+  assert(green1 === 20, `G1: the first Green Heron (NG+) kill pays 20 gold (got ${green1})`);
+  assert(green2 === 0, 'G1: the Green Heron kill does NOT pay again (latched)');
+  assert(s.goldEarned['boss:green'] === true, 'G1: the green-boss latch is set after the first kill');
+
+  // each of the 3 synergy duos fires once (stable sorted-pair key)
+  const duos = [
+    { pair: ['moonlit-pond', 'storm-cloud'] },
+    { pair: ['dancing-salamander', 'storm-cloud'] },
+    { pair: ['spring-garden', 'king-frog'] },
+  ];
+  for (const d of duos) {
+    const once = L50.goldEarn(s, L50.goldEventSynergy(d));
+    const again = L50.goldEarn(s, L50.goldEventSynergy(d));
+    assert(once === 8, `G1: a first synergy duo (${d.pair.join('+')}) pays 8 gold (got ${once})`);
+    assert(again === 0, `G1: that synergy duo does NOT pay again (latched)`);
+  }
+
+  // the orb milestone: 100 orbs in a run pays once; below the threshold pays nothing
+  assert(L50.goldEventOrbs(50) === null, 'G1: below 100 orbs there is no orb milestone (yet)');
+  const orbs1 = L50.goldEarn(s, L50.goldEventOrbs(100));
+  const orbs2 = L50.goldEarn(s, L50.goldEventOrbs(100));
+  assert(orbs1 === 8, `G1: the first 100-orb run pays 8 gold (got ${orbs1})`);
+  assert(orbs2 === 0, 'G1: the 100-orb milestone does NOT pay again (latched)');
+
+  // ---- (2) totals are correct ----
+  // max gold a career can bank = 15 + 20 + 3*8 + 8 = 67
+  assert(L50.goldTotal() === 67, `G1: the total career gold is 67 (got ${L50.goldTotal()})`);
+  assert(s.gold === 67, `G1: after every first-time event, the save has banked all 67 gold (got ${s.gold})`);
+  assert(s.gold >= 25 && s.gold >= 40, 'G1: a career can afford BOTH G2 gold paintings (25 and 40 gold)');
+  // firing the entire event set a SECOND time earns nothing (global idempotency)
+  const secondPass =
+    L50.goldEarn(s, L50.goldEventBoss('gray')) +
+    L50.goldEarn(s, L50.goldEventBoss('green')) +
+    duos.reduce((acc, d) => acc + L50.goldEarn(s, L50.goldEventSynergy(d)), 0) +
+    L50.goldEarn(s, L50.goldEventOrbs(100));
+  assert(secondPass === 0, `G1: re-firing every event earns 0 (each fires exactly once; got ${secondPass})`);
+  assert(s.gold === 67, 'G1: the total gold is unchanged after the second pass');
+
+  // an unknown boss kind produces no event / no gold
+  assert(L50.goldEventBoss('purple') === null, 'G1: an unknown boss kind produces no gold event');
+
+  // ---- (3) a live Game wires the award (banner + persist) end-to-end ----
+  const gGold = new Game(makeCanvas()); gGold.start();
+  const gsave = L50.freshSave(); gsave.stats.victories = 0; gsave.heronDefeated = false;
+  gGold.save = gsave; gGold.state = 'expedition';
+  // a gray-heron run ends in victory -> the first gray boss kill pays gold
+  gGold.heron = { green: false };
+  gGold._endRun('victory');
+  assert(gGold.save.gold === 15, `G1: a first-time victory (gray heron) banks 15 gold (got ${gGold.save.gold})`);
+  assert(gGold.save.goldEarned['boss:gray'] === true, 'G1: a first-time victory latches the gray-boss gold');
+  // a SECOND victory (same boss type) does NOT re-pay the boss gold
+  const before2 = gGold.save.gold;
+  gGold.state = 'expedition'; gGold.heron = { green: false };
+  gGold._endRun('victory');
+  assert(gGold.save.gold === before2, 'G1: a second victory does NOT re-pay the gray-boss gold (latched)');
+  // an NG+ (green heron) victory pays the DISTINCT green-boss gold
+  gGold.state = 'expedition'; gGold.heron = { green: true };
+  gGold._endRun('victory');
+  assert(gGold.save.gold === before2 + 20, `G1: an NG+ (green heron) victory banks the 20 gold green-boss (got ${gGold.save.gold})`);
+
+  // the atelier displays the gold counter (a gold dot distinct from the pigments)
+  gGold._beginAtelier();
+  gGold._drawAll(); // exercise the atelier render path (gold chip drawn) without throwing
+
+  // ---- (4) old saves migrate forward as gold 0 / empty latch ----
+  const legacy = L50.migrateSave({ v: 5, bank: { red: 5, blue: 2, green: 1 }, owned: ['moonlit-pond'], loadout: ['moonlit-pond'], upgrades: { capacity: 1, power: 0, vitality: 0 }, flags: { heronDefeated: true }, stats: { victories: 1 }, bestRun: { pigments: { red: 0, blue: 0, green: 0 }, time: 60, cleared: true }, ngCycle: 1, ngModifier: 'high-tide' });
+  assert(legacy.gold === 0, `G1: a v5 save (no gold field) migrates forward to gold 0 (got ${legacy.gold})`);
+  assert(legacy.goldEarned !== null && Object.keys(legacy.goldEarned).length === 0, 'G1: a v5 save migrates to an empty goldEarned latch');
+  assert(legacy.ngCycle === 1 && legacy.ngModifier === 'high-tide', 'G1: the migration preserves the existing NG+ fields (ngCycle + ngModifier)');
+  // a corrupt/garbled gold field normalizes to 0 (the loader never throws)
+  const corrupt = L50.migrateSave({ v: 5, bank: { red: 1, blue: 0, green: 0 }, owned: [], loadout: [], upgrades: { capacity: 0, power: 0, vitality: 0 }, flags: {}, stats: {}, bestRun: null, gold: 'lots', goldEarned: 'bad' });
+  assert(corrupt.gold === 0, `G1: a garbled gold field normalizes to 0 (got ${corrupt.gold})`);
+  assert(typeof corrupt.goldEarned === 'object' && Object.keys(corrupt.goldEarned).length === 0, 'G1: a garbled goldEarned field normalizes to {}');
+
+  console.log('ok — G1: gold is a META-ONLY currency earned exactly once per first-time event (boss kill / synergy duo / 100-orb run), totals to 67 (clears the G2 gold set), old saves migrate to gold 0, and the atelier displays it');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -893,6 +893,19 @@ _drawAtelier(ctx) {
       ctx.stroke();
       centerText(ctx, String(b[color]), px + 20, sy + stripH / 2, '700 16px Georgia, serif', INK, 1);
     });
+    // G1 (v1.3 M15): the meta gold — displayed in the bank strip but visually
+    // distinct (a gold dot) so players learn it is NOT a pigment. It is
+    // META-ONLY: it never feeds combat and is not a 4th paint color.
+    const gx = sx + 110 + 3 * 90;
+    ctx.beginPath();
+    ctx.arc(gx, sy + stripH / 2, 9, 0, TAU);
+    ctx.fillStyle = '#d9a520';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+    centerText(ctx, String(this.save.gold || 0), gx + 20, sy + stripH / 2, '700 16px Georgia, serif', INK, 1);
+    centerText(ctx, 'GOLD', gx - 4, sy + stripH / 2, '600 9px Georgia, serif', INK, 0.6);
     centerText(ctx, `loadout ${this.save.loadout.length}/2`, sx + stripW - 210, sy + stripH / 2, '700 13px Georgia, serif', INK, 0.7);
     for (let s = 0; s < 2; s++) {
       const id = this.save.loadout[s];
@@ -1353,6 +1366,7 @@ _drawAtelier(ctx) {
     this.orbs = [];
     this.hazards = []; // E3: Bold-only environmental hazards (thorn reeds / mud pools)
     this.orbStreak = 0; // E4: clean-orb streak (resets on a hit) — in-run only, not persisted
+    this.runOrbs = 0;   // G1 (v1.3 M15): this expedition's collected orbs (milestone is per-run)
     // N3 (v1.3 M14): on NG+ cycles (ngCycle >= 1) the final boss is the Great
     // GREEN Heron instead of the Great Gray Heron (the gray heron stays the
     // first-time boss). The green heron reuses the same bossStep AI / 3-hue
@@ -2263,6 +2277,12 @@ _drawAtelier(ctx) {
         const v = base * mult;
         const boosted = mult > 1;
         this.collected[o.color] += v;
+        // G1 (v1.3 M15): count this expedition's orbs; the FIRST time a single
+        // run reaches 100 collected orbs, pay the orb-milestone gold. The
+        // goldEarn latch makes it fire exactly once across a career, so we can
+        // call the check every pickup — it is a silent no-op after the first.
+        this.runOrbs += 1;
+        if (this.runOrbs === 100) this._awardGold(goldEventOrbs(this.runOrbs), 'A hundred orbs in one expedition — GOLD for the Curator.');
         if (this.stock[o.color] < this.tuning.capacity) {
           this.stock[o.color] += v;
           this.sfx(boosted ? 'pickup-streak' : 'pickup');
@@ -2322,6 +2342,26 @@ _drawAtelier(ctx) {
     const gains = bankGain(this.collected, { died: !victory, victory, tuning: this.tuning });
     for (const k of ['red', 'blue', 'green']) this.save.bank[k] += gains[k];
     this.save.stats.expeditions += 1;
+    // G1 (v1.3 M15): meta gold for a VICTORY's first-time moments — the first
+    // kill of the boss type (the gray heron the first time, the green heron on
+    // NG+) and the first completion of the active synergy duo. Both are
+    // idempotent (goldEarn latches each key once), and both fire BEFORE
+    // stats.victories is bumped so the victory bookkeeping stays intact.
+    if (victory) {
+      // G1 (v1.3 M15): the first kill of this boss type pays meta gold. The
+      // heron on a cycle-0 run is gray; an NG+ cycle's heron is green. The
+      // goldEarn latch makes each boss type fire exactly once across a career.
+      const bossKind = (this.heron && this.heron.green) ? 'green' : 'gray';
+      const bossEv = goldEventBoss(bossKind);
+      const heronLabel = bossKind === 'green'
+        ? 'The Great Green Heron is painted — GOLD settles in your palm.'
+        : 'The Great Gray Heron is painted — a sliver of GOLD settles in your palm.';
+      if (bossEv) this._awardGold(bossEv, heronLabel);
+      // the first completion of the active synergy duo (if any in the loadout)
+      const syn = activeSynergy(this.save.loadout);
+      const synEv = syn ? goldEventSynergy(syn) : null;
+      if (synEv) this._awardGold(synEv, 'A new pairing — the Curator adds GOLD to your ledger.');
+    }
     if (victory) { this.save.stats.victories += 1; this.save.flags.heronDefeated = true; }
     else this.save.stats.deaths += 1;
     this.save.stats.treasures += 0; // reserved for future content
@@ -2546,6 +2586,19 @@ _drawAtelier(ctx) {
           SaveSys.save(this.save);
         }
       }
+
+  // G1 (v1.3 M15): award meta gold for a single first-time event. The pure
+  // goldEarn (logic.js) is the single source of the amount + the idempotency
+  // latch (each event fires exactly once ever). A 0 award is a no-op (no
+  // re-save, no banner) so repeat calls / unmet milestones are silent.
+  _awardGold(event, label) {
+    const amt = goldEarn(this.save, { key: event.key, amount: event.amount });
+    if (amt <= 0) return 0;
+    this.sfx('pickup');
+    this.addBanner(label, 3.4, this.ch * 0.30);
+    SaveSys.save(this.save);
+    return amt;
+  }
 
   // ---------------- heron rendering (world space) ------------------------
   _drawHeron(ctx, h, now) {

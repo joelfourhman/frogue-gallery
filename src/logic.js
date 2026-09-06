@@ -345,6 +345,88 @@ export function applyModifier(t, id) {
 }
 
 // ----------------------------------------------------------------
+// G1 (v1.3 M15): Gold — a NEW META-ONLY currency.
+//
+// Gold is earned ONLY from first-time meta achievements (the "milestones" of a
+// longer career): the first kill of each boss type, the first completion of
+// each painting-synergy duo, and an orb milestone (first 100 orbs in a run).
+// It is deliberately META-ONLY:
+//   · it is NOT a 4th paint color (the 3-hue red/blue/green pillar is untouched),
+//   · it does NOT feed makeTuning / combat tuning (no balance impact), and
+//   · it is banked once (idempotent per event) and spent later (G2 onward).
+//
+// The earn RULE is pure + headless-testable: `goldEarn(save, event)` inspects
+// `save.goldEarned` (a {key:true} map) and, for an event not yet fired, adds the
+// amount to `save.gold` and latches the key so it never fires twice. Legacy
+// saves (no gold fields) migrate forward as gold 0 / empty goldEarned.
+//
+// Amounts (documented in PROJECT_STATE.md; tuned so a career that reaches NG+
+// — first-time gray-heron kill + NG+ green-heron kill + the synergy duos + the
+// orb milestone — banks enough to clear BOTH G2 gold paintings (25 + 40 = 65)):
+//   first kill of the Great Gray Heron ......... 15
+//   first kill of the Great Green Heron (NG+) .. 20
+//   first completion of each synergy duo ........ 8  (3 duos -> 24)
+//   first 100 orbs in a single run .............. 8
+//   ----------------------------------------------
+//   max gold a career can bank .................. 67
+export const GOLD = {
+  boss: { gray: 15, green: 20 },
+  synergyDuo: 8,
+  orbMilestone: { at: 100, amount: 8 },
+};
+
+// Build the gold event for the FIRST kill of a heron boss type (`kind` =
+// 'gray' | 'green'). Returns null for an unknown kind (no event, no gold).
+export function goldEventBoss(kind) {
+  const amount = GOLD.boss && GOLD.boss[kind];
+  if (!amount) return null;
+  return { key: `boss:${kind}`, amount };
+}
+
+// Build the gold event for the FIRST completion of a painting-synergy DUO.
+// `synergy` is the object from activeSynergy/loadout (carries `pair: [a,b]`).
+// The stable key is the sorted pair key (a|b) so each distinct duo latches once.
+export function goldEventSynergy(synergy) {
+  if (!synergy || !Array.isArray(synergy.pair) || synergy.pair.length < 2) return null;
+  return { key: `synergy:${_pairKey(synergy.pair[0], synergy.pair[1])}`, amount: GOLD.synergyDuo };
+}
+
+// Build the gold event for the ORB MILESTONE (first time a run's orb count
+// reaches GOLD.orbMilestone.at). runOrbs is the run's cumulative orb count.
+export function goldEventOrbs(runOrbs) {
+  const at = GOLD.orbMilestone.at;
+  if (!(runOrbs >= at)) return null;
+  return { key: `orbs:${at}`, amount: GOLD.orbMilestone.amount };
+}
+
+// The CORE gold earn rule (pure). `event` = { key, amount }. Returns the amount
+// just banked (0 if the key already fired, the amount is invalid, or there is no
+// save). Idempotent per event key via save.goldEarned; the save is mutated in
+// place (the caller persists it).
+export function goldEarn(save, event) {
+  if (!save || !event) return 0;
+  const key = typeof event.key === 'string' && event.key ? event.key : null;
+  const amount = Math.floor(Number(event.amount));
+  if (!key || !Number.isFinite(amount) || amount <= 0) return 0;
+  if (!isPlainObj(save.goldEarned)) save.goldEarned = {};
+  if (save.goldEarned[key]) return 0; // already banked — fires exactly once
+  if (!Number.isFinite(Number(save.gold))) save.gold = 0;
+  save.gold = Math.floor(Number(save.gold)) + amount;
+  save.goldEarned[key] = true;
+  return amount;
+}
+
+// The total gold a career could ever bank (sum of every event amount, once).
+// Pure + handy for tests/docs (should be >= the G2 gold-painting prices).
+export function goldTotal() {
+  let total = 0;
+  for (const kind of Object.keys(GOLD.boss)) total += GOLD.boss[kind];
+  total += Object.keys(SYNERGIES).length * GOLD.synergyDuo;
+  total += GOLD.orbMilestone.amount;
+  return total;
+}
+
+// ----------------------------------------------------------------
 // N3 (v1.3 M14): The Great Green Heron — the New Game+ final boss.
 //
 // A *second* final boss that appears on NG+ cycles (ngCycle >= 1) INSTEAD of the
@@ -858,7 +940,7 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // version, written into every save and read back on load. Legacy saves stored
 // it under the field `v`; migrateSave() accepts both and re-stamps to the
 // current version.
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
@@ -881,6 +963,11 @@ export const SAVE_VERSION = 5;
 // "no modifier"). A v4 save (no such field) migrates forward with the modifier
 // defaulted to null (no modifier), so old NG+ saves keep loading unchanged and
 // run their cycle with no modifier.
+// G1 (v1.3 M15): v6 adds `save.gold` (counter, META-ONLY — never touches
+// combat tuning) and `save.goldEarned` ({[key]: true} map, idempotency latch
+// so each first-time gold event fires exactly once). A v5 save (no such
+// fields) migrates forward with gold defaulted to 0 and goldEarned to {}, so
+// old saves keep loading unchanged and start with no gold / no latches.
 const SAVE_MIGRATIONS = [
   {
     from: 1, to: 2,
@@ -898,6 +985,15 @@ const SAVE_MIGRATIONS = [
     from: 4, to: 5,
     fn: (out) => { out.ngModifier = normalizeNGModifier(out.ngModifier); },
   },
+  {
+    from: 5, to: 6,
+    fn: (out) => {
+      // G1 (v1.3 M15): gold counter + idempotency map. A legacy v5 save
+      // (no such fields) migrates forward with gold 0 / empty map.
+      out.gold = Math.max(0, Math.floor(Number(out.gold) || 0));
+      out.goldEarned = normalizeGoldEarned(out.goldEarned);
+    },
+  },
 ];
 
 // N1 (v1.3 M14): normalize the New Game+ cycle index — a non-negative integer
@@ -914,6 +1010,18 @@ function normalizeNGCycle(v) {
 // load. Pure.
 function normalizeNGModifier(v) {
   return typeof v === 'string' && MODIFIERS[v] ? v : null;
+}
+
+// G1 (v1.3 M15): normalize the gold idempotency map to a clean
+// `{[key]: true}` object. A non-object (legacy/garbled) field normalizes to
+// `{}`; any string key that is truthy is carried as `true`. Pure — testable
+// headless. (Keys are internal to the gold system, so no fixed whitelist is
+// required; this just guarantees the shape survives a round-trip.)
+function normalizeGoldEarned(raw) {
+  const out = {};
+  if (!isPlainObj(raw)) return out;
+  for (const k of Object.keys(raw)) if (typeof k === 'string' && raw[k]) out[k] = true;
+  return out;
 }
 
 // N1 (v1.3 M14): a save has earned the New Game+ unlock when at least one
@@ -938,6 +1046,8 @@ export function freshSave() {
     tutorialDrills: { burn: false, freeze: false, root: false, awaken: false }, // T1/T3 (v1.2 M13)
     ngCycle: 0,           // N1 (v1.3 M14): New Game+ cycle index (0 = first-time player, no NG+ UI)
     ngModifier: null,     // N4 (v1.3 M14): chosen expedition modifier for the NG+ cycle (MODIFIERS id or null)
+    gold: 0,              // G1 (v1.3 M15): meta gold currency (META-ONLY — never touches combat tuning)
+    goldEarned: {},       // G1 (v1.3 M15): {[key]: true} — the gold events already paid out (idempotency latch)
   };
 }
 
@@ -1027,7 +1137,7 @@ export function retrainAllowed(save) {
 //                (string/number/array/null); fresh save, nothing preserved
 // (The unparseable-JSON and missing-key cases are handled one level up in
 // SaveSys.load(), which returns null so the caller starts a fresh game.)
-const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier'];
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned'];
 
 function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
 
@@ -1075,6 +1185,11 @@ export function migrateSave(raw) {
   // for a legacy v4 save with no field, the real id for a v5 save). The
   // v4->v5 migration step re-normalizes defensively on the way up.
   out.ngModifier = normalizeNGModifier(raw.ngModifier);
+  // G1 (v1.3 M15): carry the meta gold counter + idempotency map forward (0 / {}
+  // for a legacy v5 save with no fields; a real value for a v6 save). The
+  // v5->v6 migration step re-normalizes defensively on the way up.
+  out.gold = Math.max(0, Math.floor(Number(raw.gold) || 0));
+  out.goldEarned = normalizeGoldEarned(raw.goldEarned);
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks
