@@ -3646,5 +3646,73 @@ console.log('== stage 58: v1.4 J1 — wet paint that lingers (capped short-lived
   assert(jctx.count() === 0, `J1: drawWet() draws nothing once the pool is empty (${jctx.count()} calls)`);
 }
 
+// ======================================================================
+// stage 59 — v1.4 Module J, J2: hit-stop + shake escalation + boss-defeat slow-mo
+// A single `timeScale` (default 1) scales the WORLD sim (world/particles/
+// enemies/player/runT) only — never UI or input. Small hits dip it briefly
+// (60–90ms @ ~0.3×); the heron defeat dips ~0.8s @ 0.35× + a white flash +
+// a shake spike. ALL of it is gated by options.shake — with shake OFF,
+// timeScale never moves (the game runs at normal speed). Because runT
+// advances with the sim, a full run's measured runT is invariant to
+// hit-stops: a dip only stretches REAL wall-clock, never the pacing the
+// probes measure.
+console.log('== stage 59: v1.4 J2 — hit-stop + shake escalation + boss-defeat slow-mo ==');
+{
+  const { spawnEnemy } = await import('../src/enemies.js');
+  const g2 = new Game(makeCanvas());
+  g2.start(); g2._beginExpedition();
+  const p2 = g2.player; p2.alive = true; p2.hp = 99; p2.iframes = 999; p2.x = 260; p2.y = 750;
+  g2.options.shake = true; // the J2 gate is ON for the positive assertions
+  assert(g2.timeScale === 1, `J2: timeScale defaults to 1 (no hit-stop yet) (${g2.timeScale})`);
+
+  // ---- small hit: killing an enemy pops a short hit-stop (dip <0.5) ----
+  g2.timeScale = 1; g2._hitstopT = 0;
+  const beet = spawnEnemy('beetle', 300, 750, g2.tuning); // ~40px ahead, in aim
+  beet.hp = 1; beet.status = null;                          // one swipe kills it
+  g2.enemies.push(beet);
+  p2.aimA = 0; p2.pigment = 'red';
+  g2.paint.trySwipe(g2.enemies);                             // real swipe -> fan hit
+  frames(1);                                                // _updateExpedition sees e.dead -> _onEnemyDead -> hitStop
+  assert(beet.dead, `J2: the scripted swipe killed the beetle (dead=${beet.dead})`);
+  const dip = g2.timeScale;
+  assert(dip < 0.5, `J2: a kill pops a hit-stop — timeScale dipped <0.5 (dip=${dip.toFixed(2)})`);
+  // the hit-stop must recover to 1 within ~1s of REAL time (~60 frames)
+  let recovered = false;
+  for (let f = 0; f < 70; f++) { frames(1); if (g2.timeScale === 1) { recovered = true; break; } }
+  assert(recovered && g2.timeScale === 1, `J2: the small-hit hit-stop recovers to 1 within 1s (timeScale=${g2.timeScale})`);
+
+  // ---- big moment: heron defeat -> ~0.8s slow-mo + white flash + shake spike ----
+  g2.heron._intro = 0; g2.heron.hp = 0;                       // painted to death
+  g2.heron.awakened = false; g2.heron.pinned = 0;
+  const shakeBefore = g2.shake;
+  frames(1);                                                 // bossStep emits 'defeated' -> _onHeronDefeated
+  const slowDip = g2.timeScale;
+  assert(slowDip < 0.5 && slowDip >= 0.3, `J2: heron defeat triggers the slow-mo window @ ~0.35× (timeScale=${slowDip.toFixed(2)})`);
+  assert(g2._whiteFlash > 0.5, `J2: the defeat fires a white flash (flash=${g2._whiteFlash.toFixed(2)})`);
+  assert(g2.shake > shakeBefore, `J2: the defeat spikes the screen shake (${shakeBefore.toFixed(1)} -> ${g2.shake.toFixed(1)})`);
+  // the slow-mo window is ~0.8s of REAL time; it must recover to 1 within ~1.5s
+  let recov2 = false;
+  for (let f = 0; f < 100; f++) { frames(1); if (g2.timeScale === 1) { recov2 = true; break; } }
+  assert(recov2 && g2.timeScale === 1, `J2: the boss-defeat slow-mo recovers to 1 (timeScale=${g2.timeScale})`);
+  // the white flash decays back to 0 (fast)
+  for (let f = 0; f < 40; f++) frames(1);
+  assert(g2._whiteFlash <= 0, `J2: the white flash decays back to 0 (flash=${g2._whiteFlash.toFixed(3)})`);
+
+  // ---- gating: with options.shake OFF, timeScale NEVER moves ----
+  g2.options.shake = false;
+  g2.timeScale = 1; g2._hitstopT = 0; g2._whiteFlash = 0;
+  g2.hitStop(0.8, 0.35); g2.whiteFlash(); g2.freezePreHit();
+  assert(g2.timeScale === 1, `J2: with shake OFF, hitStop() is a no-op (timeScale=${g2.timeScale})`);
+  assert(g2._whiteFlash === 0, `J2: with shake OFF, whiteFlash() is a no-op (flash=${g2._whiteFlash})`);
+  assert(g2._freezeFrames === 0, `J2: with shake OFF, freezePreHit() is a no-op (freeze=${g2._freezeFrames})`);
+
+  // ---- the 1-frame pre-hit freeze engages when shake is ON, then self-clears ----
+  g2.options.shake = true;
+  g2.freezePreHit();
+  assert(g2._freezeFrames === 1, `J2: with shake ON, freezePreHit() arms a 1-frame freeze (freeze=${g2._freezeFrames})`);
+  frames(1);   // the frame consumes the latch -> simDt=0 for one frame, then restores
+  assert(g2._freezeFrames === 0, `J2: the pre-hit freeze self-clears after one frame (freeze=${g2._freezeFrames})`);
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

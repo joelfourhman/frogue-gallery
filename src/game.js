@@ -241,6 +241,15 @@ export class Game {
     this.zoom = 1;
     this.zoomTarget = 1;
     this.shake = 0;
+    // J2 (v1.4): game-feel time control. `timeScale` scales the WORLD sim
+    // (world/particles/enemies/player/runT) only — never UI, banners, shake,
+    // or input. A hit-stop dips it briefly; it always recovers to 1. All of
+    // J2's juice (slow-mo, white flash) is gated by options.shake.
+    this.timeScale = 1;
+    this._hitstopT = 0;       // remaining real seconds of the current dip
+    this._hitstopScale = 1;   // the scale held during the dip
+    this._whiteFlash = 0;     // boss-defeat white flash (0..1, fast decay)
+    this._freezeFrames = 0;   // 1-frame pre-hit freeze (lunge connect)
 
     // ---------- state machine ----------
     this.state = 'title';       // 'title' | 'expedition' | 'end'
@@ -322,6 +331,26 @@ export class Game {
   }
   addShake(n) { this.shake = Math.max(this.shake, n); }
 
+  // J2 (v1.4): a brief hit-stop. Holds timeScale at `scale` for `secs` of REAL
+  // time (the frame loop restores it to 1 when the timer expires). Gated by
+  // options.shake — with shake OFF, timeScale is never touched (the game runs
+  // at normal speed). `scale` < 1 (a dip, never >1): a small hit dips to ~0.3
+  // for 60–90 ms; the heron defeat dips to ~0.35 for ~0.8 s.
+  hitStop(secs, scale) {
+    if (!this.options.shake) return;
+    if (scale >= 1) return;
+    this._hitstopT = Math.max(this._hitstopT, secs);
+    this._hitstopScale = Math.min(this._hitstopScale, scale);
+    if (this._hitstopT > 0) this.timeScale = this._hitstopScale;
+  }
+
+  // J2 (v1.4): the boss-defeat white flash (render-only, decays in _frame).
+  whiteFlash() { if (this.options.shake) this._whiteFlash = 1; }
+
+  // J2 (v1.4): a 1-frame pre-hit freeze — the world sim holds for one frame
+  // when the boss lunge connects (a tiny impact hitch). No-op when shake OFF.
+  freezePreHit() { if (this.options.shake) this._freezeFrames = 1; }
+
   // Camera -> view. view.x/y = world coords of the screen's top-left corner
   // (world.js draw methods self-transform around it).
   _view() {
@@ -347,10 +376,34 @@ export class Game {
     this.now = t / 1000;
     this.shake *= Math.exp(-5.5 * dt);
     this.zoom = approach(this.zoom, this.zoomTarget, 10, dt);
+    // J2 (v1.4): advance/expire the hit-stop on REAL time (never sim time).
+    // While a dip is active, timeScale holds at the dip scale; otherwise it is
+    // always back to 1. This is the single timeScale knob — it can never get
+    // stuck below 1 because _hitstopT is finite and decremented every frame.
+    if (this._hitstopT > 0) {
+      this._hitstopT -= dt;
+      this.timeScale = this._hitstopT > 0 ? this._hitstopScale : 1;
+    } else if (this.timeScale !== 1) {
+      this.timeScale = 1;
+    }
+    // J2: the boss-defeat white flash decays fast (real-time presentation).
+    if (this._whiteFlash > 0) this._whiteFlash = Math.max(0, this._whiteFlash - dt * 3.2);
+
+    // J2 (v1.4): the WORLD simulation (world, particles, enemies, player, and
+    // the runT clock) advances at dt * timeScale. UI (banners, shake, zoom,
+    // menus) and input keep raw dt. Because runT advances with the sim, a full
+    // run's measured runT is invariant to hit-stops — a dip only stretches
+    // real wall-clock, never the pacing the probes measure.
+    // J2 (v1.4): a 1-frame pre-hit freeze (boss lunge connect) holds the whole
+    // WORLD sim (world + particles + expedition) for one frame while the UI
+    // keeps ticking — a tiny impact hitch. It only stretches real time, never
+    // the measured runT.
+    let simDt = this.state === 'expedition' ? dt * this.timeScale : dt;
+    if (this._freezeFrames > 0) { this._freezeFrames = 0; simDt = 0; }
 
     // ambient systems always tick (title backdrop stays alive)
-    this.world.update(dt);
-    this.particles.update(dt);
+    this.world.update(simDt);
+    this.particles.update(simDt);
     for (let i = this.banners.length - 1; i >= 0; i--) {
       const b = this.banners[i];
       b.t -= dt;
@@ -384,10 +437,13 @@ export class Game {
         if (this.dieT > 1.6) this._endRun('defeat');
       } else if (this.heron && this.heron.flying > 0) {
         // post-victory: the run is over — let the flight play out
-        // (world/particles already ticked by the ambient block above)
-        this._stepHeronFlight(dt);
+        // (world/particles already ticked by the ambient block above).
+        // J2: routed through simDt so the ~0.8s defeat slow-mo visibly stretches
+        // the heron's bloom. runT is frozen here (no _updateExpedition), so this
+        // never affects the measured run length.
+        this._stepHeronFlight(simDt);
       } else if (!this.paused && !this.help) {
-        this._updateExpedition(dt);
+        this._updateExpedition(simDt);
       } else if (this.help) {
         // M8 P6: the "?" field guide owns input while open (the run is frozen).
         if (this.input.pressed('h') || this.input.pressed('escape') || this.input.pressed('?')) {
@@ -2483,6 +2539,9 @@ _drawAtelier(ctx) {
         if (this.stock[o.color] < this.tuning.capacity) {
           this.stock[o.color] += v;
           this.sfx(boosted ? 'pickup-streak' : 'pickup');
+          // J2 (v1.4): a short hit-stop pop on a pigment pickup (the streak
+          // bonus gets a slightly longer one). Gated by options.shake.
+          this.hitStop(boosted ? 0.07 : 0.05, 0.35);
           this.particles.sparkles(o.x, o.y, PIGMENTS[o.color].light, 4);
           this.paint.note(o.x, o.y - 10, '+' + v.toFixed(boosted ? 1 : 0) + (boosted ? ' ×' + mult.toFixed(2) : ''), o.color);
           if (!this.save.flags.firstOrb) {
@@ -2500,6 +2559,9 @@ _drawAtelier(ctx) {
   _onEnemyDead(e) {
     this.score += e.score;
     this.sfx('enemy-die');
+    // J2 (v1.4): a small hit-stop pop on a kill (60–90 ms @ ~0.3×). Gated by
+    // options.shake (hitStop is a no-op when shake is OFF).
+    this.hitStop(0.08, 0.3);
     this.particles.splatter(e.x, e.y, INK, 10, 160);
     this.particles.splatter(e.x, e.y, PIGMENTS[ORB_COLORS[(Math.random() * 3) | 0]].color, 4, 120);
     // pigment orbs
@@ -2639,6 +2701,7 @@ _drawAtelier(ctx) {
         this.addBanner('The Gray Storm! The Heron rages!', 3, 240);
       } else if (name === 'lunge-start') {
         this.sfx('boss-growl');
+        h._lungeArmed = true;   // J2: telegraph is now live — arm the pre-hit freeze
       } else if (name === 'defeated') {
         this._onHeronDefeated();
       }
@@ -2647,6 +2710,17 @@ _drawAtelier(ctx) {
     // ongoing contact hazards (none while airborne, awakened, or dead)
     const airborne = (h.diveH || 0) > 50;
     if (h.hp > 0 && !airborne && !h.awakened && p.alive) {
+      // J2 (v1.4): 1-frame pre-hit freeze at the lunge connect. The 'lunge-start'
+      // telegraph arms the latch the frame the heron ENTERS the striking lunge;
+      // this consumes it once, holding the world sim for one frame (a tiny impact
+      // hitch so the lunge lands deliberately). Gated by options.shake
+      // (freezePreHit is a no-op when shake is OFF).
+      if (h.state === 'storm-lunge' && h._lungeArmed) {
+        this.freezePreHit();
+        h._lungeArmed = false;
+      } else if (h.state !== 'storm-lunge') {
+        h._lungeArmed = false;
+      }
       if (h.state === 'scoop') this._hitPlayerFromHeron(78, 9, h.scoopX, h.y - 30);
             if (h.state === 'sweep') this._hitPlayerFromHeron(150, 8, h.x + (h.sweepSide || -1) * 85, h.y - 110);
             if (h.state === 'storm-lunge') this._hitPlayerFromHeron(95, 9, h.x, h.y - 100);
@@ -2771,6 +2845,13 @@ _drawAtelier(ctx) {
     SaveSys.save(this.save);
     this.sfx('awaken');
         this.addShake(16);
+        // J2 (v1.4): the big moment — ~0.8 s of slow-mo (~0.35×) + a white
+        // flash frame + a shake spike. All gated by options.shake (hitStop /
+        // whiteFlash are no-ops when shake is OFF), so this is pure presentation
+        // and never changes the measured pacing.
+        this.hitStop(0.8, 0.35);
+        this.whiteFlash();
+        this.addShake(22);
         // N3 (v1.3 M14): the defeat line names whichever heron was painted — the
         // Great Gray Heron on a first-time run, the Great Green Heron on NG+.
         this.addBanner(h.green ? 'The Great Green Heron blooms and takes flight!' : 'The Great Gray Heron blooms and takes flight!', 4, 200);
@@ -3080,6 +3161,19 @@ _drawAtelier(ctx) {
     // on top of every screen. Pure presentation — no gameplay, no persistence
     // beyond the options toggle; skipped entirely when the option is off.
     this._drawGrain(ctx);
+
+    // J2 (v1.4): the boss-defeat white flash — a brief screen-wide white wash
+    // that peaks on the defeat frame and fades over ~0.3s. Pure presentation
+    // (gated by options.shake via whiteFlash); drawn last so it washes over
+    // the heron's bloom at the moment of the big moment.
+    if (this._whiteFlash > 0 && this.state === 'expedition') {
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.9, this._whiteFlash);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, this.cw, this.ch);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // C3 (v1.3 M16): build (once) + draw the procedural paper-grain overlay.

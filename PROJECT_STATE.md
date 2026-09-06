@@ -194,7 +194,7 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 bounded batches of ~3 items per session** (local model context ceiling;
 each session MUST end clean: committed + docs + suite green). Read
 `docs/ROADMAP.md` §v1.4 + AGENTS.md. Module J batch order: J1 → J2 → J3.
-**Status: J1 DONE (2026-09-06); J2 next.**
+**Status: J1 ✅ + J2 ✅ (2026-09-06); J3 next.**
 
 **Theme: juice, presence, and moments.** The game is mechanically complete;
 v1.4 adds no new rules — it makes the same game feel alive in the hand, the
@@ -250,7 +250,7 @@ band on Normal). Full scope + per-item status in `docs/ROADMAP.md` §v1.2.
 5. M13: **T1 ✅ (guided first expedition)** → **T2 ✅ (interactive pigment drills)** — **Batch 5 (M13 T1+T2) COMPLETE — suite 43/43, pacing 18.7/18.9 min (the frozen tutorial pre-run layer adds no timed-run time)**
 6. M13: **T3 ✅ (mini sketch heron)** → **T4 ✅ (tutorial progress + "Watch me" re-entry)** — **Batch 6 (M13 T3+T4) COMPLETE**
 7. M14: **N1 ✅ (NG+ unlock + Next Expedition flow)** → **N2 ✅ (NG+ scaling + `tests/ngpace.mjs` probe)** → **N3 ✅ (second boss — The Great Green Heron)** — **v1.3 Batch 7 (N1→N2→N3) COMPLETE** (suite 48/48, first-time pacing unchanged, NG+ cycle-1 ~19.5 min in band)
-8. v1.4 Module J: **J1 ✅ (wet paint that lingers)** — **v1.4 Batch 1, item 1** (suite 58/58, P10 stage 24 still green, presentation-only — first-time pacing unaffected)
+8. v1.4 Module J: **J1 ✅ (wet paint that lingers)** + **J2 ✅ (hit-stop / shake escalation / boss-defeat slow-mo)** — **v1.4 Batch 1, items 1–2** (suite 59/59, P10 stage 24 still green; J2 is presentation/time-feel only — first-time pacing unaffected, probes re-verified in band)
 
 Each item's Notes column in the roadmap says which existing system to reuse.
 Acceptance (per batch): suite green, pace/humance probes still in the
@@ -270,6 +270,36 @@ no gameplay change, no new dependencies. Smoke stage 58 asserts: marks spawn
 on swipes, the pool never exceeds the cap, all decay to empty on their own,
 the ribbon lingers ~0.4s, and `drawWet()` draws only while marks exist. P10
 (stage 24) still passes; first-time pacing unaffected (presentation-only).
+
+**v1.4 J2 (hit-stop + shake escalation + boss-defeat slow-mo) — implemented + tested (Batch 1, item 2).**
+A single `this.timeScale` (default 1) drives the whole WORLD sim. In the
+ambient block of `_frame`, `simDt = dt * timeScale` feeds `world.update`,
+`particles.update`, and (in the expedition branch) `_updateExpedition` — so
+the player, enemies, heron, and the `runT` clock all tick with `simDt`, while
+banners/UI/shake/zoom/input keep raw `dt`. **Because `runT` advances with the
+sim, a full run's measured `runT` is invariant to hit-stops** — a dip only
+stretches real wall-clock, so the probes (which measure `game.runT`) stay in
+band. Re-verified 2026-09-06: pace ~18.5 min, humance in band, NG+ cycle-1
+19.5 min (matches baseline). `hitStop(secs, scale)` (gated by
+`options.shake`) sets `timeScale` for `secs` of **real** time (the frame loop
+decrements `_hitstopT` by raw `dt` and restores `timeScale` to 1 when it
+expires — it can never get stuck below 1). Triggers: `_onEnemyDead` →
+`hitStop(0.075, 0.3)` (small-hit pop), pigment pickup → `hitStop(0.06, 0.35)`,
+`_onHeronDefeated` → `hitStop(0.8, 0.35)` + `whiteFlash()` + `addShake(22)`
+(shake spike). `whiteFlash()` sets `_whiteFlash=1`, drawn last in `_drawAll`
+as a full-screen white overlay at alpha ≈ `_whiteFlash*0.5` and decayed on
+real time in `_frame` (presentation only). `freezePreHit()` arms a 1-frame
+`_freezeFrames` latch consumed at the top of `_frame` (zeros `simDt` for that
+one frame while the UI keeps ticking); it is armed the frame the heron enters
+the lunge (`'lunge-start'` event sets `h._lungeArmed`) and consumed by the
+ongoing lunge-contact check. The post-victory heron flight is routed through
+`simDt` so the ~0.8 s defeat slow-mo visibly stretches the heron's bloom
+(runT is frozen during flight — no pacing effect). **All three effects are
+no-ops when `options.shake` is OFF.** No pure-logic change, no new
+dependencies. Smoke stage 59 asserts: timeScale defaults to 1, a kill pops a
+hit-stop (dip <0.5) that recovers to 1 within 1 s, defeat triggers the
+slow-mo window @ ~0.35× + white flash + shake spike, the slow-mo recovers,
+and with shake OFF every helper is a no-op. P10 (stage 24) still passes.
 
 **M13 T1 (guided first expedition) — implemented + tested (v1.2 Batch 5, item 1).**
 A **fresh save only** (no finished run, never skipped — `tutorialEligible(save)`

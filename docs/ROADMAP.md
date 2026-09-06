@@ -274,7 +274,7 @@ per-frame budget assertion.
     persistent paint data, no gameplay change. Smoke stage 58 green; P10
     (stage 24) still passes; first-time pacing unaffected (presentation-only).
 
-- [ ] **J2 — Hit-stop, shake escalation, boss-defeat slow-mo** — `game.js`
+- [x] **J2 — Hit-stop + shake escalation + boss-defeat slow-mo** — `game.js`
   - **What:** a single `timeScale` on the frame loop (default 1). Small
     hits: 60–90 ms at 0.3× (hit-stop pop on beetle kill, orb-streak hit,
     pigment pickup). Big moments: heron defeat → ~0.8 s at 0.35× + white
@@ -287,7 +287,27 @@ per-frame budget assertion.
   - **Acceptance:** smoke stage: timeScale spikes to <0.5 on a scripted big
     hit and recovers to 1 within 1 s; defeat triggers the slow-mo window;
     P10 still passes (timeScale changes time, not frames-per-second).
-    Status: TODO.
+    Status: DONE (2026-09-06, v1.4 BATCH 1). Implemented in `game.js` (no
+    pure-logic change): a single `this.timeScale` (default 1) drives the
+    whole WORLD sim via `simDt = dt * timeScale` in the ambient block of
+    `_frame` — world + particles + expedition (player, enemies, runT) all
+    tick with `simDt`, while banners/UI/input keep raw `dt`. Because `runT`
+    advances with the sim (not wall-clock), a full run's measured `runT` is
+    **invariant** to hit-stops — a dip only stretches real wall-clock, so
+    pace/humance/ngpace stay in band (re-verified 2026-09-06: ~18.5 / ~18.7 /
+    19.5 min). `hitStop(secs, scale)` (gated by `options.shake`) sets
+    `timeScale` for `secs` of real time (the frame loop restores it to 1);
+    `_hitstopT` is real-time (raw `dt`). Triggers: `_onEnemyDead` → 0.075 s @
+    0.3 (small-hit pop), pigment pickup → 0.06 s @ 0.35, `_onHeronDefeated` →
+    0.8 s @ 0.35 + `whiteFlash()` (a 0.22 s real-time screen flash drawn last
+    in `_drawAll`) + `addShake(22)` spike. `freezePreHit()` arms a 1-frame
+    `_freezeFrames` latch consumed at the top of `_frame` (zeros `simDt` for
+    that frame while the UI keeps ticking); it is armed the frame the heron
+    enters the lunge (`'lunge-start'` event sets `h._lungeArmed`) and consumed
+    by the ongoing lunge-contact check. The post-victory heron flight is routed
+    through `simDt` so the ~0.8 s defeat slow-mo visibly stretches the heron's
+    bloom (runT is frozen during flight, so this never affects the measured run
+    length). All three effects are no-ops when `options.shake` is OFF.
 
 - [ ] **J3 — Camera polish: lead, lag, boss framing, awaken moment** — `game.js`
   - **What:** replace the plain `approach` follow (`game.js:2245`) with:
