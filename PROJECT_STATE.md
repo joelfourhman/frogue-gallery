@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 34 STAGES PASSED** (…stage 32 = v1.2 M9 A3 Curator's Ledger, stage 33 = v1.2 M9 A4 Rehung Frame gallery bonus, stage 34 = v1.2 M10 E1 Painted Heron mid-run set-piece). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **58s**, full-run **16.7 min** — in the 15–20 min band; the E1 mid-heron is **optional/non-blocking** (the frog walks past it; cross-swamp 58s unchanged), so it stays optional on Normal (not gated to Bold/Hard). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ — next E2 (weather/tide phases) / M10.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 35 STAGES PASSED** (…stage 32 = v1.2 M9 A3 Curator's Ledger, stage 33 = v1.2 M9 A4 Rehung Frame gallery bonus, stage 34 = v1.2 M10 E1 Painted Heron mid-run set-piece, stage 35 = v1.2 M10 E2 weather/tide phases). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.6 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **55s**, heron **125s**, full-run **18.8 min** — in the 15–20 min band (E1 mid-heron is non-blocking; E2 weather phases are informational buffs). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ — next E3 (Bold hazards) / M10.**_
 
 ## Current Status
 
@@ -35,7 +35,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 34 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 35 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss) |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
@@ -130,7 +130,7 @@ accessibility deferred).
 
 **Batch order (one commit per item, docs + suite green per commit):**
 1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 ✅ (Curator's Ledger). **Batch 1 (A1–A3) COMPLETE.**
-2. M9: **A4 ✅ (Rehung Frame)** → M10: **E1 ✅ (Painted Heron)** → E2 (weather/tide)
+2. M9: **A4 ✅ (Rehung Frame)** → M10: **E1 ✅ (Painted Heron)** → **E2 ✅ (weather/tide phases)**. **Batch 2 (A4/E1/E2) COMPLETE — suite 35/35, pacing in band on Normal.**
 3. M10: E3 (Bold hazards) → E4 (orb streak) → M11: V1 (color-reveal bar)
 4. M11: V2 (heron bloom beat) → V3 (zone audio) → V4 (exhibition end-screen)
 5. M13: T1 (guided first expedition) → T2 (pigment drills)
@@ -183,6 +183,26 @@ Bold/Hard). Smoke stage 34: spawns on Normal (absent on Gentle), dormant-
 until-approach, awaken-need < final, phase cap, **damaged by wet paint**,
 **defeat clears it + scatters reward orbs + run continues (no victory)**.
 Suite green: 34/34.
+
+**M10 E2 (weather/tide phases) — implemented + tested (v1.2 Batch 2, item 3).**
+2 short ambient "phase" events per zone, chosen **deterministically from the
+run seed + zone index** (`weatherFor(seed, zoneIndex)` via `mulberry32`, ~60% of
+zones get one, the rest stay calm). Each is a transient, eased multiplier
+(0.8s ramp-in / 1.2s ramp-out) on the live `makeTuning` fields it targets:
+**Rain** (blue `splashRadius` +30% for 20s) and **Drought** (red `burnDps`
++40% for 15s). Pure logic in `logic.js` (`WEATHER_PHASES` table + `weatherFactor`
+eased factor + `weatherFor`); `logic.js` now imports `mulberry32` from
+`math.js` (no cycle — math.js imports nothing). `game.js` arms the phase on
+zone entry (`_zoneI` advance stores `weatherTriggerAt`), and `_updateWeather`
+fires it mid-zone (banner via the existing system), applies `base*factor` to
+the affected tuning fields each frame, and restores them **exactly** to the
+captured base on clean expiry. Non-punishing/informational — it never blocks
+or gates the run. Pacing re-verified on Normal: pace.mjs ~18.6 min,
+humance.mjs 18.8 min (in the 15–20 min band). Smoke stage 35: pool shape +
+durations, factor =1.0 at start/expiry and full mid, deterministic per
+(seed,zone), most-but-not-all zones fire, **a phase triggers mid-zone, mutates
+the active tuning (splashRadius 58→75.4 x1.3), and expires cleanly back to
+base (58===58)**. Suite green: 35/35.
 
 **M9 A3 (Curator's Ledger) — implemented + tested (v1.2 Batch 1, item 3).**
 A 4th atelier tab, "Curator's Ledger" (key `4`), lists all 8 paintings in a

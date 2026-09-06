@@ -1643,5 +1643,77 @@ console.log('== stage 34: v1.2 M10 E1 — the Painted Heron (mid-run half-heron)
   g35._onPlayerDead(); g35._endRun('defeat');
 }
 
+// stage 35 — v1.2 M10 E2: weather/tide phases (mid-zone ambient tuning buffs)
+// Deterministic-ish per run (seed + zone); announced via the banner system;
+// applied as a live, eased multiplier to the tuning for their duration, with a
+// short fade-out and a clean restore of the base values on expiry.
+console.log('== stage 35: v1.2 M10 E2 — weather/tide phases ==');
+{
+  const L = await import('../src/logic.js');
+
+  // --- the pool: only real, consumed tuning fields, modest, non-punishing ---
+  assert(L.WEATHER_PHASES.length >= 2, 'E2: at least two ambient phase events exist');
+  const seenFields = new Set();
+  for (const ph of L.WEATHER_PHASES) {
+    assert(typeof ph.name === 'string' && typeof ph.desc === 'string', 'E2: each phase has a name + banner text');
+    assert(ph.duration > 0 && ph.mult > 1, `E2: "${ph.name}" is a short buff (${ph.duration}s, x${ph.mult})`);
+    for (const f of ph.fields) {
+      seenFields.add(f);
+      const t = L.makeTuning();
+      assert(typeof t[f] === 'number', `E2: "${ph.name}" targets a real tuning field (${f})`);
+    }
+  }
+  assert(seenFields.has('splashRadius') || seenFields.has('burnDps'), 'E2: the pool includes the rain/drought-style effects');
+
+  // --- the eased factor: 1.0 at the edges (no jump), full multiplier mid-phase ---
+  const rain = L.WEATHER_PHASES.find(p => p.fields.includes('splashRadius')) || L.WEATHER_PHASES[0];
+  assert(Math.abs(L.weatherFactor(rain, 0) - 1) < 1e-9, 'E2: factor is 1.0 before the phase (no jump-in)');
+  assert(Math.abs(L.weatherFactor(rain, rain.duration) - 1) < 1e-9, 'E2: factor is 1.0 at expiry (no jump-out)');
+  const midK = L.weatherFactor(rain, rain.duration / 2);
+  assert(midK > 1.1 && midK <= rain.mult + 1e-9, `E2: factor reaches the full multiplier mid-phase (${midK.toFixed(3)})`);
+
+  // --- deterministic-ish: same seed+zone -> same phase/time; different seeds vary ---
+  const w0 = L.weatherFor(987654321, 1);
+  const w0b = L.weatherFor(987654321, 1);
+  if (w0 && w0b) assert(w0.phase.id === w0b.phase.id && Math.abs(w0.atSec - w0b.atSec) < 1e-9, 'E2: weather is deterministic per (seed, zone)');
+  else assert(!w0 || !w0b, 'E2: weather is deterministic (both calm)');
+  let fired = 0;
+  for (let z = 0; z < 12; z++) if (L.weatherFor(424242, z)) fired++;
+  assert(fired >= 4 && fired < 12, `E2: most-but-not-all zones get a phase (fired ${fired}/12) — informational variety`);
+
+  // --- the REAL loop: a phase triggers mid-zone, mutates the live tuning, and
+  // expires cleanly (the base field returns to its pre-phase value). ---
+  const cv36 = makeCanvas();
+  const g36 = new Game(cv36);
+  g36.start();
+  fireKey('keydown', 'Enter'); frames(3);           // title -> expedition
+  const P36 = g36.player;
+  P36.alive = true; P36.hp = 99; P36.iframes = 999; // god-mode: we're testing the phase, not survival
+  const baseRadius = g36.tuning.splashRadius;
+  // force the rain phase to be pending and to fire on the very next frame
+  const rainPhase = L.WEATHER_PHASES.find(p => p.fields.includes('splashRadius'));
+  g36.weatherActive = null;
+  g36.weatherPending = { phase: rainPhase, atSec: 0 };
+  g36.weatherTriggerAt = g36.runT;                  // fire now
+  // one frame: it should activate + announce
+  game.input.keys.clear();
+  frames(2);
+  assert(g36.weatherActive && g36.weatherActive.phase.id === rainPhase.id, 'E2: the phase activates mid-zone');
+  assert(g36.banners.some(b => b.text.includes(rainPhase.name)), 'E2: the phase is announced with the banner system');
+  // step into the full-strength window (~mid phase)
+  g36.weatherActive.t = rainPhase.duration / 2;
+  frames(1);
+  assert(Math.abs(g36.tuning.splashRadius - baseRadius * rainPhase.mult) < 1e-6,
+    `E2: the phase mutates the active tuning (splash radius ${baseRadius} -> ${g36.tuning.splashRadius.toFixed(1)}, x${rainPhase.mult})`);
+  // run it to (and past) expiry and confirm it expires cleanly (base restored)
+  g36.weatherActive.t = rainPhase.duration + 0.1;
+  frames(1);
+  assert(g36.weatherActive === null, 'E2: the phase expires');
+  assert(Math.abs(g36.tuning.splashRadius - baseRadius) < 1e-6,
+    `E2: the tuning is restored to its base value on clean expiry (${g36.tuning.splashRadius} === ${baseRadius})`);
+  // cleanup: end the run cleanly
+  g36._onPlayerDead(); g36._endRun('defeat');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

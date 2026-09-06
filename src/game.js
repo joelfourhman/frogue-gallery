@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -185,6 +185,12 @@ export class Game {
     this.runT = 0;
     this.spawnT = 3;
     this.score = 0;
+    // E2 (v1.2 M10): weather/tide phases — a pending phase for the current zone
+    // and the active phase (with live base tuning cached for clean expiry).
+    this.weatherPending = null;   // { phase, atSec } for the zone we're in
+    this.weatherActive = null;    // { phase, t, dur, base: {field:val,...} }
+    this.weatherZoneI = -1;       // the zone index the pending phase belongs to
+    this.weatherTriggerAt = 0;    // absolute runT at which the pending phase fires
     this.stock = { red: 0, blue: 0, green: 0 };
     this.collected = { red: 0, blue: 0, green: 0 };
     this.dying = false;
@@ -1068,6 +1074,7 @@ _drawAtelier(ctx) {
   _beginExpedition() {
     // fresh world each run (title keeps drifting over whatever is left)
     const seed = (Math.random() * 2 ** 31) | 0;
+    this.runSeed = seed; // E2: weather phases derive deterministically from this
     this.world = new World(mulberry32(seed), seed % 99991);
     this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0);
     this.player = new Player(PLAYER_START_X, PLAYER_START_Y, this.tuning);
@@ -1105,6 +1112,11 @@ _drawAtelier(ctx) {
     this.spawnT = 3.5;
     this._zoneI = 0;
     this._zoneTint = null; // M8 P12: { color, t, max } — fading zone-accent wash on entry
+    // E2 (v1.2 M10): fresh weather per run; the first zone's phase is armed below
+    this.weatherPending = null;
+    this.weatherActive = null;
+    this.weatherZoneI = -1;
+    this.weatherTriggerAt = 0;
     this.score = 0;
     this.stock = { red: 0, blue: 0, green: 0 };
     // A4 (v1.2 M9): the permanent 'Rehung Frame' gallery bonus grants +N pigment
@@ -1210,6 +1222,16 @@ _drawAtelier(ctx) {
         this._zoneBeat(z);
       }
     }
+    // E2 (v1.2 M10): arm this zone's weather/tide phase once we've entered it.
+    // `_zoneI` now indexes the zone we're standing in; the phase is derived
+    // deterministically from the run seed + zone index and fires mid-zone (an
+    // absolute run-time, atSec seconds after entry).
+    if (p.alive && this.weatherZoneI !== this._zoneI) {
+      this.weatherZoneI = this._zoneI;
+      const wf = weatherFor(this.runSeed || 0, this._zoneI);
+      this.weatherPending = wf ? { phase: wf.phase, atSec: wf.atSec } : null;
+      if (wf) this.weatherTriggerAt = this.runT + wf.atSec;
+    }
 
     // ----- pigment switching (1-4) -----
     const PIGMENT_KEYS = ['1', '2', '3', '4'];
@@ -1222,6 +1244,9 @@ _drawAtelier(ctx) {
 
     p.update(dt, this.input, this.tuning, this.world, this._view());
     this.paint.update(dt);
+    // E2 (v1.2 M10): advance the zone's weather/tide phase (banner, live tuning
+    // multiplier, fade-out). Informational — it never blocks or punishes.
+    this._updateWeather(dt);
     // every stroke you paint gives the swamp a little color back (core fantasy)
     const restore = this.paint.restoreAcc;
     if (restore > 0) {
@@ -1384,6 +1409,37 @@ _drawAtelier(ctx) {
     this.particles.leafPuff(rx, ry - 40, '#9ed483', 3);
     for (let i = 0; i < 2; i++) {
       this.orbs.push({ x: rx + (Math.random() - 0.5) * 160, y: ry + (Math.random() - 0.5) * 120, color: ORB_COLORS[(Math.random() * 3) | 0], t: 0 });
+    }
+  }
+
+  // E2 (v1.2 M10): drive the current zone's weather/tide phase. It fires the
+  // pending phase mid-zone (announced via the banner system), applies a live
+  // multiplier to the tuning fields it affects (eased in/out so the effect
+  // never jumps), and restores them EXACTLY to their captured base on expiry.
+  // Informational — it never blocks the run or punishes the player.
+  _updateWeather(dt) {
+    const t = this.tuning;
+    if (!t) return;
+    // fire a pending phase once its mid-zone trigger time passes
+    if (!this.weatherActive && this.weatherPending && this.runT >= this.weatherTriggerAt) {
+      const ph = this.weatherPending.phase;
+      const base = {};
+      for (const f of ph.fields) base[f] = t[f];
+      this.weatherActive = { phase: ph, t: 0, dur: ph.duration, base };
+      this.sfx('ui');
+      this.addBanner(ph.desc, ph.duration * 0.45, 205);
+    }
+    // advance an active phase, applying the eased multiplier each frame
+    if (this.weatherActive) {
+      const w = this.weatherActive;
+      w.t += dt;
+      const k = weatherFactor(w.phase, w.t);
+      for (const f of w.phase.fields) t[f] = w.base[f] * k;
+      if (w.t >= w.dur) {
+        // clean expiry: restore every affected field to its captured base
+        for (const f of w.phase.fields) t[f] = w.base[f];
+        this.weatherActive = null;
+      }
     }
   }
 

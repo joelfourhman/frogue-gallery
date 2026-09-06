@@ -2,6 +2,8 @@
 // All tuning lives here so balance passes are one-file edits.
 'use strict';
 
+import { mulberry32 } from './math.js';
+
 // ---------------------------------------------------------------- pigments
 export const PIGMENTS = {
   red:   { id: 'red',   name: 'Crimson', color: '#c8452c', light: '#e8836b', dmgMult: 1.3,  status: 'burn'  },
@@ -383,6 +385,50 @@ export const MID_HERON = {
 // Pure: is the Painted Heron active for this difficulty? (Normal+)
 export function midHeronAllowed(difficulty) {
   return MID_HERON.difficulties.includes(difficulty);
+}
+
+// ----------------------------------------------------------------
+// E2 (v1.2 M10): weather / tide phases — short ambient "phase" events during a
+// zone that nudge the run's tuning for their duration (informational buffs,
+// non-punishing). Each phase multiplies one already-consumed tuning field (via
+// the same in-place `apply` shape as the synergy pairs) with a short fade-in /
+// fade-out. They are derived DETERMINISTIC-ISH from the run seed + zone index
+// (mulberry32), so the same run replays the same weather. Pure; game.js wires
+// the timer + banner + in-place multiplier application.
+export const WEATHER_PHASES = [
+  {
+    id: 'rain', name: 'Rain', tint: '#5a93c9',
+    desc: 'Rain — the blue brush sweeps wider (splash radius +30%)',
+    duration: 20, mult: 1.3, fields: ['splashRadius'],
+  },
+  {
+    id: 'drought', name: 'Drought', tint: '#c8862c',
+    desc: 'Drought — the red burn bites harder (burn damage +40%)',
+    duration: 15, mult: 1.4, fields: ['burnDps'],
+  },
+];
+// Eased factor to multiply the BASE field by at time `t` into the phase:
+// 1.0 (no effect) -> phase.mult (full) -> 1.0 (fully faded at expiry). The
+// multiplier ramps in over `rampIn` seconds and ramps out over `fade` seconds,
+// so the effect never jumps and always returns exactly to the base value.
+export function weatherFactor(phase, t, fade = 1.2, rampIn = 0.8) {
+  const span = phase.mult - 1; // amount of change between "no effect" and "full"
+  if (t <= 0) return 1;
+  if (t >= phase.duration) return 1;
+  if (t < rampIn) return 1 + span * (t / rampIn);
+  const outAt = phase.duration - fade;
+  if (t > outAt) return 1 + span * Math.max(0, (phase.duration - t) / fade);
+  return phase.mult;
+}
+// Deterministic-ish: which weather (if any) fires in a given zone of a given
+// run, and roughly when (mid-zone, in seconds). ~60% of zones get one.
+export function weatherFor(seed, zoneIndex) {
+  const s = (seed + zoneIndex * 7919 + 101) >>> 0;
+  const rng = mulberry32(s);
+  if (rng() > 0.6) return null;                       // many zones stay calm
+  const phase = WEATHER_PHASES[Math.floor(rng() * WEATHER_PHASES.length) % WEATHER_PHASES.length];
+  const atSec = 6 + rng() * 18;                       // mid-zone, after the entry beat
+  return { phase, atSec };
 }
 
 // ---------------------------------------------------------------- boss AI
