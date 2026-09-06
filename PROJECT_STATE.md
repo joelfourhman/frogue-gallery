@@ -122,6 +122,13 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 
 ## Immediate Next Action
 
+**v1.3 roadmap drafted — awaiting Joel's review/approval before any
+implementation.** The draft lives in `docs/ROADMAP.md` §"v1.3 — 'The Second
+Expedition' (DRAFT — pending Joel approval)": 12 items (N1–N4, G1–G4,
+C1–C4) all marked Status `DRAFT`. Do NOT implement anything in v1.3 until
+Joel approves (and optionally trims) the plan. The v1.2 status below remains
+accurate and complete.
+
 **v1.2 "The Collection" is COMPLETE** (2026-09-06) — all four milestones done:
 M9 (A1–A4) ✅, M10 (E1–E4) ✅, M11 (V1–V4) ✅, M13 (T1–T4) ✅. Full suite
 45/45; pacing `pace.mjs` ~18.7 min + `humance.mjs` ~18.8 min (in the 15–20 min

@@ -4,15 +4,18 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 Batch 1 A1–A3 done + A4 Rehung Frame done + E1 Painted Heron done + E2 weather/tide phases done + E3 Bold-only zone hazards done + E4 orb-streak bonus done + V1 color-reveal bar done + V2 heron awaken bloom done + V3 per-zone ambient audio done + V4 end-screen exhibition done + M13 T1 guided first expedition done + M13 T2 interactive pigment drills done + M13 T3 mini sketch heron done + M13 T4 tutorial progress + "Watch me" re-entry done; Batch 2/3/4/5/6 COMPLETE — **v1.2 COMPLETE**)**
+**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 Batch 1 A1–A3 done + A4 Rehung Frame done + E1 Painted Heron done + E2 weather/tide phases done + E3 Bold-only zone hazards done + E4 orb-streak bonus done + V1 color-reveal bar done + V2 heron awaken bloom done + V3 per-zone ambient audio done + V4 end-screen exhibition done + M13 T1 guided first expedition done + M13 T2 interactive pigment drills done + M13 T3 mini sketch heron done + M13 T4 tutorial progress + "Watch me" re-entry done; Batch 2/3/4/5/6 COMPLETE — **v1.2 COMPLETE**; v1.3 "The Second Expedition" roadmap DRAFTED, pending Joel approval)**
 
 ## Current state
 
 - Release DoD: **all 12 items satisfied** (final audit 2026-09-05).
 - **v1.1 COMPLETE**: M7 (B1–B6), M7.5 (PT1–PT5), M8 (P10/P12/P7/P8/P6/P9/P11).
-- **Active phase: v1.2 "The Collection"** (M9 Atelier/collection, M10
-  Expedition depth, M11 Presentation, M13 Tutorial; accessibility deferred).
-  Driven in bounded batches of ~3 items — see `PROJECT_STATE.md` →
+- **v1.2 "The Collection" COMPLETE** (2026-09-06): M9 Atelier/collection,
+  M10 Expedition depth, M11 Presentation, M13 Tutorial (accessibility
+  deferred). Batches 1–6 all done; suite 45/45; pacing 18.7/18.8 min.
+- **Active phase: v1.3 "The Second Expedition" — DRAFT, pending Joel
+  approval** (NG+ loop M14, gold meta economy M15, season wrap M16 — 12
+  DRAFT items in `docs/ROADMAP.md`; no implementation yet). Driven in bounded batches of ~3 items — see `PROJECT_STATE.md` →
   Immediate Next Action for the batch order. **Batch 1 (A1–A3) COMPLETE: A1 ✅
   (atelier one-liners), A2 ✅ (painting synergy pairs), A3 ✅ (Curator's Ledger).**
   **Batch 2 COMPLETE: A4 ✅ (Rehung Frame — permanent saved Gallery Bonus,

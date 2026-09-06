@@ -146,3 +146,83 @@ dependencies; loopback-only.
 - Procedural (infinite) expedition generation
 - Accessibility & input (deprioritized by Joel 2026-09-05): colorblind pigment
   glyphs, remappable paint keys, text-size toggle — revisit after v1.2
+
+---
+
+## v1.3 — "The Second Expedition" (DRAFT — pending Joel approval)
+
+**Theme.** v1.1 hardened the game; v1.2 deepened collection + feel. v1.3
+pushes the **experience loop itself**: what a player does *after* the first
+full clear. A designed New Game+ loop is the spine — the biggest parked
+deferred item, and the natural home for the rest of the season — the
+gold-pigment economy gives the meta a second resource and a goal between
+cycles, and a second heron plus expedition modifiers keep the 15–20 min
+expedition fresh.
+
+**Direction justification.** The loop today ends at victory; the meta
+(paintings, galleryBonus, ledger) has no second-act purpose. NG+ is the
+minimal change that gives the collection systems v1.2 built a reason to be
+expanded — and it lets us spend the parked deferred items (NG+, gold,
+presentation filter) in one coherent season instead of as random patches.
+Nothing here touches the Normal first-time run: all new content is gated
+behind a completed victory, so the pace/humance invariants (18.7–18.8 min)
+apply unchanged to a fresh save.
+
+**Invariants (unchanged):** zero dependencies, loopback-only, pure rules in
+`logic.js`, 15–20 min expedition (per applicable run), ≤ 220 particles, no
+per-frame hot-path allocations, smoke suite green after every commit, one
+conventional commit per item/chunk, save schema stays migrated (v3 → v4).
+
+### M14 — New Game+ as a designed loop
+
+| ID | Item | Notes | Status |
+|----|------|-------|--------|
+| N1 | NG+ unlock + "Next Expedition" flow | After the first victory, the victory screen offers "Next Expedition" (alongside the existing exhibition/retreat). Starts the next expedition with cycle = 1; `save.ngPlus = {cycle, bestGalleryBonus}` persisted (SAVE_VERSION 4 migration). NG+ expeditions reuse the existing expedition run end-to-end (zones, checkpoints, pacing). Acceptance: fresh save never shows NG+; post-victory button appears; cycle increments across sessions; smoke stage covers unlock + persistence. | DRAFT |
+| N2 | NG+ scaling in `logic.js` | Pure `ngPlusScaling(cycle)` (enemy HP, boss HP, damage-taken — the same three levers as difficulty P7, applied *on top of* the chosen difficulty). Tuned so a cycle-1 NG+ Normal run still lands 15–20 min (new `tests/ngpace.mjs` probe; cycle-1 target ≈ 17–19 min). First-time Normal run byte-identical (probe regression). Balance entry in PROJECT_STATE.md. Acceptance: pure function unit-tested in smoke; ngpace probe in range; `pace.mjs`/`humance.mjs` unchanged for a fresh save. | DRAFT |
+| N3 | Second boss — The Great Green Heron | Reuses the existing heron AI/phase machine with a new palette and one swapped mechanic (e.g. a Moss-Root counter-phase: painted reeds now pin the heron, rewarding green play; Gray Storm swapped for a reed-choking "Green Calm"). Appears on cycle ≥ 1 NG+ victory instead of the Great Gray Heron (Gray Heron stays the first-time boss). Acceptance: `bosspace.mjs` variant ≤ ~40 s bot ceiling; the 3-hue awakening remains the core; art reuses heron shapes + a new 3-hue palette (no new art pipeline); smoke stage for phases + awakening. | DRAFT |
+| N4 | Expedition modifiers (player-chosen) | Three hand-tuned modifiers; player picks one pre-expedition on NG+ runs (first-time runs get none — no choice, no effect). Each reuses existing systems only, e.g. "High Tide" (M10 weather/tide phases 2× as often), "Grey Morning" (a zone-2 heron moved up, one extra), "Dry Brush Season" (+1 hazard per zone via `placeZoneHazards`, +10% enemy HP). Modifier id persisted in `save.ngPlus.modifier`. Acceptance: each modifier is a data entry feeding existing generators (no new AI/art); choice UI reuses the difficulty-select pattern; smoke stage asserts each modifier changes world generation deterministically. | DRAFT |
+
+### M15 — Gold pigment: a meta economy pass
+
+Gold is explicitly scoped as a **meta pigment** (earned from the meta, spent
+in the meta) — *not* a 4th combat brush color. This keeps the "painting is
+the game" pillar and the 3-hue awakening mechanic untouched; the
+combat-color interpretation of the parked deferred item stays deferred
+(DECISIONS entry at implementation time).
+
+| ID | Item | Notes | Status |
+|----|------|-------|--------|
+| G1 | Gold units in `logic.js` economy | Gold is a 4th banked unit, earned only from meta moments: boss defeat (e.g. 3), each painting synergy-pair first completion (1), galleryBonus milestone (1). Same death rule as pigments (50% banked on death). `bankGold(cap)` + `GOLD_CAP` in `logic.js`; save v4 field `gold`. Acceptance: pure function unit-tested; no gold possible in a first-time pre-victory run; displayed in the atelier HUD strip. | DRAFT |
+| G2 | Two gold-tier paintings (catalog 8 → 10) | New paintings cost gold + pigment mix, each adds `galleryBonus` (e.g. +2% each), with new art motifs that reuse the existing per-painting motif renderer (no new art pipeline). At least one requires the NG+ completion flag to be *unlocked* (shown dimmed + "???" on the Gallery Wall until then). Acceptance: catalog length 10; galleryBonus math pure in `logic.js` (tested); Gallery Wall + Paintings tab render the two new frames with the existing frame renderer; smoke stage. | DRAFT |
+| G3 | "Gilded Frame" — one-time galleryBonus tier | Reuses the Rehung-Frame mechanism (M9) as a purchasable one-time upgrade: costs a gold + pigment bundle, adds a fixed galleryBonus on top of the rehung bonus, purchasable once (flag in save). Acceptance: cost/flag pure in `logic.js`; atelier row follows the existing `_atelierRows` pattern; total galleryBonus caps at a documented max (no unbounded stacking); smoke stage. | DRAFT |
+| G4 | Gold UI + ledger entries + scope decision | Atelier shows gold as a 4th currency (ink-bronze accent); Curator's Ledger gains gold-specific entries ("First gold banked", "Gilded Frame hung", "Green Heron painted awake"). DECISIONS.md entry recording: gold = meta pigment; 4th *combat* color remains deferred. Acceptance: ledger reuses the M9 entry system; no new persistent data beyond save v4 fields; manual check on first NG+ playthrough. | DRAFT |
+
+### M16 — Season wrap: presentation + content closure
+
+| ID | Item | Notes | Status |
+|----|------|-------|--------|
+| C1 | Atelier one-liner batch 2 | ~8 new one-liners: Monet/Mabel/Giuseppe/Croaksworth respond to NG+ cycles and gold milestones (reuses the M9 one-liner system; no new characters). Acceptance: trigger predicates pure in `logic.js` (predicate + id, tested); display reuses M9 UI. | DRAFT |
+| C2 | Victory "Season" summary block | Victory screen (M11 exhibition) gains a compact block for NG+ runs: cycles completed, frames rehung, gold banked this cycle, best galleryBonus. Reuses the existing victory-screen layout. Acceptance: appears only on cycle ≥ 1; numbers sourced from the save (no new stats system); smoke/manual check. | DRAFT |
+| C3 | Paper-grain presentation toggle | Folds in the parked CRT/paper filter item, scoped to **paper only**: a pre-rendered vignette + paper-grain overlay drawn once to an offscreen canvas, composited with a single `drawImage` alpha, toggle in options (default **off**), zero new dependencies. No per-frame generation, no new particle budget. Acceptance: toggle persists in `options`; 60 fps with toggle on (single drawImage, no per-frame allocations); CRT scanlines explicitly NOT included (watercolor identity). | DRAFT |
+| C4 | Regression pass + season audit | Full-suite regression: smoke (all stages, including new NG+/gold stages), `pace.mjs` + `humance.mjs` (fresh save unchanged), `bosspace.mjs` + `ngpace.mjs` in range; then a v1.3 audit in PROJECT_STATE.md mirroring the release audit (items verified, DoD-checked). Acceptance: all probes in target ranges, suite green, audit table present. | DRAFT |
+
+### Explicitly deferred past v1.3 (not forgotten)
+
+- **Gamepad support** — no natural module fit in v1.3; needs its own
+  input-abstraction + focus/selection pass (UI is mouse/keyboard-first).
+  Revisit as a standalone milestone.
+- **Accessibility (X1 colorblind glyphs, X2 remappable keys, X3 text-size
+  toggle)** — still deprioritized by Joel; tracked in MISSION.md. X2 (key
+  remapping) becomes more relevant *after* gamepad lands, so the pair stays
+  parked together.
+- **Gold as a 4th *combat* brush color** — v1.3 ships gold as meta-only
+  (M15). A combat gold would rebalance the 3-hue pillar (burn/slow/root
+  symmetry, awakening thresholds) and needs its own design spike.
+- **CRT scanline look** — paper grain ships (C3); scanlines would fight the
+  watercolor identity. If ever wanted, they land as a separate toggle.
+- **Multiplayer / local co-op** — unchanged from the v1.2 deferral list;
+  no near-term plan.
+- **Procedural (infinite) expedition generation** — unchanged; hand-tuned
+  zones + modifiers (N4) keep variety without a generation system.
+- **Further boss variety (3rd+ heron, non-heron boss)** — one new heron in
+  v1.3; a genuinely new boss archetype is a future-version item.
