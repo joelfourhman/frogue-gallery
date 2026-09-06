@@ -57,7 +57,7 @@ in PROJECT_STATE.md before/after).
 | P7 | Difficulty select on title (Easy/Normal/Hard; Normal = current balance) | ⬜ |
 | P8 | The Gallery Wall: framed, titled owned paintings in the Atelier | ⬜ |
 | P9 | Audio/options polish: separate music/SFX sliders, shake & vignette toggles | ⬜ |
-| P10 | Performance pass: cull off-screen enemy AI; hold 60fps across the full world | ⬜ |
+| P10 | Performance pass: cull off-screen enemy AI; hold 60fps across the full world | ✅ 2026-09-05 (view-cull decor + enemy AI beyond 500px; draw calls 9527→~1464 localized; 60.2 fps real-browser; smoke stage 24) |
 | P11 | Human-pace pacing probe (simulated human input, not bot-optimal) | ⬜ |
 | P12 | Zone character: distinct accent + signature encounter per zone | ⬜ |
 

@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 23 STAGES PASSED** (stages 21–23 = M7.5 PT1/PT3/PT4). Pacing probes green. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT5 ✅ (ed287a4), **PT1–PT4 ✅ (this pass)**. **Next: M8 P6–P12** in value order P10 → P12 → P7 → P8 → P6 → P9 → P11._
+_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 24 STAGES PASSED** (stages 21–23 = M7.5 PT1/PT3/PT4, stage 24 = M8 P10 perf culling). Pacing probes green. Real-browser probe: 60.2 fps across the full 5400px world. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT1–PT5 ✅, **M8 P10 ✅ (this pass)**. **Next: M8 P12 → P7 → P8 → P6 → P9 → P11.**_
 
 ## Current Status
 
@@ -92,7 +92,7 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 | P7 | Difficulty select (Easy/Normal/Hard, persisted; Normal = current balance) | ⬜ |
 | P8 | The Gallery Wall — framed, titled owned paintings in the Atelier with passive tooltips | ⬜ |
 | P9 | Audio/options polish: separate music/SFX sliders, screen-shake + vignette toggles | ⬜ |
-| P10 | Performance pass: cull off-screen enemy AI/decoration updates; 60fps with full 5400px world | ⬜ |
+| P10 | Performance pass: cull off-screen enemy AI/decoration updates; 60fps with full 5400px world | ✅ 2026-09-05 — `world.js` view-culls grass/ripples/soil/slicks/veg/reeds/pads/obstacles to the visible rect (draw calls 9527 full-world → ~1464 localized, 0.15×); `game.js` skips full enemy AI beyond 500px (burn still ticks). Smoke stage 24 + real-browser probe (60.2 fps across x=5%→95%). |
 | P11 | Human-pace pacing probe (≈260 px/s walker model) | ⬜ |
 | P12 | Zone character: distinct visual accent + signature encounter motif per zone | ⬜ |
 
@@ -114,15 +114,26 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 
 ## Immediate Next Action
 
-**Tree is clean** — PT5 (ed287a4), B6 (599a599), B5 (7f4fc3e), and the v1.1
-status-docs pass (3c590be) are all committed and verified.
+**Tree is clean** — PT5 (ed287a4), B6 (599a599), B5 (7f4fc3e), M7.5 PT1–PT4
+(c92ced1), and the v1.1 status-docs pass (3c590be) are all committed and
+verified.
 
-**M7.5 PT1–PT4 (playtest fixes) — implemented + tested, committing this pass.**
-Verified with the headless driver (`node tests/headless.mjs <scenario>`,
-loopback :8901) and new smoke stages 21–23. Normal-difficulty balance is the
-baseline; before/after numbers logged below.
+**M8 P10 (performance culling) — implemented + tested this pass.** The
+dominant 60fps cost across the 5400×1500 world was drawing every decoration
+item for the *entire* world each frame. `world.js` now view-culls
+grass/ripples/soil/slicks/veg/reeds/pads/obstacles to the visible rect
+(±100–120px margin); `game.js` skips full enemy AI beyond 500px from the
+player (burn damage still ticks, so off-screen burn kills are unchanged).
+Draw-call count drops from 9527 (full world) to ~1464 (a localized
+1280×800 view — 0.15×). **Verified zero visible change** (off-screen items
+were invisible anyway) and **60.2 fps holds across the full world**
+(real-browser probe at x=5%→95%). Smoke stage 24 guards both the draw-cull
+(localized < full, ratio < 0.6) and the enemy AI cull (near enemy seeks, far
+enemy frozen). Pacing unchanged (17.1 min human estimate).
 
-- **PT1 — painting consumption (verified, no code change).** The plan flagged
+**Next: M8 P12 (zone character) → P7 → P8 → P6 → P9 → P11.**
+
+- (recorded) **PT1 — painting consumption (verified, no code change).** The plan flagged
   "painting might be free / infinite wet." Audit result: swipes and splashes
   are already rate-gated — `swipeCd = tuning.swipeCooldown (0.2s)` arms on every
   fire and blocks re-fire until it expires; the charged splash requires
@@ -162,5 +173,7 @@ Full plan: `docs/PLAN-v1.1-next.md`.
 ## Known risks / open questions
 
 - Smoke stage 16 asserts the title start-button label — P7 (difficulty select on title) will touch the same UI; update the stage when implementing.
-- P10 culling must not change visible behavior — guard with an existing smoke stage plus a 60fps timing probe.
+- P10 culling (this pass): guarded by smoke stage 24 (draw-cull ratio + enemy
+  AI-cull behavior) and a real-browser 60fps probe. Keep future world-decor
+  loops culled to the view rect so 60fps holds as density grows.
 - `browser_exec` is still dead; visual verification (P8, P12, zone art) relies on `desktop_preview` or screenshots via the dev server / the headless driver (`tests/headless.mjs`).

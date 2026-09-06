@@ -4,23 +4,24 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-05 (v1.1 pass: B6 + PT5 + B5 + M7.5 PT1–PT4 landed)**
+**Last PM audit: 2026-09-05 (v1.1 pass: B6 + PT5 + B5 + M7.5 PT1–PT4 + M8 P10 landed)**
 
 ## Current state
 
 - Release DoD: **all 12 items satisfied** (final audit 2026-09-05).
-- Active phase: **v1.1 — M8 player-facing improvements** (P6–P12).
-- Smoke suite: **23 stages, ALL PASSED** (stage 20 = B5 fallback; stages
-  21–23 = M7.5 PT1/PT3/PT4). Pacing probes (pace, bosspace) green.
+- Active phase: **v1.1 — M8 player-facing improvements** (P6–P12); P10 done.
+- Smoke suite: **24 stages, ALL PASSED** (stage 20 = B5; 21–23 = M7.5;
+  24 = M8 P10 perf culling). Pacing probes (pace, bosspace) green.
+  Real-browser probe: 60.2 fps across the full 5400px world.
 - Git: **tree clean** — PT5 (`ed287a4`), B6 (`599a599`), B5 (`7f4fc3e`),
-  and the status-docs pass (`3c590be`) are all committed.
-- Milestones: B1–B6 ✅, **M7.5: PT1–PT5 all ✅ (PT1–PT4 this pass).**
+  M7.5 PT1–PT4 (`c92ced1`), and the status-docs pass (`3c590be`) committed.
+- Milestones: B1–B6 ✅, **M7.5: PT1–PT5 all ✅. M8: P10 ✅ (this pass).**
 
 ## Active work (next, in order)
 
-1. **M8 P6–P12** — suggested value order: P10 (perf/cull) → P12 (zone
-   character) → P7 (difficulty) → P8 (gallery wall) → P6 (?) overlay →
-   P9 (audio polish) → P11 (human-pace probe).
+1. **M8 remaining: P12 → P7 → P8 → P6 → P9 → P11** (P10 perf is done):
+   P12 (zone character) → P7 (difficulty) → P8 (gallery wall) → P6 (?)
+   overlay → P9 (audio polish) → P11 (human-pace probe).
 
 Full plan: `docs/PLAN-v1.1-next.md`.
 
@@ -34,7 +35,7 @@ None. Loopback dev server, Node, and all tests are healthy.
   plan (see docs/ROADMAP.md).
 - Risk: v1.1 feature creep — deferred list in docs/ROADMAP.md is the
   boundary; New Game+ / gold pigment / gamepad stay out.
-- Risk: `src/game.js` is 1745 lines and holds state-machine + HUD; new
+- Risk: `src/game.js` is 1756 lines and holds state-machine + HUD; new
   screens should stay thin there, logic in `src/logic.js` where possible.
 
 ## Technical debt
@@ -45,10 +46,10 @@ None. Loopback dev server, Node, and all tests are healthy.
 
 ## Next priority
 
-**M8 P6–P12** in value order P10 (perf/cull) → P12 (zone character) → P7
-(difficulty) → P8 (gallery wall) → P6 (?) overlay → P9 (audio polish) → P11
-(human-pace probe). B1–B6 and M7.5 PT1–PT5 are complete.
+**M8 remaining** in value order P12 (zone character) → P7 (difficulty select)
+→ P8 (gallery wall) → P6 (?) overlay → P9 (audio polish) → P11 (human-pace
+probe). B1–B6, M7.5 PT1–PT5, and M8 P10 (perf culling) are complete.
 
 ## Release readiness
 
-Release: ready (DoD met, suite green). v1.1: M7 in progress.
+Release: ready (DoD met, suite green). v1.1: M8 in progress (P10 done).

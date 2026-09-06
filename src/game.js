@@ -821,8 +821,19 @@ _drawAtelier(ctx) {
     }
 
     // ----- enemies -----
+    // P10: skip full AI for enemies far off-screen (they can't attack or be
+    // painted at that range). Burn damage ALWAYS still ticks (the status check
+    // below) so an off-screen burn kill is identical to before; only the
+    // seek/move/contact work is skipped. A 500px buffer keeps enemies from
+    // visibly freezing at the edge. `p` is the player (declared above).
+    const CULL2 = 500 * 500;
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
+      if (!e.dead && p.alive) {
+        const dx = e.x - p.x, dy = e.y - p.y;
+        const far = dx * dx + dy * dy > CULL2;
+        if (far && !(e.status && e.status.type === 'burn')) continue;
+      }
       e.update(dt, p, this.tuning, this.world, this.now);
       if (e._burnTick) {
         e._burnTick = 0;

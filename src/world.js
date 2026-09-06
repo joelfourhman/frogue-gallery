@@ -250,8 +250,18 @@ export class World {
     ctx.fillStyle = sat('#6f9e8e', colorSat);
     ctx.fillRect(0, 0, this.w, this.h);
 
+    // P10: cull per-item decoration to the visible world rect (off-screen items
+    // are invisible anyway; skipping them is a zero-visible-change perf win that
+    // holds 60fps across the full 5400px world). The floor fillRect above is a
+    // single canvas-clipped call, so it stays.
+    const m = 100;
+    const cx0 = view.x - m, cy0 = view.y - m;
+    const cx1 = view.x + view.w / view.scale + m, cy1 = view.y + view.h / view.scale + m;
+    const inView = (x, y) => x >= cx0 && x <= cx1 && y >= cy0 && y <= cy1;
+
     // deep patches
     for (const rp of this.ripples) {
+      if (!inView(rp.x, rp.y)) continue;
       ctx.strokeStyle = `rgba(30,60,55,${0.14 * colorSat + 0.04})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -260,6 +270,7 @@ export class World {
     }
     // grass tufts
     for (const g of this.grass) {
+      if (!inView(g.x, g.y)) continue;
       const hgt = g.s * 3;
       ctx.strokeStyle = sat('#4d7a4a', colorSat);
       ctx.lineWidth = 1.6;
@@ -272,6 +283,7 @@ export class World {
     }
     // soil patches
     for (const s of this.soil) {
+      if (!inView(s.x, s.y)) continue;
       ctx.fillStyle = sat('#8a6f4d', colorSat);
       ctx.globalAlpha = 0.55;
       traceBlob(ctx, s.x, s.y, s.r, s.x | 0, 0.15, 10);
@@ -285,6 +297,7 @@ export class World {
     ctx.globalAlpha = 1;
     // slicks (blue wet shine)
     for (const s of this.slick) {
+      if (!inView(s.x, s.y)) continue;
       ctx.fillStyle = `rgba(120,170,240,${0.14 * Math.min(1, s.t)})`;
       ctx.beginPath();
       ctx.ellipse(s.x, s.y, s.r, s.r * 0.6, 0, 0, TAU);
@@ -295,9 +308,15 @@ export class World {
   drawProps(ctx, view, colorSat, now) {
     // vegetation, reeds, lily pads — in world space (caller applies the single
     // camera transform). No inner camera transform.
+    // P10: cull to the visible world rect (off-screen = invisible; zero visual change).
+    const m = 120;
+    const cx0 = view.x - m, cy0 = view.y - m;
+    const cx1 = view.x + view.w / view.scale + m, cy1 = view.y + view.h / view.scale + m;
+    const inView = (x, y) => x >= cx0 && x <= cx1 && y >= cy0 && y <= cy1;
 
     // vegetation (behind actors)
     for (const v of this.veg) {
+      if (!inView(v.x, v.y)) continue;
       const hgt = v.h;
       if (v.burn > 0) {
         // charred
@@ -334,6 +353,7 @@ export class World {
     }
     // reeds
     for (const rd of this.reeds) {
+      if (!inView(rd.x, rd.y)) continue;
       const k = rd.h;
       const hgt = 46 * k;
       ctx.strokeStyle = rd.burn > 0 ? '#5a3b2a' : sat('#3a6d55', colorSat);
@@ -353,6 +373,7 @@ export class World {
     }
     // lily pads
     for (const p of this.pads) {
+      if (!inView(p.x, p.y)) continue;
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.fillStyle = sat('#4f8a55', colorSat);
@@ -398,7 +419,12 @@ export class World {
 
   drawObstacles(ctx, view, colorSat) {
     // rocks/bushes in world space (caller applies the single camera transform).
+    // P10: cull to the visible world rect (off-screen = invisible; zero visual change).
+    const m = 120;
+    const cx0 = view.x - m, cy0 = view.y - m;
+    const cx1 = view.x + view.w / view.scale + m, cy1 = view.y + view.h / view.scale + m;
     for (const o of this.obstacles) {
+      if (o.x < cx0 || o.x > cx1 || o.y < cy0 || o.y > cy1) continue;
       ctx.save();
       ctx.translate(o.x, o.y);
       if (o.kind === 0) {

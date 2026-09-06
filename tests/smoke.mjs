@@ -885,18 +885,18 @@ console.log('== stage 23: M7.5 PT4 — early-economy safety net (welcome grant) 
   assert(fresh.bank.red === b1.red && fresh.bank.blue === b1.blue && fresh.bank.green === b1.green,
     'applying the welcome grant twice does NOT double it (one-time)');
   // the safety-net property: a fresh (zero-bank) save can ALWAYS afford at
-  // least one upgrade OR one painting after the grant. Check every cheapest
-  // level-1 upgrade and level-1 painting against the grant.
-  const bank = { ...L.freshSave().bank };
-  L.applyWelcomeGrant(bank && { flags: {}, bank }); // re-derive cleanly
+  // least one upgrade AND at least one painting after the grant. Check every
+  // cheapest level-1 upgrade and level-1 painting against the grant.
   const grantBank = { red: L.WELCOME_GRANT.red, blue: L.WELCOME_GRANT.blue, green: L.WELCOME_GRANT.green };
   const upgradeOptions = Object.values(L.UPGRADES).map(u => u.levels[0].cost);
-  const paintingOptions = L.PAINTINGS.map(pt => pt.cost).filter(c => !L.PAINTINGS.find(pt => pt.id && Object.is(pt.locked, true)));
+  const paintingOptions = L.PAINTINGS.map(p => p.cost); // all are purchasable (none locked at v1.1)
   const afford = (bank, costObj) => Object.keys(costObj).every(k => (bank[k] || 0) >= costObj[k]);
   const affordableUpgrades = upgradeOptions.filter(c => afford(grantBank, c));
   const affordablePaintings = paintingOptions.filter(c => afford(grantBank, c));
+  assert(affordableUpgrades.length >= 1, `welcome grant affords >=1 level-1 upgrade (${affordableUpgrades.length}) — no early soft-lock`);
   assert(affordableUpgrades.length >= 1 || affordablePaintings.length >= 1,
-    `welcome grant {${grantBank.red},${grantBank.blue},${grantBank.green}} affords >=1 upgrade/painting (upgrades: ${affordableUpgrades.length}, paintings: ${affordablePaintings.length}) — no early soft-lock`);
+    `welcome grant affords >=1 upgrade or painting (upgrades: ${affordableUpgrades.length}, paintings: ${affordablePaintings.length})`);
+  assert(affordablePaintings.length >= 1, `welcome grant affords >=1 painting (${affordablePaintings.length}) so a fresh player can buy a loadout slot too`);
   // specifically, the cheapest upgrade (Swamp Vitality) is reachable
   const vitality = L.UPGRADES.vitality.levels[0].cost;
   assert(afford(grantBank, vitality), `welcome grant covers the cheapest upgrade Swamp Vitality {${vitality.red},${vitality.blue},${vitality.green}}`);
@@ -904,6 +904,65 @@ console.log('== stage 23: M7.5 PT4 — early-economy safety net (welcome grant) 
   // only at first expedition, not on load) — flag simply defaults to false
   const legacy = L.migrateSave({ bank: { red: 9 }, flags: { intro: true } });
   assert(legacy.flags.welcomeGranted === false, 'migration does not silently grant the welcome kit (it is awarded at the first expedition)');
+}
+
+console.log('== stage 24: M8 P10 — performance culling (off-screen draw + enemy AI) ==');
+{
+  const { World } = await import('../src/world.js');
+  const { Enemy, spawnEnemy } = await import('../src/enemies.js');
+  const L = await import('../src/logic.js');
+
+  // deterministic world (same seed => same layout across runs)
+  function rng() { let a = 987654321; return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const world = new World(rng(), 42);
+  assert(world.w >= 5000 && world.grass.length > 100, `full-size world built (w=${world.w}, ${world.grass.length} grass tufts)`);
+
+  // counting 2d context: every draw-method invocation is tallied.
+  function countingCtx() {
+    const counter = { n: 0 };
+    const ctx = new Proxy({}, {
+      get(t, p) {
+        if (p === 'measureText') return () => ({ width: 10 });
+        if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+        if (p === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
+        counter.n++;
+        return () => {};
+      },
+      set() { return true; },
+    });
+    return { ctx, count: () => counter.n };
+  }
+  const drawCalls = (view) => {
+    const { ctx, count } = countingCtx();
+    world.drawBackground(ctx, view, 1);
+    world.drawProps(ctx, view, 1, 1.0);
+    world.drawObstacles(ctx, view, 1);
+    return count();
+  };
+  // a localized 1280x800 view vs the whole 5400x1500 world. P10 view-culling
+  // must make the localized draw dramatically cheaper (only visible items).
+  const localCalls = drawCalls({ x: 0, y: 0, scale: 1, w: 1280, h: 800 });
+  const fullCalls = drawCalls({ x: 0, y: 0, scale: 1, w: world.w, h: world.h });
+  assert(localCalls < fullCalls, `P10 view-cull: localized view draws ${localCalls} calls < ${fullCalls} for the full world`);
+  assert(localCalls < fullCalls * 0.4, `P10 view-cull keeps draw work proportional to the visible area (localized/full = ${(localCalls / fullCalls).toFixed(2)})`);
+
+  // enemy AI cull, driven through the real game loop: a near enemy keeps
+  // seeking the player; a far (>500px) non-burning enemy is skipped (frozen).
+  const cv2 = makeCanvas();
+  const g2 = new Game(cv2);
+  g2.start();
+  fireKey('keydown', 'Enter'); frames(3); // title -> expedition
+  const P = g2.player;
+  P.alive = true; P.hp = 99; P.iframes = 999; P.x = 100; P.y = 750;
+  const near = spawnEnemy('beetle', 150, 750, g2.tuning);
+  const far = spawnEnemy('beetle', 3000, 750, g2.tuning);
+  g2.enemies.push(near, far);
+  const nearX0 = near.x, farX0 = far.x;
+  for (let i = 0; i < 20; i++) frames(1); // ~0.33s
+  const nearMoved = Math.abs(near.x - nearX0) > 1;
+  const farMoved = Math.abs(far.x - farX0) > 1;
+  assert(nearMoved, `P10 enemy cull: a near enemy (50px) still runs AI and seeks the player (dx=${(near.x - nearX0).toFixed(1)})`);
+  assert(!farMoved, `P10 enemy cull: a far enemy (2900px) is AI-culled and stays frozen (dx=${(far.x - farX0).toFixed(1)})`);
 }
 
 console.log('\nALL SMOKE TESTS PASSED');
