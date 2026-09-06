@@ -2047,5 +2047,78 @@ console.log('\n== stage 39: V2 — heron awaken bloom ==');
   a.stopMusic();
 }
 
+// stage 41: V4 (v1.2 M11) — the victory-screen "exhibition": the paintings
+// carried this expedition (the 2-slot loadout) shown as a small framed row,
+// each titled, with a soft staggered reveal. Reuses the P8 frame look + the
+// generative motif + the PAINTINGS data. We verify it with a canvas that
+// records every fillText (string + the globalAlpha it was drawn at), so we
+// can assert the titles render AND the reveal animation ramps 0 -> 1.
+console.log('== stage 41: V4 — end-screen exhibition ==');
+{
+  const recCanvas = makeCanvas();
+  const baseCtx = recCanvas.getContext('2d');
+  const textLog = [];            // { str, alpha }
+  const recCtx = new Proxy(baseCtx, {
+    get(t, prop) {
+      if (prop === 'fillText') return (str, ...rest) => { textLog.push({ str: String(str), alpha: t.globalAlpha }); return t.fillText ? t.fillText(str, ...rest) : undefined; };
+      return t[prop];
+    },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas.getContext = () => recCtx;
+  const g41 = new Game(recCanvas);
+  g41.start();
+  g41._quitToTitle();
+
+  // a loadout of two paintings for this expedition
+  g41.save.owned = ['moonlit-pond', 'storm-cloud', 'spring-garden'];
+  g41.save.loadout = ['moonlit-pond', 'storm-cloud'];
+  g41.endKind = 'victory';
+  g41.endT = 0;
+  g41.endGains = { red: 5, blue: 5, green: 5 };
+  g41.state = 'end';
+  // clear any lingering mouse/key state from earlier stages so the end-screen
+  // buttons (which fire on lPressed when endT>0.6) don't send us to the atelier
+  g41.input.mouse.lPressed = false;
+  g41.input.mouse.lDown = false;
+  g41.input.mouse.x = 0;
+  g41.input.mouse.y = 0;
+
+  // the victory card is taller than the defeat card
+  assert(g41._endCardH() === 540, 'V4: the victory end-card carries the exhibition (taller card)');
+  const L = await import('../src/logic.js');
+  const expected = L.PAINTINGS.filter(p => g41.save.loadout.includes(p.id));
+  assert(expected.length === 2, 'V4: two paintings were carried this expedition');
+
+  // Note: _frame advances endT by its dt (~0.0167), so we set endT just below
+  // the target so it lands right on it after the frame.
+  // early in the reveal: the exhibition is fading in (titles drawn at <1 alpha)
+  textLog.length = 0;
+  g41.endT = 0.6;
+  g41._frame(g41.now * 1000 + 1000);
+  const early = textLog.filter(t => t.str === 'Moonlit Pond').length;
+  assert(early >= 1, 'V4: the first carried painting is titled on the victory screen');
+  const earlyAlpha = Math.min(...textLog.filter(t => t.str === 'Moonlit Pond').map(t => t.alpha));
+  assert(earlyAlpha < 0.9, `V4: the exhibition is mid-reveal early on (alpha ${earlyAlpha.toFixed(2)})`);
+
+  // fully revealed: both titles present at full alpha, and NOT on a defeat
+  g41.endT = 5;
+  textLog.length = 0;
+  g41._frame(g41.now * 1000 + 2000);
+  for (const pt of expected) {
+    // title alpha = 0.9 * ri; at full reveal ri>=0.88 so alpha>=0.79
+    assert(textLog.some(t => t.str === pt.name && t.alpha >= 0.7), `V4: the exhibition renders "${pt.name}" at full reveal`);
+  }
+  // neither of the other owned-but-not-carried paintings appears
+  assert(!textLog.some(t => t.str === 'Spring Garden'), 'V4: only the carried loadout is shown (not all owned)');
+  // the exhibition is a victory-only presentation
+  g41.endKind = 'defeat';
+  g41.endT = 5;
+  textLog.length = 0;
+  g41._frame(g41.now * 1000 + 3000);
+  assert(!textLog.some(t => t.str === 'Moonlit Pond'), 'V4: the exhibition is victory-only (not on a defeat)');
+  assert(g41._endCardH() === 430, 'V4: the defeat card keeps its compact height');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

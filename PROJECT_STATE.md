@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 40 STAGES PASSED** (…stage 38 = v1.2 M11 V1 color-reveal progress bar, stage 39 = v1.2 M11 V2 heron awaken bloom, stage 40 = v1.2 M11 V3 per-zone ambient audio bed). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **54s**, heron **156s**, full-run **19.2 min** — in the 15–20 min band (E1 mid-heron non-blocking; E2 weather phases informational; E4 streak is a scoring bonus that adds no run time; V1 is pure HUD; **V2 + V3 are pure presentation — V2 render-only bloom/SFX, V3 an ambient audio bed that only *adds* sound and changes no gameplay timing — so pacing is untouched and no pace probe re-run is needed**). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ + V2 (heron awaken bloom) ✅ + V3 (per-zone ambient audio) ✅ — v1.2 Batch 4 in flight (2 of 3 done). Next: V4 (exhibition end-screen) / M11.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 41 STAGES PASSED** (…stage 38 = v1.2 M11 V1 color-reveal progress bar, stage 39 = v1.2 M11 V2 heron awaken bloom, stage 40 = v1.2 M11 V3 per-zone ambient audio bed, stage 41 = v1.2 M11 V4 end-screen exhibition). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **54s**, heron **156s**, full-run **19.2 min** — in the 15–20 min band (E1 mid-heron non-blocking; E2 weather phases informational; E4 streak is a scoring bonus that adds no run time; V1 is pure HUD; **V2/V3/V4 are all pure presentation — V2 render-only bloom/SFX, V3 an ambient audio bed that only *adds* sound, V4 a victory-screen exhibition that changes no gameplay — so pacing is untouched and no pace probe re-run is needed for the whole presentation batch**). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ + V2 (heron awaken bloom) ✅ + V3 (per-zone ambient audio) ✅ + V4 (end-screen exhibition) ✅ — v1.2 Batch 4 (M11) COMPLETE. Next: M13 (T1 guided first expedition).**_
 
 ## Current Status
 
@@ -132,7 +132,7 @@ accessibility deferred).
 1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 ✅ (Curator's Ledger). **Batch 1 (A1–A3) COMPLETE.**
 2. M9: **A4 ✅ (Rehung Frame)** → M10: **E1 ✅ (Painted Heron)** → **E2 ✅ (weather/tide phases)**. **Batch 2 (A4/E1/E2) COMPLETE — suite 35/35, pacing in band on Normal.**
 3. M10: **E3 ✅ (Bold-only zone hazards)** → **E4 ✅ (orb-streak bonus)** → M11: **V1 ✅ (color-reveal bar)** — **Batch 3 COMPLETE**
-4. M11: **V2 ✅ (heron bloom beat)** → **V3 ✅ (zone ambient audio)** → V4 (exhibition end-screen) — Batch 4 in flight (2/3)
+4. M11: **V2 ✅ (heron bloom beat)** → **V3 ✅ (zone ambient audio)** → **V4 ✅ (exhibition end-screen)** — **Batch 4 (M11) COMPLETE — suite 41/41**
 5. M13: T1 (guided first expedition) → T2 (pigment drills)
 6. M13: T3 (mini heron) → T4 (tutorial progress + re-entry)
 
@@ -247,6 +247,34 @@ pure `orbStreakState`, so the HUD always matches the scoring. A distinct
 (E4): no bonus below 4, +10% at 4, plateau at the cap, and in the real loop the
 streak **builds on collect, boosts orb value (1.21 vs base 1.10), and resets on
 a hit** (then pays base again). Suite green: 37/37.
+
+**M11 V4 (end-screen exhibition) — implemented + tested (v1.2 Batch 4, item 3).**
+The **victory** end-screen now shows the paintings the frog carried this
+expedition (its **2-slot loadout** — the run's collection) as a small **framed
+exhibition**: a "Curator's Wall" of framed pieces, **each titled**, laid out in a
+row, with a **soft staggered fade + rise reveal** that animates on `endT` (early
+frames show the pieces fading in one by one, so the win lands as a reveal, not a
+static card). It reuses the **P8 Gallery Wall frame renderer** (gilded double
+border + `_drawPaintingMotif` generative art) + the existing **painting data**
+(`PAINTINGS`) — **no new art, no new rendering engine**. Because the exhibition
+needs room, the victory card grows to **540px** (defeat stays compact at 430) via
+a single `_endCardH()` used by **both** the draw (`_drawEnd`) and the end-state
+click rects (input routing), so the "Rest at the Atelier" / "return to the pond"
+buttons stay in the same on-screen place in both states. It is **pure
+presentation** — no new art, no gameplay change, so **pacing is untouched**.
+`game.js` stays thin: `_drawEnd` just reads `save.loadout`, maps it to
+`PAINTINGS`, and lays out the frames (the reveal is a pure `endT` function).
+
+Smoke stage 41 (V4) is a **documented headless check** via a `fillText`-recording
+canvas (the same technique as stage 32/A3): it drives a real `Game` to the
+victory end state with a 2-painting loadout and asserts the victory card is the
+taller exhibition height; the two carried paintings' **titles render on the
+victory screen**; the exhibition is **mid-reveal early** (alpha ramps in — 0.20
+early); at full reveal **both titles render**; **only the carried loadout is
+shown** (an owned-but-not-carried painting does not appear); the exhibition is
+**victory-only** (absent on a defeat); and the defeat card keeps its compact
+height. (The stage clears lingering input state so the end-screen buttons don't
+transition to the atelier mid-check.) Suite green: 41/41.
 
 **M11 V3 (per-zone ambient audio bed) — implemented + tested (v1.2 Batch 4, item 2).**
 A **soft, looping ambient bed that shifts by zone**, layered under the existing

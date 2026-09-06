@@ -331,9 +331,11 @@ export class Game {
       this.endT += dt;
       this._stepHeronFlight(dt);
       // buttons: "Rest at the Atelier" (primary) + "Return to the Pond" link
-      // (see _drawEnd layout)
+      // (see _drawEnd layout). The card is taller on a victory (it carries the
+      // V4 exhibition), so both the draw and the click rects use _endCardH().
       if (this.endT > 0.6 && this.input.mouse.lPressed) {
-        const cx = this.cw / 2, py = this.ch / 2 - 430 / 2, ph = 430;
+        const H = this._endCardH();
+        const cx = this.cw / 2, py = this.ch / 2 - H / 2, ph = H;
         const bw = 300, bh = 54, bx = cx - bw / 2, by = py + ph + 16;
         if (this._mouseIn(bx, by, bw, bh)) { this.sfx('ui'); this._beginAtelier(); }
         else if (this._mouseIn(cx - 105, by + bh + 16, 210, 34)) { this.sfx('ui-back'); this._quitToTitle(); }
@@ -2822,6 +2824,12 @@ _drawAtelier(ctx) {
     paperEnd(ctx);
   }
 
+  // V4 (v1.2 M11): the end-card height — taller on a victory (it carries the
+  // exhibition), same compact height on a defeat. Both the draw (_drawEnd) and
+  // the end-state click rects (input routing above) use this so the buttons
+  // stay in the same place on screen in both.
+  _endCardH() { return this.endKind === 'victory' ? 540 : 430; }
+
   _drawEnd(ctx) {
     const victory = this.endKind === 'victory';
     const a = Math.min(1, this.endT / 0.5);
@@ -2833,7 +2841,8 @@ _drawAtelier(ctx) {
     if (this.endT < 0.25) return; // let the heron fly a beat before the card
 
     const cx = this.cw / 2;
-    const pw = 560, ph = 430, px = cx - pw / 2, py = this.ch / 2 - ph / 2;
+    const ph = this._endCardH();   // V4: taller on a victory (carries the exhibition)
+    const pw = 560, px = cx - pw / 2, py = this.ch / 2 - ph / 2;
     const c = paperPanel(ctx, px, py, pw, ph, { seed: victory ? 31 : 37 });
 
     outlineText(c, victory ? 'The Swamp Blooms!' : 'The Brush Rests…', cx, py + 52, '700 40px Georgia, serif', victory ? '#5a9e3d' : '#8d9aa0', INK, 6);
@@ -2844,11 +2853,12 @@ _drawAtelier(ctx) {
 
     // gains
     const g = this.endGains || {};
-    centerText(c, victory ? 'Pigments added to the bank' : 'Pigments kept (half, the swamp is unforgiving)', cx, py + 122, '700 14px Georgia, serif', INK, 0.85);
+    const gainsY = victory ? 122 : 150;
+    centerText(c, victory ? 'Pigments added to the bank' : 'Pigments kept (half, the swamp is unforgiving)', cx, py + gainsY, '700 14px Georgia, serif', INK, 0.85);
     for (let i = 0; i < 3; i++) {
       const col = ORB_COLORS[i];
       const pig = PIGMENTS[col];
-      const ox = cx - 140 + i * 140, oy = py + 160;
+      const ox = cx - 140 + i * 140, oy = py + gainsY + 38;
       c.fillStyle = pig.color;
       c.lineWidth = 2;
       c.strokeStyle = INK;
@@ -2863,21 +2873,62 @@ _drawAtelier(ctx) {
       centerText(c, pig.name, ox, oy + 54, '12px Georgia, serif', INK, 0.7);
     }
 
+    // V4 (v1.2 M11): on a victory, the paintings hung for this expedition
+    // (the 2-slot loadout) are shown as a small framed "curator's wall" — a
+    // row of gilded frames, each with its title and a soft reveal (staggered
+    // fade + rise). Pure presentation: no new art, reuses the P8 frame look
+    // (paperPanel + gilded double border + _drawPaintingMotif) + the painting
+    // data. The reveal animates on endT, so early frames show nothing.
+    const exh = victory ? (this.save.loadout || []).map(id => PAINTINGS.find(p => p.id === id)).filter(Boolean) : [];
+    let bankY = 250;
+    if (exh.length > 0) {
+      const reveal = clamp((this.endT - 0.4) / 0.9, 0, 1);
+      if (reveal > 0.02) {
+        centerText(c, `Curator's Wall — ${exh.length} painting${exh.length === 1 ? '' : 's'} from this expedition`, cx, py + 244, '700 14px Georgia, serif', '#5a9e3d', 0.9 * reveal);
+        const n = exh.length;
+        const fs = 66;
+        const gap = 96;
+        const total = n * fs + (n - 1) * (gap - fs);
+        const x0 = cx - total / 2;
+        for (let i = 0; i < n; i++) {
+          const pt = exh[i];
+          const ri = clamp(reveal - i * 0.12, 0, 1);
+          if (ri <= 0.02) continue;
+          const fx = x0 + i * gap;
+          const fy = py + 274 - (1 - ri) * 16;      // soft rise
+          c.save();
+          c.globalAlpha = ri;
+          // gilded double frame (P8 look) + a paper ground
+          c.fillStyle = '#f7f0e0';
+          c.beginPath(); c.rect(fx, fy, fs, fs); c.fill();
+          c.strokeStyle = '#d9b45a'; c.lineWidth = 3;
+          c.strokeRect(fx + 1.5, fy + 1.5, fs - 3, fs - 3);
+          c.strokeStyle = '#b08a3e'; c.lineWidth = 1.5;
+          c.strokeRect(fx + 6, fy + 6, fs - 12, fs - 12);
+          this._drawPaintingMotif(c, pt, fx + 8, fy + 8, fs - 16);
+          c.restore();
+          centerText(c, pt.name, fx + fs / 2, fy + fs + 15, 'italic 12px Georgia, serif', INK, 0.9 * ri);
+        }
+        bankY = 350;   // victory card: bank moves below the exhibition
+      }
+    }
+
     // bank totals
     const b = this.save.bank;
-    centerText(c, `Bank — red ${b.red} · blue ${b.blue} · green ${b.green}`, cx, py + 250, '700 15px Georgia, serif', INK, 0.9);
+    centerText(c, `Bank — red ${b.red} · blue ${b.blue} · green ${b.green}`, cx, py + bankY, '700 15px Georgia, serif', INK, 0.9);
     const s = this.save.stats;
-    centerText(c, `expeditions ${s.expeditions} · victories ${s.victories} · herons painted ${s.heronsPainted}`, cx, py + 274, '13px Georgia, serif', INK, 0.65);
+    const statsY = victory ? 374 : 274;
+    centerText(c, `expeditions ${s.expeditions} · victories ${s.victories} · herons painted ${s.heronsPainted}`, cx, py + statsY, '13px Georgia, serif', INK, 0.65);
 
     // best run
     const br = this.save.bestRun;
     if (br) {
       const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
-      centerText(c, `best run — ${what}`, cx, py + 296, '700 13px Georgia, serif', INK, 0.8);
+      centerText(c, `best run — ${what}`, cx, py + (victory ? 396 : 296), '700 13px Georgia, serif', INK, 0.8);
     }
 
     // spend hint
-        centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + 320, 'italic 12px Georgia, serif', INK, 0.55);
+        centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + (victory ? 420 : 320), 'italic 12px Georgia, serif', INK, 0.55);
         paperEnd(ctx);
 
         // primary: to the atelier (see end-state input routing for the same rects)
