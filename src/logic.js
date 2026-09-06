@@ -154,7 +154,7 @@ export function activeSynergy(loadout = []) {
   if (ids.length < 2) return null;
   return SYNERGIES[_pairKey(ids[0], ids[1])] || null;
 }
-export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', gallery = 0) {
+export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', gallery = 0, owned = []) {
   const t = {
     // player
     maxHp: 10 + (upgrades.vitality || 0),
@@ -224,6 +224,14 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', g
   // tuning bump applied via the standard makeTuning path so it stacks after
   // loadout + difficulty. Pure + testable (no DOM).
   applyGalleryBonus(t, gallery);
+  // G2 (v1.3 M15): the two GOLD-tier paintings apply when OWNED (a permanent
+  // meta bonus, not a loadout slot). A first-time save owns neither, so these
+  // are no-ops and a cycle-0 tuning is byte-identical. `gilded-meridian` lifts
+  // the consumed orb/pickup value +10%; `verdant-crown` adds +1 to the green
+  // heal-per-touch. Both feed the EXISTING tuning fields.
+  const owns = (id) => Array.isArray(owned) && owned.includes(id);
+  if (owns('gilded-meridian')) { t.pickupValue *= 1.1; }
+  if (owns('verdant-crown')) { t.greenHeal += 1; }
   return t;
 }
 
@@ -494,11 +502,14 @@ export function applyGalleryBonus(t, gallery) {
   t.pickupValue *= t.galleryOrbMult;
   return t;
 }
-// Retire-eligibility check: all 8 paintings owned AND at least one hung in the
-// loadout. Pure.
+// Retire-eligibility check: the FULL PIGMENT collection owned (the 8 base
+// PAINTINGS — the two gold-tier G2 works are a separate NG+ meta tier and do
+// NOT raise this bar) AND at least one hung in the loadout. Uses
+// PAINTINGS.filter(!goldTier).every, so the bar tracks the pigment catalog
+// (stable at 8). Pure.
 export function canRetireCollection(save) {
   const owned = (save && Array.isArray(save.owned)) ? save.owned : [];
-  const allOwned = PAINTINGS.every(p => owned.includes(p.id));
+  const allOwned = PAINTINGS.filter(p => !p.goldTier).every(p => owned.includes(p.id));
   const hung = (save && Array.isArray(save.loadout)) ? save.loadout.length > 0 : false;
   return allOwned && hung;
 }
@@ -558,7 +569,32 @@ export const PAINTINGS = [
   { id: 'croaksworth', name: 'Sir Croaksworth (Portrait)', cost: { red: 5, blue: 5, green: 5 },
     desc: 'He finally admits art is useful. +18% brush damage.',
     art: { bg: '#33303f', shape: 'knight', accent: '#c8b8ff' }, locked: true },
+  // G2 (v1.3 M15): two GOLD-tier paintings — priced in the meta gold currency
+  // (not pigment), unlocked only on NG+ cycles, and applied when OWNED (a
+  // permanent meta bonus, not a loadout slot). `goldTier: true` + `goldCost`
+  // mark them; the existing pigment `cost` is absent. The motif renderer
+  // reuses existing art shapes (no new art pipeline).
+  { id: 'gilded-meridian', name: 'Gilded Meridian', goldTier: true, goldCost: 25,
+    desc: 'The line is gilded. Every orb is worth +10%, forever.',
+    art: { bg: '#4a3d6b', shape: 'king', accent: '#ffd75e' } },
+  { id: 'verdant-crown', name: 'Verdant Crown', goldTier: true, goldCost: 40,
+    desc: 'A crown of living moss. Moss mends +1 extra health per touch.',
+    art: { bg: '#2f5e2a', shape: 'garden', accent: '#9ed483' } },
 ];
+
+// G2 (v1.3 M15): the gold-tier subset of the catalog (the NG+-gated, gold-
+// priced paintings). Pure.
+export function goldPaintings() {
+  return PAINTINGS.filter(p => p.goldTier);
+}
+// G2 (v1.3 M15): can a save buy this gold-tier painting? It must be a gold
+// painting and the save must hold at least `pt.goldCost` gold. A non-gold
+// painting is never bought with gold (returns false). Pure.
+export function canAffordGold(save, pt) {
+  if (!pt || !pt.goldTier) return false;
+  const gold = save ? Number(save.gold) || 0 : 0;
+  return gold >= pt.goldCost;
+}
 
 export function canAfford(bank, cost) {
   return cost.every(c => (bank[c.color] || 0) >= c.amount);

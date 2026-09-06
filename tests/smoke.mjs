@@ -904,7 +904,7 @@ console.log('== stage 23: M7.5 PT4 — early-economy safety net (welcome grant) 
   // cheapest level-1 upgrade and level-1 painting against the grant.
   const grantBank = { red: L.WELCOME_GRANT.red, blue: L.WELCOME_GRANT.blue, green: L.WELCOME_GRANT.green };
   const upgradeOptions = Object.values(L.UPGRADES).map(u => u.levels[0].cost);
-  const paintingOptions = L.PAINTINGS.map(p => p.cost); // all are purchasable (none locked at v1.1)
+  const paintingOptions = L.PAINTINGS.filter(p => !p.goldTier).map(p => p.cost); // pigment paintings (gold-tier G2 works are NG+-gated, gold-priced, no pigment cost)
   const afford = (bank, costObj) => Object.keys(costObj).every(k => (bank[k] || 0) >= costObj[k]);
   const affordableUpgrades = upgradeOptions.filter(c => afford(grantBank, c));
   const affordablePaintings = paintingOptions.filter(c => afford(grantBank, c));
@@ -1427,29 +1427,35 @@ console.log('== stage 32: v1.2 M9 A3 — the Curator\'s Ledger ==');
   frames(1);
   const joined = drawnTexts.join('\u0001');
   const L = await import('../src/logic.js');
-  const expected = L.PAINTINGS; // 8 entries
-  assert(expected.length === 8, 'A3: the collection holds 8 paintings');
+  const expected = L.PAINTINGS; // 10 entries (8 pigment + 2 gold-tier, G2)
+  const goldIds = L.PAINTINGS.filter(p => p.goldTier).map(p => p.id);
+  assert(expected.length === 10, `A3: the collection holds 10 paintings (8 pigment + 2 gold-tier; got ${expected.length})`);
   // every painting name appears at least once
   for (const pt of expected) {
     assert(joined.includes(pt.name), `A3: ledger renders "${pt.name}"`);
   }
   // the correct collected / not-yet state is asserted per painting:
-  //  - the 3 owned ones must carry "collected" (king-frog: "hung in the loadout")
-  //  - the 5 unowned ones must carry "not yet collected"
+  //  - the 3 owned (pigment) ones must carry "collected" (king-frog: "hung")
+  //  - the unowned PIGMENT ones carry "not yet collected"
+  //  - the unowned GOLD-tier ones carry "not yet gold" (G2 styling)
   const owned = g32.save.owned;
   const hung = g32.save.loadout;
-  // "not yet collected" count (one per unowned entry)
+  const ownedNonGold = owned.filter(id => !goldIds.includes(id));
+  const notYetPigment = (L.PAINTINGS.filter(p => !p.goldTier).length) - ownedNonGold.length;
   const notYetCount = (joined.match(/not yet collected/g) || []).length;
-  assert(notYetCount === expected.length - owned.length, `A3: exactly ${expected.length - owned.length} entries marked "not yet collected"`);
-  // exact "collected" tag count = owned minus the ones flagged as hung
-  const ownedNotHung = owned.filter(id => !hung.includes(id)).length;
+  assert(notYetCount === notYetPigment, `A3: exactly ${notYetPigment} PIGMENT entries marked "not yet collected"`);
+  const notYetGold = (joined.match(/not yet gold/g) || []).length;
+  assert(notYetGold === goldIds.length, `A3: exactly ${goldIds.length} unowned gold-tier entries marked "not yet gold"`);
+  // exact "collected" tag count = owned non-gold minus the ones flagged as hung
+  const ownedNotHung = ownedNonGold.filter(id => !hung.includes(id)).length;
   const collectedExact = (joined.match(/\u0001collected\u0001/g) || []).length;
-  assert(collectedExact === ownedNotHung, `A3: ${ownedNotHung} owned (non-hung) entries carry the exact "collected" tag`);
+  assert(collectedExact === ownedNotHung, `A3: ${ownedNotHung} owned (non-hung) pigment entries carry the exact "collected" tag`);
   // the hung one is flagged distinctly
   assert(joined.includes('hung in the loadout'), 'A3: the hung painting is flagged "★ hung in the loadout"');
-  // the curator caption + display-only note render
-  assert(joined.includes('of 8 collected') || joined.includes("curator's ledger"), 'A3: the ledger footer caption renders');
-  assert(joined.includes('nothing is sold here'), 'A3: the display-only note renders');
+  // the curator caption + display-only note render (10 paintings + gold-tier count)
+  assert(joined.includes('of 10 collected') || joined.includes("curator's ledger"), 'A3: the ledger footer caption renders (10 paintings)');
+  assert(joined.includes('gold-tier') || joined.includes("gold"), 'A3: the ledger footer notes the gold-tier works');
+  assert(joined.includes('a display only'), 'A3: the display-only note renders');
 
   // drew cleanly for a sustained stretch (no JS errors in the render path)
   frames(30);
@@ -3000,6 +3006,113 @@ console.log('== stage 50: G1 — Gold pigment meta economy (core) ==');
   assert(typeof corrupt.goldEarned === 'object' && Object.keys(corrupt.goldEarned).length === 0, 'G1: a garbled goldEarned field normalizes to {}');
 
   console.log('ok — G1: gold is a META-ONLY currency earned exactly once per first-time event (boss kill / synergy duo / 100-orb run), totals to 67 (clears the G2 gold set), old saves migrate to gold 0, and the atelier displays it');
+}
+
+// ---- stage 51: G2 — two gold-tier paintings (catalog 8→10) -----------------
+// The PAINTINGS catalog grows 8 → 10 with two gold-tier works (a `goldTier`
+// flag + `goldCost`, priced in the meta gold currency, not pigment):
+//   · Gilded Meridian — +10% all orb/pickup value permanently — 25 gold
+//   · Verdant Crown   — +1 green heal per touch permanently      — 40 gold
+// They are purchasable ONLY on NG+ cycles (ngCycle >= 1) — a first-time
+// player never sees them in the shop — bought with gold via the existing
+// atelier purchase flow, and their effects apply in makeTuning when OWNED
+// (a permanent meta bonus, not a loadout slot). The Curator's Ledger lists
+// all 10 with gold-tier styling.
+console.log('== stage 51: G2 — Two gold-tier paintings (catalog 8→10) ==');
+{
+  const L51 = await import('../src/logic.js');
+
+  // ---- (1) the catalog grew 8 → 10, with the two gold-tier entries ----
+  assert(L51.PAINTINGS.length === 10, `G2: the PAINTINGS catalog holds 10 paintings (got ${L51.PAINTINGS.length})`);
+  assert(L51.PAINTINGS.filter(p => !p.goldTier).length === 8, 'G2: the 8 pigment paintings are unchanged');
+  const gold = L51.goldPaintings();
+  assert(gold.length === 2, `G2: goldPaintings() returns the 2 gold-tier works (got ${gold.length})`);
+  const gm = L51.PAINTINGS.find(p => p.id === 'gilded-meridian');
+  const vc = L51.PAINTINGS.find(p => p.id === 'verdant-crown');
+  assert(!!gm && gm.goldTier === true && gm.goldCost === 25 && !gm.cost, `G2: Gilded Meridian is goldTier, priced 25 gold, has NO pigment cost (got goldCost=${gm && gm.goldCost})`);
+  assert(!!vc && vc.goldTier === true && vc.goldCost === 40 && !vc.cost, `G2: Verdant Crown is goldTier, priced 40 gold, has NO pigment cost (got goldCost=${vc && vc.goldCost})`);
+
+  // ---- (2) the tuning effects apply when OWNED (via the makeTuning owned param) ----
+  const base = L51.makeTuning({}, [], 'normal', 0, []);
+  const gOnly = L51.makeTuning({}, [], 'normal', 0, ['gilded-meridian']);
+  const vOnly = L51.makeTuning({}, [], 'normal', 0, ['verdant-crown']);
+  const both = L51.makeTuning({}, [], 'normal', 0, ['gilded-meridian', 'verdant-crown']);
+  assert(gOnly.pickupValue === Math.round(base.pickupValue * 1.1 * 1000) / 1000, `G2: Gilded Meridian raises orb value +10% when owned (pickupValue ${base.pickupValue} -> ${gOnly.pickupValue})`);
+  assert(vOnly.greenHeal === base.greenHeal + 1, `G2: Verdant Crown adds +1 green heal when owned (greenHeal ${base.greenHeal} -> ${vOnly.greenHeal})`);
+  assert(Math.abs(both.pickupValue - base.pickupValue * 1.1) < 1e-9 && both.greenHeal === base.greenHeal + 1, 'G2: both gold paintings apply at once when both owned');
+  // owning nothing (a first-time / cycle-0 save) keeps the tuning byte-identical
+  assert(JSON.stringify(base) === JSON.stringify(L51.makeTuning({}, [], 'normal', 0, [])), 'G2: a save that owns no gold paintings leaves the tuning unchanged');
+
+  // ---- (3) canAffordGold gates on the gold balance ----
+  assert(L51.canAffordGold({ gold: 25 }, gm) === true, 'G2: a save with 25 gold can afford Gilded Meridian');
+  assert(L51.canAffordGold({ gold: 24 }, gm) === false, 'G2: a save with 24 gold cannot afford Gilded Meridian');
+  assert(L51.canAffordGold({ gold: 40 }, vc) === true, 'G2: a save with 40 gold can afford Verdant Crown');
+  assert(L51.canAffordGold({ gold: 0 }, vc) === false, 'G2: a save with 0 gold cannot afford Verdant Crown');
+  assert(L51.canAffordGold({ gold: 99 }, L51.PAINTINGS.find(p => p.id === 'king-frog')) === false, 'G2: canAffordGold never purchases a NON-gold painting with gold');
+
+  // ---- (4) the atelier shop: NG+-gated (hidden/blocked at cycle 0), buy with gold ----
+  const cv51 = makeCanvas();
+  const g51 = new Game(cv51); g51.start(); g51._quitToTitle(); g51._beginAtelier(); g51._atelierIntro = false; g51.atelierTab = 1;
+
+  // a FIRST-TIME save (ngCycle 0) — gold paintings must NOT be buyable
+  const ftSave = L51.freshSave(); ftSave.ngCycle = 0; ftSave.gold = 67; // plenty of gold, but cycle 0
+  g51.save = ftSave;
+  let rows = g51._atelierRows();
+  const gmRow0 = rows.find(r => r.tag === 'paint:gilded-meridian');
+  assert(!!gmRow0 && gmRow0.enabled === false, 'G2: at cycle 0 the Gilded Meridian buy row is present but DISABLED (NG+ only)');
+  g51._buyGoldPainting('gilded-meridian'); // direct call must be refused at cycle 0
+  assert(!ftSave.owned.includes('gilded-meridian') && ftSave.gold === 67, 'G2: buying a gold painting at cycle 0 is refused (no purchase, gold unchanged)');
+
+  // an NG+ save (ngCycle 1) with enough gold — the buy goes through
+  const ngSave = L51.freshSave(); ngSave.ngCycle = 1; ngSave.gold = 67; ngSave.stats.victories = 1;
+  g51.save = ngSave;
+  rows = g51._atelierRows();
+  const gmRow = rows.find(r => r.tag === 'paint:gilded-meridian');
+  assert(!!gmRow && gmRow.enabled === true, `G2: on an NG+ cycle with gold, the Gilded Meridian buy row is ENABLED (enabled=${gmRow && gmRow.enabled})`);
+  g51._buyGoldPainting('gilded-meridian');
+  assert(ngSave.owned.includes('gilded-meridian'), 'G2: the Gilded Meridian is purchased (owned)');
+  assert(ngSave.gold === 67 - 25, `G2: buying Gilded Meridian spends 25 gold (gold now ${ngSave.gold})`);
+  assert(!ngSave.loadout.includes('gilded-meridian'), 'G2: a gold painting is NOT hung into the 2-slot loadout (permanent meta bonus)');
+  assert(g51.tuning.pickupValue === Math.round(base.pickupValue * 1.1 * 1000) / 1000, 'G2: the Gilded Meridian effect is live in the run tuning after purchase');
+  // Verdant Crown likewise
+  g51._buyGoldPainting('verdant-crown');
+  assert(ngSave.owned.includes('verdant-crown') && ngSave.gold === 67 - 25 - 40, `G2: Verdant Crown is purchased for 40 gold (gold now ${ngSave.gold})`);
+  assert(g51.tuning.greenHeal === base.greenHeal + 1, 'G2: the Verdant Crown effect (+1 green heal) is live in the run tuning after purchase');
+  // re-buying is a no-op (already owned)
+  const goldAfter = ngSave.gold;
+  g51._buyGoldPainting('gilded-meridian');
+  assert(ngSave.gold === goldAfter, 'G2: re-buying an owned gold painting is a no-op (gold unchanged)');
+  // spending more gold than held is refused
+  g51.save = L51.freshSave(); g51.save.ngCycle = 1; g51.save.gold = 10;
+  g51._buyGoldPainting('gilded-meridian');
+  assert(!g51.save.owned.includes('gilded-meridian') && g51.save.gold === 10, 'G2: a gold purchase is refused when gold is insufficient (gold unchanged)');
+
+  // ---- (5) the Curator's Ledger lists ALL 10 with gold-tier styling ----
+  const recCanvas = makeCanvas();
+  const drawnTexts = [];
+  const baseCtx = makeCtx(recCanvas);
+  const recCtx = new Proxy(baseCtx, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawnTexts.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas.getContext = () => recCtx;
+  const g51l = new Game(recCanvas); g51l.start(); g51l._quitToTitle(); g51l._beginAtelier(); g51l._atelierIntro = false;
+  g51l.save = L51.freshSave(); g51l.save.owned = ['gilded-meridian', 'verdant-crown']; g51l.save.ngCycle = 1;
+  fireKey('keydown', '4'); frames(4);
+  assert(g51l.atelierTab === 3, 'G2: the Ledger tab is reached by key 4');
+  const joined51 = drawnTexts.join('\u0001');
+  assert(joined51.includes('Gilded Meridian') && joined51.includes('Verdant Crown'), 'G2: the Ledger lists both gold-tier paintings');
+  assert(joined51.includes('Moonlit Pond') && joined51.includes('Sir Croaksworth (Portrait)'), 'G2: the Ledger still lists the pigment paintings (all 10)');
+  // the ledger lists ALL 10 (verified by the pigment + gold names above) and
+  // marks the gold-tier entries with the gilded "◆ GOLD" tag (gold-tier styling)
+  assert((joined51.match(/◆ GOLD/g) || []).length >= 2, 'G2: the Ledger marks the gold-tier entries with the "◆ GOLD" tag (gold-tier styling)');
+  assert(joined51.includes('not yet gold') === false, 'G2: the owned gold paintings no longer read "not yet gold" (they are collected)');
+  frames(20);
+  assert(g51l.state === 'atelier', 'G2: the Ledger tab drew cleanly (all 10, no JS errors)');
+  fireKey('keydown', 'Escape'); frames(2);
+  assert(g51l.state === 'title', 'G2: Escape returned from the Ledger to the title');
+
+  console.log('ok — G2: the catalog grows 8→10 with two gold-tier works (Gilded Meridian +10% orb value @25g, Verdant Crown +1 green heal @40g) that are NG+-gated, bought with gold via the existing atelier flow, apply in makeTuning when owned, and are listed (all 10) in the Curator\'s Ledger with gold-tier styling');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

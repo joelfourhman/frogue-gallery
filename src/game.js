@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -99,6 +99,8 @@ const LEDGER_LORE = {
   'storm-cloud': 'A single cloud caught at the exact second it decided to rain. Monet insists it was raining on him, not the canvas.',
   "beetle-armor": 'Chitin borrowed, not stolen — the beetle grew a second shell and kept its dignity. So did you.',
   'croaksworth': 'The one portrait he finally let himself be. Even the old heron looks a little proud, and a little green.',
+  'gilded-meridian': 'The Curator gilded a single horizon and it glows still — every drop that crosses it leaves a little more of itself behind. A gold-tier work; earned only in the second expedition.',
+  'verdant-crown': 'A crown woven from the moss that mends, worn by no frog and gifted to all of them. It heals the hand that reaches for it. A gold-tier work; earned only in the second expedition.',
 };
 export function ledgerEntry(pt) {
   return { id: pt.id, name: pt.name, lore: LEDGER_LORE[pt.id] || 'A blank page, still waiting for its story.' };
@@ -191,7 +193,7 @@ export class Game {
     // ---------- persistence + tuning ----------
     this.save = SaveSys.load() || freshSave();
     this.options = SaveSys.loadOptions();
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned);
     // B5: persistent storage unavailable (privacy mode, quota, disabled)? We
     // still run on the in-memory save, but surface a one-time warning so the
     // player knows progress may not survive a reload. storageOK forces the
@@ -673,7 +675,7 @@ export class Game {
       // narrow + tight so all four sit on one symmetric row about cx.
       tabY: 148, tabW: 180, tabH: 44, tabGap: 8,
       rowY0: 204, rowH: 104, rowGap: 12,
-      cardW: (listW - 24) / 2, cardH: 112, cardGap: 12, cols: 2,
+      cardW: (listW - 24) / 2, cardH: 90, cardGap: 8, cols: 2,  // G2: 10 paintings (2x5) fit above the Depart button
       depart: { x: cx - 150, y: ch - 92, w: 300, h: 54 },
       leave: { x: cx - 370, y: ch - 82, w: 200, h: 34 },
     };
@@ -709,7 +711,16 @@ export class Game {
         const y = g.rowY0 + row * (g.cardH + g.cardGap);
         const owned = this.save.owned.includes(pt.id);
         const inLoadout = this.save.loadout.includes(pt.id);
-        const bw = 160, bh = 44, bx = x + g.cardW - bw - 16, by = y + 34;
+        const bw = 160, bh = 38, bx = x + g.cardW - bw - 14, by = y + 26;
+        const isGold = !!pt.goldTier;
+        if (isGold) {
+          // G2: gold-tier paintings are NG+-gated, bought with the meta gold
+          // currency, and NEVER added to the 2-slot loadout (permanent meta).
+          const ngOk = (Math.floor(this.save.ngCycle) || 0) >= 1;
+          const enabled = !owned && ngOk && canAffordGold(this.save, pt);
+          rows.push({ tag: 'paint:' + pt.id, x: bx, y: by, w: bw, h: bh, enabled, act: () => this._buyGoldPainting(pt.id) });
+          return;
+        }
         if (owned) rows.push({ tag: 'paint:' + pt.id, x: bx, y: by, w: bw, h: bh, enabled: inLoadout || this.save.loadout.length < 2, act: () => this._toggleLoadout(pt.id) });
                 else rows.push({ tag: 'paint:' + pt.id, x: bx, y: by, w: bw, h: bh, enabled: canAfford(this.save.bank, Array.isArray(pt.cost) ? pt.cost : costArray(pt.cost)), act: () => this._buyPainting(pt.id) });
       });
@@ -800,6 +811,40 @@ export class Game {
     this._noteAtelierPurchase();
   }
 
+  // G2 (v1.3 M15): purchase a gold-tier painting with the meta gold currency.
+  // NG+-gated (ngCycle >= 1) and gold-denominated. The painting is OWNED but
+  // NOT hung into the loadout — it is a permanent meta bonus (applied in
+  // makeTuning via save.owned), so a first-time (cycle-0) player never sees it.
+  _buyGoldPainting(id) {
+    const pt = PAINTINGS.find(p => p.id === id);
+    if (!pt || !pt.goldTier || this.save.owned.includes(id)) return;
+    if ((Math.floor(this.save.ngCycle) || 0) < 1) { this.sfx('hurt'); return; } // NG+ gate
+    if (!canAffordGold(this.save, pt)) { this.sfx('hurt'); return; }
+    this.save.gold -= pt.goldCost;
+    this.save.owned.push(id);
+    // rebuild live tuning so the bonus is active right away + next run
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus, this.save.owned);
+    this.sfx('awaken');
+    this.addBanner(`${pt.name} is hung in gilded glass — its effect is yours forever.`, 4.2, this.ch * 0.34);
+    SaveSys.save(this.save);
+    this._noteAtelierPurchase();
+  }
+
+  // G2 (v1.3 M15): a small gold chip + amount, left-anchored (mirrors _costChips
+  // but for the meta gold currency).
+  _goldChips(ctx, amount, x, y) {
+    const cx0 = x;
+    ctx.beginPath();
+    ctx.arc(cx0, y, 9, 0, TAU);
+    ctx.fillStyle = '#d9a520';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+    centerText(ctx, String(amount) + 'g', cx0 + 20, y, '700 14px Georgia, serif', '#8a6d1f', 1);
+    return cx0 + 56;
+  }
+
   _toggleLoadout(id) {
     const i = this.save.loadout.indexOf(id);
     if (i >= 0) { this.save.loadout.splice(i, 1); this.sfx('ui-back'); }
@@ -822,7 +867,7 @@ export class Game {
     SaveSys.save(this.save);
     // rebuild the live tuning so the bonus is active right away (also for the
     // next run) without needing a fresh expedition start.
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus, this.save.owned);
     this.sfx('awaken');
     this.addBanner(`The frame is rehung — Gallery Bonus ${after} minted.`, 4.2, this.ch * 0.34);
     this.addBanner(`+${after * 2} pigment of each color at every run start · +${Math.round(after * 10)}% orb value.`, 4.2, this.ch * 0.34 + 34);
@@ -980,36 +1025,49 @@ _drawAtelier(ctx) {
         const y = g.rowY0 + row * (g.cardH + g.cardGap);
         const owned = this.save.owned.includes(pt.id);
         const inLoadout = this.save.loadout.includes(pt.id);
-        const costC = Array.isArray(pt.cost) ? pt.cost : costArray(pt.cost);
-        const buyable = !owned && canAfford(this.save.bank, costC);
-        const c = paperPanel(ctx, x, y, g.cardW, g.cardH, { seed: 70 + i, fill: inLoadout ? '#f7f1e2' : PAPER });
-        // art tile
-        const artS = 72, artX = x + 16, artY = y + 20;
+        const isGold = !!pt.goldTier;
+        // NG+ gate: gold-tier paintings are purchasable only on NG+ cycles
+        // (ngCycle >= 1). A first-time player (cycle 0) sees them but cannot
+        // buy them — and the button reads "NG+ only".
+        const ngOk = (Math.floor(this.save.ngCycle) || 0) >= 1;
+        const costC = (isGold || Array.isArray(pt.cost)) ? null : costArray(pt.cost);
+        const buyable = !owned && !isGold && canAfford(this.save.bank, costC);
+        const c = paperPanel(ctx, x, y, g.cardW, g.cardH, { seed: 70 + i, fill: inLoadout ? '#f7f1e2' : (isGold ? '#f7efdc' : PAPER) });
+        // art tile (G2: slightly smaller so a 2x5 grid fits the 90px cards)
+        const artS = 60, artX = x + 14, artY = y + 15;
         c.fillStyle = pt.art.bg;
         c.beginPath(); c.roundRect(artX, artY, artS, artS, 8); c.fill();
-        c.lineWidth = 2.5;
-        c.strokeStyle = INK;
+        c.lineWidth = isGold ? 3 : 2.5;
+        c.strokeStyle = isGold ? '#b8912e' : INK;
         c.stroke();
         this._drawPaintingMotif(c, pt, artX, artY, artS);
         // text
-        const tx = artX + artS + 16;
+        const tx = artX + artS + 14;
         const sealed = this._ptLocked(pt);
-        this._leftText(c, sealed ? '???' : pt.name, tx, y + 32, '700 16px Georgia, serif', INK, 1);
+        this._leftText(c, sealed ? '???' : pt.name, tx, y + 28, '700 15px Georgia, serif', INK, 1);
         c.save();
         c.globalAlpha = sealed ? 0.5 : 0.78;
-        c.fillStyle = INK;
+        c.fillStyle = isGold ? '#8a6d1f' : INK;
         c.font = '12px Georgia, serif';
         c.textBaseline = 'middle';
-        c.fillText(sealed ? 'a portrait someone must earn' : pt.desc, tx, y + 58, 256);
+        c.fillText(sealed ? 'a portrait someone must earn' : pt.desc, tx, y + 50, 300);
         c.restore();
-        if (!sealed) this._costChips(c, pt.cost, tx, y + 88);
-        // action button
-        const bw = 160, bh = 44, bx = x + g.cardW - bw - 16, by = y + 34;
+        // cost: pigment chips, or a gold chip for a gold-tier painting
+        if (!sealed) {
+          if (isGold) this._goldChips(c, pt.goldCost, tx, y + 72);
+          else this._costChips(c, pt.cost, tx, y + 72);
+        }
+        // action button (G2: gold paintings buy with gold + NG+ gate; no loadout slot)
+        const bw = 160, bh = 38, bx = x + g.cardW - bw - 14, by = y + 26;
         let label = buyable ? 'Learn' : 'Cannot afford', enabled = buyable;
-        if (owned) { label = inLoadout ? 'Unhang' : 'Hang'; enabled = inLoadout || this.save.loadout.length < 2; }
+        if (isGold) {
+          if (owned) { label = 'collected'; enabled = false; }
+          else if (!ngOk) { label = 'NG+ only'; enabled = false; }
+          else { label = `Buy · ${pt.goldCost}g`; enabled = canAffordGold(this.save, pt); }
+        } else if (owned) { label = inLoadout ? 'Unhang' : 'Hang'; enabled = inLoadout || this.save.loadout.length < 2; }
         if (sealed) { label = 'Sealed'; enabled = false; }
-        uiButton(c, bx, by, bw, bh, label, this._mouseIn(bx, by, bw, bh), false, { seed: 90 + i, size: 14 });
-        if (inLoadout) centerText(c, '★', x + g.cardW - 26, y + 22, '700 16px Georgia, serif', '#c9922a', 1);
+        uiButton(c, bx, by, bw, bh, label, this._mouseIn(bx, by, bw, bh), false, { seed: 90 + i, size: 13 });
+        if (inLoadout) centerText(c, '★', x + g.cardW - 24, y + 20, '700 16px Georgia, serif', '#c9922a', 1);
         paperEnd(ctx);
       });
     } else if (this.atelierTab === 2) {
@@ -1017,7 +1075,7 @@ _drawAtelier(ctx) {
       // are lit (full color + title + passive-bonus caption); works the frog
       // hasn't earned sit in a dimmed, unlabeled frame so the collection reads
       // as a wall of art, not a shop.
-      const fw = 200, fh = 168, fgap = 34, cols = 3, rows = 2;
+      const fw = 190, fh = 150, fgap = 28, cols = 5, rows = 2;  // G2: 10 paintings (5x2) fit the width
       const gridW = cols * fw + (cols - 1) * fgap, gridH = rows * fh + (rows - 1) * fgap;
       const gx0 = cx - gridW / 2, gy0 = g.rowY0 + 8;
       PAINTINGS.forEach((pt, i) => {
@@ -1078,8 +1136,10 @@ _drawAtelier(ctx) {
       // not-yet state. Reuses the P8 Gallery wall's framed look (paperPanel +
       // the gilded frame + the generative motif) and the same painting data;
       // no buying here — the ledger only reads the collection.
-      // 2 cols x 4 rows; sized so the grid ends well above the Depart button.
-      const fw = 548, fh = 104, fgap = 10, cols = 2, rows = 4;
+      // G2: 2 cols x 5 rows (10 paintings); a compact row height so the grid
+      // ends well above the Rehung-Frame bar (at y ≈ ch-150). Gold-tier
+      // paintings get a gilded border + a "GOLD" tag (the ledger lists all 10).
+      const fw = 548, fh = 72, fgap = 9, cols = 2, rows = 5;
       const gridW = cols * fw + (cols - 1) * fgap, gridH = rows * fh + (rows - 1) * fgap;
       const gx0 = cx - gridW / 2, gy0 = g.rowY0 + 2;
       PAINTINGS.forEach((pt, i) => {
@@ -1087,67 +1147,77 @@ _drawAtelier(ctx) {
         const x = gx0 + col * (fw + fgap), y = gy0 + row * (fh + fgap);
         const owned = this.save.owned.includes(pt.id);
         const entry = ledgerEntry(pt);
-        const c = paperPanel(ctx, x, y, fw, fh, { seed: 300 + i, fill: owned ? '#f9f3e2' : '#efe8d6' });
-        // left: a framed thumbnail, gilded when collected (P8 frame look)
-        const fs = fh - 24, fx = x + 14, fy = y + 12;
+        const isGold = !!pt.goldTier;
+        const c = paperPanel(ctx, x, y, fw, fh, { seed: 300 + i, fill: owned ? '#f9f3e2' : (isGold ? '#f6eed6' : '#efe8d6') });
+        // left: a framed thumbnail, gilded when collected (P8 frame look);
+        // gold-tier paintings carry a gilded frame EVEN when not owned (G2).
+        const fs = fh - 22, fx = x + 12, fy = y + 11;
         c.save();
         c.lineWidth = 4;
-        c.strokeStyle = owned ? '#b8912e' : '#b7ab8c';
+        c.strokeStyle = (owned || isGold) ? '#b8912e' : '#b7ab8c';
         c.beginPath(); c.roundRect(fx - 2, fy - 2, fs + 4, fs + 4, 3); c.stroke();
         c.lineWidth = 1.5;
-        c.strokeStyle = owned ? '#8a6d1f' : '#9a9078';
+        c.strokeStyle = (owned || isGold) ? '#8a6d1f' : '#9a9078';
         c.beginPath(); c.roundRect(fx, fy, fs, fs, 2); c.stroke();
         if (owned) {
           c.fillStyle = pt.art.bg;
           c.fillRect(fx, fy, fs, fs);
           this._drawPaintingMotif(c, pt, fx, fy, fs);
         } else {
-          c.fillStyle = '#e3dac4';
+          c.fillStyle = isGold ? '#efe4c6' : '#e3dac4';
           c.fillRect(fx, fy, fs, fs);
           c.globalAlpha = 0.4;
-          c.fillStyle = INK;
-          c.font = '700 30px Georgia, serif';
+          c.fillStyle = isGold ? '#8a6d1f' : INK;
+          c.font = '700 26px Georgia, serif';
           c.textAlign = 'center'; c.textBaseline = 'middle';
           c.fillText('✕', fx + fs / 2, fy + fs / 2);
         }
         c.restore();
-        // right: title, state tag, and the lore blurb (wrapped)
-        const tx = fx + fs + 14, tw = fw - (fs + 28) - 14;
+        // right: title (with a GOLD tag for gold-tier), state tag, lore blurb
+        const tx = fx + fs + 12, tw = fw - (fs + 24) - 12;
         c.save();
         c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-        c.fillStyle = INK;
-        c.font = '700 16px Georgia, serif';
-        c.globalAlpha = owned ? 1 : 0.7;
-        c.fillText(pt.name, tx, y + 30);
+        c.fillStyle = isGold ? '#8a6d1f' : INK;
+        c.font = '700 15px Georgia, serif';
+        c.globalAlpha = owned ? 1 : 0.75;
+        c.fillText(pt.name, tx, y + 26);
+        // GOLD tag sits right of the title for gold-tier entries
+        if (isGold) {
+          const nameW = c.measureText(pt.name).width;
+          c.globalAlpha = owned ? 1 : 0.7;
+          c.font = '700 11px Georgia, serif';
+          c.fillStyle = '#b8912e';
+          c.fillText('◆ GOLD', tx + nameW + 8, y + 26);
+        }
         // state tag: collected / not yet (hung noted for loadout members)
         const hung = this.save.loadout.includes(pt.id);
         c.font = '700 11px Georgia, serif';
         if (owned) {
           c.fillStyle = hung ? '#c9922a' : '#4e8a5a';
-          c.fillText(hung ? '★ hung in the loadout' : 'collected', tx, y + 47);
+          c.globalAlpha = 1;
+          c.fillText(hung ? '★ hung in the loadout' : 'collected', tx, y + 43);
         } else {
-          c.fillStyle = '#9a9078';
-          c.fillText('not yet collected', tx, y + 47);
+          c.fillStyle = isGold ? '#8a6d1f' : '#9a9078';
+          c.globalAlpha = 1;
+          c.fillText(isGold ? 'not yet gold' : 'not yet collected', tx, y + 43);
         }
-        // lore blurb — simple word wrap in the remaining height
+        // lore blurb — a single line (the compact row height)
         c.fillStyle = INK;
-        c.globalAlpha = owned ? 0.85 : 0.55;
-        c.font = 'italic 12.5px Georgia, serif';
-        const words = entry.lore.split(' ');
-        let line = '', ly = y + 66, lh = 15, maxLines = 3;
-        for (let w = 0; w < words.length; w++) {
-          const test = line ? line + ' ' + words[w] : words[w];
-          if (c.measureText(test).width > tw && line) {
-            c.fillText(line, tx, ly); line = words[w]; ly += lh;
-            if (ly > y + fh - 12) { c.fillText(line + '…', tx, ly); line = ''; w = words.length; break; }
-          } else { line = test; }
+        c.globalAlpha = owned ? 0.8 : 0.5;
+        c.font = 'italic 12px Georgia, serif';
+        const lore = entry.lore;
+        let loreOut = lore;
+        while (c.measureText(loreOut).width > tw && loreOut.length > 1) {
+          loreOut = loreOut.slice(0, loreOut.length - 1);
         }
-        if (line) c.fillText(line, tx, ly);
+        if (loreOut !== lore) loreOut = loreOut.replace(/\s+\S*$/, '') + '…';
+        c.fillText(loreOut, tx, y + 60);
         c.restore();
         paperEnd(ctx);
       });
       const ownCt = PAINTINGS.filter(pt => this.save.owned.includes(pt.id)).length;
-      centerText(ctx, `the curator's ledger — ${ownCt} of ${PAINTINGS.length} collected · a display only, nothing is sold here`, cx, gy0 + gridH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
+      const goldCt = PAINTINGS.filter(pt => pt.goldTier).length;
+      centerText(ctx, `the curator's ledger — ${ownCt} of ${PAINTINGS.length} collected · ${goldCt} gold-tier · a display only`, cx, gy0 + gridH + 16, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
       // A4 (v1.2 M9): the 'Rehung Frame' retirement — a permanent, saved
       // gallery bonus minted once the collection is complete. Sits above the
       // Depart button (same geometry as the retire row in _atelierRows).
@@ -1344,7 +1414,7 @@ _drawAtelier(ctx) {
     // advances save.ngCycle) drives NG+ scaling (N2) and boss selection (N3).
     this.ngCycle = Math.max(0, Math.floor(this.save.ngCycle) || 0);
     this.world = new World(mulberry32(seed), seed % 99991);
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned);
     // N2 (v1.3 M14): NG+ per-cycle scaling — applied ONLY when ngCycle >= 1 so
     // a first-time (cycle 0) run's tuning stays byte-identical to pre-NG+.
     if (this.ngCycle >= 1) applyNGPlus(this.tuning, this.ngCycle);
@@ -3289,7 +3359,7 @@ _drawAtelier(ctx) {
     if (!DIFFICULTIES[id] || this.options.difficulty === id) return;
     this.options.difficulty = id;
     SaveSys.saveOptions(this.options);
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned);
     this._prevHp = this.tuning.maxHp;
     this.sfx('ui');
   }
