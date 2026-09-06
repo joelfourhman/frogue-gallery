@@ -27,7 +27,7 @@ release v1.1.
 | B3 | Dry-brush softlock audit: prove a pigment-starved frog can still beat the heron | ✅ `a32a721` |
 | B4 | Tab-hidden time-spike verification (dt cap exists: 0.05s; confirm no physics blowups) | ✅ `2ed1c9a` |
 | B5 | localStorage unavailable → in-memory fallback + one-time notice | ⬜ |
-| B6 | Save schema versioning: `saveVersion` in the save, migration test (foundations in logic.js) | ⬜ |
+| B6 | Save schema versioning: `saveVersion` in the save, migration test (foundations in logic.js) | ✅ 2026-09-05 (commit pending this pass — `SAVE_VERSION`/`SAVE_MIGRATIONS` in logic.js, smoke stage 19) |
 
 Acceptance: each item has a passing test; smoke suite green; no behavior
 change to Normal difficulty.
@@ -43,7 +43,7 @@ Player-tested the game; five issues to fix as one cohesive UX pass
 | PT2 | Onboarding | tighten/clarify first-run flow | ⬜ |
 | PT3 | Fly fairness | frog fly mechanic judged unfair — audit + rebalance | ⬜ |
 | PT4 | Early-economy safety net | new players can soft-lock the bank early | ⬜ |
-| PT5 | Grey box in the swamp | visible rendering artifact | ⬜ |
+| PT5 | Grey box in the swamp | duplicate camera transform in world.js terrain painters — removed | ✅ 2026-09-05 (commit pending) — smoke 19/19 green |
 
 Acceptance: each fix shipped with a test or documented manual check; full
 suite green; Normal-difficulty baseline preserved (balance numbers logged

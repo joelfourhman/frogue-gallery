@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-05, final DoD audit sweep (items 1–12). `node tests/smoke.mjs` = ALL 16 STAGES PASSED (118 assertions). Pacing probes: `tests/pace.mjs` lower-bound 1.3 min / competent-player ≈17 min (DoD #9 target 15–20); `tests/bosspace.mjs` real heron fight 36.8s bot / ~1–2.3 min human. DoD #1: HTTP 200 on the documented 8765 loopback launch. DoD #2: title now labels the start button "Continue Expedition" when a save has progress (else "Begin Expedition"), footer explains New Game = erase-save link; stage 16 asserts it. DoD #11: stage 15 focused migration/failure tests (corrupt JSON, old-schema saves, options clamping). DoD #12: SYSTEM_CHANGES.md launch workflow + 8765 port corrected, CLEANUP.md accurate. All P1–P5 committed (see git log). **Definition of Done: all 12 items satisfied.**_
+_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 19 STAGES PASSED**. Pacing probes green. DoD: all 12 items satisfied. v1.1: B1–B6 ✅ (B6 = save schema versioning, commit pending this pass; smoke stage 19). M7.5 PT5 ✅ (grey-box double-transform fix in world.js, uncommitted — see Immediate Next Action). **Next: B5 storage-failure fallback, then PT1–PT4 playtest fixes via the new `tests/headless.mjs` browser driver.**_
 
 ## Current Status
 
@@ -35,7 +35,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 16 stages, all passing (118 assertions).** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 19 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `tests/pace.mjs`, `tests/bosspace.mjs` | **Pacing probes (informational, not assertions).** Lower-bound run length + human model; real pigment-cycling heron fight timing |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
@@ -83,7 +83,7 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 | B3 | Dry-brush softlock audit: prove a pigment-starved frog can still beat the heron | ✅ 2026-09-05 — commit `a32a721`: audit proves no softlock (dry never damages the heron by design; in-run wet pigment is unlimited; 30k-HP heron falls in bounded ~84 awaken cycles; heron damage-locked states are transient). Regression guard in smoke stage 17 (fails if a wet pigment goes to 0 dmg or awaken becomes unreachable). PM-verified: code claims confirmed + suite green. |
 | B4 | Tab-hidden time spike: verify dt cap / pause behavior on long hidden-tab gaps | ✅ 2026-09-05 — commit `2ed1c9a`: dt cap (0.05s) holds; `last = t` uses the real timestamp so no catch-up spiral; all physics integrates on clamped dt (absolute `now` only for animation/status/UI timing). Smoke stage 18 injects a 300,000ms delta: wall clock jumps 30s, player/enemy motion bounded to one frame, no NaN, clean recovery. PM-verified. |
 | B5 | Storage-failure fallback: localStorage unavailable → in-memory + one-time notice | ⬜ |
-| B6 | Save schema versioning: `version` field on every write + migration smoke stage | ⬜ |
+| B6 | Save schema versioning: `saveVersion` field on every write + migration chain + smoke stage | ✅ 2026-09-05 (this pass, commit pending) — `logic.js`: `SAVE_VERSION = 1`, saves stamped `saveVersion` (legacy `v` field read + re-stamped on load), `SAVE_MIGRATIONS` ordered chain for future schema bumps. Smoke stage 19 (19 stages total). PM-verified: diff + full suite green. |
 | P6 | In-game "?" reference overlay (pigment roles, counterplay, heron hint, controls) | ⬜ |
 | P7 | Difficulty select (Easy/Normal/Hard, persisted; Normal = current balance) | ⬜ |
 | P8 | The Gallery Wall — framed, titled owned paintings in the Atelier with passive tooltips | ⬜ |
@@ -98,7 +98,20 @@ Optional (after all of the above is green): gold pigment, gamepad support, New G
 
 ## Immediate Next Action
 
-**B1:** from `frogue-gallery/`, run `node tests/smoke.mjs` to confirm 16 stages / 118 assertions still pass, then commit the working-tree changes (game.js, tests/smoke.mjs, PROJECT_STATE.md, SYSTEM_CHANGES.md) as `fix: release sweep — Continue/New Game start-button label, smoke stages 15–16, doc accuracy (DoD #2/#11/#12)`. Then start B2: implement corrupt-save handling in `src/save.js` (graceful detection + user choice), extend a smoke stage to drive it, update this file, commit. Continue through Track B → Track A without stopping at checkpoints.
+**Tree is NOT clean — two in-flight items land this pass (uncommitted):**
+1. `src/world.js` — **PT5 (M7.5) grey-box fix**: `drawBackground`/`drawProps`/`drawObstacles` applied a *second* camera transform on top of the render loop's single `translate(-v.x,-v.y)+scale(v.scale)` wrap, pushing all terrain ~2× off-screen and exposing the page background ("grey box in the swamp"). Fix: drop the per-function transforms so the three terrain painters match `drawEnemy`/`player.draw`/`_drawOrbs` (which never re-apply the camera). Verified: smoke 19/19 green; PM-confirmed correct.
+2. `tests/headless.mjs` — new playwright-core headless-Chrome driver for the M7.5 playtest pass (scenarios: explore/paint/spawn/death/onb; server on `127.0.0.1:8901`; screenshots to `tests/.out/`).
+
+**Commits to make (conventional, one per chunk):**
+- `fix: PT5 swamp grey-box — remove duplicate camera transform in world painters` (src/world.js + tests/headless.mjs; note headless driver as test tooling in the same or a follow commit per PM judgment)
+- `feat: B6 save schema versioning — saveVersion stamp, legacy-v migration, smoke stage 19` (src/logic.js + tests/smoke.mjs + docs)
+
+**Then, in order (do not stop at checkpoints):**
+1. **B5** — storage-failure fallback: `src/save.js` detects unavailable/failing localStorage → in-memory save with a one-time "progress may not persist" banner; smoke stage (stub localStorage to throw).
+2. **M7.5 PT1–PT4** — playtest fixes, each verified with `node tests/headless.mjs <scenario>` (needs `python -m http.server 8901` from the repo root) before committing: PT1 painting consumption, PT2 onboarding tighten, PT3 fly fairness audit + rebalance, PT4 early-economy safety net. Log before/after balance numbers.
+3. **M8 P6–P12** — suggested value order: P10 (perf/cull) → P12 (zone character) → P7 (difficulty) → P8 (gallery wall) → P6 (?) overlay → P9 (audio polish) → P11 (human-pace probe).
+
+Full plan: `docs/PLAN-v1.1-next.md` (written 2026-09-05 by Joel's Hermes on behalf of this profile).
 
 ## Known risks / open questions
 
