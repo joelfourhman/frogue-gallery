@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 26 STAGES PASSED** (stages 21–23 = M7.5 PT1/PT3/PT4, stage 24 = M8 P10 perf culling, stage 25 = M8 P12 zone character, **stage 26 = M8 P7 difficulty select**). Pacing probes green (human est. ~18.8 min). Real-browser probe: 60.5 fps (zone with signature guardian) / 60.2 fps full world / title 60 fps with the P7 pills, no JS errors. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT1–PT5 ✅, **M8 P10 ✅, M8 P12 ✅, M8 P7 ✅ (this pass)**. **Next: M8 P8 → P6 → P9 → P11.**_
+_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 27 STAGES PASSED** (stages 21–23 = M7.5 PT1/PT3/PT4, stage 24 = M8 P10 perf culling, stage 25 = M8 P12 zone character, stage 26 = M8 P7 difficulty select, **stage 27 = M8 P8 Gallery Wall**). Pacing probes green (human est. ~18.8 min). Real-browser probe: 60.5 fps (zone with signature guardian) / 60.2 fps full world / title 60 fps with the P7 pills, no JS errors. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT1–PT5 ✅, **M8 P10 ✅, P12 ✅, P7 ✅, P8 ✅ (this pass)**. **Next: M8 P6 → P9 → P11.**_
 
 ## Current Status
 
@@ -90,7 +90,7 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 | PT4 | Early-economy safety net: fresh save can afford ≥1 upgrade/painting | ✅ 2026-09-05 — one-time `WELCOME_GRANT = {red:3, blue:6, green:4}` (+13) on first expedition (pure `applyWelcomeGrant`, gated on `flags.welcomeGranted`). Fresh save now buys capacity/vitality lvl1 + moonlit-pond/self-portrait. Smoke stage 23. |
 | P6 | In-game "?" reference overlay (pigment roles, counterplay, heron hint, controls) | ⬜ |
 | P7 | Difficulty select (Gentle/Normal/Bold, persisted; Normal = current balance) | ✅ 2026-09-05 — `logic.js` `applyDifficulty()` + `DIFFICULTIES` (Gentle 0.75× boss/dmg, Bold 1.35× boss/enemy/dmg, Normal identity); `options.difficulty` persisted; three pills on the title (G/N/B keys + click). |
-| P8 | The Gallery Wall — framed, titled owned paintings in the Atelier with passive tooltips | ⬜ |
+| P8 | The Gallery Wall — framed, titled owned paintings in the Atelier with passive tooltips | ✅ 2026-09-05 — third Atelier tab "The Gallery" (key 3 / click): every painting hung in a gold frame; owned = lit full-color motif + title placard + passive bonus + "★ hung" when in loadout, unowned = dimmed silhouette, sealed = "???". Display-only (buying/hanging stays on the Paintings tab). Smoke stage 27. |
 | P9 | Audio/options polish: separate music/SFX sliders, screen-shake + vignette toggles | ⬜ |
 | P10 | Performance pass: cull off-screen enemy AI/decoration updates; 60fps with full 5400px world | ✅ 2026-09-05 — `world.js` view-culls grass/ripples/soil/slicks/veg/reeds/pads/obstacles to the visible rect (draw calls 9527 full-world → ~1464 localized, 0.15×); `game.js` skips full enemy AI beyond 500px (burn still ticks). Smoke stage 24 + real-browser probe (60.2 fps across x=5%→95%). |
 | P11 | Human-pace pacing probe (≈260 px/s walker model) | ⬜ |
@@ -123,23 +123,31 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 ## Immediate Next Action
 
 **Tree is clean** — PT5 (ed287a4), B6 (599a599), B5 (7f4fc3e), M7.5 PT1–PT4
-(c92ced1), the v1.1 status-docs pass (3c590be), M8 P10 (`5e95fbf`), and M8
-P12 (`0ab27e8`) are all committed and verified.
+(c92ced1), the v1.1 status-docs pass (3c590be), M8 P10 (`5e95fbf`), M8 P12
+(`0ab27e8`), and M8 P7 (`7457229`) are all committed and verified.
 
-**M8 P7 (difficulty select) — implemented + tested this pass.** Three tiers
-(**Gentle / Normal / Bold**) selectable on the title via G/N/B keys, the
-three pills, or a click; the choice persists in `options.difficulty`
-(migrated in `logic.js`). `applyDifficulty()` in `logic.js` scales boss HP,
-enemy HP, and damage-taken **after** loadout modifiers; **Normal is
-byte-for-byte the released tuning** (boss 30000, all multipliers 1.0) so the
-existing balance is preserved. Applied at run start in `_beginExpedition` and
-re-applied in the constructor + `_setDifficulty`. The title gains a shared
-`_titleLayout()` source of truth (buttons + difficulty pills) used by both
-`_drawTitle` and `_updateTitle` so click targets and pixels can't drift.
-**Verified:** smoke stage 26 (Normal = released boss HP 30000 + identity
-multipliers; Gentle 22500 / Bold 42000 boss; label presence; migrate in/out
-of the field; real loop title → B → Bold run starts the heron at 42000);
-real-browser title probe 60 fps with the pills, zero JS errors.
+**M8 P8 (the Gallery Wall) — implemented + tested this pass.** The Atelier
+gains a third tab, **"The Gallery"** (key 3 / click), which hangs every
+painting in a gold frame. Owned works are *lit*: full-color motif + a title
+placard + the passive bonus, with a "★ hung" badge when the painting is in
+the loadout. Unowned works are dimmed silhouettes with a cost hint; sealed
+Croaksworth shows "???" (a portrait someone must earn). It is **display-only**
+— buying and hanging stay on the Paintings tab, so the wall is a place to
+*look at* your collection, not a shop. The tab layout is driven by the same
+`_atelierGeom()` the other tabs use (3 narrower tabs centered on cx), and
+`_atelierRows()` now gates the buy/hang rows behind `atelierTab === 1` so the
+Gallery tab exposes none of them. **Verified:** smoke stage 27 (a `tab2`
+click row exists; key 3 + a click both land on the Gallery; the tab exposes no
+`paint:` rows but keeps `depart`/`leave`; the tab draws cleanly for 30 frames
+both with an empty collection and with owned + hung paintings — the lit path).
+
+**Prior pass — M8 P7 (difficulty select).** Three tiers (**Gentle / Normal /
+Bold**) on the title (G/N/B keys, the pills, or a click); persists in
+`options.difficulty`. `applyDifficulty()` in `logic.js` scales boss HP, enemy
+HP, and damage-taken after loadout modifiers; **Normal is byte-for-byte the
+released tuning** (boss 30000, multipliers 1.0). Shared `_titleLayout()` keeps
+draw and click in sync. Smoke stage 26; real-browser title probe 60 fps, no JS
+errors. Committed `7457229`.
 
 **Prior pass — M8 P12 (zone character).** `ZONES` carry a per-zone `accent`
 color and a `sig` signature encounter; on zone entry `_zoneBeat` spawns an
@@ -151,7 +159,7 @@ zone-accent wash (`_drawZoneTint`). Guards: Reed beetle×1, Slick
 mosquito×2, Bramble toad×1, Gray beetle×2 (6 total). Smoke stage 25; real
 browser 60.5 fps, no JS errors. Committed `0ab27e8`.
 
-**Next: M8 P8 (Gallery Wall) → P6 (? overlay) → P9 (audio polish) → P11 (human-pace probe).**
+**Next: M8 P6 (? overlay) → P9 (audio polish) → P11 (human-pace probe).**
 
 - (recorded) **PT1 — painting consumption (verified, no code change).** The plan flagged
   "painting might be free / infinite wet." Audit result: swipes and splashes

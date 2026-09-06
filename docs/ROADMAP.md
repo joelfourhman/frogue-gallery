@@ -55,7 +55,7 @@ in PROJECT_STATE.md before/after).
 |---|---|---|
 | P6 | In-game "?" reference overlay (controls, pigments, enemies) | ⬜ |
 | P7 | Difficulty select on title (Gentle/Normal/Bold; Normal = current balance) | ✅ 2026-09-05 — three pills on the title (keys G/N/B, click, or the pills); choice persists in `options.difficulty`. `applyDifficulty()` in `logic.js` scales boss HP / enemy HP / damage-taken; Normal is exactly the released tuning. |
-| P8 | The Gallery Wall: framed, titled owned paintings in the Atelier | ⬜ |
+| P8 | The Gallery Wall: framed, titled owned paintings in the Atelier | ✅ 2026-09-05 — third Atelier tab "The Gallery" (key 3 / click): every painting hung in a gold frame. Owned works are lit (full-color motif + title placard + passive bonus, "★ hung" when in the loadout); unowned are dimmed silhouettes (cost hint); sealed Croaksworth shows "???" (earned). Display-only — buying/hanging stays on the Paintings tab. Smoke stage 27. |
 | P9 | Audio/options polish: separate music/SFX sliders, shake & vignette toggles | ⬜ |
 | P10 | Performance pass: cull off-screen enemy AI; hold 60fps across the full world | ✅ 2026-09-05 (view-cull decor + enemy AI beyond 500px; draw calls 9527→~1464 localized; 60.2 fps real-browser; smoke stage 24) |
 | P11 | Human-pace pacing probe (simulated human input, not bot-optimal) | ⬜ |

@@ -274,7 +274,9 @@ export class Game {
     const listX = cx - 560, listW = 1120;
     return {
       cx, ch, listX, listW,
-      tabY: 148, tabW: 220, tabH: 44,
+      // M8 P8: three tabs (Upgrades / Paintings / Gallery); narrower than the old
+      // two so all three sit on one row.
+      tabY: 148, tabW: 176, tabH: 44, tabGap: 8,
       rowY0: 204, rowH: 104, rowGap: 12,
       cardW: (listW - 24) / 2, cardH: 112, cardGap: 12, cols: 2,
       depart: { x: cx - 150, y: ch - 92, w: 300, h: 54 },
@@ -286,8 +288,11 @@ export class Game {
     // [{x, y, w, h, enabled?, act()}] — the full click map for this frame.
     const g = this._atelierGeom();
     const rows = [
-          { tag: 'tab0', x: g.cx - g.tabW - 10, y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== 0) this.sfx('ui'); this.atelierTab = 0; } },
-          { tag: 'tab1', x: g.cx + 10, y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== 1) this.sfx('ui'); this.atelierTab = 1; } },
+          // M8 P8: three tabs (Upgrades / Paintings / Gallery), centered on cx.
+          // Spacing between left edges = tabW + tabGap; the group is symmetric about cx.
+          { tag: 'tab0', x: g.cx - 1.5 * g.tabW - g.tabGap, y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== 0) this.sfx('ui'); this.atelierTab = 0; } },
+          { tag: 'tab1', x: g.cx - 0.5 * g.tabW, y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== 1) this.sfx('ui'); this.atelierTab = 1; } },
+          { tag: 'tab2', x: g.cx + 0.5 * g.tabW + g.tabGap, y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== 2) this.sfx('ui'); this.atelierTab = 2; } },
         ];
     if (this.atelierTab === 0) {
       Object.keys(UPGRADES).forEach((id, i) => {
@@ -297,7 +302,8 @@ export class Game {
         const y = g.rowY0 + i * (g.rowH + g.rowGap);
         rows.push({ tag: 'buy:' + id, x: g.listX + g.listW - 250, y: y + 21, w: 220, h: 62, enabled: !maxed && canAfford(this.save.bank, Array.isArray(u.levels[lv].cost) ? u.levels[lv].cost : costArray(u.levels[lv].cost)), act: () => this._buyUpgrade(id) });
       });
-    } else {
+    } else if (this.atelierTab === 1) {
+      // the Gallery tab (2) is display-only — no buy/hang rows
       PAINTINGS.forEach((pt, i) => {
         if (this._ptLocked(pt)) return; // sealed: nothing to click
         const col = i % g.cols, row = (i / g.cols) | 0;
@@ -321,6 +327,7 @@ export class Game {
     if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); this._beginExpedition(); return; }
     if (this.input.pressed('1')) { if (this.atelierTab !== 0) this.sfx('ui'); this.atelierTab = 0; dismissIntro(); }
     if (this.input.pressed('2')) { if (this.atelierTab !== 1) this.sfx('ui'); this.atelierTab = 1; dismissIntro(); }
+    if (this.input.pressed('3')) { if (this.atelierTab !== 2) this.sfx('ui'); this.atelierTab = 2; dismissIntro(); }
     if (this.atelierTab === 0) {
       if (this.input.pressed('a')) { this._buyUpgrade('capacity'); dismissIntro(); }
       if (this.input.pressed('s')) { this._buyUpgrade('power'); dismissIntro(); }
@@ -469,17 +476,19 @@ _drawAtelier(ctx) {
       else centerText(ctx, '·', fx + fs / 2, fy + fs / 2 + 1, '700 14px Georgia, serif', INK, 0.35);
     }
 
-    // tabs
-    [['Studio Upgrades', 0], ['Paintings', 1]].forEach(([label, idx]) => {
+    // tabs (M8 P8: three) — same centered layout as the click map in _atelierRows
+    [['Studio Upgrades', 0], ['Paintings', 1], ['The Gallery', 2]].forEach(([label, idx]) => {
       const active = this.atelierTab === idx;
-      const bx = idx === 0 ? cx - g.tabW - 10 : cx + 10;
-      uiButton(ctx, bx, g.tabY, g.tabW, g.tabH, label, this._mouseIn(bx, g.tabY, g.tabW, g.tabH) && !active, active, { seed: 30 + idx, size: 17 });
+      const bx = cx - 1.5 * g.tabW - g.tabGap + idx * (g.tabW + g.tabGap);
+      uiButton(ctx, bx, g.tabY, g.tabW, g.tabH, label, this._mouseIn(bx, g.tabY, g.tabW, g.tabH) && !active, active, { seed: 30 + idx, size: 15 });
     });
     // persistent one-line legends, so returning players never have to guess
     if (this.atelierTab === 0) {
       centerText(ctx, 'training is paid in banked pigments — it is permanent, even after a defeat', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
-    } else {
+    } else if (this.atelierTab === 1) {
       centerText(ctx, 'buy once, then hang up to 2 — hung paintings are real passive bonuses on your runs', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
+    } else {
+      centerText(ctx, 'your collection — every painting you own, hung on the wall (owned frames are lit)', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
     }
 
     // list
@@ -511,7 +520,7 @@ _drawAtelier(ctx) {
         uiButton(c, bx, by, bw, bh, maxed ? 'MAX' : buyable ? 'Learn' : 'Cannot afford', this._mouseIn(bx, by, bw, bh), false, { seed: 60 + i, size: 16 });
         paperEnd(ctx);
       });
-    } else {
+    } else if (this.atelierTab === 1) {
       PAINTINGS.forEach((pt, i) => {
         const col = i % g.cols, row = (i / g.cols) | 0;
         const x = g.listX + col * (g.cardW + 24);
@@ -550,6 +559,66 @@ _drawAtelier(ctx) {
         if (inLoadout) centerText(c, '★', x + g.cardW - 26, y + 22, '700 16px Georgia, serif', '#c9922a', 1);
         paperEnd(ctx);
       });
+    } else if (this.atelierTab === 2) {
+      // M8 P8 — the Gallery wall: every painting hung in a frame. Owned works
+      // are lit (full color + title + passive-bonus caption); works the frog
+      // hasn't earned sit in a dimmed, unlabeled frame so the collection reads
+      // as a wall of art, not a shop.
+      const fw = 200, fh = 168, fgap = 34, cols = 3, rows = 2;
+      const gridW = cols * fw + (cols - 1) * fgap, gridH = rows * fh + (rows - 1) * fgap;
+      const gx0 = cx - gridW / 2, gy0 = g.rowY0 + 8;
+      PAINTINGS.forEach((pt, i) => {
+        const col = i % cols, row = (i / cols) | 0;
+        const x = gx0 + col * (fw + fgap), y = gy0 + row * (fh + fgap);
+        const owned = this.save.owned.includes(pt.id);
+        const sealed = this._ptLocked(pt);
+        const c = paperPanel(ctx, x, y, fw, fh, { seed: 130 + i, fill: owned ? '#f9f3e2' : '#efe8d6' });
+        // the frame: a double border, gilded when owned
+        const fx = x + 14, fy = y + 14, fs = fw - 28;
+        c.save();
+        c.lineWidth = 5;
+        c.strokeStyle = owned ? '#b8912e' : '#b7ab8c';
+        c.beginPath(); c.roundRect(fx - 3, fy - 3, fs + 6, fs + 6, 4); c.stroke();
+        c.lineWidth = 2;
+        c.strokeStyle = owned ? '#8a6d1f' : '#9a9078';
+        c.beginPath(); c.roundRect(fx, fy, fs, fs, 2); c.stroke();
+        if (owned) {
+          c.fillStyle = pt.art.bg;
+          c.fillRect(fx, fy, fs, fs);
+          this._drawPaintingMotif(c, pt, fx, fy, fs);
+        } else {
+          // dimmed, unlabeled — a silhouette of a future painting
+          c.fillStyle = sealed ? '#d8cfb8' : '#e3dac4';
+          c.fillRect(fx, fy, fs, fs);
+          c.globalAlpha = 0.4;
+          c.fillStyle = INK;
+          c.font = '700 26px Georgia, serif';
+          c.textAlign = 'center'; c.textBaseline = 'middle';
+          c.fillText(sealed ? '?' : '✕', fx + fs / 2, fy + fs / 2);
+        }
+        c.restore();
+        // placard
+        c.save();
+        c.fillStyle = INK;
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        if (owned) {
+          c.font = '700 14px Georgia, serif';
+          c.globalAlpha = 1;
+          c.fillText(pt.name, x + fw / 2, y + fh - 34);
+          c.font = 'italic 11px Georgia, serif';
+          c.globalAlpha = 0.7;
+          c.fillText(pt.desc, x + fw / 2, y + fh - 18, fw - 24);
+          if (this.save.loadout.includes(pt.id)) { c.globalAlpha = 1; c.font = '700 12px Georgia, serif'; c.fillStyle = '#c9922a'; c.fillText('★ hung', x + fw - 20, y + 22); }
+        } else {
+          c.font = 'italic 11px Georgia, serif';
+          c.globalAlpha = 0.6;
+          c.fillText(sealed ? 'a sealed portrait' : 'not yet collected', x + fw / 2, y + fh - 24);
+        }
+        c.restore();
+        paperEnd(ctx);
+      });
+      const ownedCount = PAINTINGS.filter(pt => this.save.owned.includes(pt.id)).length;
+      centerText(ctx, `${ownedCount} of ${PAINTINGS.length} paintings in your collection`, cx, gy0 + gridH + 16, '700 14px Georgia, serif', '#fdf6e9', 0.85);
     }
 
     // first-visit how-it-works panel (one-time; any tab/buy/action dismisses it)
@@ -564,7 +633,7 @@ _drawAtelier(ctx) {
         'Ready when you are — Depart sends you back out to the swamp.',
       ];
       lines.forEach((ln, i) => centerText(c, ln, cx, py + 84 + i * 32, '15px Georgia, serif', INK, 0.85));
-      centerText(c, 'press 1 / 2 to browse the shelves — any action closes this note', cx, py + ph - 24, 'italic 12px Georgia, serif', INK, 0.55);
+      centerText(c, 'press 1 / 2 / 3 to browse the shelves, paintings, and gallery — any action closes this note', cx, py + ph - 24, 'italic 12px Georgia, serif', INK, 0.55);
       paperEnd(ctx);
     }
 

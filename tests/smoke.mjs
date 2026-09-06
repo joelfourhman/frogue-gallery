@@ -1068,5 +1068,40 @@ console.log('== stage 26: M8 P7 — difficulty select (Gentle/Normal/Bold) ==');
   assert(g4.state === 'end', 'run ended cleanly after the P7 stage');
 }
 
+console.log('== stage 27: M8 P8 — the Gallery Wall in the Atelier ==');
+{
+  const cv5 = makeCanvas();
+  const g5 = new Game(cv5);
+  g5.start();
+  fireKey('keydown', 'Enter'); frames(3);        // title -> expedition (empty save)
+  g5.player.iframes = 0; g5.player.hurt(99, g5.tuning); frames(140);
+  fireKey('keydown', 'Enter'); frames(3);        // end -> atelier (empty collection)
+
+  // the third tab is reachable by key and by its click target
+  const findRow = (tag) => g5._atelierRows().find(r => r.tag === tag);
+  assert(findRow('tab2'), 'a tab2 (Gallery) row exists in the click map');
+  fireKey('keydown', '3'); frames(2);
+  assert(g5.atelierTab === 2, 'key 3 switched to the Gallery tab');
+  const t2 = findRow('tab2');
+  fireMouse(cv5, t2.x + t2.w / 2, t2.y + t2.h / 2); frames(2);
+  assert(g5.atelierTab === 2, 'clicking the Gallery tab keeps it active');
+  // Gallery is display-only: no buy/hang rows, but depart/leave still present
+  const rows = g5._atelierRows();
+  assert(!rows.some(r => /^paint:/.test(r.tag)), 'the Gallery tab exposes no buy/hang rows (display-only)');
+  assert(rows.some(r => r.tag === 'depart') && rows.some(r => r.tag === 'leave'), 'depart/leave rows remain on the Gallery tab');
+  frames(30);
+  assert(g5.state === 'atelier', 'the Gallery tab drew cleanly for 30 frames (no JS errors)');
+
+  // now own a couple of paintings + one loadout slot, and confirm the lit path
+  // (full-color art + placard + "hung") also renders without error.
+  g5.save.owned = ['spring-garden', 'moonlit-pond'];
+  g5.save.loadout = ['spring-garden'];
+  g5._atelierIntro = false;
+  frames(30);
+  assert(g5.state === 'atelier', 'Gallery drew cleanly with owned + hung paintings (lit + "★ hung" path)');
+  fireKey('keydown', 'Escape'); frames(2);
+  assert(g5.state === 'title', 'Escape returned from the Gallery to the title');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
