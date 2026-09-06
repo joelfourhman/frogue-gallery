@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -193,7 +193,7 @@ export class Game {
     // ---------- persistence + tuning ----------
     this.save = SaveSys.load() || freshSave();
     this.options = SaveSys.loadOptions();
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
     // B5: persistent storage unavailable (privacy mode, quota, disabled)? We
     // still run on the in-memory save, but surface a one-time warning so the
     // player knows progress may not survive a reload. storageOK forces the
@@ -728,13 +728,25 @@ export class Game {
     // A4 (v1.2 M9): the Curator's Ledger (tab 3) offers a 'Rehung Frame'
     // retirement: once the collection is complete (all 8 + one hung), retiring
     // mints a permanent, saved gallery bonus. Repeatable — a counter, not a flag.
+    // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' tier sits in its OWN bar just
+    // above the Rehung Frame bar (50g permanent prestige bump, NG+ + gold-gated).
+    // Both bars are 560 wide; each button is 150 wide on the RIGHT edge so the
+    // click rects line up with the drawn buttons.
     if (this.atelierTab === 3) {
       const eligible = canRetireCollection(this.save);
-      const barX = g.cx - 280, barY = g.ch - 146;
-      const bbw = 150, bbh = 40, bbx = barX + 560 - bbw - 12, bby = barY + 2;
+      const barW = 560, barH = 84, btnW = 150, btnH = 56;
+      // Gilded Frame bar: y = ch-248 (sits above the Rehung bar at ch-150).
+      const gbx = g.cx - barW / 2, gby = g.ch - 248;
+      const canGild = canBuyGildedFrame(this.save);
       rows.push({
-        tag: 'retire', x: bbx, y: bby, w: bbw, h: bbh, enabled: eligible,
-        act: () => this._retireCollection(),
+        tag: 'gild', x: gbx + barW - btnW - 14, y: gby + (barH - btnH) / 2, w: btnW, h: btnH,
+        enabled: canGild, act: () => this._buyGildedFrame(),
+      });
+      // Rehung Frame bar: y = ch-150 (unchanged from A4).
+      const rbx = g.cx - barW / 2, rby = g.ch - 150;
+      rows.push({
+        tag: 'retire', x: rbx + barW - btnW - 14, y: rby + (barH - btnH) / 2, w: btnW, h: btnH,
+        enabled: eligible, act: () => this._retireCollection(),
       });
     }
     rows.push({ tag: 'depart', x: g.depart.x, y: g.depart.y, w: g.depart.w, h: g.depart.h, act: () => { this.sfx('ui'); this._beginExpedition(); } });
@@ -823,9 +835,24 @@ export class Game {
     this.save.gold -= pt.goldCost;
     this.save.owned.push(id);
     // rebuild live tuning so the bonus is active right away + next run
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus, this.save.owned);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus, this.save.owned, isGilded(this.save));
     this.sfx('awaken');
     this.addBanner(`${pt.name} is hung in gilded glass — its effect is yours forever.`, 4.2, this.ch * 0.34);
+    SaveSys.save(this.save);
+    this._noteAtelierPurchase();
+  }
+
+  // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier — a permanent,
+  // saved, 50g purchase (NG+ + gold-gated) that applies a tuning bump ON TOP
+  // of the Rehung Frame gallery bonus. All the rules (eligibility, one-time,
+  // gold deduction) live in logic.js buyGildedFrame(); this method is a thin
+  // game-side wrapper: on success rebuild the live tuning, persist, banner.
+  _buyGildedFrame() {
+    if (!buyGildedFrame(this.save)) { this.sfx('hurt'); return; }
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus, this.save.owned, isGilded(this.save));
+    this.sfx('awaken');
+    this.addBanner('The Gilded Frame is hung — the gallery blazes with light.', 4.4, this.ch * 0.34);
+    this.addBanner(`+${GILDED_FRAME.ink} pigment of each color at every run start · +${Math.round(GILDED_FRAME.orbMult * 100 - 100)}% orb value. Permanent.`, 4.4, this.ch * 0.34 + 34);
     SaveSys.save(this.save);
     this._noteAtelierPurchase();
   }
@@ -867,7 +894,7 @@ export class Game {
     SaveSys.save(this.save);
     // rebuild the live tuning so the bonus is active right away (also for the
     // next run) without needing a fresh expedition start.
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus, this.save.owned);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus, this.save.owned, isGilded(this.save));
     this.sfx('awaken');
     this.addBanner(`The frame is rehung — Gallery Bonus ${after} minted.`, 4.2, this.ch * 0.34);
     this.addBanner(`+${after * 2} pigment of each color at every run start · +${Math.round(after * 10)}% orb value.`, 4.2, this.ch * 0.34 + 34);
@@ -1136,10 +1163,11 @@ _drawAtelier(ctx) {
       // not-yet state. Reuses the P8 Gallery wall's framed look (paperPanel +
       // the gilded frame + the generative motif) and the same painting data;
       // no buying here — the ledger only reads the collection.
-      // G2: 2 cols x 5 rows (10 paintings); a compact row height so the grid
-      // ends well above the Rehung-Frame bar (at y ≈ ch-150). Gold-tier
-      // paintings get a gilded border + a "GOLD" tag (the ledger lists all 10).
-      const fw = 548, fh = 72, fgap = 9, cols = 2, rows = 5;
+      // G3: 2 cols x 5 rows with a slightly shorter row height so the whole
+      // collection fits above the two prestige bars (Gilded Frame + Rehung
+      // Frame) at the bottom. Gold-tier paintings get a gilded border + a
+      // "GOLD" tag (the ledger lists all 10).
+      const fw = 548, fh = 63, fgap = 3, cols = 2, rows = Math.ceil(PAINTINGS.length / cols);
       const gridW = cols * fw + (cols - 1) * fgap, gridH = rows * fh + (rows - 1) * fgap;
       const gx0 = cx - gridW / 2, gy0 = g.rowY0 + 2;
       PAINTINGS.forEach((pt, i) => {
@@ -1149,11 +1177,11 @@ _drawAtelier(ctx) {
         const entry = ledgerEntry(pt);
         const isGold = !!pt.goldTier;
         const c = paperPanel(ctx, x, y, fw, fh, { seed: 300 + i, fill: owned ? '#f9f3e2' : (isGold ? '#f6eed6' : '#efe8d6') });
-        // left: a framed thumbnail, gilded when collected (P8 frame look);
-        // gold-tier paintings carry a gilded frame EVEN when not owned (G2).
-        const fs = fh - 22, fx = x + 12, fy = y + 11;
+        // left: a framed thumbnail, gilded when collected OR gold-tier
+        // (G2: gold-tier paintings carry a gilded frame EVEN when not owned).
+        const fs = fh - 18, fx = x + 12, fy = y + (fh - fs) / 2;
         c.save();
-        c.lineWidth = 4;
+        c.lineWidth = 3.5;
         c.strokeStyle = (owned || isGold) ? '#b8912e' : '#b7ab8c';
         c.beginPath(); c.roundRect(fx - 2, fy - 2, fs + 4, fs + 4, 3); c.stroke();
         c.lineWidth = 1.5;
@@ -1168,59 +1196,114 @@ _drawAtelier(ctx) {
           c.fillRect(fx, fy, fs, fs);
           c.globalAlpha = 0.4;
           c.fillStyle = isGold ? '#8a6d1f' : INK;
-          c.font = '700 26px Georgia, serif';
+          c.font = '700 22px Georgia, serif';
           c.textAlign = 'center'; c.textBaseline = 'middle';
           c.fillText('✕', fx + fs / 2, fy + fs / 2);
         }
         c.restore();
-        // right: title (with a GOLD tag for gold-tier), state tag, lore blurb
+        // right: title + GOLD tag (line 1), state tag + lore blurb (line 2)
         const tx = fx + fs + 12, tw = fw - (fs + 24) - 12;
         c.save();
         c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+        // line 1: name + GOLD tag
         c.fillStyle = isGold ? '#8a6d1f' : INK;
-        c.font = '700 15px Georgia, serif';
-        c.globalAlpha = owned ? 1 : 0.75;
-        c.fillText(pt.name, tx, y + 26);
-        // GOLD tag sits right of the title for gold-tier entries
+        c.font = '700 14.5px Georgia, serif';
+        c.globalAlpha = owned ? 1 : 0.78;
+        c.fillText(pt.name, tx, y + 24);
         if (isGold) {
           const nameW = c.measureText(pt.name).width;
           c.globalAlpha = owned ? 1 : 0.7;
-          c.font = '700 11px Georgia, serif';
+          c.font = '700 10.5px Georgia, serif';
           c.fillStyle = '#b8912e';
-          c.fillText('◆ GOLD', tx + nameW + 8, y + 26);
+          c.fillText('◆ GOLD', tx + nameW + 8, y + 24);
         }
-        // state tag: collected / not yet (hung noted for loadout members)
+        // line 2: state tag + a short lore blurb
         const hung = this.save.loadout.includes(pt.id);
+        let state;
+        if (owned) state = hung ? '★ hung in the loadout' : 'collected';
+        else state = isGold ? 'not yet gold' : 'not yet collected';
         c.font = '700 11px Georgia, serif';
-        if (owned) {
-          c.fillStyle = hung ? '#c9922a' : '#4e8a5a';
-          c.globalAlpha = 1;
-          c.fillText(hung ? '★ hung in the loadout' : 'collected', tx, y + 43);
-        } else {
-          c.fillStyle = isGold ? '#8a6d1f' : '#9a9078';
-          c.globalAlpha = 1;
-          c.fillText(isGold ? 'not yet gold' : 'not yet collected', tx, y + 43);
-        }
-        // lore blurb — a single line (the compact row height)
+        c.fillStyle = owned ? (hung ? '#c9922a' : '#4e8a5a') : (isGold ? '#8a6d1f' : '#9a9078');
+        c.globalAlpha = 1;
+        c.fillText(state, tx, y + 44);
+        const stateW = c.measureText(state).width;
         c.fillStyle = INK;
-        c.globalAlpha = owned ? 0.8 : 0.5;
+        c.globalAlpha = owned ? 0.78 : 0.5;
         c.font = 'italic 12px Georgia, serif';
-        const lore = entry.lore;
-        let loreOut = lore;
-        while (c.measureText(loreOut).width > tw && loreOut.length > 1) {
-          loreOut = loreOut.slice(0, loreOut.length - 1);
-        }
-        if (loreOut !== lore) loreOut = loreOut.replace(/\s+\S*$/, '') + '…';
-        c.fillText(loreOut, tx, y + 60);
+        let loreOut = entry.lore;
+        const loreMax = tw - stateW - 12;
+        while (c.measureText(loreOut).width > loreMax && loreOut.length > 1) loreOut = loreOut.slice(0, loreOut.length - 1);
+        if (loreOut !== entry.lore) loreOut = loreOut.replace(/\s+\S*$/, '') + '…';
+        c.fillText(loreOut, tx + stateW + 12, y + 44);
         c.restore();
         paperEnd(ctx);
       });
       const ownCt = PAINTINGS.filter(pt => this.save.owned.includes(pt.id)).length;
       const goldCt = PAINTINGS.filter(pt => pt.goldTier).length;
-      centerText(ctx, `the curator's ledger — ${ownCt} of ${PAINTINGS.length} collected · ${goldCt} gold-tier · a display only`, cx, gy0 + gridH + 16, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
+      centerText(ctx, `the curator's ledger — ${ownCt} of ${PAINTINGS.length} collected · ${goldCt} gold-tier · a display only`, cx, gy0 + gridH + 15, 'italic 12.5px Georgia, serif', '#fdf6e9', 0.7);
+      // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier — a 50g
+      // permanent, saved tuning bump (NG+ + gold-gated) that stacks ON TOP OF
+      // the Rehung Frame below. Sits in its own bar above the Rehung Frame.
+      {
+        const gilded = isGilded(this.save);
+        const canGild = canBuyGildedFrame(this.save);
+        const ngOk = (Math.floor(this.save.ngCycle) || 0) >= 1;
+        const bw = 560, bh = 78, bx = cx - bw / 2, by = g.ch - 248;
+        const c = paperPanel(ctx, bx, by, bw, bh, { seed: 502, fill: gilded ? '#f6edc8' : '#efe8d6' });
+        c.save();
+        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+        c.fillStyle = gilded ? '#8a6d1f' : INK;
+        c.font = '700 15px Georgia, serif';
+        c.globalAlpha = 1;
+        c.fillText('Gilded Frame', bx + 20, by + 25);
+        if (gilded) { c.font = '700 11px Georgia, serif'; c.fillText('◆ gilded', bx + 118, by + 25); }
+        c.font = '12px Georgia, serif';
+        c.globalAlpha = 0.8;
+        c.fillStyle = INK;
+        c.fillText('A one-time, permanent prestige tier on top of the Rehung Frame: +3 start ink · +15% orb value.', bx + 20, by + 44);
+        c.fillText('Earned with gold after a first NG+ victory. Bought once, kept forever.', bx + 20, by + 62);
+        c.restore();
+        // the gild button on the right (label reflects state: bought / price / NG+ hint)
+        const bbw = 150, bbh = 52, bbx = bx + bw - bbw - 14, bby = by + (bh - bbh) / 2;
+        let label = 'Not yet';
+        if (gilded) label = '◆ Gilded';
+        else if (!ngOk) label = 'NG+ needed';
+        else if (!canGild) label = `${GILDED_FRAME.cost}g needed`;
+        else label = `Gild · ${GILDED_FRAME.cost}g`;
+        uiButton(c, bbx, bby, bbw, bbh, label, false, false, { seed: 503 });
+        paperEnd(ctx);
+      }
       // A4 (v1.2 M9): the 'Rehung Frame' retirement — a permanent, saved
       // gallery bonus minted once the collection is complete. Sits above the
       // Depart button (same geometry as the retire row in _atelierRows).
+      // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' tier — a 50g permanent
+      // prestige bar sits just ABOVE the Rehung Frame bar (NG+ + gold-gated),
+      // with a state-aware button (price / NG+ gate / owned).
+      {
+        const gilded = isGilded(this.save);
+        const canGild = canBuyGildedFrame(this.save);
+        const ngOk = (Math.floor(this.save.ngCycle) || 0) >= 1;
+        const bw = 560, bh = 84, bx = cx - bw / 2, by = g.ch - 248;
+        const c = paperPanel(ctx, bx, by, bw, bh, { seed: 520, fill: gilded ? '#f4ecd0' : (canGild ? '#f3ead2' : '#efe8d6') });
+        c.save();
+        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+        c.fillStyle = '#8a6d1f';
+        c.font = '700 15px Georgia, serif';
+        c.globalAlpha = 1;
+        c.fillText('◆ Gilded Frame', bx + 20, by + 26);
+        c.fillStyle = INK;
+        c.font = '12.5px Georgia, serif';
+        c.globalAlpha = 0.8;
+        c.fillText('A one-time gilded tier on top of the Rehung Frame — a permanent, saved tuning bump.', bx + 20, by + 45);
+        c.fillText(gilded
+          ? `Hung and permanent: +${GILDED_FRAME.ink} start ink · +${Math.round(GILDED_FRAME.orbMult * 100 - 100)}% orb value, every run, forever.`
+          : `One-time: +${GILDED_FRAME.ink} start ink of each color · +${Math.round(GILDED_FRAME.orbMult * 100 - 100)}% orb value, forever.`, bx + 20, by + 63);
+        c.restore();
+        // the gild button on the right (state-aware: owned / affordable / gated)
+        const bbw = 150, bbh = 56, bbx = bx + bw - bbw - 14, bby = by + (bh - bbh) / 2;
+        uiButton(c, bbx, bby, bbw, bbh, gilded ? 'Gilded' : (ngOk ? `Gild · ${GILDED_FRAME.cost}g` : 'NG+ needed'), canGild, false, { seed: 521 });
+        paperEnd(ctx);
+      }
       {
         const lvl = galleryBonusLevel(this.save);
         const eligible = canRetireCollection(this.save);
@@ -1414,7 +1497,7 @@ _drawAtelier(ctx) {
     // advances save.ngCycle) drives NG+ scaling (N2) and boss selection (N3).
     this.ngCycle = Math.max(0, Math.floor(this.save.ngCycle) || 0);
     this.world = new World(mulberry32(seed), seed % 99991);
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
     // N2 (v1.3 M14): NG+ per-cycle scaling — applied ONLY when ngCycle >= 1 so
     // a first-time (cycle 0) run's tuning stays byte-identical to pre-NG+.
     if (this.ngCycle >= 1) applyNGPlus(this.tuning, this.ngCycle);
@@ -3359,7 +3442,7 @@ _drawAtelier(ctx) {
     if (!DIFFICULTIES[id] || this.options.difficulty === id) return;
     this.options.difficulty = id;
     SaveSys.saveOptions(this.options);
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
     this._prevHp = this.tuning.maxHp;
     this.sfx('ui');
   }

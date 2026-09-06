@@ -154,7 +154,7 @@ export function activeSynergy(loadout = []) {
   if (ids.length < 2) return null;
   return SYNERGIES[_pairKey(ids[0], ids[1])] || null;
 }
-export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', gallery = 0, owned = []) {
+export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', gallery = 0, owned = [], gilded = false) {
   const t = {
     // player
     maxHp: 10 + (upgrades.vitality || 0),
@@ -232,6 +232,18 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', g
   const owns = (id) => Array.isArray(owned) && owned.includes(id);
   if (owns('gilded-meridian')) { t.pickupValue *= 1.1; }
   if (owns('verdant-crown')) { t.greenHeal += 1; }
+  // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier — a permanent
+  // tuning bump applied LAST, ON TOP OF the Rehung Frame gallery bonus
+  // (+3 start ink of each color, +15% orb value), so it stacks distinctively
+  // with it. NG+/gold-gated: a first-time (cycle-0, non-gilded) save never
+  // passes gilded=true, so the gilded keys are added ONLY when on and a
+  // cycle-0 tuning is byte-identical (no new keys, same values).
+  if (gilded) {
+    t.gildedInkBonus = GILDED_FRAME.ink;
+    t.gildedOrbMult = GILDED_FRAME.orbMult;
+    t.galleryInkBonus += GILDED_FRAME.ink;   // stacks on the Rehung Frame ink
+    t.pickupValue = Math.round(t.pickupValue * GILDED_FRAME.orbMult * 100) / 100;
+  }
   return t;
 }
 
@@ -594,6 +606,54 @@ export function canAffordGold(save, pt) {
   if (!pt || !pt.goldTier) return false;
   const gold = save ? Number(save.gold) || 0 : 0;
   return gold >= pt.goldCost;
+}
+
+// G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier — a permanent,
+// saved, gold-priced tuning bump applied LAST in makeTuning, ON TOP OF the
+// existing 'Rehung Frame' gallery bonus. A single 50g purchase for:
+//   +3 pigment of each color at the start of every run (start ink)
+//   +15% orb / pickup value (orb value)
+// It STACKS distinctively with the Rehung Frame: the gilded ink is added on
+// top of the Rehung Frame ink (so a save with both gets galleryInkBonus =
+// 2*level + 3), and the gilded orb multiplier is applied after the Rehung
+// Frame orb multiplier (so pickupValue is multiplied by both). Both feed the
+// SAME existing tuning fields (galleryInkBonus / pickupValue), so no new
+// combat surface. Pure + testable.
+//
+// NG+/gold-gated: a first-time (cycle-0) save never qualifies (ngCycle < 1),
+// so makeTuning is never called with gilded=true on a cycle-0 save — the
+// gilded keys are added ONLY when gilded is truthy, keeping a cycle-0 tuning
+// byte-identical (see the smoke test's deep-equal fingerprint).
+export const GILDED_FRAME = {
+  cost: 50,        // gold, ONE-TIME
+  ink: 3,          // +3 of each pigment color at run start
+  orbMult: 1.15,   // +15% orb / pickup value
+};
+// G3 (v1.3 M15): has this save already bought the Gilded Frame? Truthy check
+// on save.gildedFrame (a boolean, set once and never removed). A missing /
+// falsy field (a fresh or old-format save) means NOT bought. Pure.
+export function isGilded(save) {
+  return !!(save && save.gildedFrame);
+}
+// G3 (v1.3 M15): can a save buy the Gilded Frame? It must be an NG+ save
+// (ngCycle >= 1), NOT already gilded (one-time), and hold at least
+// GILDED_FRAME.cost gold. Pure.
+export function canBuyGildedFrame(save) {
+  if (!save) return false;
+  if (isGilded(save)) return false;                       // one-time
+  if ((Math.floor(Number(save.ngCycle) || 0)) < 1) return false;  // NG+ gate
+  return (Number(save.gold) || 0) >= GILDED_FRAME.cost;
+}
+// G3 (v1.3 M15): attempt the one-time Gilded Frame purchase. On success:
+// deduct the gold, set save.gildedFrame = true, and return true. Refuses
+// (returns false, no change) when NG+-gated, insufficient gold, or already
+// bought. Pure — no DOM.
+export function buyGildedFrame(save) {
+  if (!save) return false;
+  if (!canBuyGildedFrame(save)) return false;
+  save.gold = (Number(save.gold) || 0) - GILDED_FRAME.cost;
+  save.gildedFrame = true;
+  return true;
 }
 
 export function canAfford(bank, cost) {
@@ -976,7 +1036,7 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // version, written into every save and read back on load. Legacy saves stored
 // it under the field `v`; migrateSave() accepts both and re-stamps to the
 // current version.
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
@@ -1004,6 +1064,11 @@ export const SAVE_VERSION = 6;
 // so each first-time gold event fires exactly once). A v5 save (no such
 // fields) migrates forward with gold defaulted to 0 and goldEarned to {}, so
 // old saves keep loading unchanged and start with no gold / no latches.
+// G3 (v1.3 M15): v7 adds `save.gildedFrame` (boolean) — the ONE-TIME,
+// permanent 'Gilded Frame' prestige tier, bought with 50 gold on an NG+
+// cycle. A v6 save (no such field) migrates forward with gildedFrame
+// defaulted to false, so old saves keep loading unchanged and are simply
+// NOT-yet-gilded.
 const SAVE_MIGRATIONS = [
   {
     from: 1, to: 2,
@@ -1028,6 +1093,15 @@ const SAVE_MIGRATIONS = [
       // (no such fields) migrates forward with gold 0 / empty map.
       out.gold = Math.max(0, Math.floor(Number(out.gold) || 0));
       out.goldEarned = normalizeGoldEarned(out.goldEarned);
+    },
+  },
+  {
+    from: 6, to: 7,
+    fn: (out) => {
+      // G3 (v1.3 M15): the one-time Gilded Frame tier. A legacy v6 save
+      // (no such field) migrates forward with gildedFrame defaulted to
+      // false (not-yet-gilded), so old saves keep loading unchanged.
+      out.gildedFrame = normalizeGildedFrame(out.gildedFrame);
     },
   },
 ];
@@ -1060,6 +1134,13 @@ function normalizeGoldEarned(raw) {
   return out;
 }
 
+// G3 (v1.3 M15): normalize the one-time Gilded Frame flag — a boolean. A
+// missing / falsy value (a fresh or legacy save) reads back as false
+// (not-yet-gilded). Pure — testable headless.
+function normalizeGildedFrame(raw) {
+  return !!raw;
+}
+
 // N1 (v1.3 M14): a save has earned the New Game+ unlock when at least one
 // victory is recorded. Gating NG+ behind a completed victory keeps it out of the
 // first-time run's pace band; a first-time player (ngCycle 0, no victory) sees
@@ -1084,6 +1165,7 @@ export function freshSave() {
     ngModifier: null,     // N4 (v1.3 M14): chosen expedition modifier for the NG+ cycle (MODIFIERS id or null)
     gold: 0,              // G1 (v1.3 M15): meta gold currency (META-ONLY — never touches combat tuning)
     goldEarned: {},       // G1 (v1.3 M15): {[key]: true} — the gold events already paid out (idempotency latch)
+    gildedFrame: false,   // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier (bought once, permanent)
   };
 }
 
@@ -1173,7 +1255,7 @@ export function retrainAllowed(save) {
 //                (string/number/array/null); fresh save, nothing preserved
 // (The unparseable-JSON and missing-key cases are handled one level up in
 // SaveSys.load(), which returns null so the caller starts a fresh game.)
-const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned'];
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned', 'gildedFrame'];
 
 function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
 
@@ -1226,6 +1308,10 @@ export function migrateSave(raw) {
   // v5->v6 migration step re-normalizes defensively on the way up.
   out.gold = Math.max(0, Math.floor(Number(raw.gold) || 0));
   out.goldEarned = normalizeGoldEarned(raw.goldEarned);
+  // G3 (v1.3 M15): carry the one-time Gilded Frame flag forward (false for a
+  // legacy v6 save with no field, the real boolean for a v7 save). The
+  // v6->v7 migration step re-normalizes defensively on the way up.
+  out.gildedFrame = normalizeGildedFrame(raw.gildedFrame);
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks

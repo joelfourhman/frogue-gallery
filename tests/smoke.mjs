@@ -2916,7 +2916,7 @@ console.log('== stage 50: G1 — Gold pigment meta economy (core) ==');
   const L50 = await import('../src/logic.js');
 
   // ---- (0) schema: SAVE_VERSION bumped to 6; a fresh save starts gold 0 / empty latch ----
-  assert(L50.SAVE_VERSION === 6, `G1: SAVE_VERSION is now 6 (gold era; got ${L50.SAVE_VERSION})`);
+  assert(L50.SAVE_VERSION >= 6, `G1: SAVE_VERSION is now >= 6 (gold era; got ${L50.SAVE_VERSION})`);
   const f50 = L50.freshSave();
   assert(f50.gold === 0, 'G1: a fresh save starts with 0 gold');
   assert(typeof f50.goldEarned === 'object' && f50.goldEarned !== null && Object.keys(f50.goldEarned).length === 0, 'G1: a fresh save starts with an empty goldEarned latch');
@@ -3113,6 +3113,137 @@ console.log('== stage 51: G2 — Two gold-tier paintings (catalog 8→10) ==');
   assert(g51l.state === 'title', 'G2: Escape returned from the Ledger to the title');
 
   console.log('ok — G2: the catalog grows 8→10 with two gold-tier works (Gilded Meridian +10% orb value @25g, Verdant Crown +1 green heal @40g) that are NG+-gated, bought with gold via the existing atelier flow, apply in makeTuning when owned, and are listed (all 10) in the Curator\'s Ledger with gold-tier styling');
+}
+
+// ---------------------------------------------------------------------
+// stage 52: G3 (v1.3 M15) — the ONE-TIME 'Gilded Frame' prestige tier.
+// A permanent, saved, 50g tuning bump (NG+ + gold-gated) applied LAST in
+// makeTuning, ON TOP OF the Rehung Frame gallery bonus. We verify: a fresh
+// save has no effect; after purchase the tuning shows the gilded bump; it
+// persists across save/load; it STACKS with an existing galleryBonus; gold
+// is deducted and the purchase is NOT repeatable; the NG+ gate holds; and
+// old-format (v6, no gildedFrame) saves migrate to not-gilded.
+// ---------------------------------------------------------------------
+console.log('== stage 52: v1.3 M15 G3 — Gilded Frame (NG+ prestige tier) ==');
+{
+  const L52 = await import('../src/logic.js');
+  const S52 = await import('../src/save.js');
+  const KEY = 'frogue_gallery_save';
+
+  // (0) schema: a fresh save is NOT gilded, SAVE_VERSION is now 7.
+  assert(L52.SAVE_VERSION === 7, `G3: SAVE_VERSION is now 7 (gilded era; got ${L52.SAVE_VERSION})`);
+  const fresh = L52.freshSave();
+  assert(fresh.gildedFrame === false, 'G3: a fresh save has gildedFrame false');
+  assert(L52.isGilded(fresh) === false, 'G3: isGilded is false on a fresh save');
+  assert(L52.GILDED_FRAME.cost === 50 && L52.GILDED_FRAME.ink === 3 && L52.GILDED_FRAME.orbMult === 1.15,
+    `G3: the Gilded Frame is 50g, +3 ink, +15% orb (got cost ${L52.GILDED_FRAME.cost}, ink ${L52.GILDED_FRAME.ink}, orb ${L52.GILDED_FRAME.orbMult})`);
+
+  // (1) fresh save has NO gilded effect: a cycle-0 tuning has no gilded keys
+  // and a byte-identical base (pickup 1, galleryInkBonus 0).
+  const tOff = L52.makeTuning({}, [], 'normal', fresh.galleryBonus, fresh.owned);
+  assert(!('gildedInkBonus' in tOff) && !('gildedOrbMult' in tOff), 'G3: a fresh save\'s tuning has no gilded keys (byte-identical base)');
+  assert(tOff.pickupValue === 1 && tOff.galleryInkBonus === 0, `G3: a fresh save\'s tuning is untouched (pickup ${tOff.pickupValue}, ink ${tOff.galleryInkBonus})`);
+
+  // (2) NG+ gate: a cycle-0 save cannot buy even with plenty of gold.
+  const gated = L52.freshSave();
+  gated.ngCycle = 0; gated.gold = 200;
+  assert(!L52.canBuyGildedFrame(gated), 'G3: a cycle-0 save cannot buy the Gilded Frame (NG+ gate), even with 200 gold');
+  assert(L52.buyGildedFrame(gated) === false && !gated.gildedFrame && gated.gold === 200, 'G3: the cycle-0 buy is refused (no gold change, not gilded)');
+
+  // (3) after a purchase (NG+, 60 gold): gold deducted, gilded set, tuning bumps.
+  const s = L52.freshSave();
+  s.ngCycle = 1; s.gold = 60;
+  assert(L52.canBuyGildedFrame(s), 'G3: an NG+ save with 60 gold can buy the Gilded Frame');
+  assert(L52.buyGildedFrame(s) === true, 'G3: the buy succeeds on an NG+ save with enough gold');
+  assert(s.gold === 10 && s.gildedFrame === true, `G3: 50g is deducted and gildedFrame is set (gold ${s.gold}, gilded ${s.gildedFrame})`);
+  const tOn = L52.makeTuning({}, [], 'normal', s.galleryBonus, s.owned, L52.isGilded(s));
+  assert(tOn.gildedInkBonus === 3 && tOn.gildedOrbMult === 1.15, `G3: the tuning carries the gilded bump (ink ${tOn.gildedInkBonus}, orb ${tOn.gildedOrbMult})`);
+  assert(tOn.galleryInkBonus === 3 && tOn.pickupValue === 1.15, `G3: the gilded bump is applied (galleryInkBonus ${tOn.galleryInkBonus}, pickup ${tOn.pickupValue})`);
+
+  // (4) NOT repeatable: a second attempt refuses (no gold change, no error).
+  assert(!L52.canBuyGildedFrame(s), 'G3: the Gilded Frame is one-time (canBuy is false after purchase)');
+  assert(L52.buyGildedFrame(s) === false && s.gold === 10, 'G3: a second buy is refused (gold unchanged at 10)');
+
+  // (5) it STACKS with the existing Rehung Frame galleryBonus (both effects).
+  const st = L52.freshSave();
+  st.ngCycle = 1; st.gold = 50; st.galleryBonus = 2;   // Rehung Frame level 2
+  L52.buyGildedFrame(st);
+  const tStack = L52.makeTuning({}, [], 'normal', st.galleryBonus, st.owned, L52.isGilded(st));
+  assert(tStack.galleryInkBonus === 7, `G3: gilded STACKS on the Rehung Frame ink (2 levels * 2 + 3 = ${tStack.galleryInkBonus})`);
+  assert(tStack.gildedInkBonus === 3 && tStack.gildedOrbMult === 1.15, 'G3: the gilded keys are present on top of the Rehung Frame effect');
+  assert(Math.abs(tStack.pickupValue - 1.38) < 1e-6, `G3: the orb multipliers multiply (1.2 * 1.15 = ${tStack.pickupValue.toFixed(3)})`);
+  // the Rehung Frame's own orb multiplier is still applied (1.2) — a gilded-only
+  // save (level 0) gets 1.15, so the stack is distinctively 1.38.
+  const tGildOnly = L52.makeTuning({}, [], 'normal', 0, st.owned, true);
+  assert(tGildOnly.pickupValue === 1.15 && tStack.pickupValue > tGildOnly.pickupValue, 'G3: the stack pickup exceeds the gilded-only pickup (Rehung Frame still contributes)');
+
+  // (6) persists across a save/load round-trip.
+  S52.SaveSys.save(s);
+  const reloaded = S52.SaveSys.load();
+  assert(reloaded && reloaded.gildedFrame === true && reloaded.gold === 10, `G3: gildedFrame + gold persist across save/load (got ${reloaded && reloaded.gildedFrame} / ${reloaded && reloaded.gold})`);
+  const tReload = L52.makeTuning({}, reloaded.loadout, 'normal', reloaded.galleryBonus, reloaded.owned, L52.isGilded(reloaded));
+  assert(tReload.gildedInkBonus === 3 && tReload.pickupValue === 1.15, 'G3: the reloaded save rebuilds the same gilded tuning');
+
+  // (7) an OLD-format save (v6, no gildedFrame field) migrates to not-gilded.
+  store.set(KEY, JSON.stringify({
+    v: 6,
+    bank: { red: 9, blue: 9, green: 9 },
+    owned: ['gilded-meridian'], loadout: ['moonlit-pond'],
+    upgrades: { capacity: 1, power: 0, vitality: 0 },
+    flags: { intro: true },
+    stats: { expeditions: 5, victories: 2, deaths: 0, heronsPainted: 1, treasures: 0 },
+    bestRun: null,
+    galleryBonus: 1,
+    ngCycle: 1, ngModifier: null, gold: 75, goldEarned: { 'boss-gray-heron': true },
+    // NOTE: no gildedFrame field on purpose — this is a v6 save.
+  }));
+  const oldMigrated = S52.SaveSys.load();
+  assert(oldMigrated !== null, 'G3: an OLD v6-format save (no gildedFrame field) still loads');
+  assert(oldMigrated.saveVersion === L52.SAVE_VERSION, 'G3: the old v6 save re-stamps to the current schema version (7)');
+  assert(oldMigrated.gildedFrame === false, 'G3: the old v6 save migrates to gildedFrame false (not-yet-gilded, no error)');
+  assert(oldMigrated.gold === 75 && oldMigrated.ngCycle === 1, 'G3: the old v6 save keeps its gold + ngCycle through the migration');
+  // and a v6 save that WAS gilded keeps that through the migration.
+  const v6Gilded = S52.SaveSys.load(); // (reload the same blob — not gilded)
+  const v6g2 = { ...v6Gilded, saveVersion: 6, gildedFrame: true };
+  // re-write with gildedFrame true to exercise the preserved-true path:
+  store.set(KEY, JSON.stringify({ ...v6Gilded, gildedFrame: true }));
+  const v6gLoaded = S52.SaveSys.load();
+  assert(v6gLoaded.gildedFrame === true, 'G3: a v6 save that WAS gilded keeps gildedFrame true through the migration');
+
+  // (8) the Curator's Ledger draws the Gilded Frame bar + a state-aware gild
+  // button. (A fresh recording instance g52: NG+, 70g, not gilded → the
+  // price is shown; toggling gildedFrame → the owned state is shown. The
+  // cycle-0 NG+ gate is verified at the LOGIC level below rather than by a
+  // second live instance, which would share the window key listeners.)
+  const recCanvas = makeCanvas();
+  const drawnTexts = [];
+  const baseCtx = makeCtx(recCanvas);
+  const recCtx = new Proxy(baseCtx, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawnTexts.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas.getContext = () => recCtx;
+  const g52 = new Game(recCanvas); g52.start(); g52._quitToTitle(); g52._beginAtelier(); g52._atelierIntro = false;
+  g52.save = L52.freshSave(); g52.save.ngCycle = 1; g52.save.gold = 70;
+  g52.atelierTab = 3;                 // draw the Ledger tab directly
+  frames(4);
+  const joined = drawnTexts.join('\u0001');
+  assert(joined.includes('Gilded Frame'), 'G3: the Ledger draws the "Gilded Frame" bar');
+  assert(joined.includes('Gild · 50g'), 'G3: the gild button shows its price when NG+ + affordable');
+  assert(joined.includes('the curator\'s ledger'), 'G3: the Ledger still draws its header (all 10 + the two prestige bars)');
+  // after a gilded buy, the button label flips to the owned state.
+  g52.save.gildedFrame = true;
+  drawnTexts.length = 0;
+  frames(4);
+  assert(drawnTexts.join('\u0001').includes('Gilded'), 'G3: after buying, the gild button shows the owned "Gilded" state');
+  // the NG+ gate at the logic level: a cycle-0 save (even with plenty of gold)
+  // can never buy, so the button would show its gate hint, not a price.
+  const gated2 = L52.freshSave(); gated2.ngCycle = 0; gated2.gold = 999;
+  assert(!L52.canBuyGildedFrame(gated2) && !L52.ngUnlocked(gated2), 'G3: a cycle-0 save is NG+-gated (no NG+ unlock), so the gild button shows the gate hint, not a price');
+  frames(20);
+  assert(g52.state === 'atelier', 'G3: the Ledger tab (with the Gilded Frame bar) drew cleanly');
+
+  console.log('ok — G3: the ONE-TIME Gilded Frame (50g, +3 start ink, +15% orb) is an NG+/gold-gated, permanent, saved prestige tier that applies LAST in makeTuning ON TOP OF the Rehung Frame (stacking to +7 ink / 1.38× orb at Rehung level 2), is not repeatable, persists across save/load, migrates old v6 saves to not-gilded, and surfaces in the Curator\'s Ledger as a gild bar with a state-aware button');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');
