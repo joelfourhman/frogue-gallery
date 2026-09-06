@@ -152,7 +152,7 @@ export function activeSynergy(loadout = []) {
   if (ids.length < 2) return null;
   return SYNERGIES[_pairKey(ids[0], ids[1])] || null;
 }
-export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal') {
+export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', gallery = 0) {
   const t = {
     // player
     maxHp: 10 + (upgrades.vitality || 0),
@@ -195,6 +195,13 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal') {
     bossPaintHit: 6,         // hue per paint hit
     // damage taken
     contactCooldown: 0.7,
+    // A4 (v1.2 M9): 'Rehung Frame' gallery bonus — a permanent, saved tuning
+    // bump minted by retiring a completed collection (prestige-lite, no wipe).
+    // Off (level 0) by default; applyGalleryBonus() fills these from the save
+    // level. ink = +2 pigment of each color at the start of every run;
+    // orb = a small permanent multiplier on orb/pickup value.
+    galleryInkBonus: 0,
+    galleryOrbMult: 1,
   };
   const has = (id) => loadout.includes(id);
   if (has('moonlit-pond')) { t.freezeDuration *= 1.4; t.slowFactor *= 0.75; t.bossAwakenNeed.blue *= 0.7; }
@@ -211,7 +218,51 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal') {
   if (synergy) { t.synergy = synergy.name; synergy.apply(t); }
   // M8 P7: scale the run by the chosen difficulty (after loadout modifiers).
   applyDifficulty(t, difficulty);
+  // A4 (v1.2 M9): the permanent 'Rehung Frame' gallery bonus is a saved
+  // tuning bump applied via the standard makeTuning path so it stacks after
+  // loadout + difficulty. Pure + testable (no DOM).
+  applyGalleryBonus(t, gallery);
   return t;
+}
+
+// ----------------------------------------------------------------
+// A4 (v1.2 M9): 'Rehung Frame' — a prestige-lite, NOT save-wipe. Retiring a
+// fully-completed collection (all 8 paintings owned + at least one ★-hung)
+// mints a permanent, saved `galleryBonus` level. Each level is a small
+// permanent bump applied through makeTuning via applyGalleryBonus:
+//   +2 pigment of every color at the start of each run (start ink)
+//   +10% orb / pickup value (orb value)
+// It is repeatable — the level is a counter, not a one-time flag. Pure.
+export const GALLERY_BONUS = {
+  inkPerLevel: 2,       // flat +N of each pigment color at run start / level
+  orbPerLevel: 0.10,    // +10% orb value / level (multiplicative on base)
+};
+export function galleryBonusLevel(save) {
+  return Math.max(0, Math.floor(Number(save && save.galleryBonus) || 0));
+}
+// Fill t.galleryInkBonus / t.galleryOrbMult for a given (non-negative) level.
+// Called by makeTuning; safe to call on any already-built tuning object.
+export function applyGalleryBonus(t, gallery) {
+  const lvl = Math.max(0, Math.floor(Number(gallery) || 0));
+  t.galleryInkBonus = lvl * GALLERY_BONUS.inkPerLevel;
+  t.galleryOrbMult = 1 + lvl * GALLERY_BONUS.orbPerLevel;
+  t.pickupValue *= t.galleryOrbMult;
+  return t;
+}
+// Retire-eligibility check: all 8 paintings owned AND at least one hung in the
+// loadout. Pure.
+export function canRetireCollection(save) {
+  const owned = (save && Array.isArray(save.owned)) ? save.owned : [];
+  const allOwned = PAINTINGS.every(p => owned.includes(p.id));
+  const hung = (save && Array.isArray(save.loadout)) ? save.loadout.length > 0 : false;
+  return allOwned && hung;
+}
+// Mint one level of the gallery bonus (repeatable; does NOT wipe the save).
+// Returns the new level. Caller persists the save.
+export function retireCollection(save) {
+  if (!canRetireCollection(save)) return galleryBonusLevel(save);
+  save.galleryBonus = galleryBonusLevel(save) + 1;
+  return save.galleryBonus;
 }
 
 // ---------------------------------------------------------------- upgrades
@@ -453,15 +504,21 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // version, written into every save and read back on load. Legacy saves stored
 // it under the field `v`; migrateSave() accepts both and re-stamps to the
 // current version.
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
 // `from` order, so a save written at any older version migrates forward step
-// by step up to SAVE_VERSION. v1 is the initial version, so the chain starts
-// empty — append `{ from: 1, to: 2, fn }` (and bump SAVE_VERSION) when the
-// next schema lands.
-const SAVE_MIGRATIONS = [];
+// by step up to SAVE_VERSION. v1 is the initial version.
+// A4 (v1.2 M9): v2 adds the `galleryBonus` counter (the 'Rehung Frame'
+// prestige-lite level). Old v1 saves (no such field) migrate forward with the
+// bonus defaulted to 0, so they keep loading unchanged.
+const SAVE_MIGRATIONS = [
+  {
+    from: 1, to: 2,
+    fn: (out) => { out.galleryBonus = Math.max(0, Math.floor(Number(out.galleryBonus) || 0)); },
+  },
+];
 
 export function freshSave() {
   return {
@@ -473,6 +530,7 @@ export function freshSave() {
     flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false },
     stats: { expeditions: 0, victories: 0, deaths: 0, heronsPainted: 0, treasures: 0 },
     bestRun: null,        // {pigments, time, cleared}
+    galleryBonus: 0,      // A4 (v1.2 M9): 'Rehung Frame' prestige-lite level
   };
 }
 
@@ -485,7 +543,7 @@ export function freshSave() {
 //                (string/number/array/null); fresh save, nothing preserved
 // (The unparseable-JSON and missing-key cases are handled one level up in
 // SaveSys.load(), which returns null so the caller starts a fresh game.)
-const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun'];
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus'];
 
 function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
 
@@ -518,6 +576,9 @@ export function migrateSave(raw) {
     for (const k of Object.keys(f.stats)) out.stats[k] = Math.max(0, Number(raw.stats[k]) || 0);
   }
   out.bestRun = isPlainObj(raw.bestRun) ? raw.bestRun : f.bestRun;
+  // A4 (v1.2 M9): galleryBonus is a top-level scalar counter; normalize so an
+  // old-format save (no field) defaults to 0 instead of leaking undefined.
+  out.galleryBonus = Math.max(0, Math.floor(Number(raw.galleryBonus) || 0));
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks

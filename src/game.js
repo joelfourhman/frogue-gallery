@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -138,7 +138,7 @@ export class Game {
     // ---------- persistence + tuning ----------
     this.save = SaveSys.load() || freshSave();
     this.options = SaveSys.loadOptions();
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0);
     // B5: persistent storage unavailable (privacy mode, quota, disabled)? We
     // still run on the in-memory save, but surface a one-time warning so the
     // player knows progress may not survive a reload. storageOK forces the
@@ -468,6 +468,18 @@ export class Game {
                 else rows.push({ tag: 'paint:' + pt.id, x: bx, y: by, w: bw, h: bh, enabled: canAfford(this.save.bank, Array.isArray(pt.cost) ? pt.cost : costArray(pt.cost)), act: () => this._buyPainting(pt.id) });
       });
     }
+    // A4 (v1.2 M9): the Curator's Ledger (tab 3) offers a 'Rehung Frame'
+    // retirement: once the collection is complete (all 8 + one hung), retiring
+    // mints a permanent, saved gallery bonus. Repeatable — a counter, not a flag.
+    if (this.atelierTab === 3) {
+      const eligible = canRetireCollection(this.save);
+      const barX = g.cx - 280, barY = g.ch - 146;
+      const bbw = 150, bbh = 40, bbx = barX + 560 - bbw - 12, bby = barY + 2;
+      rows.push({
+        tag: 'retire', x: bbx, y: bby, w: bbw, h: bbh, enabled: eligible,
+        act: () => this._retireCollection(),
+      });
+    }
     rows.push({ tag: 'depart', x: g.depart.x, y: g.depart.y, w: g.depart.w, h: g.depart.h, act: () => { this.sfx('ui'); this._beginExpedition(); } });
         rows.push({ tag: 'leave', x: g.leave.x, y: g.leave.y, w: g.leave.w, h: g.leave.h, act: () => { this.sfx('ui-back'); this._quitToTitle(); } });
     return rows;
@@ -551,6 +563,23 @@ export class Game {
       this.sfx('ui');
     }
     SaveSys.save(this.save);
+  }
+
+  // A4 (v1.2 M9): retire a completed collection for a permanent, saved gallery
+  // bonus. Prestige-lite — NOT a save-wipe: the collection and bank remain, and
+  // the run tuning is rebuilt so the bonus is live immediately. Repeatable.
+  _retireCollection() {
+    if (!canRetireCollection(this.save)) { this.sfx('hurt'); return; }
+    const before = galleryBonusLevel(this.save);
+    const after = retireCollection(this.save);
+    if (after === before) return;
+    SaveSys.save(this.save);
+    // rebuild the live tuning so the bonus is active right away (also for the
+    // next run) without needing a fresh expedition start.
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus);
+    this.sfx('awaken');
+    this.addBanner(`The frame is rehung — Gallery Bonus ${after} minted.`, 4.2, this.ch * 0.34);
+    this.addBanner(`+${after * 2} pigment of each color at every run start · +${Math.round(after * 10)}% orb value.`, 4.2, this.ch * 0.34 + 34);
   }
 
   _leftText(ctx, text, x, y, font, color = INK, alpha = 1) {
@@ -860,6 +889,30 @@ _drawAtelier(ctx) {
       });
       const ownCt = PAINTINGS.filter(pt => this.save.owned.includes(pt.id)).length;
       centerText(ctx, `the curator's ledger — ${ownCt} of ${PAINTINGS.length} collected · a display only, nothing is sold here`, cx, gy0 + gridH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
+      // A4 (v1.2 M9): the 'Rehung Frame' retirement — a permanent, saved
+      // gallery bonus minted once the collection is complete. Sits above the
+      // Depart button (same geometry as the retire row in _atelierRows).
+      {
+        const lvl = galleryBonusLevel(this.save);
+        const eligible = canRetireCollection(this.save);
+        const bw = 560, bh = 84, bx = cx - bw / 2, by = g.ch - 150;
+        const c = paperPanel(ctx, bx, by, bw, bh, { seed: 500, fill: eligible ? '#f3ead2' : '#efe8d6' });
+        c.save();
+        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+        c.fillStyle = INK;
+        c.font = '700 15px Georgia, serif';
+        c.globalAlpha = 1;
+        c.fillText('Rehung Frame', bx + 20, by + 26);
+        c.font = '12.5px Georgia, serif';
+        c.globalAlpha = 0.8;
+        c.fillText('Retire the complete collection for a permanent Gallery Bonus (the bank and collection remain).', bx + 20, by + 45);
+        c.fillText(`Currently: +${lvl * 2} start ink · +${Math.round(lvl * 10)}% orb value per run. Repeatable.`, bx + 20, by + 63);
+        c.restore();
+        // the retire button on the right
+        const bbw = 150, bbh = 56, bbx = bx + bw - bbw - 14, bby = by + (bh - bbh) / 2;
+        uiButton(c, bbx, bby, bbw, bbh, eligible ? 'Retire' : 'Incomplete', false, false, { seed: 501 });
+        paperEnd(ctx);
+      }
     }
 
     // first-visit how-it-works panel (one-time; any tab/buy/action dismisses it)
@@ -1016,7 +1069,7 @@ _drawAtelier(ctx) {
     // fresh world each run (title keeps drifting over whatever is left)
     const seed = (Math.random() * 2 ** 31) | 0;
     this.world = new World(mulberry32(seed), seed % 99991);
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0);
     this.player = new Player(PLAYER_START_X, PLAYER_START_Y, this.tuning);
     this.paint = new Paint(this.player, this.world, this.tuning, (n, o) => this.sfx(n, o), this.particles);
     this.enemies = [];
@@ -1037,6 +1090,13 @@ _drawAtelier(ctx) {
     this._zoneTint = null; // M8 P12: { color, t, max } — fading zone-accent wash on entry
     this.score = 0;
     this.stock = { red: 0, blue: 0, green: 0 };
+    // A4 (v1.2 M9): the permanent 'Rehung Frame' gallery bonus grants +N pigment
+    // of each color at the start of every run (start ink). Capped at capacity.
+    if (this.tuning.galleryInkBonus > 0) {
+      for (const c of ['red', 'blue', 'green']) {
+        this.stock[c] = Math.min(this.tuning.capacity, this.tuning.galleryInkBonus);
+      }
+    }
     this.collected = { red: 0, blue: 0, green: 0 };
     this.dying = false;
     this.dieT = 0;
@@ -2043,7 +2103,7 @@ _drawAtelier(ctx) {
     if (!DIFFICULTIES[id] || this.options.difficulty === id) return;
     this.options.difficulty = id;
     SaveSys.saveOptions(this.options);
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0);
     this._prevHp = this.tuning.maxHp;
     this.sfx('ui');
   }

@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 32 STAGES PASSED** (…stage 32 = v1.2 M9 A3 Curator's Ledger). Pacing probes green: `pace.mjs` (analytic, human est. ~18.8 min) + **`humance.mjs` (P11 — simulated imperfect human on the real sim: measured cross-swamp + measured heron → full-run 18.4 min, in the 15–20 min target)** + `bosspace.mjs`. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ — next A4 / M10.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 33 STAGES PASSED** (…stage 32 = v1.2 M9 A3 Curator's Ledger, stage 33 = v1.2 M9 A4 Rehung Frame gallery bonus). Pacing probes green: `pace.mjs` (analytic, human est. ~18.8 min) + **`humance.mjs` (P11 — simulated imperfect human on the real sim: measured cross-swamp + measured heron → full-run 18.4 min, in the 15–20 min target)** + `bosspace.mjs`. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ — next E1 (Painted Heron) / M10.**_
 
 ## Current Status
 
@@ -35,7 +35,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 32 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 33 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss) |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
@@ -130,7 +130,7 @@ accessibility deferred).
 
 **Batch order (one commit per item, docs + suite green per commit):**
 1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 ✅ (Curator's Ledger). **Batch 1 (A1–A3) COMPLETE.**
-2. M9: A4 (Rehung Frame) → M10: E1 (Painted Heron) → E2 (weather/tide)
+2. M9: **A4 ✅ (Rehung Frame)** → M10: E1 (Painted Heron) → E2 (weather/tide)
 3. M10: E3 (Bold hazards) → E4 (orb streak) → M11: V1 (color-reveal bar)
 4. M11: V2 (heron bloom beat) → V3 (zone audio) → V4 (exhibition end-screen)
 5. M13: T1 (guided first expedition) → T2 (pigment drills)
@@ -139,6 +139,28 @@ accessibility deferred).
 Each item's Notes column in the roadmap says which existing system to reuse.
 Acceptance (per batch): suite green, pace/humance probes still in the
 15–20 min band (any in-run change), zero new dependencies, loopback-only.
+
+**M9 A4 (Rehung Frame) — implemented + tested (v1.2 Batch 2, item 1).**
+A permanent, saved **Gallery Bonus** (`save.galleryBonus`, a counter) minted
+from the Curator's Ledger (atelier tab 3) when the player **retires a
+fully-completed collection** (all 8 paintings owned + ≥1 ★-hung). Prestige-lite,
+NOT a save-wipe: the bank + collection stay, and it is **repeatable** (a
+counter, not a flag). Each level is a small permanent tuning bump applied via
+`makeTuning` → `applyGalleryBonus`: **+2 pigment of each color at run start**
+(start ink, granted in `_beginExpedition`, capped at `capacity`) and **+10%
+orb/pickup value** (`pickupValue × 1.1` per level). Save schema bumped
+`SAVE_VERSION 1→2` with a `SAVE_MIGRATIONS` entry (`from:1,to:2` defaulting
+`galleryBonus:0`) plus a normalizer in `migrateSave`, so old saves load
+unchanged. Pure logic in `src/logic.js` (`GALLERY_BONUS`, `galleryBonusLevel`,
+`canRetireCollection`, `retireCollection`, `applyGalleryBonus`); a compact
+"Rehung Frame" bar + Retire button on the Ledger tab (click-map row `retire`,
+`_retireCollection()` rebuilds the live tuning). `makeTuning` gains a 4th
+`gallery` arg (defaults 0) so the existing callers pass the saved level.
+Smoke stage 33 asserts: OFF on a fresh save, ON after a simulated retire
+(repeatable), persists across a save/load round-trip, and an old-format save
+(no field) migrates without error + legacy fields survive. Stage 19 now uses
+`SAVE_VERSION` dynamically. No in-run pacing impact (economy/start only).
+Suite green: 33/33.
 
 **M9 A3 (Curator's Ledger) — implemented + tested (v1.2 Batch 1, item 3).**
 A 4th atelier tab, "Curator's Ledger" (key `4`), lists all 8 paintings in a

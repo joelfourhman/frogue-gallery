@@ -734,12 +734,12 @@ console.log('== stage 19: B6 - save schema versioning (saveVersion + migration) 
   const S = await import('../src/save.js');
   const KEY = 'frogue_gallery_save';
   // freshSave stamps the authoritative saveVersion field (legacy `v` is gone)
-  assert(L.freshSave().saveVersion === 1, 'freshSave carries saveVersion: 1');
+  assert(L.freshSave().saveVersion === L.SAVE_VERSION, 'freshSave carries the current saveVersion');
   assert(!('v' in L.freshSave()), 'freshSave no longer emits the legacy v field (superseded by saveVersion)');
   // persist the live game save, then confirm the on-disk blob is version-stamped
   S.SaveSys.save(game.save);
   const rawB6 = JSON.parse(store.get(KEY));
-  assert(rawB6 && rawB6.saveVersion === 1, `persisted save is stamped saveVersion: 1 (got ${JSON.stringify(rawB6 && rawB6.saveVersion)})`);
+  assert(rawB6 && rawB6.saveVersion === L.SAVE_VERSION, `persisted save is stamped the current saveVersion (got ${JSON.stringify(rawB6 && rawB6.saveVersion)})`);
   // a legacy save written under the old `v` field (no saveVersion) migrates and is re-stamped
   store.set(KEY, JSON.stringify({
     v: 0,
@@ -752,13 +752,13 @@ console.log('== stage 19: B6 - save schema versioning (saveVersion + migration) 
   }));
   const migratedB6 = S.SaveSys.load();
   assert(migratedB6 !== null, 'legacy v0 save loads (not dropped as corrupt)');
-  assert(migratedB6.saveVersion === 1, 'legacy v0 save re-stamped to saveVersion: 1 after migration');
+  assert(migratedB6.saveVersion === L.SAVE_VERSION, 'legacy v0 save re-stamped to the current saveVersion after migration');
   assert(migratedB6.bank.red === 42 && migratedB6.owned.includes('moonlit-pond'), 'legacy v0 fields preserved through migration (bank.red=42, moonlit-pond owned)');
   assert(migratedB6._case === 'migrated', 'legacy v0 save classified as migrated (fields recognized)');
   // the versioned save round-trips with the stamp intact
   S.SaveSys.save(migratedB6);
   const rawB6b = JSON.parse(store.get(KEY));
-  assert(rawB6b.saveVersion === 1 && rawB6b.bank.red === 42, 'versioned save round-trips with saveVersion: 1 + preserved fields');
+  assert(rawB6b.saveVersion === L.SAVE_VERSION && rawB6b.bank.red === 42, 'versioned save round-trips with the current stamp + preserved fields');
   // restore the live game save for any later stage
   game.save = S.SaveSys.load();
 }
@@ -1456,6 +1456,101 @@ console.log('== stage 32: v1.2 M9 A3 — the Curator\'s Ledger ==');
   assert(g32.state === 'atelier', 'the Ledger tab drew cleanly for 30 frames (no JS errors)');
   fireKey('keydown', 'Escape'); frames(2);
   assert(g32.state === 'title', 'Escape returned from the Ledger to the title');
+}
+
+// stage 33 — v1.2 M9 A4: 'Rehung Frame' (prestige-lite gallery bonus)
+// The bonus is a permanent, saved tuning bump (NOT a save-wipe) minted by
+// retiring a completed collection. Asserts: OFF on a fresh save, ON after a
+// simulated retire, persists across a save/load round-trip, an OLD-format
+// save (no field) migrates without error, and the atelier UI mints it.
+// ---------------------------------------------------------------------
+console.log('== stage 33: v1.2 M9 A4 — Rehung Frame (gallery bonus) ==');
+{
+  const L = await import('../src/logic.js');
+  const S = await import('../src/save.js');
+  const KEY = 'frogue_gallery_save';
+
+  // (1) OFF on a fresh save: no bonus, tuning carries zero ink / 1.0x orb.
+  const fresh = L.freshSave();
+  assert(fresh.galleryBonus === 0, 'A4: a fresh save has galleryBonus 0');
+  const tOff = L.makeTuning({}, [], 'normal', fresh.galleryBonus);
+  assert(tOff.galleryInkBonus === 0 && tOff.galleryOrbMult === 1, `A4: bonus OFF on a fresh save (ink ${tOff.galleryInkBonus}, orb ${tOff.galleryOrbMult})`);
+
+  // (2) ON after a simulated retire: eligibility + mint + tuning reflects it.
+  assert(!L.canRetireCollection(L.freshSave()), 'A4: an empty collection is not eligible to retire');
+  const s = L.freshSave();
+  s.owned = L.PAINTINGS.map(p => p.id);      // all 8 paintings owned
+  s.loadout = [L.PAINTINGS[0].id];          // at least one ★-hung
+  assert(L.canRetireCollection(s), 'A4: a completed collection (all 8 + one hung) is eligible to retire');
+  assert(L.retireCollection(s) === 1 && s.galleryBonus === 1, 'A4: retiring mints galleryBonus level 1');
+  // repeatable: a second retire advances the counter
+  assert(L.retireCollection(s) === 2 && s.galleryBonus === 2, 'A4: the bonus is repeatable (retire again -> level 2)');
+  const tOn = L.makeTuning({}, s.loadout, 'normal', s.galleryBonus);
+  assert(tOn.galleryInkBonus === L.GALLERY_BONUS.inkPerLevel * 2 && tOn.galleryOrbMult > 1, `A4: bonus ON after retire (ink ${tOn.galleryInkBonus}, orb ${tOn.galleryOrbMult.toFixed(2)})`);
+  // the orb value bump is applied to the live tuning's pickupValue
+  const baseOrb = L.makeTuning({}, s.loadout, 'normal', 0).pickupValue;
+  assert(tOn.pickupValue > baseOrb, `A4: orb value is bumped by the bonus (pickup ${baseOrb} -> ${tOn.pickupValue.toFixed(2)})`);
+
+  // (3) persists across a save/load round-trip.
+  S.SaveSys.save(s);
+  const reloaded = S.SaveSys.load();
+  assert(reloaded && reloaded.galleryBonus === 2, `A4: galleryBonus persists across a save/load round-trip (got ${reloaded && reloaded.galleryBonus})`);
+  const tReload = L.makeTuning({}, reloaded.loadout, 'normal', reloaded.galleryBonus);
+  assert(tReload.galleryInkBonus === tOn.galleryInkBonus, 'A4: the reloaded save rebuilds the same tuned bonus');
+
+  // (4) an OLD-format save (no galleryBonus field) migrates without error.
+  store.set(KEY, JSON.stringify({
+    v: 1,
+    bank: { red: 9, blue: 9, green: 9 },
+    owned: ['moonlit-pond'], loadout: ['moonlit-pond'],
+    upgrades: { capacity: 1, power: 0, vitality: 0 },
+    flags: { intro: true },
+    stats: { expeditions: 3, victories: 1, deaths: 0, heronsPainted: 0, treasures: 0 },
+    bestRun: null,
+    // NOTE: no galleryBonus field on purpose — this is the old schema.
+  }));
+  const oldMigrated = S.SaveSys.load();
+  assert(oldMigrated !== null, 'A4: an OLD-format save (no galleryBonus field) still loads');
+  assert(oldMigrated.saveVersion === L.SAVE_VERSION, 'A4: the old save re-stamps to the current schema version');
+  assert(oldMigrated.galleryBonus === 0, 'A4: the old save migrates with galleryBonus defaulted to 0 (no error)');
+  // and the legacy fields survived the migration
+  assert(oldMigrated.bank.red === 9 && oldMigrated.owned.includes('moonlit-pond'), 'A4: legacy fields survive the old->new migration');
+
+  // (5) the atelier UI mints the bonus: eligible save -> the Ledger tab exposes
+  // a 'retire' row; clicking it raises the level and rebuilds the tuning.
+  const recCanvas = makeCanvas();
+  const g33 = new Game(recCanvas);
+  g33.start();
+  g33._quitToTitle();
+  g33._beginAtelier();
+  g33._atelierIntro = false;
+  g33.save = L.freshSave();
+  g33.save.owned = L.PAINTINGS.map(p => p.id);
+  g33.save.loadout = [L.PAINTINGS[0].id];
+  const retireRow = () => g33._atelierRows().find(r => r.tag === 'retire');
+  fireKey('keydown', '4'); frames(2); // onto the Ledger tab
+  let rr = retireRow();
+  assert(rr && rr.enabled === true, 'A4: the Ledger tab exposes an enabled retire row for a completed collection');
+  const before = L.galleryBonusLevel(g33.save);
+  rr.act(); frames(2);
+  const after = L.galleryBonusLevel(g33.save);
+  assert(after === before + 1, `A4: clicking Retire mints the next bonus level (${before} -> ${after})`);
+  assert(g33.tuning.galleryInkBonus > 0, 'A4: the live tuning is rebuilt with the bonus active');
+  // the run-start ink grant: a fresh expedition starts with the ink bonus in stock
+  g33._beginExpedition();
+  assert(g33.stock.red === g33.tuning.galleryInkBonus && g33.stock.blue === g33.tuning.galleryInkBonus && g33.stock.green === g33.tuning.galleryInkBonus,
+    `A4: a run starts with +${g33.tuning.galleryInkBonus} start ink of every color (bonus ${after})`);
+  // a non-complete collection shows a disabled retire row (no accidental mint)
+  g33._quitToTitle(); g33._beginAtelier(); g33._atelierIntro = false;
+  g33.save = L.freshSave(); g33.save.owned = ['moonlit-pond']; g33.save.loadout = ['moonlit-pond'];
+  fireKey('keydown', '4'); frames(2);
+  const rr2 = retireRow();
+  assert(rr2 && rr2.enabled === false, 'A4: an incomplete collection shows a disabled retire row');
+  const beforeIneligible = L.galleryBonusLevel(g33.save);
+  rr2.act(); frames(2); // must be a no-op (hurt, no mint)
+  assert(L.galleryBonusLevel(g33.save) === beforeIneligible, 'A4: retiring an incomplete collection does nothing (no mint)');
+  // restore the live game save for any later stage
+  g33._quitToTitle();
 }
 
 console.log('\nALL SMOKE TESTS PASSED');
