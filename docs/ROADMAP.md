@@ -59,7 +59,7 @@ in PROJECT_STATE.md before/after).
 | P9 | Audio/options polish: separate music/SFX sliders, shake & vignette toggles | ⬜ |
 | P10 | Performance pass: cull off-screen enemy AI; hold 60fps across the full world | ✅ 2026-09-05 (view-cull decor + enemy AI beyond 500px; draw calls 9527→~1464 localized; 60.2 fps real-browser; smoke stage 24) |
 | P11 | Human-pace pacing probe (simulated human input, not bot-optimal) | ⬜ |
-| P12 | Zone character: distinct accent + signature encounter per zone | ⬜ |
+| P12 | Zone character: distinct accent + signature encounter per zone | ✅ 2026-09-05 (per-zone accent wash + an elite "signature guardian" of the zone's emblematic enemy — 1.9× HP / 1.35× size / 3× score, ringed in the zone accent; accents Reed #c9a94e, Slick #5a93c9, Bramble #7fb069, Gray #9a9a8f; pace probe updated, human est. ~18.8 min; smoke stage 25; 60.5 fps real-browser) |
 
 Acceptance: each item shipped with a smoke stage or regression test;
 full suite green; 15–20 min run target still holds on Normal; docs accurate.

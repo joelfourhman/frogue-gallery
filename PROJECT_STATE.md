@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 24 STAGES PASSED** (stages 21–23 = M7.5 PT1/PT3/PT4, stage 24 = M8 P10 perf culling). Pacing probes green. Real-browser probe: 60.2 fps across the full 5400px world. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT1–PT5 ✅, **M8 P10 ✅ (this pass)**. **Next: M8 P12 → P7 → P8 → P6 → P9 → P11.**_
+_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 25 STAGES PASSED** (stages 21–23 = M7.5 PT1/PT3/PT4, stage 24 = M8 P10 perf culling, **stage 25 = M8 P12 zone character**). Pacing probes green (human est. ~18.8 min). Real-browser probe: 60.5 fps (zone with signature guardian) / 60.2 fps full world. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT1–PT5 ✅, **M8 P10 ✅, M8 P12 ✅ (this pass)**. **Next: M8 P7 → P8 → P6 → P9 → P11.**_
 
 ## Current Status
 
@@ -94,7 +94,7 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 | P9 | Audio/options polish: separate music/SFX sliders, screen-shake + vignette toggles | ⬜ |
 | P10 | Performance pass: cull off-screen enemy AI/decoration updates; 60fps with full 5400px world | ✅ 2026-09-05 — `world.js` view-culls grass/ripples/soil/slicks/veg/reeds/pads/obstacles to the visible rect (draw calls 9527 full-world → ~1464 localized, 0.15×); `game.js` skips full enemy AI beyond 500px (burn still ticks). Smoke stage 24 + real-browser probe (60.2 fps across x=5%→95%). |
 | P11 | Human-pace pacing probe (≈260 px/s walker model) | ⬜ |
-| P12 | Zone character: distinct visual accent + signature encounter motif per zone | ⬜ |
+| P12 | Zone character: distinct visual accent + signature encounter motif per zone | ✅ 2026-09-05 — `game.js` `ZONES` now carry a per-zone `accent` + a `sig` signature encounter; `_zoneBeat` spawns an elite "signature guardian" (`_spawnZoneElite`, `ELITE = {hp:1.9, dmg:1.3, radius:1.35, score:3}`) of the zone's emblematic enemy, ringed in the zone accent (`enemies.js` drawEnemy scales the body to the elite hitbox + draws a pulsing accent halo) and sets a 2.6s fading zone-accent wash (`_drawZoneTint`) so crossing a boundary reads as a place-shift. Accents: Reed `#c9a94e`, Slick `#5a93c9`, Bramble `#7fb069`, Gray `#9a9a8f` (guards: Reed beetle×1, Slick mosquito×2, Bramble toad×1, Gray beetle×2 = 6 total). `pace.mjs` folds the 6 guardians into the human model (~18.7 min, inside target). Smoke stage 25. 60.5 fps real-browser (no JS errors). |
 
 Optional (after all of the above is green): gold pigment, gamepad support, New Game+.
 
@@ -110,6 +110,13 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 | PT4 | Fresh-save bank | `{red:0, blue:0, green:0}` | `{red:3, blue:6, green:4}` (one-time `WELCOME_GRANT`, +13) | Early death kept ~0 (`deathKeepFraction 0.5` floor) → soft-lock at the shop. Grant buys ≥1 upgrade and ≥1 painting. |
 | PT1 | swipe/splash rate | `swipeCd 0.2s`, splash charge→`0.9s cd` | unchanged (verified, not free) | "Infinite wet" is the attack *rate* gate, already correct; no change. |
 
+### Balance Log (M8 — before → after, 2026-09-05)
+
+| Item | Knob | Before | After | Why |
+|---|---|---|---|---|
+| P12 | zone combat beat | named zone beat only (beetle/mosquito/toad `mix`) | + an elite **signature guardian** of the zone's emblematic enemy, `ELITE = {hp:1.9, dmg:1.3, radius:1.35, score:3}` (6 across the run) | v1.1 wanted each zone to have "character." An elite + a per-zone accent wash gives a memorable set-piece without a wall: 1.9× HP is a couple of swipes, and the pace probe still lands inside the 15–20 min target (~18.7 min). |
+| P12 | zone entry cue | banner text only | + 2.6s fading full-screen zone-accent wash (`_drawZoneTint`), peak alpha 0.16 | A color shift on crossing a boundary reads as a place-shift, not just a new banner; kept subtle so it never obscures the world. |
+
 **v1.1 acceptance criteria** (see MISSION.md): every P/B item has a passing smoke stage or regression test; full suite green in one command; 15–20 min run target still holds on Normal; docs accurate; git clean with one conventional commit per chunk.
 
 ## Immediate Next Action
@@ -118,20 +125,30 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 (c92ced1), and the v1.1 status-docs pass (3c590be) are all committed and
 verified.
 
-**M8 P10 (performance culling) — implemented + tested this pass.** The
-dominant 60fps cost across the 5400×1500 world was drawing every decoration
-item for the *entire* world each frame. `world.js` now view-culls
-grass/ripples/soil/slicks/veg/reeds/pads/obstacles to the visible rect
-(±100–120px margin); `game.js` skips full enemy AI beyond 500px from the
-player (burn damage still ticks, so off-screen burn kills are unchanged).
-Draw-call count drops from 9527 (full world) to ~1464 (a localized
-1280×800 view — 0.15×). **Verified zero visible change** (off-screen items
-were invisible anyway) and **60.2 fps holds across the full world**
-(real-browser probe at x=5%→95%). Smoke stage 24 guards both the draw-cull
-(localized < full, ratio < 0.6) and the enemy AI cull (near enemy seeks, far
-enemy frozen). Pacing unchanged (17.1 min human estimate).
+**M8 P12 (zone character) — implemented + tested this pass.** Each of the 4
+expedition zones now reads as a distinct place. `ZONES` carry a per-zone
+`accent` color and a `sig` signature encounter; on zone entry `_zoneBeat`
+spawns an elite **signature guardian** of the zone's emblematic enemy via
+`_spawnZoneElite` — scaled up and hardened by `ELITE = {hp:1.9, dmg:1.3,
+radius:1.35, score:3}` (a single well-timed splash or a couple of swipes still
+handles it; it adds character, not a wall). `enemies.js drawEnemy` scales the
+body to the elite hitbox and draws a pulsing accent halo; `game.js` also sets
+a 2.6s fading zone-accent wash (`_drawZoneTint`) so crossing a boundary reads
+as a place-shift, not just a new banner. Guards: Reed beetle×1, Slick
+mosquito×2, Bramble toad×1, Gray beetle×2 (6 total). Accents: Reed `#c9a94e`,
+Slick `#5a93c9`, Bramble `#7fb069`, Gray `#9a9a8f`. **Verified:** smoke stage
+25 (accent uniqueness + sig validity per zone; a real loop crossing Reed
+Flats spawns the right elite with the right accent, scaled HP/radius/score,
+and the wash active-then-faded); `pace.mjs` now folds the 6 guardians into the
+human model (~18.7 min, inside the 15–20 target); real-browser probe 60.5 fps
+with zero JS errors while driving through the zone.
 
-**Next: M8 P12 (zone character) → P7 → P8 → P6 → P9 → P11.**
+**Prior pass — M8 P10 (performance culling).** `world.js` view-culls
+off-screen decor to the visible rect and `game.js` culls far enemy AI (burn
+still ticks); draw calls 9527 → ~1464 localized, 60.2 fps across the full
+world. Committed `5e95fbf`. Smoke stage 24.
+
+**Next: M8 P7 (difficulty select) → P8 (Gallery Wall) → P6 (? overlay) → P9 (audio polish) → P11 (human-pace probe).**
 
 - (recorded) **PT1 — painting consumption (verified, no code change).** The plan flagged
   "painting might be free / infinite wet." Audit result: swipes and splashes

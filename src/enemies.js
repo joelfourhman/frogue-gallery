@@ -124,9 +124,36 @@ export function drawEnemy(ctx, e, now) {
   ctx.fill();
   ctx.globalAlpha = 1;
 
+  // M8 P12: elite signature guardians are drawn scaled up to match their
+  // larger hitbox (the body sprites are a fixed pixel size, so scale them).
+  const base = ENEMIES[e.kind] ? ENEMIES[e.kind].radius : e.r;
+  const escale = e.elite ? e.r / base : 1;
+  if (escale !== 1) ctx.scale(escale, escale);
+
   if (e.kind === 'beetle') drawBeetle(ctx, e, frozen, flash, now);
   else if (e.kind === 'mosquito') drawMosquito(ctx, e, frozen, flash, now);
   else drawToad(ctx, e, frozen, dizzy, flash, now);
+  ctx.scale(1 / escale, 1 / escale); // undo body scale for the auras below
+
+  // M8 P12: zone-accent ring — a slow pulsing halo in the zone's color that
+  // marks the signature guardian. Pulses with `now`; sits under the status
+  // aura so a burning/frozen elite still shows its status ring on top.
+  if (e.elite && e.accent) {
+    const pulse = 0.55 + 0.45 * Math.sin(now * 3 + e._seed);
+    ctx.save();
+    ctx.globalAlpha = 0.28 + 0.22 * pulse;
+    ctx.fillStyle = e.accent;
+    ctx.beginPath();
+    ctx.arc(0, 0, e.r + 9 + 2.5 * pulse, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = e.accent;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, e.r + 7, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // status aura
   if (e.status) {

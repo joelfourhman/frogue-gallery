@@ -965,5 +965,54 @@ console.log('== stage 24: M8 P10 — performance culling (off-screen draw + enem
   assert(!farMoved, `P10 enemy cull: a far enemy (2900px) is AI-culled and stays frozen (dx=${(far.x - farX0).toFixed(1)})`);
 }
 
+console.log('== stage 25: M8 P12 — zone character: accent wash + signature guardian per zone ==');
+{
+  const { ZONES, ELITE } = await import('../src/game.js');
+  const L = await import('../src/logic.js');
+
+  // Every zone declares a distinct accent + a signature encounter.
+  assert(ZONES.length === 4, 'four zones declared');
+  const accents = new Set(ZONES.map(z => z.accent));
+  assert(accents.size === 4, `each zone has a distinct accent color (got ${accents.size} unique of ${ZONES.length})`);
+  for (const z of ZONES) {
+    assert(typeof z.accent === 'string' && z.accent.startsWith('#'), `zone "${z.name}" accent is a hex color (${z.accent})`);
+    assert(z.sig && z.sig.kind && L.ENEMIES[z.sig.kind], `zone "${z.name}" has a signature encounter of a real enemy kind (${z.sig && z.sig.kind})`);
+    assert(z.sig.count >= 1, `zone "${z.name}" signature encounter spawns >=1 guardian`);
+  }
+
+  // Driving the real loop: teleport a fresh game across the first zone
+  // boundary and confirm the zone beat now includes an elite signature
+  // guardian wearing the zone accent, plus the fading accent wash.
+  const cv3 = makeCanvas();
+  const g3 = new Game(cv3);
+  g3.start();
+  fireKey('keydown', 'Enter'); frames(3); // title -> expedition
+  const P3 = g3.player;
+  P3.alive = true; P3.hp = 99; P3.iframes = 999;
+  P3.x = g3.world.w * ZONES[0].x + 2; P3.y = 760; // step into Reed Flats
+  frames(2);
+  assert(g3.banners.some(b => b.text.includes('Reed Flats')), 'Reed Flats banner fired on entry');
+  const elites = g3.enemies.filter(e => e.elite);
+  assert(elites.length === ZONES[0].sig.count, `Reed Flats spawned its signature guardian(s) (elites=${elites.length}, expected ${ZONES[0].sig.count})`);
+  const el = elites[0];
+  assert(el.kind === ZONES[0].sig.kind, `Reed Flats guardian is the zone's emblematic enemy (${el.kind})`);
+  assert(el.accent === ZONES[0].accent, `Reed Flats guardian wears the zone accent (${el.accent})`);
+  // elite scaling actually applied vs a normal spawn of the same kind
+  const baseBeetle = L.ENEMIES[el.kind];
+  assert(el.maxHp > baseBeetle.hp, `elite guardian has scaled HP (${el.maxHp} > ${baseBeetle.hp})`);
+  assert(el.r > baseBeetle.radius, `elite guardian has a larger hitbox (${el.r} > ${baseBeetle.radius})`);
+  assert(el.score > baseBeetle.score, `elite guardian pays more score (${el.score} > ${baseBeetle.score})`);
+  // the zone-accent wash is live on entry and fades out over ~2.6s
+  assert(g3._zoneTint && g3._zoneTint.color === ZONES[0].accent, 'zone-accent wash active on entry');
+  const tintStart = g3._zoneTint.t;
+  frames(200); // ~3.3s > 2.6s wash duration
+  assert(g3._zoneTint === null, 'zone-accent wash faded out after its duration');
+  assert(tintStart <= 2.6 + 1e-6, 'wash duration is bounded (~2.6s)');
+  g3.player.iframes = 0;
+  g3.player.hurt(99, g3.tuning);
+  frames(140);
+  assert(g3.state === 'end', 'run ended cleanly after the P12 stage');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

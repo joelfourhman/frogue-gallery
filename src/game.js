@@ -10,17 +10,28 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, makeTuning, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor } from './ui.js';
 
 // P5: 4 named expedition zones + a rest checkpoint between each — structure
 // the run so a full expedition reads as a journey, not one long hallway.
-const ZONES = [
-  { x: 0.24, name: 'Reed Flats',   tip: 'Reed Flats — the swamp breathes. Beetles chew through the reeds.',   mix: { beetle: 3, mosquito: 1 } },
-  { x: 0.44, name: 'Slick Hollow', tip: 'Slick Hollow — mosquitos swarm the still water. Blue paint chills them.', mix: { mosquito: 4, beetle: 2 } },
-  { x: 0.64, name: 'Bramble Thicket', tip: 'Bramble Thicket — toads lurk in the bramble. Paint them dizzy (green) for open shots.', mix: { toad: 2, mosquito: 3 } },
-  { x: 0.82, name: 'The Gray Shore', tip: 'The Gray Shore — everything the swamp kept gathers here. Rest, then finish.', mix: { toad: 2, beetle: 3, mosquito: 3 } },
+// M8 P12: each zone carries a distinct accent color and a `sig` signature
+// encounter — one larger, bolder "guardian" of the zone's signature enemy that
+// wears the zone's accent ring. The zone reads as a place, not a repeat.
+export const ZONES = [
+  { x: 0.24, name: 'Reed Flats',   accent: '#c9a94e', tip: 'Reed Flats — the swamp breathes. Beetles chew through the reeds.',   mix: { beetle: 3, mosquito: 1 },
+    sig: { kind: 'beetle',   count: 1 } },
+  { x: 0.44, name: 'Slick Hollow', accent: '#5a93c9', tip: 'Slick Hollow — mosquitos swarm the still water. Blue paint chills them.', mix: { mosquito: 4, beetle: 2 },
+    sig: { kind: 'mosquito', count: 2 } },
+  { x: 0.64, name: 'Bramble Thicket', accent: '#7fb069', tip: 'Bramble Thicket — toads lurk in the bramble. Paint them dizzy (green) for open shots.', mix: { toad: 2, mosquito: 3 },
+    sig: { kind: 'toad',     count: 1 } },
+  { x: 0.82, name: 'The Gray Shore', accent: '#9a9a8f', tip: 'The Gray Shore — everything the swamp kept gathers here. Rest, then finish.', mix: { toad: 2, beetle: 3, mosquito: 3 },
+    sig: { kind: 'beetle',   count: 2 } },
 ];
+// Elite scaling for signature encounters (P12): bolder than a normal spawn of
+// the same kind, but a single well-timed splash or a couple of swipes still
+// handles it — they add character, not a wall.
+export const ELITE = { hp: 1.9, dmg: 1.3, radius: 1.35, score: 3 };
 
 const HERON_Y = 800; // heron x is set per-run at world.w - 350 (P5)
 const PLAYER_START_X = 260, PLAYER_START_Y = 750;
@@ -141,6 +152,11 @@ export class Game {
       const b = this.banners[i];
       b.t -= dt;
       if (b.t <= 0) this.banners.splice(i, 1);
+    }
+    // M8 P12: zone-accent wash fades out after entry
+    if (this._zoneTint) {
+      this._zoneTint.t -= dt;
+      if (this._zoneTint.t <= 0) this._zoneTint = null;
     }
 
     if (this.state === 'title') {
@@ -681,6 +697,7 @@ _drawAtelier(ctx) {
     this.runT = 0;
     this.spawnT = 3.5;
     this._zoneI = 0;
+    this._zoneTint = null; // M8 P12: { color, t, max } — fading zone-accent wash on entry
     this.score = 0;
     this.stock = { red: 0, blue: 0, green: 0 };
     this.collected = { red: 0, blue: 0, green: 0 };
@@ -890,6 +907,12 @@ _drawAtelier(ctx) {
     const W = this.world.w;
     this.sfx('ui');
     this.addBanner(z.tip, 5.2, this.ch * 0.3);
+    // M8 P12: a brief zone-accent wash so entering a zone reads as a change of
+    // place, not just a new banner.
+    if (z.accent) this._zoneTint = { color: z.accent, t: 2.6, max: 2.6 };
+    // M8 P12: a signature guardian of the zone's emblematic enemy — scaled up
+    // and ringed in the zone's accent. It leads the zone's combat beat.
+    if (z.sig) this._spawnZoneElite(p, z);
     // combat beat, staged ahead of the frog so it plays out gradually
     for (const [kind, n] of Object.entries(z.mix)) {
       for (let i = 0; i < n; i++) {
@@ -905,6 +928,30 @@ _drawAtelier(ctx) {
     this.particles.leafPuff(rx, ry - 40, '#9ed483', 3);
     for (let i = 0; i < 2; i++) {
       this.orbs.push({ x: rx + (Math.random() - 0.5) * 160, y: ry + (Math.random() - 0.5) * 120, color: ORB_COLORS[(Math.random() * 3) | 0], t: 0 });
+    }
+  }
+
+  // M8 P12: spawn the zone's signature guardian(s). Each is a scaled-up elite
+  // of the zone's emblematic enemy that wears the zone's accent ring. They are
+  // spawned a little further ahead than the regular beat so the zone's "boss"
+  // reveals itself as the frog pushes in.
+  _spawnZoneElite(p, z) {
+    const sig = z.sig;
+    if (!sig || !sig.kind) return;
+    const base = ENEMIES[sig.kind];
+    if (!base) return;
+    const n = sig.count || 1;
+    for (let i = 0; i < n; i++) {
+      const x = clamp(p.x + 340 + i * 90 + Math.random() * 200, 60, this.world.w - 60);
+      const y = clamp(p.y + (Math.random() - 0.5) * 420, 100, this.world.h - 100);
+      const e = spawnEnemy(sig.kind, x, y, this.tuning);
+      e.elite = true;
+      e.hp = e.maxHp = Math.round(base.hp * ELITE.hp);
+      e.r = base.radius * ELITE.radius;
+      e.dmg = base.dmg * ELITE.dmg;
+      e.score = base.score * ELITE.score;
+      e.accent = z.accent;
+      this.enemies.push(e);
     }
   }
 
@@ -1328,6 +1375,7 @@ _drawAtelier(ctx) {
     if (this.state === 'end') this._drawEnd(ctx);
     // banners render last so they sit above every screen (incl. the title,
     // where the erase-save confirm banner appears)
+    this._drawZoneTint(ctx);
     this._drawBanners(ctx);
 
     // ---- M5: low-HP vignette (soft red pulse when at <= 2 hp) ----
@@ -1342,6 +1390,23 @@ _drawAtelier(ctx) {
       ctx.fillRect(0, 0, this.cw, this.ch);
       ctx.restore();
     }
+  }
+
+  // M8 P12: zone-accent wash — a soft full-screen tint in the zone's color
+  // that fades out over ~2.6s after the player crosses into the zone. Reads
+  // as a gentle "place shift" without hiding the world.
+  _drawZoneTint(ctx) {
+    if (!this._zoneTint || this.state !== 'expedition') return;
+    const zt = this._zoneTint;
+    // ease out: strong at the moment of entry, fading to nothing.
+    const k = zt.t / zt.max;
+    const alpha = 0.16 * k;
+    if (alpha < 0.005) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = zt.color;
+    ctx.fillRect(0, 0, this.cw, this.ch);
+    ctx.restore();
   }
 
   _drawOrbs(ctx) {

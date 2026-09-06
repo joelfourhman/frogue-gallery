@@ -126,16 +126,19 @@ const dpsFraction = 0.42;              // human: range + misses + dodging + pigm
 const bossHuman = bossGod / dpsFraction;
 const avgMoveFrac = 0.55;              // humans average ~55% of max move speed (stops, detours)
 const travelHuman = (HX - 260) / (230 * avgMoveFrac);
-// encounters: named zone beats (P5) + background spawn waves
+// encounters: named zone beats (P5) + background spawn waves + M8 P12 signature
+// guardians (an elite per zone beat, ~1.9x HP, so a few extra seconds each)
 const zoneCombat = 4 * 40;               // 4 zones × ~40s of fight+reposition for a competent player
-const enemyWaves = Math.floor((travelHuman + zoneCombat + bossHuman) / 2.4);
+const eliteCombat = 6 * 5;               // 6 signature guardians (1+2+1+2) × ~5s extra attention
+const enemyWaves = Math.floor((travelHuman + zoneCombat + eliteCombat + bossHuman) / 2.4);
 const background = enemyWaves * 5;        // ~5s of extra attention per background wave
-const humanTotal = travelHuman + zoneCombat + background + bossHuman;
+const humanTotal = travelHuman + zoneCombat + eliteCombat + background + bossHuman;
 
 console.log(`\nLOWER-BOUND (ideal player, god-mode): ${game.runT.toFixed(0)}s = ${(game.runT / 60).toFixed(1)} min`);
 console.log(`HUMAN ESTIMATE (competent player): ~${(humanTotal / 60).toFixed(1)} min`);
 console.log(`  travel (55% avg speed): ${travelHuman.toFixed(0)}s`);
 console.log(`  zone beats (4 named encounters): ~${zoneCombat}s`);
+console.log(`  signature guardians (P12, 6): ~${eliteCombat}s`);
 console.log(`  background waves (~${enemyWaves}): ~${background}s`);
 console.log(`  heron boss (${game.tuning.bossMaxHp} hp, human DPS): ~${bossHuman.toFixed(0)}s = ${(bossHuman / 60).toFixed(1)} min`);
 console.log(`Target is 15–20 min. First runs run longer (learning curve) — see note below.`);
