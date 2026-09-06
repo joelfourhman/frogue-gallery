@@ -226,3 +226,258 @@ combat-color interpretation of the parked deferred item stays deferred
   zones + modifiers (N4) keep variety without a generation system.
 - **Further boss variety (3rd+ heron, non-heron boss)** — one new heron in
   v1.3; a genuinely new boss archetype is a future-version item.
+
+## v1.4 — "Make It Amazing" (APPROVED — executing)
+
+**Theme: juice, presence, and moments.** Three versions have made the game
+mechanically deep and complete — the missing layer is how it *feels*. v1.4
+adds no new rules and no systems of consequence; it makes the same game feel
+alive in the hand, alive in the world, and alive in the ear. Every item
+reuses existing systems (named in each Notes) and stays inside the
+zero-dependency, procedural-only, 60fps, painted-world invariants.
+
+**Why this order — juice first, because it multiplies everything after.**
+Camera, hit-stop, and body feel on the *current* art and audio are already a
+big leap in feel — and they make the art and audio that land on top of them
+read better. Frog hop feel (J4) comes before the living-world pass (L1) so
+the character is already animated when the world starts moving; the living
+world lands before the title screen (L3) so the title reuses the same
+animation code; the melodic zone theme (S1) lands after the first art pass so
+the visual + audio upgrade hit together; the first-victory cinematic (M1)
+lands last, when it has the best swamp to bloom; Encore + easter eggs are pure
+delight that depend on nothing. Batches of 3 (last batch 2), one conventional
+commit per item, full smoke suite green after every commit, and a 60fps
+acceptance check on every juice/art item: the P10 culling stage is the
+headless budget guard, and every item either re-runs it or adds its own
+per-frame budget assertion.
+
+### Module J — Game feel / juice (the #1 lever)
+
+- [ ] **J1 — Wet paint that lingers** — `paint.js` / `world.js` / `particles.js`
+  - **What:** short-lived "wet marks" on surfaces. When a swipe/splash hits
+    terrain or an enemy, 3–6 low-alpha watercolor blots (pigment color,
+    wobbly edges via `math.js` shapes, slightly darker wet rim) persist
+    2–6 s and fade. The swipe trail in `paint.js:drawTrails` becomes a
+    tapered wet-stroke ribbon (3–4 fading segments) that lingers ~0.4 s
+    instead of vanishing in a frame.
+  - **Notes:** store the wet marks in a capped list (reuse the `particles`
+    array with a new `kind`, or a parallel cap on the world); HARD CAP ~120
+    active wet marks, oldest dropped first (P10 discipline — same rule as
+    the culling invariant). No persistent paint data (deferred list).
+  - **Acceptance:** new smoke stage: swipe + splash spawn wet marks, count
+    never exceeds the cap, all fade out within 7 s; P10 stage still passes.
+    Status: TODO.
+
+- [ ] **J2 — Hit-stop, shake escalation, boss-defeat slow-mo** — `game.js`
+  - **What:** a single `timeScale` on the frame loop (default 1). Small
+    hits: 60–90 ms at 0.3× (hit-stop pop on beetle kill, orb-streak hit,
+    pigment pickup). Big moments: heron defeat → ~0.8 s at 0.35× + white
+    flash frame + shake spike; the boss lunge telegraph already exists
+    (`enemies.js`), add a 1-frame pre-hit freeze when the lunge connects.
+  - **Notes:** `timeScale` scales `dt` for world/particles/enemies only —
+    never the UI or the input buffer; shake reuses `addShake`
+    (`game.js:323`) with new escalation values; the existing
+    `options.shake` toggle gates all of it.
+  - **Acceptance:** smoke stage: timeScale spikes to <0.5 on a scripted big
+    hit and recovers to 1 within 1 s; defeat triggers the slow-mo window;
+    P10 still passes (timeScale changes time, not frames-per-second).
+    Status: TODO.
+
+- [ ] **J3 — Camera polish: lead, lag, boss framing, awaken moment** — `game.js`
+  - **What:** replace the plain `approach` follow (`game.js:2245`) with:
+    (a) input-direction look-ahead (up to ~40 px, eases in/out); (b) mild
+    lag when the frog moves fast, so the world feels weighted; (c) boss
+    fights: camera widens and centers on the frog–heron midpoint; (d) the
+    awaken moment: when a heron rises (especially the Great Green Heron
+    reveal), a 1.2 s zoom-out + hold on the heron, then back to follow.
+  - **Notes:** all in the existing `cam` object + `drawWorld` view math;
+    `addShake` still applies on top. No new camera system.
+  - **Acceptance:** smoke stage: cam converges to the look-ahead target,
+    boss midpoint centering holds within tolerance, awaken hold fires once
+    per rise; P10 still passes. Status: TODO.
+
+- [ ] **J4 — Frog hop feel: squash, stretch, dust, ripple** — `player.js` / `particles.js`
+  - **What:** hop start → stretch (x0.85/y1.15, 0.1 s); landing (`hopT`→0)
+    → squash (x1.2/y0.8, 0.1 s) + a soft dust/water puff (new
+    `particles.dustPuff`) + a single ripple ring on open water; a soft low
+    "boing" sfx (synth, no asset). Draw-time only — `player.js` physics is
+    untouched, so pacing probes stay unchanged.
+  - **Notes:** pose flags live on the player, read by the draw pass in
+    `game.js`; amplitude small (painted-world, not bouncy-arcade).
+  - **Acceptance:** smoke stage: hop spawns exactly one dust puff and the
+    squash/pose flags transition; `pace.mjs` / `humance.mjs` medians
+    unchanged (draw-only check); P10 still passes. Status: TODO.
+
+- [ ] **J5 — Pickup / ink / UI micro-animations** — `game.js` / `ui.js` / `particles.js`
+  - **What:** pickups pop (scale 1.3→1, 0.15 s) + `sparkles` burst; HUD
+    numbers float up-and-fade instead of swapping; the orb streak gains a
+    short fading trail; UI: buttons hover-wobble 1–2 px, panels open with a
+    0.15 s slide+fade instead of hard cuts (menus, pause, game-over card).
+  - **Notes:** built on the `ui.js` primitives (`drawButton`, panel helper)
+    so every screen inherits the transitions for free; a tiny per-widget `t`
+    clock — no animation library.
+  - **Acceptance:** smoke stage: pickup increments a floating-text count,
+    panel open state interpolates (not a hard cut); P10 still passes.
+    Status: TODO.
+
+### Module L — Art direction / presence
+
+- [ ] **L1 — Living world pass: swaying reeds, drifting mist, water shimmer**
+  — `world.js`
+  - **What:** reeds sway (per-reed sine, phase from the existing reed
+    `seed`, small amplitude); 2–3 soft mist bands drift across the
+    playfield at very low alpha (procedural ellipses, slow parallax); a
+    handful of staggered shimmer glints on open-water cells. All inside the
+    existing view culling (P10).
+  - **Notes:** `world.js:drawProps` already receives `now` — pure
+    draw-time modulation of existing geometry; no new world data.
+  - **Acceptance:** smoke stage: reed tip x-offset changes across frames
+    (animated, not static) and shimmer count stays bounded; P10 stage still
+    passes. Status: TODO.
+
+- [ ] **L2 — Layered watercolor render pass: wet edges + stroke texture**
+  — `world.js` / `math.js`
+  - **What:** (a) wet edges: freshly painted cells get a darker wet rim that
+    lightens over ~5 s (reuse the paint-cell state — no new persistence);
+    (b) stroke texture: short directional brush strokes pre-baked ONCE at
+    world build into an offscreen canvas per zone (seeded via `math.js`
+    wobbly shapes), drawn as one cached image per zone per frame; (c) prop
+    outlines get a second offset "watercolor double-stroke" at low alpha.
+  - **Notes:** the pre-bake is the budget trick — stroke texture costs one
+    `drawImage` per zone per frame, not thousands of strokes; bake on
+    `world.build()` so it rides the existing seed system (same seed → same
+    texture).
+  - **Acceptance:** smoke stage: offscreen canvases created once per zone
+    (count stable across frames), wet-rim alpha decays over time; P10
+    still passes (this item is the one most likely to regress 60fps —
+    verify the cached path, not the raw one). Status: TODO.
+
+- [ ] **L3 — Breathing title screen + vignette/lighting polish** — `game.js` / `ui.js`
+  - **What:** the title screen becomes the swamp breathing: a slow
+    `worldColorSat` swell (e.g. 0.35↔0.55, 8 s sine) on the existing living
+    backdrop; a frog sits idle on a lily pad (reuses J4's poses); menu items
+    fade in staggered (200 ms steps). Lighting: a soft warm radial glow
+    around the frog in-expedition, plus a subtle always-on warm vignette
+    layer under the existing low-HP vignette pass (`game.js:3062`, gated by
+    the same `options.vignette` toggle).
+  - **Notes:** the title camera drift (`game.js:374`) stays; the saturation
+    swell is a draw-only modulation of the `worldColorSat` read — not a
+    change to world state (the color-reveal single-source-of-truth
+    invariant is preserved: the swell only affects the title backdrop).
+  - **Acceptance:** smoke stage: title colorSat oscillates between the two
+    bounds, menu items appear staggered not simultaneous; P10 still
+    passes. Status: TODO.
+
+### Module S — Audio
+
+- [ ] **S1 — Melodic zone themes (real themes, not just drone)** — `audio.js`
+  - **What:** a small lookahead step-sequencer schedules short 8–16 bar
+    pentatonic loops per zone on a new per-zone melody gain, layered ABOVE
+    the existing ambient drone (drone stays as the bed; melody is quiet,
+    ~-12 dB relative, wobbly detune via `_tone`'s detune param). Melody
+    crossfades with the ambient on zone change (reuses the P9/P20 per-zone
+    group-gain crossfade machinery). `musicBus` inherits the music slider +
+    mute for free.
+  - **Notes:** scheduling via `ctx.currentTime` lookahead in the rAF tick —
+    no `setInterval`, no audio files, no new deps; theme data is plain note
+    arrays per zone (deterministic per zone; seeded variety allowed).
+  - **Acceptance:** smoke stage (headless AudioContext): melody gains are
+    created per zone, zone switch crossfades (old melody gain ramps down,
+    new ramps up), the music slider still scales the melody; P10 still
+    passes. Status: TODO.
+
+- [ ] **S2 — Boss music + victory/defeat stingers** — `audio.js` / `game.js`
+  - **What:** when the heron engages: a tense layer (low pulse + faster
+    tempo) on top of the zone theme, cut on defeat. Victory stinger (major
+    arpeggio swell) on boss defeat / victory screen; soft minor-descent
+    defeat stinger on the player-death sequence. Trigger points all already
+    exist in `game.js` (boss engage, defeat, death sequence).
+  - **Notes:** the boss layer reuses the S1 sequencer (extra voices + tempo
+    multiplier); stingers are short one-shots built from `_tone` / `_noise`
+    — same shape as existing `sfx()`.
+  - **Acceptance:** smoke stage: engage schedules the boss layer, defeat
+    fires the victory stinger + cuts the boss layer, death fires the defeat
+    stinger; audio scheduling does not affect frame timing (P10 passes).
+    Status: TODO.
+
+- [ ] **S3 — Painting sound-design pass: thicker brush, pigment timbres**
+  — `audio.js`
+  - **What:** the swipe becomes a thicker wet-brush swish (filtered noise
+    with a lowpass sweep + a droplet pluck); each pigment gets a distinct
+    pluck timbre — red warm/bright, blue cool/low, green mid with a shimmer;
+    the splash gains a watery "blub". All through the existing `sfx()` name
+    map, so the SFX slider + mute apply unchanged.
+  - **Notes:** all `_noise` / `_tone` recipes — no assets; pigments pass an
+    `opt` to `sfx()` (`game.js:289`) to select the timbre variant.
+  - **Acceptance:** smoke stage: swipe/splash per pigment dispatches a
+    distinct sfx variant (assert the variant key, not the waveform); P10
+    still passes. Status: TODO.
+
+### Module M — Moments / delight
+
+- [ ] **M1 — First-victory cinematic (letterbox bloom, skippable)** — `game.js`
+  - **What:** on a first Normal victory only (new save flag
+    `firstVictoryShown`, **SAVE_VERSION 7→8** with a migration): letterbox
+    bars slide in, the camera drifts slowly over the fully-colored swamp as
+    `worldColorSat` eases to 1 (reuses `restoreColor`), ~7 s, with the S2
+    victory stinger. Any key/click skips straight to the victory screen.
+    Never plays again; NG+ victories go straight to the victory screen.
+  - **Notes:** purely presentational — reuses the end screen,
+    `restoreColor`, and the L3 vignette; the cinematic is a thin wrapper
+    state, not a new game state with its own rules.
+  - **Acceptance:** smoke stage: first Normal victory plays the cinematic,
+    sets the flag (SAVE_VERSION 8 round-trips), skip aborts to the victory
+    screen, second victory skips straight; pacing probes unchanged.
+    Status: TODO.
+
+- [ ] **M2 — "Encore" gallery viewing screen** — `game.js` / `ui.js`
+  - **What:** an "Encore" button on the victory screen opens a leisurely
+    browse of the collection: the run's paintings first, then everything
+    unlocked; full-color render, per-painting detail (atelier one-liner,
+    pigments used, time to paint, expedition number), soft page-turn sfx,
+    Esc/vision back. No timers, no fail state — just looking at the art.
+  - **Notes:** reuses the existing gallery-wall rendering (gallery screen)
+    + atelier one-liner pools + save painting records; a new screen in the
+    state machine, no new data.
+  - **Acceptance:** smoke stage: opens from the victory screen, renders
+    every painting in the save, detail view shows one-liner + pigments,
+    closes cleanly back to the victory screen; P10 still passes.
+    Status: TODO.
+
+- [ ] **M3 — Two tasteful easter eggs** — `game.js` / `world.js` / field guide
+  - **What:** (1) **The other frog:** a tiny dark frog in a far Reedy Mire
+    corner; aim the brush at it within 60 px for 2 s and it blinks, croaks
+    once (synth), and paints one small leaf — recorded as a hidden field
+    guide entry ("You are not alone."). (2) **The signed canvas:** after
+    50 total lifetime paintings (save stat `paintingsCreated` already
+    exists), a small signed canvas appears in the atelier with the curator's
+    signature + a one-line joke on hover.
+  - **Notes:** reuse field guide data, atelier UI, and existing save stats;
+    both are discoverable-not-required (no map marker, no objective) —
+    delight, not content.
+  - **Acceptance:** smoke stage: each egg fires deterministically under its
+    condition, is recorded in the save (guide entry / atelier flag), and
+    does not affect run pacing; P10 still passes. Status: TODO.
+
+### Deferred past v1.4 (and why)
+
+- **Gamepad** — needs an input-mapping layer across `input.js` + every
+  screen; an accessibility-adjacent workstream, not juice. Revisit as its
+  own milestone.
+- **Accessibility pass** (captions, screen-reader) — the UI is
+  canvas-drawn; proper a11y needs an architecture review, not a v1.4 item.
+- **Gold combat color** — combat-adjacent gold would break the meta-only
+  discipline that made the v1.3 gold economy safe. Revisit only if the gold
+  economy itself grows.
+- **Co-op / multiplayer** — contradicts the loopback-only, single-session,
+  localStorage architecture; an architecture mismatch, not a polish item.
+- **Procgen** — the world is hand-tuned for the 15–20 min Normal pacing
+  target; generated worlds risk that pacing. Revisit post-release.
+- **Persistent paint data beyond the cell layer** — P10 budget; v1.4's wet
+  marks (J1) are deliberately short-lived. A permanent extra paint layer
+  would fight the culling invariant.
+- **Image/audio/font assets** — invariant: zero dependencies, procedural
+  only; everything above is built from `math.js` shapes, canvas, and
+  WebAudio synth.
+- **CRT/scanlines/retro filter** — rejected twice (v1.3); stays rejected.
+  The painted-world identity has no retro mode.

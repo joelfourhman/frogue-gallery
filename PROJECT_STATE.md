@@ -69,7 +69,7 @@ v1.3 "The Second Expedition" is **COMPLETE**. Full-suite regression, all probes 
 
 (Plus the two docs-only v1.3 setup commits `431285e` roadmap draft + `99d8513` approval, and this `docs: v1.3 complete` audit commit.)
 
-**Next season (v1.4):** see `docs/ROADMAP.md` "Explicitly deferred past v1.3" (gamepad support is the parked top item; gold-pigment-as-combat-color and CRT/scanline filters remain explicitly out of scope).
+**Next season (v1.4 "Make It Amazing") — APPROVED and executing (2026-09-06):** theme + 14 items (J1–J5 juice, L1–L3 presence, S1–S3 audio, M1–M3 moments) + fixed batch order + deferred list in `docs/ROADMAP.md` §v1.4; see Immediate Next Action above.
 
 ---
 
@@ -190,40 +190,51 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 
 ## Immediate Next Action
 
-**v1.3 "The Second Expedition" is APPROVED by Joel (2026-09-06) — execute in
+**v1.4 "Make It Amazing" is APPROVED by Joel (2026-09-06) — execute in
 bounded batches of ~3 items per session** (local model context ceiling;
 each session MUST end clean: committed + docs + suite green). Read
-`docs/ROADMAP.md` §v1.3 + AGENTS.md. All 12 items now Status `TODO` (no
-longer DRAFT).
+`docs/ROADMAP.md` §v1.4 + AGENTS.md. All 14 items Status `TODO`.
 
-**Fixed batch order** (each fresh session resumes losslessly from here):
-1. ~~N1 ✅~~ ~~N2 ✅~~ ~~N3 ✅~~ (NG+ unlock ✅, scaling + ngpace probe ✅, second boss ✅) — **Batch 7 (N1→N2→N3) COMPLETE**
-2. ~~N4 ✅~~ → ~~G1 ✅~~ → ~~G2 ✅~~ → **~~G3 ✅~~** (~~modifiers ✅~~, ~~gold economy core ✅~~, ~~2 gold paintings ✅~~, ~~Gilded Frame ✅~~)
-3. ~~G3 ✅~~ → ~~G4 ✅~~ → ~~C1 ✅~~ (~~gilded frame ✅~~, ~~gold UI + ledger ✅~~, ~~one-liner batch 2 ✅~~)
-4. C2 → C3 → C4 (season summary, paper-grain toggle, regression + audit)
+**Theme: juice, presence, and moments.** The game is mechanically complete;
+v1.4 adds no new rules — it makes the same game feel alive in the hand, the
+world, and the ear. **Why this order: juice first, because it multiplies
+everything after** — feel on the current art/audio is already a big leap,
+and it makes the art + audio that land on top of it read better.
 
-**Next up: the M16 season wrap — C2 (victory "Season" summary block), C3 (paper-grain presentation toggle), C4 (regression pass + season audit).** (Batch 9 item 3: C1 ✅ — suite 54/54, pure display so cycle-0 tuning + first-time pacing byte-identical.)
+**Fixed batch order** (each fresh session resumes losslessly from here;
+one conventional commit per item; groups of 3, last batch 2):
+1. J1 → J2 → J3 (wet paint that lingers · hit-stop/shake/boss-defeat slow-mo · camera polish: lead/lag/boss framing/awaken moment)
+2. J4 → J5 → L1 (frog hop feel: squash/stretch/dust/ripple · pickup/ink/UI micro-animations · living world pass: reeds/mist/shimmer)
+3. L2 → L3 → S1 (layered watercolor render pass · breathing title screen + vignette/lighting · melodic zone themes)
+4. S2 → S3 → M1 (boss music + victory/defeat stingers · painting sound-design pass · first-victory cinematic, SAVE_VERSION 7→8)
+5. M2 → M3 (Encore gallery viewing screen · two tasteful easter eggs) — final batch
 
 **Per-item discipline:** one conventional commit per item; add a passing
 smoke stage (or documented headless check for pure presentation); update
 docs/ROADMAP.md (mark ✅) + PROJECT_STATE.md + docs/PROJECT_STATUS.md;
 suite green after every commit; zero new dependencies; loopback-only; keep
-game.js thin (rules in logic.js). **Pacing invariants:** the FIRST-TIME
-Normal run must stay ~15–20 min (N1 gates all NG+ content behind a
-completed victory); NG+ cycles get the new `tests/ngpace.mjs` probe with
-its own 15–20 min target.
+game.js thin (rules in logic.js). **60fps acceptance (HARD, every
+juice/art item):** the P10 culling stage must still pass AND the item's own
+smoke stage must assert its per-frame budget (capped lists, cached
+offscreen canvases, draw-time-only pose flags); run the real-browser 60fps
+probe where practical (see Known risks — headless driver). **Pacing
+invariants:** every item is presentation/feel — first-time Normal stays
+15–20 min; re-run `pace.mjs`/`humance.mjs` after any item that touches the
+in-run path, and J4/M1 must prove medians unchanged. SAVE_VERSION bumps
+only where a save field is added (M1: 7→8 `firstVictoryShown`). **Style
+boundary:** everything must read as painted watercolor — no sci-fi/gamey
+HUD, no scanlines/CRT (rejected twice), no image/audio/font assets.
 
-**v1.3 recap:** spine = New Game+ as a designed loop (M14 N1–N4: unlock +
-"Next Expedition", `ngPlusScaling(cycle)` + ngpace probe, second boss The
-Great Green Heron reusing heron AI with a swapped pinning mechanic,
-player-chosen expedition modifiers). M15 G1–G4: gold pigment as a META
-economy (boss defeats/synergies/milestones earn gold; gold-tier paintings
-+ "Gilded Frame" galleryBonus tier) — explicitly NOT a 4th combat color.
-M16 C1–C4: season wrap (one-liner batch 2, victory "Season" summary,
-paper-grain presentation toggle [default OFF, scanlines excluded], full
-regression pass + season audit). Deferred past v1.3: gamepad,
-accessibility (Joel's call), gold-as-combat-color, CRT scanlines, co-op,
-procedural gen, 3rd+ boss archetypes.
+**v1.4 recap:** Module J (juice): J1 wet paint lingers · J2 hit-stop/shake/
+slow-mo · J3 camera polish · J4 frog hop feel · J5 micro-animations. Module
+L (presence): L1 living world · L2 layered watercolor render (pre-baked
+stroke texture per zone) · L3 breathing title + lighting. Module S (audio):
+S1 melodic zone themes (sequencer over the ambient drone) · S2 boss music
++ stingers · S3 painting sound-design (pigment timbres). Module M
+(moments): M1 first-victory cinematic (skippable, once) · M2 Encore gallery
+viewing · M3 easter eggs (the other frog, the signed canvas). Deferred past
+v1.4 (reasons in ROADMAP §v1.4): gamepad, accessibility, gold combat color,
+co-op, procgen, persistent paint data, image/audio/font assets, CRT/retro.
 
 **v1.2 "The Collection" is COMPLETE** (2026-09-06) — all four milestones done:
 M9 (A1–A4) ✅, M10 (E1–E4) ✅, M11 (V1–V4) ✅, M13 (T1–T4) ✅. Full suite
