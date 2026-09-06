@@ -236,6 +236,21 @@ export class AudioSys {
         this._noise(t, 0.5, 'bandpass', 2000, 3, 0.15);
         break;
       }
+      // V2 (v1.2 M11): a short celebratory "bloom" when the heron turns
+      // colorful — a warm rising major arpeggio (C-E-G-C) over a soft
+      // shimmering pad. Distinctive from the plain 'awaken' blip; reuses the
+      // existing _tone/_noise voices, no new assets.
+      case 'awaken-bloom': {
+        const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+        notes.forEach((f, i) => {
+          this._tone(t + i * 0.12, 'sine', f, f, 0.55, 0.22);
+          this._tone(t + i * 0.12, 'triangle', f * 2, f * 2, 0.4, 0.08); // sparkle octave
+        });
+        // a warm low swell underneath the arpeggio
+        this._tone(t, 'sine', 130.81, 196.0, 0.9, 0.14);
+        this._noise(t + 0.1, 0.8, 'bandpass', 4000, 2.5, 0.08); // airy shimmer
+        break;
+      }
       case 'victory': {
         const notes = [523, 659, 784, 1046];
         notes.forEach((f, i) => this._tone(t + i * 0.14, 'triangle', f, f, 0.3, 0.25));

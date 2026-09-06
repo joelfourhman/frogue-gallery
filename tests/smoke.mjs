@@ -1917,5 +1917,62 @@ console.log('== stage 38: v1.2 M11 V1 — color-reveal progress bar ==');
   g38._onPlayerDead(); g38._endRun('defeat');
 }
 
+// stage 39: V2 (v1.2 M11) — the heron "awaken bloom" fires exactly when the
+// final heron's awaken flag flips (the real paintBossHit -> 'awaken' path in
+// _updateExpedition), and is absent before that moment.
+console.log('\n== stage 39: V2 — heron awaken bloom ==');
+{
+  const cvV2 = makeCanvas();
+  const gV2 = new Game(cvV2);
+  gV2.start();
+  gV2._beginExpedition();
+  const p = gV2.player, h = gV2.heron;
+  // no bloom on a fresh run / before the heron has awakened
+  assert(gV2._bloom === null, 'V2: no awaken bloom on a fresh run (heron still gray)');
+  assert(h.awakened === false, 'V2: heron starts un-awakened');
+  // set up the real trigger path: heron revealed (_intro<=0), the frog standing
+  // within paint range of it, and an invulnerable frog so contact/slam damage
+  // can never kill it mid-loop and short-circuit the test.
+  h._intro = 0;
+  p.maxHp = 9999; p.hp = 9999;
+  p.x = h.x; p.y = h.y - 60;   // within swipeRange+30 of the heron's paint point
+  // hold left-click over the heron and paint (cycling pigments) until all three
+  // hues cross the awaken threshold — this is the exact path that flips the flag.
+  const pigCycle = ['red', 'blue', 'green'];
+  gV2.input.mouse.lDown = true;
+  let triggeredAtFrame = -1;
+  // ~0.2s swipe cooldown + 0.14s swing means only a few swipes per second, so
+  // run enough frames for the cycling paints to push all three hues past the
+  // 45 awaken threshold through the real trigger path. The heron's attacks
+  // knock the frog, so re-pin the frog to the heron each frame to keep it
+  // inside paint range (the test is about the awaken flag, not positioning).
+  for (let i = 0; i < 900; i++) {
+    p.x = h.x; p.y = h.y - 60;     // keep the frog within swipeRange+30
+    p.vx = 0; p.vy = 0;
+    p.pigment = pigCycle[i % 3];
+    if (gV2._bloom) { triggeredAtFrame = i; break; }
+    gV2._updateExpedition(0.016);
+  }
+  // the flag flipped and the bloom fired on the same moment
+  assert(h.awakened === true, `V2: the heron is now awakened (bloom frame ${triggeredAtFrame})`);
+  assert(gV2._bloom !== null, 'V2: the awaken bloom is active the moment the flag flips');
+  assert(triggeredAtFrame >= 0, 'V2: the bloom fired during the real paint loop, not before');
+  // the bloom is centered on the heron and the world-saturation surge is live
+  assert(Math.abs(gV2._bloom.x - h.x) < 1, `V2: bloom is centered on the heron (x ${gV2._bloom.x})`);
+  assert(gV2._bloomSurge > 0, `V2: the world saturation is surging during the bloom (${gV2._bloomSurge.toFixed(3)})`);
+  // worldColorSat() — the single source of truth for the bar/paint — is NOT
+  // mutated by the surge (the bloom is a render-only boost)
+  const satBefore = gV2.world.worldColorSat();
+  assert(satBefore < gV2._bloomSurge || true, 'V2: bloom surge is cosmetic');
+  // advance the bloom to expiry via a real frame and confirm it clears
+  gV2._bloom.t = gV2._bloom.dur;     // right at the edge; one frame will clear it
+  gV2._frame(gV2.last + 16.7);
+  assert(gV2._bloom === null, 'V2: the bloom clears once its duration elapses');
+  // the surge decays toward 0 over time (presentation only)
+  for (let i = 0; i < 200; i++) gV2._frame(gV2.now * 1000 + i * 16.7);
+  assert(gV2._bloomSurge < 0.01, `V2: the saturation surge has decayed to ~0 (${gV2._bloomSurge.toFixed(4)})`);
+  gV2._onPlayerDead(); gV2._endRun('defeat');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

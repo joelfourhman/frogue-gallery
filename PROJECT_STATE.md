@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 38 STAGES PASSED** (…stage 37 = v1.2 M10 E4 orb-streak bonus, stage 38 = v1.2 M11 V1 color-reveal progress bar). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **54s**, heron **156s**, full-run **19.2 min** — in the 15–20 min band (E1 mid-heron non-blocking; E2 weather phases informational; E4 streak is a scoring bonus that adds no run time; V1 is pure HUD, zero gameplay change). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ — v1.2 Batch 3 COMPLETE. Next: V2 (bloom beat) / M11.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 39 STAGES PASSED** (…stage 37 = v1.2 M10 E4 orb-streak bonus, stage 38 = v1.2 M11 V1 color-reveal progress bar, stage 39 = v1.2 M11 V2 heron awaken bloom). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **54s**, heron **156s**, full-run **19.2 min** — in the 15–20 min band (E1 mid-heron non-blocking; E2 weather phases informational; E4 streak is a scoring bonus that adds no run time; V1 is pure HUD; **V2 is pure presentation — render-only saturation surge + radial wash + SFX, zero gameplay change — so pacing is untouched and no pace probe re-run is needed**). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ + V2 (heron awaken bloom) ✅ — v1.2 Batch 4 in flight (item 1 of 3 done). Next: V3 (zone audio) / M11.**_
 
 ## Current Status
 
@@ -132,7 +132,7 @@ accessibility deferred).
 1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 ✅ (Curator's Ledger). **Batch 1 (A1–A3) COMPLETE.**
 2. M9: **A4 ✅ (Rehung Frame)** → M10: **E1 ✅ (Painted Heron)** → **E2 ✅ (weather/tide phases)**. **Batch 2 (A4/E1/E2) COMPLETE — suite 35/35, pacing in band on Normal.**
 3. M10: **E3 ✅ (Bold-only zone hazards)** → **E4 ✅ (orb-streak bonus)** → M11: **V1 ✅ (color-reveal bar)** — **Batch 3 COMPLETE**
-4. M11: V2 (heron bloom beat) → V3 (zone audio) → V4 (exhibition end-screen)
+4. M11: **V2 ✅ (heron bloom beat)** → V3 (zone audio) → V4 (exhibition end-screen) — Batch 4 in flight (1/3)
 5. M13: T1 (guided first expedition) → T2 (pigment drills)
 6. M13: T3 (mini heron) → T4 (tutorial progress + re-entry)
 
@@ -247,6 +247,31 @@ pure `orbStreakState`, so the HUD always matches the scoring. A distinct
 (E4): no bonus below 4, +10% at 4, plateau at the cap, and in the real loop the
 streak **builds on collect, boosts orb value (1.21 vs base 1.10), and resets on
 a hit** (then pays base again). Suite green: 37/37.
+
+**M11 V2 (heron awaken bloom) — implemented + tested (v1.2 Batch 4, item 1).**
+The moment the final heron **turns colorful** (its `awakened` flag flips) the
+game plays a short **celebratory bloom**: (1) a **world-space radial color
+wash** — `_drawBloom`, three concentric pigment rings (red/green/blue light)
+that expand and fade over ~1.1s centered on the heron; (2) a **brief world
+saturation surge** — a `_bloomSurge` (peak 0.14, exponential decay ~1.2s) that
+is applied **render-only** in `_drawAll` (`drawSat = min(1, worldColorSat() +
+_bloomSurge)`), so the world visibly blooms for a moment **without mutating
+`world.worldColorSat()`** — the single source of truth the V1 bar and the
+terrain paint both read; and (3) a **distinctive `awaken-bloom` SFX** in
+`audio.js` (a rising C5-E5-G5-C6 arpeggio + a shimmer octave + a warm low
+swell + an airy noise bed) built from the existing `_tone`/`_noise` voices —
+no new assets. It is wired to the **real** `paintBossHit → 'awaken'` path in
+`_updateExpedition` (the same moment the existing `awaken` SFX + shake + banner
+fire), fires **exactly when the flag flips**, and is **pure presentation** — no
+gameplay change, so **pacing is untouched** (no pace/humance re-run needed).
+The bloom timer + surge tick in the ambient block of `_frame` so the wash
+plays even during the post-defeat flight, and both reset at the start of each
+run. Smoke stage 39 (V2): no bloom on a fresh run, the heron starts
+un-awakened, the bloom fires **during the real paint loop the instant the
+`awakened` flag flips** (held left-click over the heron, cycling pigments —
+the exact trigger path), it is centered on the heron, the saturation surge is
+live (0.140) while `worldColorSat()` is untouched, the bloom **clears once its
+duration elapses**, and the surge decays to ~0. Suite green: 39/39.
 
 **M11 V1 (color-reveal progress bar) — implemented + tested (v1.2 Batch 3, item 3).**
 A **thin HUD bar along the very top edge** that fills **gray → full color as the

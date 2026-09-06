@@ -172,6 +172,8 @@ export class Game {
     this.endKind = null;
     this.endT = 0;
     this.endGains = null;
+    this._bloom = null;      // V2 (v1.2 M11): { x, y, t, dur } — heron awaken bloom
+    this._bloomSurge = 0;    // V2: timed saturation surge (0..~0.14), decays to 0
     this.now = 0;
     this.last = 0;
     this.titleT = 0;
@@ -269,6 +271,15 @@ export class Game {
       this._zoneTint.t -= dt;
       if (this._zoneTint.t <= 0) this._zoneTint = null;
     }
+    // V2 (v1.2 M11): the heron awaken bloom is a timed presentation effect;
+    // tick it (and clear it) here so it plays even during the end-state flight.
+    if (this._bloom) {
+      this._bloom.t += dt;
+      if (this._bloom.t >= this._bloom.dur) this._bloom = null;
+    }
+    // V2: the saturation surge decays toward 0 (exponential, ~1.2s feel) so the
+    // world's long-run color curve is only nudged for the bloom's lifetime.
+    if (this._bloomSurge > 0) this._bloomSurge *= Math.exp(-3.2 * dt);
 
     if (this.state === 'title') {
       this.titleT += dt;
@@ -1118,6 +1129,8 @@ _drawAtelier(ctx) {
     this.spawnT = 3.5;
     this._zoneI = 0;
     this._zoneTint = null; // M8 P12: { color, t, max } — fading zone-accent wash on entry
+    this._bloom = null;     // V2 (v1.2 M11): fresh run — no active awaken bloom
+    this._bloomSurge = 0;   // V2: fresh run — no lingering saturation surge
     // E2 (v1.2 M10): fresh weather per run; the first zone's phase is armed below
     this.weatherPending = null;
     this.weatherActive = null;
@@ -1276,6 +1289,10 @@ _drawAtelier(ctx) {
         const res = this.paint.paintBossHit(this.heron, p.pigment, this.tuning.bossPaintHit);
         if (res === 'awaken') {
           this.sfx('awaken');
+          // V2 (v1.2 M11): the heron turns colorful — a short celebratory
+          // bloom: radial color wash + a brief world-saturation surge + a
+          // distinctive 'awaken-bloom' SFX. Pure presentation (see _triggerBloom).
+          this._triggerBloom(this.heron.x, this.heron.y - 150);
           this.addShake(14);
           this.addBanner('The Heron AWAKENS — paint it while it shimmers!', 3.4);
         }
@@ -2028,22 +2045,27 @@ _drawAtelier(ctx) {
     ctx.clearRect(0, 0, this.cw, this.ch);
     const v = this._view();
     const sat01 = this.world.worldColorSat();
+    // V2 (v1.2 M11): the awaken saturation surge is a RENDER-ONLY boost. The
+    // world's paint/bar keep reading worldColorSat() (the single source of
+    // truth); this just nudges how saturated the world is drawn for ~1s.
+    const drawSat = Math.min(1, sat01 + (this._bloomSurge || 0));
 
     // ---- world space ----
     ctx.save();
     ctx.translate(-v.x * v.scale, -v.y * v.scale);
     ctx.scale(v.scale, v.scale);
-    this.world.drawBackground(ctx, v, sat01);
-    this.world.drawProps(ctx, v, sat01, this.now);
-    this.world.drawObstacles(ctx, v, sat01);
+    this.world.drawBackground(ctx, v, drawSat);
+    this.world.drawProps(ctx, v, drawSat, this.now);
+    this.world.drawObstacles(ctx, v, drawSat);
     this.paint && this.paint.drawTrails(ctx);
     if (this.state === 'expedition' || this.state === 'end') {
       if (this.heron) this._drawHeron(ctx, this.heron, this.now);
       if (this.midHeron) this._drawHeron(ctx, this.midHeron, this.now); // E1: Painted Heron
       for (const e of this.enemies) drawEnemy(ctx, e, this.now);
-      this._drawHazards(ctx, sat01); // E3: Bold-only zone hazards
+      this._drawHazards(ctx, drawSat); // E3: Bold-only zone hazards
       if (this.player && this.player.alive) this.player.draw(ctx, v, this.now);
       this._drawOrbs(ctx);
+      this._drawBloom(ctx); // V2: radial awaken-bloom wash (world space)
     }
     this.particles.draw(ctx);
     this.paint && this.paint.drawNotes(ctx);
@@ -2079,6 +2101,52 @@ _drawAtelier(ctx) {
       ctx.fillRect(0, 0, this.cw, this.ch);
       ctx.restore();
     }
+  }
+
+  // V2 (v1.2 M11): trigger the heron "awaken bloom" at world position (x, y).
+  // Pure presentation, tied to the existing awaken state change — no gameplay.
+  // Three things happen, all short and cosmetic:
+  //   1. a radial color wash spreads from the heron (drawn in _drawBloom);
+  //   2. the world saturation briefly surges (a timed +kick on worldColorSat);
+  //   3. a distinctive 'awaken-bloom' SFX (see audio.js).
+  _triggerBloom(x, y) {
+    this._bloom = { x, y, t: 0, dur: 1.1 };
+    // a brief, decaying saturation surge (the swamp "blooms" for a moment).
+    // It eases back out so the long-run color curve is untouched — the bar and
+    // the world both keep reading worldColorSat(), which this bumps for ~1s.
+    this._bloomSurge = 0.14;
+    this.particles.sparkles(x, y, PIGMENTS.red.light, 8);
+    this.particles.sparkles(x, y, PIGMENTS.blue.light, 8);
+    this.particles.sparkles(x, y, PIGMENTS.green.light, 8);
+    this.sfx('awaken-bloom');
+  }
+
+  // V2: draw the awaken bloom (world space — caller has applied the view
+  // transform). A radial multi-color wash that expands and fades over `dur`.
+  _drawBloom(ctx) {
+    if (!this._bloom) return;
+    const b = this._bloom;
+    const k = b.t / b.dur;                 // 0..1
+    if (k >= 1) return;
+    const r = 40 + 420 * (1 - Math.pow(1 - k, 2));  // fast-out expansion
+    const a = 0.5 * (1 - k);               // fade out
+    if (a < 0.01) return;
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    // three concentric pigment rings, each a touch larger, for a watercolor wash
+    const cols = [PIGMENTS.red.light, PIGMENTS.green.light, PIGMENTS.blue.light];
+    for (let i = cols.length - 1; i >= 0; i--) {
+      const rr = r * (0.55 + i * 0.28);
+      const g = ctx.createRadialGradient(0, 0, rr * 0.2, 0, 0, rr);
+      g.addColorStop(0, cols[i]);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = a * (0.5 - i * 0.08);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, rr, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   // M8 P12: zone-accent wash — a soft full-screen tint in the zone's color
