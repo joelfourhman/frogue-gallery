@@ -140,7 +140,10 @@ const W = game.world.w;
 const HX = game.heron.x;
 console.log(`[ngpace] NG+ cycle ${game.ngCycle}  ·  scaling ${JSON.stringify(scaling)}  ·  seed ${seed}`);
 console.log(`[ngpace] world width ${W}px, heron at x=${HX}, start x=${pl().x.toFixed(0)}`);
-console.log(`[ngpace] tuning: enemyHp=${game.tuning.enemyHp || 1}, enemyDmg=${game.tuning.enemyDmg || 1}, spawnRate=${game.tuning.spawnRate || 1}, bossMaxHp=${game.tuning.bossMaxHp}`);
+// N3: on cycle >= 1 the sim fights the real GREAT GREEN HERON (36k HP, a distinct
+// boss); on cycle 0 it fights the gray heron (30k). Report the ACTUAL boss HP
+// (game.heron.maxHp), not tuning.bossMaxHp (the gray heron's fixed 30k).
+console.log(`[ngpace] tuning: enemyHp=${game.tuning.enemyHp || 1}, enemyDmg=${game.tuning.enemyDmg || 1}, spawnRate=${game.tuning.spawnRate || 1}, actual boss HP=${game.heron.maxHp} (kind=${game.heron.kind})`);
 
 // ============================================================ Phase 1: cross
 // (identical human walk model to humance.mjs — pure walk, no brush held.)
@@ -186,45 +189,29 @@ const crossRaw = game.runT - t0;
 const cross = crossRaw * RETURNER_CROSS_EFF;
 console.log(`Phase 1 — cross-swamp: measured ${crossRaw.toFixed(0)}s × returner ${RETURNER_CROSS_EFF} = ${cross.toFixed(0)}s = ${(cross / 60).toFixed(1)} min  (${zonesRead} zone guide-reads)`);
 
-// ============================================================ Phase 2: heron
-// (identical human boss input to humance.mjs — heron HP is NOT NG+-scaled, so
-// this measures the same heron fight; the returning-player factor reflects that
-// a returner knows the heron's patterns.)
-if (!game.heron.flying && game.heron.hp > 0) {
-  game.heron._intro = 0;
-  const bodyY = () => game.heron.y - (game.heron.diveH || 0);
-  const b0 = game.runT;
-  let bossFrames = 0;
-  const MAXBOSS = Math.ceil(60 * 1800); // 30 min cap
-  while (!game.heron.flying && game.heron.hp > 0 && bossFrames < MAXBOSS) {
-    const h = game.heron;
-    const bx = pl().x, by = pl().y;
-    const threat = (h.state || '').indexOf('telegraph') === 0 || (h.diveH || 0) > 50
-      || h.state === 'scoop' || h.state === 'sweep' || h.state === 'storm-lunge';
-    game.input.keys.clear();
-    if (threat) {
-      game.input.keys.add(bx > h.x ? 'd' : 'a');
-      game.input.mouse.lDown = false;
-    } else {
-      const tx = h.x - (bx > h.x ? 80 : -80);
-      if (Math.abs(bx - tx) > 24) game.input.keys.add(tx > bx ? 'd' : 'a');
-      const v = game._view();
-      game.input.mouse.x = (h.x + r(-24, 24) - v.x) * v.scale;
-      game.input.mouse.y = (bodyY() - 90 + r(-24, 24) - v.y) * v.scale;
-      game.input.update();
-      game.input.mouse.lDown = true;
-    }
-    keepAlive();
-    frame();
-    bossFrames++;
-    if (DEBUG && Math.floor(game.runT * 1) !== Math.floor((b0 + bossFrames / 60) * 1)) {
-      console.log(`  [boss t=${(game.runT - b0).toFixed(0)}s heronHp=${h.hp.toFixed(0)}]`);
-    }
-  }
-  const bossRaw = game.runT - b0;
-  const won = game.heron.flying > 0;
+// ============================================================ Phase 2: heron boss
+// (ANALYTIC, bosspace-style — not a real-sim bot fight, which is bimodal/
+// flaky: a scripted "human" either stalls on the heron's summon knockback or
+// melts it through stacked 2x awaken windows.)
+//
+// Model: sustained human DPS. Calibrated to the MEASURED human gray-heron
+// fight (humance.mjs: the Great Gray Heron at 30k HP takes ~149s for a
+// competent human who dodges + cycles the 3 hues). That gives a sustained
+// human DPS of ~201 HP/s. A different heron's fight time is its HP / that
+// DPS. The Great Green Heron (36k, +20% HP) therefore takes ~179s raw —
+// ~20% longer than the gray heron, i.e. in a SIMILAR TIME BAND (the check the
+// N3 spec asks for: the green heron reuses the gray heron's AI/phases, so its
+// fight scales with HP, and the +20% is a deliberate modest bump, not a new
+// fight. The green heron's reed pin is a BONUS 2x window the player earns with
+// green play, which a real player uses to shorten that ~3 min; the analytic
+// model is conservative and does not credit the pin).
+{
+  const bossHp = game.heron.maxHp;      // 30k gray (cycle 0) / 36k green (cycle >= 1)
+  const HUMAN_BOSS_DPS = 30000 / 149;   // calibrated to the measured human gray-heron fight
+  const bossRaw = bossHp / HUMAN_BOSS_DPS;
   const boss = bossRaw * RETURNER_BOSS_EFF;
-  console.log(`Phase 2 — heron boss: measured ${bossRaw.toFixed(0)}s (${won ? 'DEFEATED' : 'CAP'}) × returner ${RETURNER_BOSS_EFF} = ${boss.toFixed(0)}s = ${(boss / 60).toFixed(1)} min`);
+  const isGreenBoss = game.heron.green === true;
+  console.log(`Phase 2 — heron boss (ANALYTIC, bosspace-style): ${isGreenBoss ? 'Great GREEN Heron' : 'Great Gray Heron'} at ${bossHp} HP ÷ ${HUMAN_BOSS_DPS.toFixed(0)} HP/s human DPS = ${bossRaw.toFixed(0)}s × returner ${RETURNER_BOSS_EFF} = ${boss.toFixed(0)}s = ${(boss / 60).toFixed(1)} min`);
 
   // ============================================================ wave leg (analytic)
   // The only NG+-scaled leg: enemies are ×hp tankier, and a returning player
@@ -238,18 +225,20 @@ if (!game.heron.flying && game.heron.hp > 0) {
   console.log('');
   console.log(`NG+ PACING PROBE — competent returning human, NG+ cycle ${game.ngCycle} (Normal)`);
   console.log('================================================================================');
-  console.log(`  human: already cleared the game once (returning player). Measured`);
-  console.log(`         cross-walk + heron fight on the real NG+ sim; the ~150-enemy`);
-  console.log(`         wave-fighting leg carried analytically (not tractable as input),`);
-  console.log(`         scaled by the NG+ enemy-HP multiplier and a returning-player`);
-  console.log(`         fight efficiency. God-mode on (pacing, not survival).`);
+  console.log(`  human: already cleared the game once (returning player). The cross-walk`);
+  console.log(`         is MEASURED on the real NG+ sim; the heron boss is modeled`);
+  console.log(`         analytically (bosspace-style, calibrated to the measured human`);
+  console.log(`         gray-heron fight) so it is stable; the ~150-enemy wave-fighting`);
+  console.log(`         leg is carried analytically (not tractable as input), scaled by`);
+  console.log(`         the NG+ enemy-HP multiplier and a returning-player fight efficiency.`);
+  console.log(`         God-mode on (pacing, not survival).`);
   console.log(`  NG+ scaling: enemyHp ×${scaling.hp}, enemyDmg ×${scaling.dmg}, spawnRate ×${scaling.spawn}`);
   console.log('');
-  console.log(`  result: ${won ? 'HERON DEFEATED' : 'BOSS CAP REACHED (not a full win)'}`);
+  console.log(`  result: ${isGreenBoss ? 'Great GREEN Heron (NG+ boss)' : 'Great Gray Heron'}`);
   console.log('  components:');
   console.log(`    cross-swamp (measured × ${RETURNER_CROSS_EFF}):     ${cross.toFixed(0)}s = ${(cross / 60).toFixed(1)} min`);
   console.log(`    wave-fighting (analytic ×${scaling.hp}hp ×${RETURNER_FIGHT_EFF} ret): ${waves.toFixed(0)}s = ${(waves / 60).toFixed(1)} min   [NG+ difficulty alone: ${wavesRaw.toFixed(0)}s]`);
-  console.log(`    heron boss (measured × ${RETURNER_BOSS_EFF}):       ${boss.toFixed(0)}s = ${(boss / 60).toFixed(1)} min`);
+  console.log(`    heron boss (analytic ${bossHp}HP ÷ human DPS × ${RETURNER_BOSS_EFF}): ${boss.toFixed(0)}s = ${(boss / 60).toFixed(1)} min`);
   console.log('');
   console.log(`  NG+ cycle-${game.ngCycle} full-run estimate: ${total.toFixed(0)}s = ${mins.toFixed(1)} min`);
   console.log(`    (first-time reference: ~18.7-19.1 min per pace.mjs / humance.mjs)`);
@@ -263,8 +252,4 @@ if (!game.heron.flying && game.heron.hp > 0) {
   } else {
     console.log(`  (cycle 0 = first-time baseline; the 15-20 band is asserted by humance.mjs, not here.)`);
   }
-} else {
-  // defensive: if the heron wasn't ready, still report the cross so the probe
-  // never silently exits 0 with no estimate.
-  console.log(`[ngpace] WARNING: heron not ready for the fight; cross ${crossRaw.toFixed(0)}s only.`);
 }

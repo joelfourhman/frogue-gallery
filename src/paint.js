@@ -141,6 +141,11 @@ export class Paint {
     // direct paint damage while painting the boss
     let dmg = paintDamage(this.tuning.swipeDamage, pig, this.tuning, { enemy: h });
     if (h.awakened) dmg *= 2; // the shimmer window: double paint damage (see bossStep)
+    // N3 (v1.3 M14): the Great Green Heron's reed-pin vulnerable window — while
+    // pinned (held in place by the player's Moss paint) it takes 2x paint damage,
+    // mirroring the awaken window. The gray heron never carries `pinned`, so this
+    // is a no-op for the first-time run.
+    if (h.pinned > 0) dmg *= 2;
     h.hp -= dmg;
     const res = paintBoss(h, pig, amount, this.tuning);
     if (res === 'awaken') return 'awaken';

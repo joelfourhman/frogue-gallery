@@ -2671,5 +2671,115 @@ console.log('== stage 47: N2 — NG+ scaling (ngPlusScaling / applyNGPlus) ==');
   console.log('ok — N2: NG+ scaling is pure, cycle-0 is byte-identical, cycle-1 is applied only when ngCycle>=1, and caps at cycle 3');
 }
 
+console.log('== stage 48: N3 — The Great Green Heron (NG+ second boss) ==');
+{
+  const L48 = await import('../src/logic.js');
+  const { paintDamage } = await import('../src/paint.js');
+
+  // ---- (1) boss selection: cycle 0 fights the GRAY heron, cycle 1 the GREEN ----
+  const gGray = new Game(makeCanvas()); gGray.start();
+  gGray.save = L48.freshSave();                 // ngCycle 0 (first-time)
+  gGray._beginExpedition();
+  assert(gGray.heron.kind === 'gray', `N3: ngCycle 0 fights the GRAY heron (got kind=${gGray.heron.kind})`);
+  assert(gGray.heron.green === undefined, 'N3: the gray heron carries no green flag (first-time UI/behavior unchanged)');
+  assert(gGray.heron.hp === 30000, `N3: the gray heron keeps its 30k HP (got ${gGray.heron.hp})`);
+  assert(gGray.heron.pinned === undefined, 'N3: the gray heron has no reed-pin field (the pin mechanic is green-only)');
+
+  const gGreen = new Game(makeCanvas()); gGreen.start();
+  const gsave = L48.freshSave(); gsave.stats.victories = 1; gsave.ngCycle = 1; gsave.flags.heronDefeated = true;
+  gGreen.save = gsave;
+  gGreen._beginExpedition();
+  assert(gGreen.ngCycle === 1, 'N3: the NG+ run carries ngCycle 1');
+  assert(gGreen.heron.kind === 'green', `N3: ngCycle 1 fights the GREAT GREEN HERON (got kind=${gGreen.heron.kind})`);
+  assert(gGreen.heron.green === true, 'N3: the green heron is flagged for the distinct green palette');
+  assert(gGreen.heron.hp === 36000, `N3: the green heron carries 36k HP (got ${gGreen.heron.hp})`);
+  assert(gGreen.heron.maxHp === 36000 && gGreen.heron.hp > 0, 'N3: the green heron is live at 36k max HP');
+  assert(gGreen.heron.awakenNeed && gGreen.heron.awakenNeed.red === 45 && gGreen.heron.awakenNeed.blue === 45 && gGreen.heron.awakenNeed.green === 45,
+    'N3: the green heron keeps the 3-hue awakening rhythm (core pillar unchanged)');
+  assert(gGreen.heron.pinned === 0, 'N3: the green heron starts unpinned (pin is earned, not passive)');
+
+  // ---- (2) the reed pin is a PURE timer (testable without a browser) ----
+  const ph = { pinned: 1.0 };
+  assert(L48.greenHeronPinTick(ph, 0.3) === 'pinned' && ph.pinned === 0.7, 'N3: greenHeronPinTick decays the hold while pinned');
+  assert(L48.greenHeronPinTick(ph, 10) === 'pin-off' && ph.pinned === 0, 'N3: greenHeronPinTick reports pin-off on the frame it releases');
+  const ph2 = { pinned: 0 };
+  assert(L48.greenHeronPinTick(ph2, 0.3) === 0, 'N3: greenHeronPinTick is a no-op when not pinned (gray heron never pins)');
+
+  // ---- (3) the pin ENGAGES by painting the green heron with Moss (the swapped mechanic) ----
+  const h = gGreen.heron, p = gGreen.player;
+  h._intro = 0;                                   // reveal the boss so it can be painted
+  p.maxHp = 9999; p.hp = 9999; p.iframes = 999;    // invulnerable so the pin loop can't short-circuit on death
+  p.x = h.x; p.y = h.y - 60;                        // within swipeRange+30 of the heron's paint point
+  p.pigment = 'green';                              // MOSS triggers the reed pin
+  gGreen.input.mouse.lDown = true;
+  let pinFrame = -1;
+  for (let i = 0; i < 500; i++) {
+    p.x = h.x; p.y = h.y - 60; p.vx = 0; p.vy = 0;  // hold the brush on the heron (knockback-free)
+    gGreen._updateExpedition(0.016);
+    if (h.pinned > 0) { pinFrame = i; break; }
+  }
+  gGreen.input.mouse.lDown = false;
+  assert(h.pinned > 0, `N3: painting the green heron with Moss pins it (engaged at frame ${pinFrame})`);
+  assert(h.green === true && h.awakened === false, 'N3: the pin is a distinct window — it engages while the heron is NOT yet awakened');
+
+  // the pin HELDS it in place: while pinned, _updateBoss skips bossStep so the heron does not move
+  const xPinned = h.x;
+  for (let i = 0; i < 20; i++) { p.x = h.x; p.y = h.y - 60; gGreen._updateExpedition(0.016); }
+  assert(h.pinned > 0, 'N3: the pin holds for a sustained window (not a one-frame blip)');
+  assert(h.x === xPinned, `N3: the pinned heron is HELD IN PLACE (x frozen at ${xPinned})`);
+
+  // the pin is a VULNERABLE window: while pinned the green heron takes 2x paint damage
+  const t48 = gGreen.tuning, px = p.x, py = p.y;
+  const mkH = (pinned) => ({ x: px, y: py, hp: 1000, maxHp: 1000, hue: { red: 0, blue: 0, green: 0 }, awakened: false, awakenedT: 0, pinned, diveH: 0, green: pinned > 0 });
+  const paint48 = new (await import('../src/paint.js')).Paint(p, gGreen.world, t48, () => {}, gGreen.particles);
+  const hBase = mkH(0), hPin = mkH(2.0);
+  p.pigment = 'red';
+  paint48.paintBossHit(hBase, 'red', t48.bossPaintHit);
+  paint48.paintBossHit(hPin, 'red', t48.bossPaintHit);
+  const dmgBase = 1000 - hBase.hp, dmgPin = 1000 - hPin.hp;
+  assert(dmgPin === 2 * dmgBase, `N3: the pinned green heron takes 2x paint damage (base ${dmgBase} -> pinned ${dmgPin})`);
+
+  // the pin decays on its own (greenHeronPinTick in _updateBoss)
+  let decays = 0;
+  for (let i = 0; i < 260 && h.pinned > 0; i++) { p.x = h.x; p.y = h.y - 60; decays++; gGreen._updateExpedition(0.016); }
+  assert(h.pinned === 0, `N3: the reed pin releases on its own after ~${L48.GREEN_HERON.pinDuration}s (decayed over ${decays} frames)`);
+
+  // ---- (4) the green heron can be damaged / awakened / defeated, and defeat ends the run correctly ----
+  // reset for the awaken + defeat beat (the pin test consumed some green hue)
+  h.hue = { red: 0, blue: 0, green: 0 }; h.pinned = 0; h.pinCharge = 0; h.awakened = false; h.awakenedT = 0; h.hp = h.maxHp; h.state = 'idle'; h.stateT = 999;
+  const pigCycle = ['red', 'blue', 'green'];
+  gGreen.input.mouse.lDown = true;
+  let awakeFrame = -1;
+  for (let i = 0; i < 900; i++) {
+    p.x = h.x; p.y = h.y - 60; p.vx = 0; p.vy = 0; p.pigment = pigCycle[i % 3];
+    gGreen._updateExpedition(0.016);
+    if (h.awakened) { awakeFrame = i; break; }
+  }
+  gGreen.input.mouse.lDown = false;
+  assert(h.awakened === true, `N3: the green heron can be AWAKENED through the real 3-hue path (frame ${awakeFrame})`);
+  // defeat: paint the (now low-HP, awakened) heron to death through the real paint path
+  h.hp = 2; p.pigment = 'red';
+  gGreen.input.mouse.lDown = true;
+  let died = false;
+  for (let i = 0; i < 60; i++) { p.x = h.x; p.y = h.y - 60; p.vx = 0; p.vy = 0; gGreen._updateExpedition(0.016); if (h.flying > 0) { died = true; break; } }
+  gGreen.input.mouse.lDown = false;
+  assert(died && h.flying > 0, `N3: the green heron can be DEFEATED (it blooms and takes flight, flying=${h.flying.toFixed(2)})`);
+  // let the victory flight play out -> _endRun('victory')
+  frames(300);
+  assert(gGreen.state === 'end' && gGreen.endKind === 'victory', 'N3: defeating the green heron ends the run in VICTORY (-> the end screen)');
+  // NG+ progression intact: a second victory is recorded, the heron is painted, and the NG+ cycle is preserved
+  assert(gGreen.save.stats.victories >= 2, `N3: the victory is recorded in the save (victories=${gGreen.save.stats.victories})`);
+  assert(gGreen.save.stats.heronsPainted >= 1, 'N3: the green heron counts as a heron painted');
+  assert(gGreen.save.flags.heronDefeated === true, 'N3: the heronDefeated flag is set');
+  assert(gGreen.save.ngCycle === 1, `N3: NG+ progression is INTACT through the victory (ngCycle=${gGreen.save.ngCycle})`);
+  assert(gGreen.save.saveVersion === L48.SAVE_VERSION, 'N3: the save round-trips at the current schema version (saveVersion 4)');
+  // the victory -> atelier route works (the between-run loop), with the NG+ button offered
+  gGreen._beginAtelier();
+  frames(30);
+  assert(gGreen.state === 'atelier', 'N3: defeat -> victory -> the atelier (the NG+ loop closes)');
+  assert(gGreen._endButtons !== undefined, 'N3: the end-screen button layout (incl. the Next Expedition button) is present');
+  console.log('ok — N3: the Great Green Heron appears on NG+ cycles, reuses the heron AI, its reed pin pins it + deals 2x, it is damageable/awakenable/defeatable, and defeat ends the run into victory with NG+ intact');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

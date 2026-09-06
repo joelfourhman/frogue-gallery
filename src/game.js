@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -1204,12 +1204,29 @@ _drawAtelier(ctx) {
     this.orbs = [];
     this.hazards = []; // E3: Bold-only environmental hazards (thorn reeds / mud pools)
     this.orbStreak = 0; // E4: clean-orb streak (resets on a hit) — in-run only, not persisted
+    // N3 (v1.3 M14): on NG+ cycles (ngCycle >= 1) the final boss is the Great
+    // GREEN Heron instead of the Great Gray Heron (the gray heron stays the
+    // first-time boss). The green heron reuses the same bossStep AI / 3-hue
+    // awaken / phase machine end-to-end; it differs only by (a) a distinct green
+    // palette and (b) ONE swapped mechanic — painting it with Moss pins it in
+    // place briefly (the E1/MidHeron reed-pin idea, at boss scale). It carries
+    // slightly MORE fixed HP than the gray heron (30k -> 36k), keeping the fight
+    // in the same ~2-3 min time band (the pin is a small extra damage window).
+    const isGreen = this.ngCycle >= 1;
     this.heron = {
-      x: this.world.w - 350, y: HERON_Y, hp: this.tuning.bossMaxHp, maxHp: this.tuning.bossMaxHp,
+      x: this.world.w - 350, y: HERON_Y,
+      hp: isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp,
+      maxHp: isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp,
+      kind: isGreen ? GREEN_HERON.kind : 'gray',      // N3: boss selection (smoke asserts this)
       phase: 1, state: 'idle', stateT: 2.2, hue: { red: 0, blue: 0, green: 0 },
       awakened: false, awakenedT: 0, summonT: 9, lungeDir: -1,
       targetX: this.world.w - 650, diveH: 0, facing: -1,
       flying: 0, _intro: 3.2,
+      // N3 green-heron-only fields (the gray heron carries undefined for these,
+      // so a first-time run's heron behaves byte-identically to pre-N3):
+      green: isGreen ? true : undefined,              // distinct green palette in _drawHeron
+      awakenNeed: isGreen ? { ...GREEN_HERON.awakenNeed } : undefined, // same 3-hue rhythm
+      pinned: isGreen ? 0 : undefined,                // the Moss reed-pin timer (green only)
     };
     // E1 (v1.2 M10): the Painted Heron — a mid-run "half-heron" set-piece on a
     // zone boundary (end of zone 3) for Normal+. A small re-use of the real
@@ -1720,6 +1737,21 @@ _drawAtelier(ctx) {
           this.addShake(14);
           this.addBanner('The Heron AWAKENS — paint it while it shimmers!', 3.4);
         }
+        // N3 (v1.3 M14): the Great Green Heron's swapped mechanic — painting it
+        // with MOSS (green) accumulates a reed pin. Once enough Moss is painted,
+        // it is HELD IN PLACE (pinned) for ~3s: no attacks, and 2x paint damage
+        // (the vulnerable window that rewards green play). Green heron only.
+        if (this.heron.green && res && res !== 0 && p.pigment === 'green' && !(this.heron.pinned > 0)) {
+          this.heron.pinCharge = (this.heron.pinCharge || 0) + this.tuning.bossPaintHit;
+          if (this.heron.pinCharge >= GREEN_HERON.pinNeed) {
+            this.heron.pinned = GREEN_HERON.pinDuration;
+            this.heron.pinCharge = 0;
+            this.sfx('awaken');
+            this.addShake(9);
+            this.particles.splatter(this.heron.x, this.heron.y - 120, GREEN_HERON.greenHue, 14, 220);
+            this.addBanner('Reeds catch the Great Green Heron — it is pinned! Paint while it holds!', 3.0);
+          }
+        }
       }
       // E1: paint the Painted Heron (mid-run set-piece) the same way
       if (this.midHeron && this.midHeron.hp > 0 && !this.midHeron.flying && this.midHeron._intro <= 0) {
@@ -2170,6 +2202,22 @@ _drawAtelier(ctx) {
     // NOTE: let bossStep run even at hp<=0 — it emits the 'defeated' event
     if (!h || h.flying > 0 || this.dying) return;
     const v = this._view();
+    // N3 (v1.3 M14): the Great Green Heron's reed pin. While pinned (h.pinned>0)
+    // the heron is HELD IN PLACE — no bossStep attacks / no movement — and the
+    // player gets a 2x paint-damage window (rewarding green play). greenHeronPinTick
+    // (pure, logic.js) decays the hold; on the frame it releases we show a beat.
+    // The gray heron never carries `pinned`, so this is a no-op for it.
+    const pinnedNow = h.green && h.pinned > 0;
+    if (h.green && h.pinned > 0) {
+      const pinRes = greenHeronPinTick(h, dt);
+      if (pinRes === 'pin-off') this.addBanner('The reeds release the Great Green Heron…', 2.4, 240);
+    }
+    if (pinnedNow) {
+      // held: no attacks / movement this frame, but the 'defeated' event must
+      // still fire if it was painted to death during the vulnerable window.
+      if (h.hp <= 0) this._onHeronDefeated();
+      return;
+    }
     const ev = bossStep(h, dt, { left: v.x, right: v.x + v.w / v.scale, playerX: p.x }, this.tuning, this.now);
     for (const name of ev) {
       if (name === 'slam') {
@@ -2337,7 +2385,9 @@ _drawAtelier(ctx) {
     SaveSys.save(this.save);
     this.sfx('awaken');
         this.addShake(16);
-        this.addBanner('The Great Gray Heron blooms and takes flight!', 4, 200);
+        // N3 (v1.3 M14): the defeat line names whichever heron was painted — the
+        // Great Gray Heron on a first-time run, the Great Green Heron on NG+.
+        this.addBanner(h.green ? 'The Great Green Heron blooms and takes flight!' : 'The Great Gray Heron blooms and takes flight!', 4, 200);
         for (const c of ORB_COLORS) this.particles.sparkles(h.x, h.y - 160, PIGMENTS[c].light, 10);
         h.flying = 0.001; // hand off to the victory flight
         // story beat: the first heron ever painted summons the swamp's critic
@@ -2355,7 +2405,12 @@ _drawAtelier(ctx) {
     const fy = h.y - dy;                    // feet level
     const flying = h.flying > 0;
     const gray = h.awakened || flying;      // painted body when awake / flying
-    const bodyCol = gray ? '#7d8f96' : '#98a19b';
+    // N3 (v1.3 M14): the Great Green Heron's distinct palette — moss green instead
+    // of the gray heron's gray-green. The gray heron keeps the original colors
+    // byte-identically (h.green is undefined for it).
+    const bodyCol = h.green
+      ? (gray ? GREEN_HERON.greenHue : '#7a9a6a')   // moss green (awake/flying) / muted moss (asleep)
+      : (gray ? '#7d8f96' : '#98a19b');
     const ink = INK;
 
     // ground shadow
@@ -2366,6 +2421,31 @@ _drawAtelier(ctx) {
     ctx.ellipse(h.x, h.y + 6, 58 * (1 - dy / 500), 16 * (1 - dy / 500), 0, 0, TAU);
     ctx.fill();
     ctx.restore();
+
+    // N3 (v1.3 M14): the Great Green Heron's reed-pin visual — when pinned, moss
+    // reeds wrap its feet and a faint pulsing ring shows the vulnerable window.
+    // Pure presentation; the gray heron never enters this branch (no `pinned`).
+    if (h.green && h.pinned > 0) {
+      const pulse = 0.5 + Math.sin(now * 6) * 0.25;
+      ctx.save();
+      ctx.globalAlpha = 0.55 * pulse + 0.25;
+      ctx.strokeStyle = GREEN_HERON.greenHue;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(h.x, h.y + 4, 60, 18, 0, 0, TAU);
+      ctx.stroke();
+      // a few reed strokes around the feet
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      for (let i = -2; i <= 2; i++) {
+        const rx = h.x + i * 20;
+        ctx.beginPath();
+        ctx.moveTo(rx, h.y + 8);
+        ctx.quadraticCurveTo(rx + 6, h.y - 30, rx + 2 + Math.sin(now * 3 + i) * 3, h.y - 58);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(h.x, fy);

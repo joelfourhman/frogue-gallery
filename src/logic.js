@@ -273,6 +273,50 @@ export function applyNGPlus(t, cycle) {
 }
 
 // ----------------------------------------------------------------
+// N3 (v1.3 M14): The Great Green Heron — the New Game+ final boss.
+//
+// A *second* final boss that appears on NG+ cycles (ngCycle >= 1) INSTEAD of the
+// Great Gray Heron (the gray heron stays the first-time boss). It reuses the
+// existing heron AI / phase machine (bossStep) and the 3-hue awakening (paint)
+// end-to-end — the only differences are:
+//   · a distinct GREEN palette (rendered in _drawHeron via h.green), and
+//   · ONE swapped mechanic: painting it with MOSS (green) pins it in place
+//     briefly (the E1/MidHeron "reed pinning" idea, reused at boss scale).
+//
+// It has slightly MORE HP than the gray heron (30k -> 36k, +20%). Because the
+// heron is fixed-HP in tuning (deliberately NOT N2-scaled — see N2), the fight
+// stays in the same ~2-3 min human band; the pin is a small extra damage window
+// the player earns with green play, which offsets the HP bump and keeps the
+// fight time close to the gray heron's (bosspace-style band; see the N3 note in
+// PROJECT_STATE.md for the expected fight time).
+export const GREEN_HERON = {
+  kind: 'green',                 // the NG+ boss (vs the gray heron's 'gray')
+  hp: 36000,                     // +20% over the gray heron's 30000 — same time band
+  awakenNeed: { red: 45, blue: 45, green: 45 }, // 3-hue rhythm UNCHANGED (core pillar)
+  greenHue: '#5a9e3d',           // moss green — the distinct palette
+  greenHueLight: '#9ed483',
+  pinNeed: 30,                   // Moss units to trigger a pin (~5 swipes @ 6/hit)
+  pinDuration: 3.0,              // the Moss reed pin holds it in place ~3s (E1 reed-pin, boss scale)
+};
+
+// N3: the swapped boss mechanic — the Great Green Heron's reed pin, as a PURE
+// timer so it is testable without a browser. Painting the green heron with MOSS
+// (when it is not already pinned) accumulates h.pinCharge; once it reaches
+// GREEN_HERON.pinNeed, game.js sets h.pinned = GREEN_HERON.pinDuration. While
+// h.pinned > 0 the heron is HELD IN PLACE: _updateBoss skips its bossStep
+// attacks (no retaliation / no movement), and it takes 2x paint damage (the
+// vulnerable window — rewarding green play). greenHeronPinTick decays the hold;
+// it returns 'pinned' while held, 'pin-off' on the frame it releases, or 0 when
+// not pinned. The gray heron never carries `pinned`, so this is a no-op for it
+// (first-time run byte-identical).
+export function greenHeronPinTick(h, dt) {
+  if (!h || !(h.pinned > 0)) return 0;
+  h.pinned -= dt;
+  if (h.pinned <= 0) { h.pinned = 0; return 'pin-off'; }
+  return 'pinned';
+}
+
+// ----------------------------------------------------------------
 // A4 (v1.2 M9): 'Rehung Frame' — a prestige-lite, NOT save-wipe. Retiring a
 // fully-completed collection (all 8 paintings owned + at least one ★-hung)
 // mints a permanent, saved `galleryBonus` level. Each level is a small
