@@ -122,12 +122,23 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 
 ## Immediate Next Action
 
-**v1.1 is COMPLETE — nothing is left to do.** The working tree is clean and the
-full v1.1 roadmap (M7 B1–B6, M7.5 PT1–PT5, M8 P10/P12/P7/P8/P6/P9/P11) is
-committed and verified. Latest commits: v1.1 status-docs pass (`3c590be`),
-M8 P10 (`5e95fbf`), P12 (`0ab27e8`), P7 (`7457229`), P8 (`4118146`), P6
-(`27bdd22`), P9 (audio/options), and P11 (`tests/humance.mjs`, this pass).
-Smoke: **29 stages green**; `pace.mjs` / `humance.mjs` / `bosspace.mjs` all run.
+**v1.2 "The Collection" is ACTIVE — driven in bounded batches** (the local
+model has a context ceiling, so the PM works in chunks of ~3 items per
+session; each session MUST end with a clean commit + docs update so a fresh
+session can pick up). Full scope in `docs/ROADMAP.md` §v1.2 (M9 M10 M11 M13;
+accessibility deferred).
+
+**Batch order (one commit per item, docs + suite green per commit):**
+1. M9: A1 (atelier one-liners) → A2 (painting synergy pairs) → A3 (Curator's Ledger)
+2. M9: A4 (Rehung Frame) → M10: E1 (Painted Heron) → E2 (weather/tide)
+3. M10: E3 (Bold hazards) → E4 (orb streak) → M11: V1 (color-reveal bar)
+4. M11: V2 (heron bloom beat) → V3 (zone audio) → V4 (exhibition end-screen)
+5. M13: T1 (guided first expedition) → T2 (pigment drills)
+6. M13: T3 (mini heron) → T4 (tutorial progress + re-entry)
+
+Each item's Notes column in the roadmap says which existing system to reuse.
+Acceptance (per batch): suite green, pace/humance probes still in the
+15–20 min band (any in-run change), zero new dependencies, loopback-only.
 
 The two most recent passes, for the record:
 
