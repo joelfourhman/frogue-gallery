@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 43 STAGES PASSED** (…stage 41 = v1.2 M11 V4 end-screen exhibition, **stage 42 = v1.2 M13 T1 guided first expedition, stage 43 = v1.2 M13 T2 interactive pigment drills**). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **52s**, heron **140s**, full-run **18.9 min** — in the 15–20 min band (the M13 tutorial is a **separate pre-run layer** — the timed clock is frozen while it runs — so it adds no timed-run time; `pace.mjs`/`humance.mjs` re-verified after T1+T2 and unchanged from the ~18.7/19.0 min baseline). DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ + V2 (heron awaken bloom) ✅ + V3 (per-zone ambient audio) ✅ + V4 (end-screen exhibition) ✅ + M13 T1 (guided first expedition) ✅ + M13 T2 (interactive pigment drills) ✅ — v1.2 Batch 5 (M13 T1+T2) COMPLETE. Next: M13 (T3 mini heron, T4 tutorial progress + re-entry).**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 44 STAGES PASSED** (…stage 41 = v1.2 M11 V4 end-screen exhibition, **stage 42 = v1.2 M13 T1 guided first expedition, stage 43 = v1.2 M13 T2 interactive pigment drills, stage 44 = v1.2 M13 T3 mini sketch heron**). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **53s**, heron **124s**, full-run **18.7 min** — in the 15–20 min band (the M13 tutorial is a **separate pre-run layer** — the timed clock is frozen while it runs — so it adds no timed-run time; `pace.mjs`/`humance.mjs` re-verified after T1/T2/T3 and unchanged from the ~18.7/18.7 min baseline). DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ + V2 (heron awaken bloom) ✅ + V3 (per-zone ambient audio) ✅ + V4 (end-screen exhibition) ✅ + M13 T1 (guided first expedition) ✅ + M13 T2 (interactive pigment drills) ✅ + M13 T3 (mini sketch heron) ✅ — v1.2 Batch 6 (M13 T3) committed, T4 next.**_
 
 ## Current Status
 
@@ -134,7 +134,7 @@ accessibility deferred).
 3. M10: **E3 ✅ (Bold-only zone hazards)** → **E4 ✅ (orb-streak bonus)** → M11: **V1 ✅ (color-reveal bar)** — **Batch 3 COMPLETE**
 4. M11: **V2 ✅ (heron bloom beat)** → **V3 ✅ (zone ambient audio)** → **V4 ✅ (exhibition end-screen)** — **Batch 4 (M11) COMPLETE — suite 41/41**
 5. M13: **T1 ✅ (guided first expedition)** → **T2 ✅ (interactive pigment drills)** — **Batch 5 (M13 T1+T2) COMPLETE — suite 43/43, pacing 18.7/18.9 min (the frozen tutorial pre-run layer adds no timed-run time)**
-6. M13: T3 (mini heron) → T4 (tutorial progress + re-entry)
+6. M13: **T3 ✅ (mini sketch heron)** → T4 (tutorial progress + re-entry) — **Batch 6 in progress**
 
 Each item's Notes column in the roadmap says which existing system to reuse.
 Acceptance (per batch): suite green, pace/humance probes still in the
@@ -201,6 +201,41 @@ skipping mid-drills (after burn+freeze) leaves `tutorialDrills = {burn:true,
 freeze:true, root:false}` persisted to disk, so retraining can reference
 exactly which drills were done. Stage 42 (T1) was extended to drive all six
 phases and assert per-drill persistence + `tutorialDrillsAllDone`.
+
+**M13 T3 (mini "sketch" heron) — implemented + tested (v1.2 Batch 6, item 1).**
+T3 appends a **final `'sketch'` phase** (idx 6) to `TUTORIAL_PHASES`: after the
+three drills the guided run spawns a **low-HP "sketch" heron** (a re-use of the
+real heron's `bossStep` + 3-hue awaken machinery at a `SKETCH_HERON` config —
+240 HP vs 30000, `awakenNeed {12,12,12}` ≈ 1 hue, `maxPhase 2`, `contactDmg 0`
+so it never hurts the frog). It spawns just ahead of the frog and is **pinned in
+brush reach** by `_tutorialTick` (so a first-timer can paint it without chasing).
+The beat teaches the **3-hue awaken loop**: the player must paint all of red,
+blue, and green to **AWAKEN** it — completion is gated on the heron's real
+`awakened` flag (the same loop the 30k-HP fight uses), so the real boss is a
+"known pattern." On awaken, `_tutorialAdvance` records
+`save.tutorialDrills.awaken = true` (the "awaken" progress reference) and the
+practice completes → the heron resumes → the timed expedition begins. **SKIP**
+during the sketch beat does NOT record `awaken` (finishing is optional) and ends
+the run normally. The sketch lives only in the frozen teaching layer
+(`runT` frozen, real heron `_intro` held at 999), so it adds **zero** timed-run
+time. `game.js` stays thin: the new config + the completion/eligibility
+predicates are pure in `logic.js` (`SKETCH_HERON`, `tutorialDone` — all four
+drills + awaken, and `tutorialDrillSatisfied`/`tutorialDrillDone` unchanged).
+`save.tutorialDrills` **gains an `awaken` field** (schema stays v3 — the field
+is carried through the existing v3 `normalizeDrills`/`migrateSave` path, which
+now defaults `awaken:false` for legacy saves; no `SAVE_VERSION` bump was needed).
+Smoke stage 44 (T3): after the drills the run reaches idx 6 with the low-HP
+sketch heron spawned (240 HP, `maxPhase 2`) as the tutorial target; it takes
+paint damage; **red alone and red+blue do NOT awaken it** (the loop needs all
+three); **all three hues awaken it** → the practice completes the moment it
+awakens → `tutorialDrills.awaken=true` persists + `tutorialDone(save)` reads
+true; a returning save re-enters the sketch phase; and **skipping the sketch
+leaves `awaken=false`** (finishing is not required), clears the heron, and
+begins the timed expedition. Stage 42 (T1) was updated: the guided run now has
+7 phases, so after the drills it asserts the sketch phase is live (idx 6, heron
+target, `maxHp<1000`) and the practice is NOT yet complete. Pacing unchanged:
+the sketch is tutorial-only, so `pace.mjs` ~18.7 min and `humance.mjs` 18.7 min
+stay in the 15–20 min band.
 
 **M9 A4 (Rehung Frame) — implemented + tested (v1.2 Batch 2, item 1).**
 A permanent, saved **Gallery Bonus** (`save.galleryBonus`, a counter) minted

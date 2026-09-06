@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -139,12 +139,15 @@ const ORB_COLORS = ['red', 'blue', 'green'];
 //   phase 'drills' — T2: explicit per-pigment "do it" drills; each advancement
 //                    predicate reads the enemy's REAL status/death (see
 //                    logic.tutorialDrillSatisfied) and persists
-//                    save.tutorialDrills so "Watch me" (T3/T4) can reference it.
+//                    save.tutorialDrills so "Watch me" (T4) can reference it.
+//   phase 'sketch' — T3: a low-HP "sketch" heron (a re-use of the real heron's
+//                    bossStep + 3-hue awaken machinery) as the final beat, so the
+//                    30k-HP fight is a known pattern. Completing/skipping it
+//                    records save.tutorialDrills.awaken.
 // `pigment` is the brush color the player is asked to use; `enemy` the target
-// kind; `drill` maps to save.tutorialDrills (persisted by the T2 drills phase).
-// T1 ships the three 'learn' goals below; T2 appends the three 'drills' goals
-// (a later phase of the SAME guided run) that gate on the enemy's real
-// death/status and record each into save.tutorialDrills.
+// kind; `drill` maps to save.tutorialDrills (persisted by the drills/sketch
+// phases). T1 ships the three 'learn' goals; T2 the three 'drills' goals; T3
+// appends the single 'sketch' goal.
 const TUTORIAL_PHASES = [
   // T1 — learn the tools (coaxed goals; the enemy is placed close and pinned so
   // a first-timer can land the stroke without chasing it across the swamp).
@@ -168,6 +171,14 @@ const TUTORIAL_PHASES = [
     chip: 'Do it: freeze a mosquito with BLUE until it stops — prove the ice', done: 'Frozen drilled ✓ — the mosquito is locked solid.' },
   { phase: 'drills', pigment: 'green', enemy: 'toad',     drill: 'root',
     chip: 'Do it: root a toad with GREEN until it stops — prove the grip', done: 'Rooted drilled ✓ — the toad is nailed to the spot.' },
+  // T3 — the final teaching beat: a low-HP "sketch" heron. It reuses the real
+  // heron's bossStep + 3-hue awaken machinery at a few-hundred-HP scale so the
+  // 30k-HP fight is a "known pattern", not a surprise. One goal — paint all
+  // three hues to AWAKEN it (the 3-hue awaken loop). Completing it records
+  // save.tutorialDrills.awaken=true; skipping the tutorial leaves it undone.
+  { phase: 'sketch', pigment: 'red', drill: 'awaken',
+    chip: 'Face the sketch heron — paint RED, BLUE, and GREEN to wake it',
+    done: 'The sketch heron wakes and blooms — you know its 3-hue rhythm now.' },
 ];
 
 export class Game {
@@ -220,6 +231,12 @@ export class Game {
     // save (tutorialEligible) may enter it; it is fully skippable and is NOT
     // part of the timed expedition (the clock freezes while it runs).
     this.tutorial = null;    // null = not active; else { idx, target, frozen, done }
+    // T3 (v1.2 M13): the low-HP "sketch" heron — a re-use of the real heron's
+    // bossStep machinery that only ever appears in the guided teaching layer
+    // (the 'sketch' phase) so the 30k-HP fight is a known pattern.
+    this.sketchHeron = null; // null = absent; else a heron-like object
+    // T4 (v1.2 M13): the Field Guide's "Watch me" retraining menu (in-run only).
+    this.helpRetrain = false;
     this.now = 0;
     this.last = 0;
     this.titleT = 0;
@@ -1146,6 +1163,9 @@ _drawAtelier(ctx) {
     this.player = new Player(PLAYER_START_X, PLAYER_START_Y, this.tuning);
     this.paint = new Paint(this.player, this.world, this.tuning, (n, o) => this.sfx(n, o), this.particles);
     this.tutorial = null;   // T1 (v1.2 M13): fresh state each run; set below if guided
+    this.sketchHeron = null;   // T3 (v1.2 M13): the teaching sketch heron (absent by default)
+    this._sketchDefeated = false; // T3: latch reset each run
+    this.helpRetrain = false;  // T4: the Field Guide retraining menu is closed
     this.enemies = [];
     this.orbs = [];
     this.hazards = []; // E3: Bold-only environmental hazards (thorn reeds / mud pools)
@@ -1285,6 +1305,9 @@ _drawAtelier(ctx) {
   _tutorialSpawnTarget() {
     const ph = this._tutorialPhase();
     if (!ph || !this.player) return;
+    // T3 (v1.2 M13): the 'sketch' phase faces the low-HP sketch heron instead
+    // of a small bug — a re-use of the real heron's bossStep machinery.
+    if (ph.phase === 'sketch') { this._setupSketchHeron(); return; }
     const p = this.player;
     const pos = { x: p.x + 52, y: p.y - 10 };
     const e = spawnEnemy(ph.enemy, pos.x, pos.y, this.tuning);
@@ -1294,33 +1317,80 @@ _drawAtelier(ctx) {
     this.tutorial.targetPos = pos;
   }
 
+  // T3 (v1.2 M13): spawn the low-HP "sketch" heron for the final teaching beat.
+  // It reuses the real heron's bossStep + 3-hue awaken machinery at a few-hundred-
+  // HP scale (see SKETCH_HERON): much lower HP, awakens on ~1 hue, phase
+  // escalation capped at 2 (no phase-3 "Gray Storm"), and it never hurts the
+  // frog (contactDmg 0) so the beat is low-stakes. It spawns just ahead of the
+  // frog (so a first-timer reaches it), is driven by _updateSketchHeron (which
+  // pins it in reach), and becomes the tutorial's `target` so the advancement
+  // check + skip both read it uniformly.
+  _setupSketchHeron() {
+    const p = this.player;
+    const x = p.x + SKETCH_HERON.x, y = p.y + SKETCH_HERON.y;
+    this.sketchHeron = {
+      x, y,
+      hp: SKETCH_HERON.hp, maxHp: SKETCH_HERON.hp,
+      phase: 1, state: 'idle', stateT: 2.0, hue: { red: 0, blue: 0, green: 0 },
+      awakened: false, awakenedT: 0, summonT: 99, lungeDir: -1,
+      targetX: x - 300, diveH: 0, facing: -1,
+      flying: 0, _intro: 0, maxPhase: SKETCH_HERON.maxPhase,
+      awakenNeed: SKETCH_HERON.awakenNeed, contactDmg: SKETCH_HERON.contactDmg,
+    };
+    this._sketchDefeated = false;
+    // make the sketch the tutorial's current target (advancement + skip read it)
+    this.tutorial.target = this.sketchHeron;
+    this.tutorial.targetPos = { x, y };
+  }
+
+  // T3 (v1.2 M13): clear the sketch heron (used on advance, skip, and retrain
+  // end). The completion is persisted by _tutorialAdvance (save.tutorialDrills.
+  // awaken) before this runs, so a skipped/ended beat simply leaves it undone.
+  _clearSketchHeron() {
+    this.sketchHeron = null;
+  }
+
   // Advance once the current goal's real-state predicate is satisfied.
   _tutorialAdvance() {
     const t = this.tutorial;
     const ph = TUTORIAL_PHASES[t.idx];   // the phase just completed
+    // the target is a small bug OR (T3) the sketch heron — only remove it from
+    // the enemies list if it is actually one of them (the sketch heron is not).
     this.enemies = this.enemies.filter(e => e !== t.target);
     t.target = null; t.targetPos = null;
     t.idx += 1;
-    // T2: a completed drill is persisted to save.tutorialDrills so T3/T4
+    // T2: a completed drill is persisted to save.tutorialDrills so T4
     // "Watch me" retraining can reference which drills were completed. The
     // predicate already guaranteed the REAL effect landed before we got here.
     if (ph.phase === 'drills') {
-      if (!this.save.tutorialDrills) this.save.tutorialDrills = { burn: false, freeze: false, root: false };
+      if (!this.save.tutorialDrills) this.save.tutorialDrills = { burn: false, freeze: false, root: false, awaken: false };
       if (!this.save.tutorialDrills[ph.drill]) {
         this.save.tutorialDrills[ph.drill] = true;
         SaveSys.save(this.save);
       }
     }
+    // T3: completing the sketch-heron beat (the 3-hue awaken loop) records
+    // save.tutorialDrills.awaken — the "awaken" progress reference.
+    if (ph.phase === 'sketch') {
+      if (!this.save.tutorialDrills) this.save.tutorialDrills = { burn: false, freeze: false, root: false, awaken: false };
+      if (!this.save.tutorialDrills.awaken) {
+        this.save.tutorialDrills.awaken = true;
+        SaveSys.save(this.save);
+      }
+    }
     if (t.idx >= TUTORIAL_PHASES.length) {
       t.done = true;
+      this._clearSketchHeron();   // the sketch beat is the last phase
       this.heron._intro = 3.2;     // practice over — the timed expedition resumes
       this.addBanner('Well painted. Off into the swamp — the Great Gray Heron waits in the gray east.', 4.6, this.ch * 0.3);
       this.sfx('victory');
       return;
     }
-    // T2: crossing from the 'learn' goals into the 'drills' — a "now prove it"
-    // beat (replaces the last learn done-banner at that juncture).
-    if (TUTORIAL_PHASES[t.idx].phase === 'drills' && ph.phase !== 'drills') {
+    // T3: crossing into the sketch-heron beat — a "now face the heron" moment.
+    if (TUTORIAL_PHASES[t.idx].phase === 'sketch') {
+      this.addBanner('Now a small heron — a sketch of the big one. Wake it with three hues.', 3.8, this.ch * 0.3);
+    } else if (TUTORIAL_PHASES[t.idx].phase === 'drills' && ph.phase !== 'drills') {
+      // T2: crossing from the 'learn' goals into the 'drills' — "now prove it".
       this.addBanner('You know the tools. Now prove each one — do it for real.', 3.8, this.ch * 0.3);
     } else {
       this.addBanner(ph.done, 3.4, this.ch * 0.3);
@@ -1339,6 +1409,7 @@ _drawAtelier(ctx) {
     }
     this.enemies = this.enemies.filter(e => e && e !== this.tutorial.target);
     this.tutorial.target = null; this.tutorial.targetPos = null;
+    this._clearSketchHeron();     // T3: a skipped sketch beat is not completed
     this.runT = 0;
     this.heron._intro = 3.2;       // the timed expedition begins
     this.addBanner('Practice skipped — the expedition begins.', 3.2, this.ch * 0.3);
@@ -1359,14 +1430,26 @@ _drawAtelier(ctx) {
     const m = this.input.mouse;
     if (m.lPressed && this._mouseIn(lay.skip.x, lay.skip.y, lay.skip.w, lay.skip.h)) { this._skipTutorial(); return; }
     if (this.input.pressed('escape')) { this._skipTutorial(); return; }
+    // hold the real heron's intro so it can never wake mid-practice.
+    if (this.heron) this.heron._intro = Math.max(this.heron._intro, 999);
+    // T3: the sketch-heron beat — completes when the player has painted all three
+    // hues to AWAKEN it (the 3-hue loop the real heron uses). It is NOT pinned
+    // here (it drifts, driven by _updateSketchHeron); the heron target has no
+    // `kind`, so the enemy-pin block below skips it.
+    if (ph.phase === 'sketch') {
+      const h = this.sketchHeron;
+      // keep the sketch within brush reach (low-stakes teaching beat)
+      if (h && this.player && this.tutorial.targetPos) {
+        h.x = this.tutorial.targetPos.x; h.y = this.tutorial.targetPos.y; h._now = this.now;
+      }
+      if (h && h.awakened) this._tutorialAdvance();
+      return;
+    }
     // keep the target in reach (low-stakes: pinned near the starting point)
     const e = t.target;
-    if (e && !e.dead && t.targetPos) {
+    if (e && !e.dead && t.targetPos && e.kind) {
       e.x = t.targetPos.x; e.y = t.targetPos.y; e.vx = 0; e.vy = 0; e._now = this.now;
     }
-    // the timed clock (runT) is frozen, but the heron intro counts down by
-    // real dt — hold it so the boss can never wake mid-practice.
-    if (this.heron) this.heron._intro = Math.max(this.heron._intro, 1);
     if (e && tutorialDrillSatisfied(ph.drill, e)) this._tutorialAdvance();
   }
 
@@ -1558,6 +1641,16 @@ _drawAtelier(ctx) {
           this.addBanner('The Painted Heron shimmers — paint it while it glows!', 3.0);
         }
       }
+      // T3 (v1.2 M13): paint the sketch heron (the teaching beat) the same way —
+      // the 3-hue awaken loop, at a low-HP scale.
+      if (this.sketchHeron && this.sketchHeron.hp > 0 && !this.sketchHeron.flying) {
+        const res = this.paint.paintBossHit(this.sketchHeron, p.pigment, this.tuning.bossPaintHit);
+        if (res === 'awaken') {
+          this.sfx('awaken');
+          this.addShake(8);
+          this.addBanner('The sketch heron shimmers — that is the 3-hue rhythm!', 2.8);
+        }
+      }
     }
     if (this.input.mouse.rPressed && p.splashCharge >= 1) {
       this.paint.trySplash(targetList);
@@ -1649,6 +1742,12 @@ _drawAtelier(ctx) {
         this._updateMidHeron(dt);
       }
     }
+
+    // ----- T3 (v1.2 M13): the sketch heron (teaching beat) -----
+    // Driven only while the tutorial 'sketch' phase is live (it is spawned by
+    // that phase and cleared when it ends), so it can never appear in the timed
+    // run.
+    if (this.sketchHeron && !this.dying) this._updateSketchHeron(dt);
 
     // ----- first-hit teaching (once per lifetime) -----
     if (p.alive && p.hp < this._prevHp) {
@@ -2110,6 +2209,22 @@ _drawAtelier(ctx) {
     // the mid-heron is gone for the rest of the run (no victory state — it's a
     // set-piece, not the final boss)
     this.midHeron = null;
+  }
+
+  // T3 (v1.2 M13): drive the low-HP "sketch" heron with the shared bossStep
+  // machinery — the SAME 3-hue awaken cadence as the real heron, at a low-HP
+  // scale. It is ONLY live during the guided teaching layer (the 'sketch'
+  // phase), so it never appears in the timed expedition. It never hurts the
+  // frog (contactDmg 0) and never summons; the beat completes when all three
+  // hues awaken it (the 3-hue loop the real heron uses — see _tutorialTick).
+  _updateSketchHeron(dt) {
+    const h = this.sketchHeron;
+    const p = this.player;
+    if (!h || !p || h.flying > 0 || this.dying) return;
+    // bossStep runs the awaken/awakenedT state machine; the sketch is pinned in
+    // reach by _tutorialTick, so its drift is harmless.
+    const v = this._view();
+    bossStep(h, dt, { left: v.x, right: v.x + v.w / v.scale, playerX: p.x }, this.tuning, this.now);
   }
 
   // M4: mute toggle (M key) — works from any screen, saved to options

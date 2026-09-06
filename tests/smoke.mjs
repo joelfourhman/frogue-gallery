@@ -2192,9 +2192,15 @@ console.log('== stage 42: T1 — guided first expedition (tutorial) ==');
   advance('root', 'green');  // a toad that actually rooted
   assert(g42.save.tutorialDrills.root === true, 'T2: the root drill completion is persisted (tutorialDrills.root)');
   assert(L42.tutorialDrillsAllDone(g42.save), 'T2: all three drills are recorded as done on the save');
-  assert(g42.tutorial.done, 'T1/T2: all six guided phases (3 learn + 3 drills) complete the practice');
-  assert(Math.abs(g42.runT - runT0) < 0.5, `T1: the timed clock stayed frozen through the practice (runT ${runT0} -> ${g42.runT})`);
-  assert(g42.heron._intro < 10 && g42.heron._intro > 0, 'T1: the heron resumes once the practice ends (intro reset)');
+  // T3: after the three drills the guided run enters the FINAL 'sketch' phase
+  // (the low-HP heron beat). It is not yet complete — the sketch must be
+  // awakened — so the practice is still live and the sketch heron has spawned.
+  assert(g42.tutorial.idx === 6, 'T3: the three drills advance into the sketch-heron phase (idx 6)');
+  assert(g42.tutorial.target && !g42.tutorial.target.kind, 'T3: the sketch phase targets the sketch heron (not a bug)');
+  assert(g42.sketchHeron && g42.sketchHeron.maxHp > 0 && g42.sketchHeron.maxHp < 1000, `T3: the low-HP sketch heron spawned in the teaching run (${g42.sketchHeron.maxHp} HP)`);
+  assert(!g42.tutorial.done, 'T3: the practice is NOT complete until the sketch is awakened');
+  assert(Math.abs(g42.runT - runT0) < 0.5, `T1: the timed clock stayed frozen through the drills (runT ${runT0} -> ${g42.runT})`);
+  assert(g42.heron._intro > 100, 'T3: the real heron stays deferred through the sketch phase');
 
   // ---- a wrong-pigment brush stroke does NOT advance a goal (reads real
   // status, not "a brush stroke happened") ----
@@ -2314,6 +2320,99 @@ console.log('== stage 43: T2 — interactive pigment drills (real status/death) 
   const reloaded = S43.SaveSys.load();
   assert(reloaded.tutorialDrills.burn === true && reloaded.tutorialDrills.freeze === true && reloaded.tutorialDrills.root === false, 'T2: the partial drill map persists to disk (survives a reload)');
   assert(L43.tutorialDrillDone(reloaded, 'burn') && !L43.tutorialDrillDone(reloaded, 'root'), 'T2: retraining can reference exactly which drills were completed');
+}
+
+console.log('== stage 44: T3 — the sketch heron (3-hue awaken teaching beat) ==');
+{
+  const S44 = await import('../src/save.js');
+  const L44 = await import('../src/logic.js');
+  store.clear();
+  const g44 = new Game(makeCanvas());
+  g44.start();
+  g44.save = L44.freshSave();
+  g44._beginExpedition(true);
+  let t44 = 1000;
+  const fr44 = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t44 += step; g44._frame(t44); } };
+  const aim44 = (e) => { const v = g44._view(); g44.input.mouse.x = (e.x - v.x) * v.scale; g44.input.mouse.y = (e.y - v.y) * v.scale; };
+  fr44(6);
+  g44.player.iframes = 99; // low-stakes: the sketch never hurts the frog
+
+  // The sketch heron is the FINAL phase of the guided run. Fast-forward the
+  // six earlier phases (3 learn + 3 drills) to reach the 'sketch' beat (idx 6).
+  const clearPhase = (pig) => {
+    g44.player.pigment = pig;
+    let f = 0; const before = g44.tutorial.idx;
+    while (g44.tutorial.idx === before && f < 400) {
+      const e = g44.tutorial.target; if (e && e.dizzyPaintChance !== undefined) e.dizzyPaintChance = 0;
+      aim44(g44.tutorial.target); g44.input.mouse.lDown = true; fr44(1); f++;
+    }
+    g44.input.mouse.lDown = false;
+  };
+  clearPhase('red'); clearPhase('blue'); clearPhase('green'); // learn 0-2
+  clearPhase('red'); clearPhase('blue'); clearPhase('green'); // drills 3-5
+  assert(g44.tutorial.idx === 6, 'T3: after the drills the guided run reaches the sketch-heron phase (idx 6)');
+
+  // ---- the sketch heron spawns in the teaching run ----
+  const sh0 = g44.sketchHeron;
+  assert(sh0 && sh0.maxHp > 0 && sh0.maxHp < 1000, `T3: the low-HP sketch heron spawns in the teaching run (${sh0.maxHp} HP, a fraction of the 30000-HP real heron)`);
+  assert(g44.tutorial.target === sh0, 'T3: the sketch heron is the current tutorial target');
+  assert(sh0.maxPhase === 2, 'T3: the sketch heron reuses the real heron machinery (phase escalation capped at 2)');
+  assert(sh0.hp === sh0.maxHp && sh0.awakened === false, 'T3: the sketch heron starts at full HP, un-awakened');
+  assert(!g44.tutorial.done, 'T3: the practice is not complete before the sketch is awakened');
+
+  // ---- it can be DAMAGED and AWAKENED (the 3-hue loop) ----
+  // paintBossHit measures range to the heron's BODY (feet - 150), so aim there.
+  const bodyPt = () => { const v = g44._view(); return { x: (g44.sketchHeron.x - v.x) * v.scale, y: (g44.sketchHeron.y - 150 - v.y) * v.scale }; };
+  const need = sh0.awakenNeed.red; // ~1 hue per color to awaken
+  const paintHue = (pig) => {
+    g44.player.pigment = pig;
+    let f = 0;
+    while (sh0.hue[pig] < need && f < 12) {
+      const b = bodyPt(); g44.input.mouse.x = b.x; g44.input.mouse.y = b.y;
+      g44.input.mouse.lDown = true; fr44(1); f++;
+    }
+    g44.input.mouse.lDown = false;
+  };
+  paintHue('red');
+  assert(sh0.hp < sh0.maxHp, `T3: the sketch heron takes paint damage (${sh0.maxHp} -> ${Math.round(sh0.hp)} HP)`);
+  assert(sh0.hue.red >= need && sh0.awakened === false, 'T3: red alone does not awaken it (the 3-hue loop requires all three)');
+  paintHue('blue');
+  assert(sh0.awakened === false, 'T3: red + blue alone does not awaken it (needs all three hues)');
+  paintHue('green');
+  // the green stroke completes the third hue -> the heron AWAKENS; the same
+  // frame the tutorial advances and persists the completion.
+  assert(sh0.awakened === true, 'T3: the sketch heron AWAKENS once all three hues are painted (the 3-hue awaken loop)');
+  assert(g44.tutorial.done, 'T3: the practice completes the moment the sketch is awakened');
+  assert(g44.save.tutorialDrills.awaken === true, 'T3: completion persists save.tutorialDrills.awaken=true');
+  assert(L44.tutorialDone(g44.save), 'T3: the progress reference (tutorialDone) reads the completed tutorial');
+
+  // ---- a skipping player is NOT required to finish the sketch ----
+  store.clear();
+  const g44b = new Game(makeCanvas());
+  g44b.start();
+  g44b.save = L44.freshSave();
+  g44b._beginExpedition(true);
+  let t44b = 1000;
+  const fr44b = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t44b += step; g44b._frame(t44b); } };
+  const aim44b = (e) => { const v = g44b._view(); g44b.input.mouse.x = (e.x - v.x) * v.scale; g44b.input.mouse.y = (e.y - v.y) * v.scale; };
+  fr44b(6); g44b.player.iframes = 99;
+  const skipClear = (pig) => {
+    g44b.player.pigment = pig;
+    let f = 0; const before = g44b.tutorial.idx;
+    while (g44b.tutorial.idx === before && f < 400) {
+      const e = g44b.tutorial.target; if (e && e.dizzyPaintChance !== undefined) e.dizzyPaintChance = 0;
+      aim44b(g44b.tutorial.target); g44b.input.mouse.lDown = true; fr44b(1); f++;
+    }
+    g44b.input.mouse.lDown = false;
+  };
+  skipClear('red'); skipClear('blue'); skipClear('green'); skipClear('red'); skipClear('blue'); skipClear('green');
+  assert(g44b.tutorial.idx === 6 && g44b.sketchHeron, 'T3: the returning path reaches the sketch-heron phase');
+  g44b._skipTutorial(); // skip the sketch — it is optional
+  assert(g44b.save.tutorialDrills.awaken === false, 'T3: skipping the sketch does NOT record awaken (finishing it is not required)');
+  assert(g44b.tutorial.done, 'T3: skipping ends the practice');
+  assert(g44b.sketchHeron === null, 'T3: the sketch heron is cleared when the practice is skipped');
+  assert(g44b.heron._intro === 3.2, 'T3: skipping the sketch begins the timed expedition (heron intro reset)');
+  assert(g44b.state === 'expedition', 'T3: the run proceeds to the timed expedition after the skip');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

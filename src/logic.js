@@ -440,6 +440,28 @@ export function midHeronAllowed(difficulty) {
 }
 
 // ----------------------------------------------------------------
+// T3 (v1.2 M13): the "sketch" heron — the FINAL phase of the guided first
+// expedition (a fresh save's teaching run). It reuses the real heron's
+// bossStep + 3-hue awaken machinery at a low-HP scale so a first-timer meets
+// the 3-hue awaken cadence BEFORE the 30k-HP fight: the real boss is then a
+// "known pattern", not a surprise.
+//
+// Much smaller than the final heron (a few hundred HP — a low-HP "sketch"),
+// awakens on about one hue of each color, and its phase escalation is capped
+// at 2 (no phase-3 "Gray Storm"). It only ever appears inside the guided
+// teaching layer (runT frozen), so it never inflates the 15-20 min timed
+// expedition. game.js spawns/drives it (see Game._setupSketchHeron); this
+// config keeps its rules pure + testable headless.
+export const SKETCH_HERON = {
+  x: 90,                                 // offset ahead of the frog (spawned relative to the player)
+  y: 0,                                  // the frog's ground level (spawned relative to the player)
+  hp: 240,                               // a few hundred HP (the real heron = 30000)
+  awakenNeed: { red: 12, blue: 12, green: 12 }, // ~1 hue to awaken (final = 45)
+  maxPhase: 2,                           // cap phase escalation at 1-2 (no Gray Storm)
+  contactDmg: 0,                         // low-stakes teaching: the sketch never hurts
+};
+
+// ----------------------------------------------------------------
 // E3 (v1.2 M10): Bold-only zone hazards. Two environmental hazards give
 // Bold a reason to exist beyond "harder numbers": a THORN REED that briefly
 // roots the frog on touch, and a MUD POOL that slows it. They spawn ONLY on
@@ -711,7 +733,7 @@ export function freshSave() {
     stats: { expeditions: 0, victories: 0, deaths: 0, heronsPainted: 0, treasures: 0 },
     bestRun: null,        // {pigments, time, cleared}
     galleryBonus: 0,      // A4 (v1.2 M9): 'Rehung Frame' prestige-lite level
-    tutorialDrills: { burn: false, freeze: false, root: false }, // T1 (v1.2 M13)
+    tutorialDrills: { burn: false, freeze: false, root: false, awaken: false }, // T1/T3 (v1.2 M13)
   };
 }
 
@@ -719,9 +741,9 @@ export function freshSave() {
 // save (no field, or a partial/garbled one) always reads back as a complete
 // {burn,freeze,root} booleans object. Pure — testable headless.
 function normalizeDrills(raw) {
-  const base = { burn: false, freeze: false, root: false };
+  const base = { burn: false, freeze: false, root: false, awaken: false };
   if (!isPlainObj(raw)) return base;
-  for (const k of ['burn', 'freeze', 'root']) base[k] = !!raw[k];
+  for (const k of ['burn', 'freeze', 'root', 'awaken']) base[k] = !!raw[k];
   return base;
 }
 
@@ -766,6 +788,30 @@ export function tutorialDrillSatisfied(drill, enemy) {
   if (drill === 'freeze') return st === 'freeze';
   if (drill === 'root') return st === 'root';
   return false;
+}
+
+// T3 (v1.2 M13): has the guided first expedition been COMPLETED? This is the
+// "tutorial progress" reference (T4): true when ALL of the three pigment drills
+// (burn/freeze/root) AND the sketch-heron (awaken) are recorded in
+// save.tutorialDrills. Pure.
+export function tutorialDone(save) {
+  const d = (save && isPlainObj(save.tutorialDrills)) ? save.tutorialDrills : null;
+  if (!d) return false;
+  return !!(d.burn && d.freeze && d.root && d.awaken);
+}
+
+// T4 (v1.2 M13): is "Watch me" retraining available for this save? It must be
+// reachable only for a player who has some tutorial context to replay — i.e. a
+// fresh save (eligible to run the guided expedition) or a save that has already
+// started/completed at least one drill or the sketch. A truly empty save
+// (nothing done, not eligible) offers nothing to retrain. Pure.
+export function retrainAllowed(save) {
+  if (!save || !isPlainObj(save.flags)) return false;
+  if (save.flags.heronDefeated) return true;          // finished at least one run
+  if (save.flags.tutorialSkipped) return true;        // dismissed the guided run
+  const d = isPlainObj(save.tutorialDrills) ? save.tutorialDrills : null;
+  if (d && (d.burn || d.freeze || d.root || d.awaken)) return true; // some progress
+  return tutorialEligible(save);                       // fresh, eligible to start
 }
 
 // B2: corrupt-save handling. migrateSave never throws and always returns a

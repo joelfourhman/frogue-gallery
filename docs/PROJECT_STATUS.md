@@ -4,7 +4,7 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 Batch 1 A1–A3 done + A4 Rehung Frame done + E1 Painted Heron done + E2 weather/tide phases done + E3 Bold-only zone hazards done + E4 orb-streak bonus done + V1 color-reveal bar done + V2 heron awaken bloom done + V3 per-zone ambient audio done + V4 end-screen exhibition done; Batch 2 COMPLETE, Batch 3 COMPLETE, Batch 4 (M11) COMPLETE)**
+**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 Batch 1 A1–A3 done + A4 Rehung Frame done + E1 Painted Heron done + E2 weather/tide phases done + E3 Bold-only zone hazards done + E4 orb-streak bonus done + V1 color-reveal bar done + V2 heron awaken bloom done + V3 per-zone ambient audio done + V4 end-screen exhibition done + M13 T1 guided first expedition done + M13 T2 interactive pigment drills done + M13 T3 mini sketch heron done; Batch 2/3/4/5 COMPLETE, Batch 6 T3 committed)**
 
 ## Current state
 
@@ -62,11 +62,20 @@ consequential decisions in `docs/DECISIONS.md`.
   to root; advancement reads the enemy's REAL status/death (logic.js, never a
   brush stroke); each completion persists save.tutorialDrills so T3/T4 "Watch
   me" retraining can reference which drills were done; partial completion is
-  preserved across a mid-drills skip).**
-  - Smoke suite: **43 stages, ALL PASSED** (stage 34 = v1.2 M10 E1 Painted Heron; stage 35 = v1.2 M10 E2 weather/tide phases; stage 36 = v1.2 M10 E3 Bold-only zone hazards; stage 37 = v1.2 M10 E4 orb-streak bonus; stage 38 = v1.2 M11 V1 color-reveal bar; stage 39 = v1.2 M11 V2 heron awaken bloom; stage 40 = v1.2 M11 V3 per-zone ambient audio bed; stage 41 = v1.2 M11 V4 end-screen exhibition; **stage 42 = v1.2 M13 T1 guided first expedition; stage 43 = v1.2 M13 T2 interactive pigment drills**). Pacing
+  preserved across a mid-drills skip),
+  T3 ✅ (mini "sketch" heron — the guided run's FINAL phase (idx 6): a low-HP
+  "sketch" heron (SKETCH_HERON config, 240 HP vs 30000, awakenNeed ~1 hue,
+  maxPhase 2, contactDmg 0) reuses the real heron's bossStep + 3-hue awaken
+  machinery; it is pinned in brush reach and the beat completes when the
+  player paints all three hues to AWAKEN it — the same 3-hue loop the 30k-HP
+  fight uses, so the real boss is a known pattern; completion persists
+  save.tutorialDrills.awaken=true (tutorialDone reads it), SKIP during the
+  sketch does NOT record awaken (finishing is optional); frozen teaching layer
+  so it adds no timed-run time).**
+  - Smoke suite: **44 stages, ALL PASSED** (stage 34 = v1.2 M10 E1 Painted Heron; stage 35 = v1.2 M10 E2 weather/tide phases; stage 36 = v1.2 M10 E3 Bold-only zone hazards; stage 37 = v1.2 M10 E4 orb-streak bonus; stage 38 = v1.2 M11 V1 color-reveal bar; stage 39 = v1.2 M11 V2 heron awaken bloom; stage 40 = v1.2 M11 V3 per-zone ambient audio bed; stage 41 = v1.2 M11 V4 end-screen exhibition; **stage 42 = v1.2 M13 T1 guided first expedition; stage 43 = v1.2 M13 T2 interactive pigment drills; stage 44 = v1.2 M13 T3 mini sketch heron**). Pacing
   probes green on Normal: `pace.mjs` (analytic ~18.7 min) + `humance.mjs` (simulated
-  human, ~18.9 min full-run / 52s cross-swamp) + `bosspace.mjs` (re-verified after
-  T1+T2; the frozen tutorial pre-run layer adds no timed-run time). Real-browser: 60 fps title / full world.
+  human, ~18.7 min full-run / 53s cross-swamp) + `bosspace.mjs` (re-verified after
+  T1/T2/T3; the frozen tutorial pre-run layer adds no timed-run time). Real-browser: 60 fps title / full world.
 - Git: v1.1 fully committed; v1.2 roadmap + M13 tutorial
   swap committed (`5258d13`, `543d1cd`).
 
