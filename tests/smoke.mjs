@@ -1103,5 +1103,47 @@ console.log('== stage 27: M8 P8 — the Gallery Wall in the Atelier ==');
   assert(g5.state === 'title', 'Escape returned from the Gallery to the title');
 }
 
+console.log('== stage 28: M8 P6 — the "?" field guide overlay ==');
+{
+  const cv6 = makeCanvas();
+  const g6 = new Game(cv6);
+  g6.start();
+  fireKey('keydown', 'Enter'); frames(3);        // title -> expedition
+  assert(g6.state === 'expedition' && g6.help === false, 'a run starts with the field guide closed');
+
+  // H opens the guide; the run must freeze (a held movement key does not move the frog)
+  const px0 = g6.player.x, hp0 = g6.player.hp;
+  fireKey('keydown', 'h'); frames(1);
+  assert(g6.help === true, 'pressing H opens the field guide');
+  // hold W down (no keyup) so the frog WOULD walk if the run were still ticking
+  (windowListeners['keydown'] || []).forEach((fn) => fn({ key: 'W', repeat: false, preventDefault() {} }));
+  frames(60);                                     // ~1s frozen
+  assert(g6.player.x === px0, `holding W while the guide is open does not move the frog (dx=${(g6.player.x - px0).toFixed(2)})`);
+  assert(g6.player.hp === hp0, 'the run is frozen — no damage ticked while the guide is open');
+  frames(30);                                     // draw path runs clean for 30 frames
+  assert(g6.state === 'expedition' && g6.help, 'the field guide drew cleanly for 30 frames (no JS errors)');
+  // release W
+  (windowListeners['keyup'] || []).forEach((fn) => fn({ key: 'w', repeat: false, preventDefault() {} }));
+
+  // the close button lives in the shared geometry and closes on click
+  const g = g6._helpGeom();
+  assert(g && g.close && g.close.w > 0, 'the field guide exposes a close-button rect');
+  fireMouse(cv6, g.close.x + g.close.w / 2, g.close.y + g.close.h / 2); frames(1);
+  assert(g6.help === false, 'clicking Close (H) closes the field guide');
+
+  // H re-opens it, and "?" / Esc both close it
+  fireKey('keydown', 'h'); frames(1);
+  assert(g6.help === true, 'pressing H again re-opens the field guide');
+  fireKey('keydown', '?'); frames(1);
+  assert(g6.help === false, 'pressing ? closes the field guide');
+
+  // a fresh run always starts closed
+  fireKey('keydown', 'Enter'); frames(3);        // back into a run
+  g6.player.iframes = 0; g6.player.hurt(99, g6.tuning); frames(140);
+  fireKey('keydown', 'Enter'); frames(3);        // -> end -> atelier
+  fireKey('keydown', 'Escape'); frames(3);       // -> title
+  assert(g6.state === 'title', 'returned to the title after the P6 stage');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

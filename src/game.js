@@ -74,6 +74,7 @@ export class Game {
     // ---------- state machine ----------
     this.state = 'title';       // 'title' | 'expedition' | 'end'
     this.paused = false;
+    this.help = false;          // M8 P6: "?" reference overlay (pauses the run)
     this.endKind = null;
     this.endT = 0;
     this.endGains = null;
@@ -173,8 +174,17 @@ export class Game {
         // post-victory: the run is over — let the flight play out
         // (world/particles already ticked by the ambient block above)
         this._stepHeronFlight(dt);
-      } else if (!this.paused) {
+      } else if (!this.paused && !this.help) {
         this._updateExpedition(dt);
+      } else if (this.help) {
+        // M8 P6: the "?" field guide owns input while open (the run is frozen).
+        if (this.input.pressed('h') || this.input.pressed('escape') || this.input.pressed('?')) {
+          this.help = false;
+          this.sfx('ui');
+        } else if (this.input.mouse.lPressed) {
+          const h = this._helpGeom();
+          if (this._mouseIn(h.close.x, h.close.y, h.close.w, h.close.h)) { this.help = false; this.sfx('ui'); }
+        }
       } else if (!this.dying) {
         // M5: the pause menu owns input while paused — _updateExpedition is
         // skipped in that state, so its own pause block never ran.
@@ -777,6 +787,7 @@ _drawAtelier(ctx) {
     this.dying = false;
     this.dieT = 0;
     this.paused = false;
+    this.help = false;   // M8 P6: start a run with the field guide closed
     this.banners = [];
     this.state = 'expedition';
     // B5: one-time "progress may not persist" notice when persistent storage is
@@ -839,6 +850,12 @@ _drawAtelier(ctx) {
     if (this.input.pressed('p')) {
       this.paused = !this.paused;
       this.sfx(this.paused ? 'ui-back' : 'ui');
+      return;
+    }
+    // M8 P6: "?" field guide — pauses the run so you can read it safely.
+    if (this.input.pressed('h') || this.input.pressed('?')) {
+      this.help = !this.help;
+      this.sfx(this.help ? 'ui-back' : 'ui');
       return;
     }
     if (this.input.pressed('escape')) {
@@ -1445,6 +1462,7 @@ _drawAtelier(ctx) {
     if (this.state === 'title') this._drawTitle(ctx);
     if (this.state === 'atelier') this._drawAtelier(ctx);
     if (this.paused && this.state === 'expedition') this._drawPause(ctx);
+    if (this.help && this.state === 'expedition') this._drawHelp(ctx);   // M8 P6
     if (this.state === 'end') this._drawEnd(ctx);
     // banners render last so they sit above every screen (incl. the title,
     // where the erase-save confirm banner appears)
@@ -1842,6 +1860,88 @@ _drawAtelier(ctx) {
         const armed = (this.now - (this._eraseArm || -99)) < 3;
         centerText(ctx, armed ? 'click again to erase save data…' : 'erase save data', ex + 120, ey + 14, armed ? '700 12px Georgia, serif' : '11px Georgia, serif', armed ? '#d8543c' : 'rgba(253,246,233,0.45)', armed ? 1 : 0.8);
       }
+
+  // M8 P6: the "?" field guide. A single source of truth for its layout so the
+  // click handling (in the frame router) and the draw never drift apart.
+  _helpGeom() {
+    const cx = this.cw / 2, cw = this.cw;
+    const pw = 720, ph = 470, px = cx - pw / 2, py = 150;
+    return { cx, pw, ph, px, py,
+      close: { x: px + pw - 120, y: py + 18, w: 100, h: 40 } };
+  }
+
+  _drawHelp(ctx) {
+    const g = this._helpGeom();
+    ctx.save();
+    ctx.fillStyle = 'rgba(30,25,22,0.62)';
+    ctx.fillRect(0, 0, this.cw, this.ch);
+    ctx.restore();
+    const c = paperPanel(ctx, g.px, g.py, g.pw, g.ph, { seed: 71 });
+    this._leftText(c, 'Field Guide', g.px + 40, g.py + 38, '700 26px Georgia, serif', INK, 1);
+    this._leftText(c, 'the run is paused — take your time', g.px + 40, g.py + 62, 'italic 13px Georgia, serif', INK, 0.6);
+    // close button
+    uiButton(ctx, g.close.x, g.close.y, g.close.w, g.close.h, 'Close (H)', this._mouseIn(g.close.x, g.close.y, g.close.w, g.close.h), false, { seed: 75, size: 14 });
+
+    const colL = g.px + 34, colR = g.px + g.pw / 2 + 14, colW = g.pw / 2 - 58;
+    const y0 = g.py + 96;
+    // ---- left column: painting (the pigments) ----
+    c.save(); c.font = '700 16px Georgia, serif'; c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Painting — your brush', colL, y0); c.restore();
+    const pig = [
+      ['1', PIGMENTS.red.color, 'Crimson', 'burn — damage over time, ignores armor; your main weapon'],
+      ['2', PIGMENTS.blue.color, 'Cobalt', 'slow, then a second coat within 1s freezes solid'],
+      ['3', PIGMENTS.green.color, 'Moss', 'root ground enemies (flies are immune); heals the frog'],
+    ];
+    pig.forEach((r, i) => {
+      const y = y0 + 34 + i * 58;
+      c.fillStyle = r[1]; c.beginPath(); c.arc(colL + 12, y, 11, 0, TAU); c.fill();
+      c.lineWidth = 1.6; c.strokeStyle = INK; c.stroke();
+      c.fillStyle = INK; c.font = '700 15px Georgia, serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillText(`${r[2]} (key ${r[0]})`, colL + 32, y);
+      c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.8)';
+      this._wrapHelp(c, r[3], colL + 32, y + 16, colW - 32, 14);
+    });
+    c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.7)'; c.textAlign = 'left'; c.textBaseline = 'middle';
+    this._wrapHelp(c, 'Hold left mouse to paint, aim with the cursor. Hold right mouse to charge a Splash burst, release to fire. A dry brush (no pigment) still deals half damage and never runs out.', colL, y0 + 34 + 3 * 58 + 6, colW, 14);
+
+    // ---- right column: counterplay + the heron ----
+    c.save(); c.font = '700 16px Georgia, serif'; c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Know your quarry', colR, y0); c.restore();
+    const foes = [
+      ['Mud Beetle', 'armored — burn (red) ignores its shell. Don\u2019t just chip it.'],
+      ['Mosquito', 'fast and airborne — blue slows it; it ignores root.'],
+      ['Grumpy Toad', 'tanky — paint it dizzy (green) for a 1.5× open shot.'],
+    ];
+    foes.forEach((r, i) => {
+      const y = y0 + 34 + i * 48;
+      c.font = '700 14px Georgia, serif'; c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillText(r[0], colR, y);
+      c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.8)';
+      this._wrapHelp(c, r[1], colR, y + 15, colW, 13);
+    });
+    const hy = y0 + 34 + 3 * 48 + 12;
+    c.font = '700 15px Georgia, serif'; c.fillStyle = '#8d7bb0'; c.textAlign = 'left'; c.textBaseline = 'middle';
+    c.fillText('The Great Gray Heron', colR, hy);
+    c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.85)';
+    this._wrapHelp(c, 'Watch the telegraph (a glow before it strikes). Move off the marked line when it swoops, sweeps, or dives. It gathers reinforcements and grows fiercer the lower its health falls — keep painting to keep it stunned.', colR, hy + 16, colW, 14);
+
+    // footer
+    centerText(c, 'WASD / arrows to move  ·  Space to hop (brief invulnerability)  ·  P to pause  ·  M to mute', g.cx, g.py + g.ph - 22, 'italic 13px Georgia, serif', INK, 0.6);
+    paperEnd(ctx);
+  }
+
+  // tiny word-wrap helper for the field guide (keeps long lines tidy)
+  _wrapHelp(c, text, x, y, maxW, lh) {
+    const words = text.split(' ');
+    let line = '', yy = y;
+    c.textAlign = 'left'; c.textBaseline = 'middle';
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (c.measureText(test).width > maxW && line) {
+        c.fillText(line, x, yy); line = w; yy += lh;
+      } else line = test;
+    }
+    if (line) c.fillText(line, x, yy);
+    return yy;
+  }
 
   _drawPause(ctx) {
     ctx.save();
