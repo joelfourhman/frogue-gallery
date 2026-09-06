@@ -37,6 +37,11 @@ export class Game {
     this.save = SaveSys.load() || freshSave();
     this.options = SaveSys.loadOptions();
     this.tuning = makeTuning(this.save.upgrades, this.save.loadout);
+    // B5: persistent storage unavailable (privacy mode, quota, disabled)? We
+    // still run on the in-memory save, but surface a one-time warning so the
+    // player knows progress may not survive a reload. storageOK forces the
+    // store to resolve here so the flag is accurate at construction.
+    this._storageOK = SaveSys.storageOK;
 
     // ---------- systems ----------
     this.input = new Input(canvas);
@@ -684,6 +689,14 @@ _drawAtelier(ctx) {
     this.paused = false;
     this.banners = [];
     this.state = 'expedition';
+    // B5: one-time "progress may not persist" notice when persistent storage is
+    // unavailable (we are running on the in-memory fallback). Emitted once per
+    // page load — the flag lives on the Game instance, not the save, so it
+    // re-warns on every reload (which is exactly the degraded case).
+    if (!this._storageOK && !this._warnedStorage) {
+      this._warnedStorage = true;
+      this.addBanner('No persistent storage — progress may not survive a reload.', 5.5, this.ch * 0.3);
+    }
     this.audio.ensure();
     this.sfx('ui');
     this._prevHp = this.tuning.maxHp;

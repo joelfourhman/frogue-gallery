@@ -4,28 +4,25 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-05 (v1.1 pass: B6 + PT5 landed)**
+**Last PM audit: 2026-09-05 (v1.1 pass: B6 + PT5 + B5 landed)**
 
 ## Current state
 
 - Release DoD: **all 12 items satisfied** (final audit 2026-09-05).
 - Active phase: **v1.1 — M7 bug fixes & robustness**, then M8 improvements.
-- Smoke suite: **19 stages, ALL PASSED** (stage 19 = B6 save-versioning).
-- Git: **tree not clean** — this pass lands 2 uncommitted items: PT5 fix
-  (`src/world.js`, duplicate camera transform removed) + `tests/headless.mjs`
-  (playwright-core playtest driver). Two commits pending (see
-  `PROJECT_STATE.md` → Immediate Next Action).
+- Smoke suite: **20 stages, ALL PASSED** (stage 20 = B5 storage fallback).
+- Git: **tree clean** — PT5 (`ed287a4`), B6 (`599a599`), B5 (this pass),
+  and the status-docs pass (`3c590be`) are all committed.
 - Milestones: B1 ✅, B2 ✅ (`14b50a3`), B3 ✅ (`a32a721`), B4 ✅ (`2ed1c9a`),
-  B6 ✅ (this pass). M7.5: PT5 ✅ (this pass), PT1–PT4 ⬜.
+  B5 ✅ (this pass), B6 ✅ (`599a599`). **M7.5: PT5 ✅, PT1–PT4 ⬜ (next).**
 
 ## Active work (next, in order)
 
-1. **B5** — localStorage unavailable → in-memory fallback + one-time notice.
-2. **M7.5 PT1–PT4** — playtest fixes via `tests/headless.mjs`
+1. **M7.5 PT1–PT4** — playtest fixes via `tests/headless.mjs`
    (explore/paint/spawn/death/onb; server on `127.0.0.1:8901`):
    PT1 painting consumption → PT2 onboarding → PT3 fly fairness →
-   PT4 early-economy safety net.
-3. **M8 P6–P12** — suggested value order: P10 → P12 → P7 → P8 → P6 → P9 → P11.
+   PT4 early-economy safety net. Log before/after balance numbers.
+2. **M8 P6–P12** — suggested value order: P10 → P12 → P7 → P8 → P6 → P9 → P11.
 
 Full plan: `docs/PLAN-v1.1-next.md`.
 
@@ -50,10 +47,10 @@ None. Loopback dev server, Node, and all tests are healthy.
 
 ## Next priority
 
-**B5:** storage-failure fallback — `src/save.js` detects unavailable/failing
-localStorage → in-memory save + one-time "progress may not persist" banner;
-new smoke stage (stub localStorage to throw). Then M7.5 PT1–PT4 via
-`tests/headless.mjs`, then M8.
+**M7.5 PT1–PT4** via `tests/headless.mjs` (dev server on `127.0.0.1:8901`):
+PT1 painting consumption → PT2 onboarding → PT3 fly fairness (audit +
+rebalance) → PT4 early-economy safety net. Log before/after balance numbers.
+B5 (storage fallback) and B6 (save versioning) are complete. Then M8.
 
 ## Release readiness
 

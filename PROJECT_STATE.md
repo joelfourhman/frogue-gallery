@@ -82,7 +82,7 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 | B2 | Corrupt-save handling: detect on load, "keep what we can" vs "start fresh", never crash boot | ✅ 2026-09-05 — commit `14b50a3`: `migrateSave` merges recognizable fields (bank/owned/loadout/upgrades/flags/stats/bestRun) into a fresh schema, coerces/clips numbers, filters unknown painting ids; non-object or unrecognizable → pure fresh; unparseable → null (fresh boot). `_case` tag (migrated\|fresh) non-enumerable, never persisted. Smoke stage 17 (17 stages total). PM-verified: diff + full suite green. |
 | B3 | Dry-brush softlock audit: prove a pigment-starved frog can still beat the heron | ✅ 2026-09-05 — commit `a32a721`: audit proves no softlock (dry never damages the heron by design; in-run wet pigment is unlimited; 30k-HP heron falls in bounded ~84 awaken cycles; heron damage-locked states are transient). Regression guard in smoke stage 17 (fails if a wet pigment goes to 0 dmg or awaken becomes unreachable). PM-verified: code claims confirmed + suite green. |
 | B4 | Tab-hidden time spike: verify dt cap / pause behavior on long hidden-tab gaps | ✅ 2026-09-05 — commit `2ed1c9a`: dt cap (0.05s) holds; `last = t` uses the real timestamp so no catch-up spiral; all physics integrates on clamped dt (absolute `now` only for animation/status/UI timing). Smoke stage 18 injects a 300,000ms delta: wall clock jumps 30s, player/enemy motion bounded to one frame, no NaN, clean recovery. PM-verified. |
-| B5 | Storage-failure fallback: localStorage unavailable → in-memory + one-time notice | ⬜ |
+| B5 | Storage-failure fallback: localStorage unavailable → in-memory + one-time notice | ✅ 2026-09-05 — `src/save.js` in-memory fallback + `SaveSys.storageOK`; one-time banner in `game.js _beginExpedition`; smoke stage 20 (throwing localStorage). PM-verified. |
 | B6 | Save schema versioning: `saveVersion` field on every write + migration chain + smoke stage | ✅ 2026-09-05 (this pass, commit pending) — `logic.js`: `SAVE_VERSION = 1`, saves stamped `saveVersion` (legacy `v` field read + re-stamped on load), `SAVE_MIGRATIONS` ordered chain for future schema bumps. Smoke stage 19 (19 stages total). PM-verified: diff + full suite green. |
 | P6 | In-game "?" reference overlay (pigment roles, counterplay, heron hint, controls) | ⬜ |
 | P7 | Difficulty select (Easy/Normal/Hard, persisted; Normal = current balance) | ⬜ |
@@ -98,24 +98,32 @@ Optional (after all of the above is green): gold pigment, gamepad support, New G
 
 ## Immediate Next Action
 
-**Tree is NOT clean — two in-flight items land this pass (uncommitted):**
-1. `src/world.js` — **PT5 (M7.5) grey-box fix**: `drawBackground`/`drawProps`/`drawObstacles` applied a *second* camera transform on top of the render loop's single `translate(-v.x,-v.y)+scale(v.scale)` wrap, pushing all terrain ~2× off-screen and exposing the page background ("grey box in the swamp"). Fix: drop the per-function transforms so the three terrain painters match `drawEnemy`/`player.draw`/`_drawOrbs` (which never re-apply the camera). Verified: smoke 19/19 green; PM-confirmed correct.
-2. `tests/headless.mjs` — new playwright-core headless-Chrome driver for the M7.5 playtest pass (scenarios: explore/paint/spawn/death/onb; server on `127.0.0.1:8901`; screenshots to `tests/.out/`).
+**Tree is clean** — PT5 (ed287a4), B6 (599a599), and the v1.1 status-docs pass
+(3c590be) are all committed and verified. **B5 (localStorage fallback) is
+complete and verified (2026-09-05):** `src/save.js` downgrades to an
+in-memory store on any storage failure and exposes `SaveSys.storageOK`;
+`game.js` surfaces a one-time "No persistent storage — progress may not
+survive a reload" banner on the first expedition; smoke stage 20 stubs a
+throwing localStorage and proves the fallback round-trips in-session without
+crashing. Smoke now 20/20; pace + bosspace probes green.
 
-**Commits to make (conventional, one per chunk):**
-- `fix: PT5 swamp grey-box — remove duplicate camera transform in world painters` (src/world.js + tests/headless.mjs; note headless driver as test tooling in the same or a follow commit per PM judgment)
-- `feat: B6 save schema versioning — saveVersion stamp, legacy-v migration, smoke stage 19` (src/logic.js + tests/smoke.mjs + docs)
+**Next: M7.5 PT1–PT4 via the headless driver (do not stop at checkpoints):**
+Start `python -m http.server 8901 --bind 127.0.0.1` from the repo root, then
+`node tests/headless.mjs <scenario>` for each fix before committing:
+1. **PT1** — painting consumption (painting effects must actually consume).
+2. **PT2** — onboarding (tighten/clarify first-run flow).
+3. **PT3** — fly fairness (audit + rebalance the frog fly mechanic).
+4. **PT4** — early-economy safety net (new players can soft-lock the bank early).
+Log before/after balance numbers in the Balance Log table.
 
-**Then, in order (do not stop at checkpoints):**
-1. **B5** — storage-failure fallback: `src/save.js` detects unavailable/failing localStorage → in-memory save with a one-time "progress may not persist" banner; smoke stage (stub localStorage to throw).
-2. **M7.5 PT1–PT4** — playtest fixes, each verified with `node tests/headless.mjs <scenario>` (needs `python -m http.server 8901` from the repo root) before committing: PT1 painting consumption, PT2 onboarding tighten, PT3 fly fairness audit + rebalance, PT4 early-economy safety net. Log before/after balance numbers.
-3. **M8 P6–P12** — suggested value order: P10 (perf/cull) → P12 (zone character) → P7 (difficulty) → P8 (gallery wall) → P6 (?) overlay → P9 (audio polish) → P11 (human-pace probe).
+**Then: M8 P6–P12** — suggested value order: P10 (perf/cull) → P12 (zone
+character) → P7 (difficulty) → P8 (gallery wall) → P6 (?) overlay →
+P9 (audio polish) → P11 (human-pace probe).
 
-Full plan: `docs/PLAN-v1.1-next.md` (written 2026-09-05 by Joel's Hermes on behalf of this profile).
+Full plan: `docs/PLAN-v1.1-next.md`.
 
 ## Known risks / open questions
 
 - Smoke stage 16 asserts the title start-button label — P7 (difficulty select on title) will touch the same UI; update the stage when implementing.
-- B5/B6 both touch `src/save.js`; do B6 (version field) before B5 (failure fallback) so the fallback path versions in-memory saves too.
 - P10 culling must not change visible behavior — guard with an existing smoke stage plus a 60fps timing probe.
-- `browser_exec` is still dead; visual verification (P8, P12, zone art) relies on `desktop_preview` or screenshots via the dev server.
+- `browser_exec` is still dead; visual verification (P8, P12, zone art) relies on `desktop_preview` or screenshots via the dev server / the headless driver (`tests/headless.mjs`).

@@ -26,7 +26,7 @@ release v1.1.
 | B2 | Corrupt-save handling: detect, "keep what we can" vs fresh start, never crash boot | ✅ `14b50a3` |
 | B3 | Dry-brush softlock audit: prove a pigment-starved frog can still beat the heron | ✅ `a32a721` |
 | B4 | Tab-hidden time-spike verification (dt cap exists: 0.05s; confirm no physics blowups) | ✅ `2ed1c9a` |
-| B5 | localStorage unavailable → in-memory fallback + one-time notice | ⬜ |
+| B5 | localStorage unavailable → in-memory fallback + one-time notice | ✅ 2026-09-05 (save.js in-memory fallback + `storageOK`, one-time banner in `_beginExpedition`, smoke stage 20) |
 | B6 | Save schema versioning: `saveVersion` in the save, migration test (foundations in logic.js) | ✅ 2026-09-05 (commit pending this pass — `SAVE_VERSION`/`SAVE_MIGRATIONS` in logic.js, smoke stage 19) |
 
 Acceptance: each item has a passing test; smoke suite green; no behavior

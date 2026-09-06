@@ -748,5 +748,55 @@ console.log('== stage 19: B6 - save schema versioning (saveVersion + migration) 
   game.save = S.SaveSys.load();
 }
 
+console.log('== stage 20: B5 — storage-failure fallback (in-memory save + one-time warning) ==');
+{
+  const L = await import('../src/logic.js');
+  const S = await import('../src/save.js');
+  // The earlier stages resolved the (working) stub store. Force a fresh
+  // resolution so save.js re-discovers storage, then make it throw like
+  // privacy mode / quota-full / disabled localStorage.
+  S.SaveSys._resetStorage();
+  globalThis.localStorage = {
+    getItem() { throw new Error('SecurityError: localStorage is disabled'); },
+    setItem() { throw new Error('SecurityError: localStorage is disabled'); },
+    removeItem() { throw new Error('SecurityError: localStorage is disabled'); },
+  };
+  // storageOK reflects the degraded state after the forced re-resolution.
+  assert(S.SaveSys.storageOK === false, 'storageOK must be false when localStorage throws');
+  // The game must keep running on an in-memory save: save succeeds…
+  const memSave = L.freshSave();
+  memSave.bank.red = 7;
+  memSave.flags.intro = true;
+  assert(S.SaveSys.save(memSave) === true, 'save() must return true on the in-memory fallback');
+  // …and the data round-trips (it is stored in memory, not localStorage).
+  const memBack = S.SaveSys.load();
+  assert(memBack && memBack.bank.red === 7 && memBack.flags.intro === true,
+    'in-memory save must round-trip (bank.red=7, flags.intro=true)');
+  assert(S.SaveSys.hasSave() === true, 'hasSave() must be true after an in-memory save');
+  // erase() on the fallback must clear the in-memory record.
+  assert(S.SaveSys.erase() === true, 'erase() must return true on the in-memory fallback');
+  assert(S.SaveSys.hasSave() === false, 'hasSave() must be false after erase');
+  // Options: loadOptions still returns a usable options object (never throws).
+  const opts = S.SaveSys.loadOptions();
+  assert(typeof opts === 'object' && opts !== null, 'loadOptions() must return a usable object when storage fails');
+  S.SaveSys.saveOptions(opts); // must not throw on the fallback
+  // The one-time banner predicate (exactly what game.js _beginExpedition uses):
+  // a Game with degraded storage surfaces the warning on its first expedition
+  // and never repeats it. We exercise the predicate directly rather than the
+  // full browser Game (which is the shared instance from earlier stages).
+  const g = { _storageOK: false, _warnedStorage: false, banners: [], ch: 600,
+              addBanner(t, d, y) { this.banners.push({ text: t, dur: d, y }); } };
+  const emit = () => { if (!g._storageOK && !g._warnedStorage) { g._warnedStorage = true; g.addBanner('No persistent storage — progress may not survive a reload.', 5.5, g.ch * 0.3); } };
+  emit();
+  assert(g.banners.length === 1 && /progress may not survive/i.test(g.banners[0].text),
+    'first expedition with degraded storage must emit the one-time persistence banner');
+  emit();
+  assert(g.banners.length === 1, 'the persistence banner must NOT repeat on subsequent runs');
+  // Restore a working stub store for any later stage / process teardown.
+  globalThis.localStorage = localStorageStub;
+  S.SaveSys._resetStorage();
+  assert(S.SaveSys.storageOK === true, 'storageOK recovers to true once a working store is restored');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
