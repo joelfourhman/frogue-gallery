@@ -13,6 +13,79 @@ import { SaveSys } from './save.js';
 import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
+// A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
+// Four context pools per character (victory / defeat / purchase / general),
+// a typewriter reveal, and rotation so the same line never repeats twice in
+// a row. Pure display data — nothing here is persisted.
+const ATELIER_CHARS = [
+  { name: 'Mabel', pools: {
+      victory: [
+        'The swamp was green again by morning. You hear that?',
+        'I told Giuseppe you were steady. I never lie about strokes.',
+        'Hang that one on the wall. You have earned a wall.',
+      ],
+      defeat: [
+        'The water takes and the water gives. Bank what you can.',
+        'Wipe your snout and sit. The kettle is always on.',
+        'Every great canvas starts with a wet patch. Try again soon.',
+      ],
+      purchase: [
+        'Ah, new colors! My eyes, Giuseppe — look at them!',
+        'You spoil me. Sit, you will want the good light next.',
+        'Paid in pigment, and paid in good company. Worth it.',
+      ],
+      general: [
+        'I still cannot tell the moon from a pale lily. You can.',
+        'Paint slow, dry fast — that is the whole secret, really.',
+        'The reeds were quieter today. Good signs, for a painter.',
+      ],
+  } },
+  { name: 'Giuseppe', pools: {
+      victory: [
+        'A clear run! Buy me a pigment while you are at it.',
+        'I was watching from the window. Magnificent technique.',
+        'Victory, victory — and did you count the drops, or not?',
+      ],
+      defeat: [
+        'The swamp keeps its own ledger. Ours is smaller, and kinder.',
+        'You came back! That is already half the sale.',
+        'A bruised frog paints the bluest. Rest first, obviously.',
+      ],
+      purchase: [
+        'Sold! No refunds, but excellent taste. As always.',
+        'A fine investment. The frame alone pays for itself.',
+        'My stock is thinning and my smile is not. Keep buying.',
+      ],
+      general: [
+        'Everything for sale, nothing truly gone. House rules.',
+        'Best painters in my experience: the ones who keep showing up.',
+        'Red for passion, blue for patience, green for a long lunch.',
+      ],
+  } },
+  { name: 'Monet', pools: {
+      victory: [
+        'Not bad. The light was on my side, though. Probably.',
+        'You cleared it. I am allowed to be a little pleased.',
+        'Impressive. I will stop practicing in the same swamp now.',
+      ],
+      defeat: [
+        'Lost, and yet you painted something. That is the whole point.',
+        'The heron is a critic. So am I. We do not mix, you know.',
+        'Failure dries faster than you think. Sit, then go.',
+      ],
+      purchase: [
+        'You buy the pigments and I buy the silence. Fair trade.',
+        'More color for you to get wrong beautifully. Lovely.',
+        'A rival who invests in their tools. Respect, at least.',
+      ],
+      general: [
+        'I paint the swamp at dawn. You paint it at its worst. We tie.',
+        'Color is just light that got in trouble. So are we, all.',
+        'Your frog has manners. It paints over its mistakes. Good.',
+      ],
+  } },
+];
+
 // P5: 4 named expedition zones + a rest checkpoint between each — structure
 // the run so a full expedition reads as a journey, not one long hallway.
 // M8 P12: each zone carries a distinct accent color and a `sig` signature
@@ -99,6 +172,12 @@ export class Game {
     this.dying = false;
     this.dieT = 0;
     this.banners = [];
+
+    // A1: atelier one-liners — reveal state for the typewriter line shown in
+    // the atelier. Seeded from the last finished run's outcome on entry.
+    this._atelierSay = null;    // { name, text, revealed } or null
+    this._atelierSayIdx = {};   // per-character rotation index (not persisted)
+    this.lastResult = null;     // 'victory' | 'defeat' | null — last finished run
 
     // one-time audio unlock on first gesture (browser autoplay rules).
     // P9: also start the ambient bed so the music/SFX sliders have a live
@@ -278,11 +357,46 @@ export class Game {
     this.atelierT = 0;
     this.atelierTab = 0;            // 0 upgrades, 1 paintings
     this.paused = false;
+    this._lastPurchase = null;      // A1: a fresh visit has no "just bought" hook
+    this._pickAtelierSay();
     if (!this.save.flags.firstAtelier) {
       this.save.flags.firstAtelier = true;
       SaveSys.save(this.save);
       this._atelierIntro = true;   // one-time how-it-works panel (drawn on the first visit only)
     }
+  }
+
+  // A1: pick the atelier one-liner for this visit. Context priority:
+  // (1) a purchase just made this visit, (2) the last finished run's result,
+  // (3) the player's best run, (4) general banter. Each character rotates
+  // through their pool without repeating the last line. Pure data read —
+  // nothing persisted.
+  _pickAtelierSay() {
+    const chars = ATELIER_CHARS;
+    const who = chars[Math.floor(Math.random() * chars.length)];
+    const best = this.save.bestRun;
+    const ctx =
+      this._lastPurchase ? 'purchase'
+      : this.lastResult === 'victory' ? 'victory'
+      : this.lastResult === 'defeat' ? 'defeat'
+      : best && best.cleared ? 'victory'
+      : best ? 'general'
+      : 'general';
+    const pool = who.pools[ctx] || who.pools.general;
+    const i = (this._atelierSayIdx[who.name] || 0) % pool.length;
+    this._atelierSayIdx[who.name] = (i + 1) % pool.length;
+    this._atelierSay = { name: who.name, text: pool[i], revealed: 0 };
+  }
+
+  // A1: a purchase just made — re-roll the one-liner from the purchase pool
+  // so the resident reacts to the fresh acquisition (a banner-free echo).
+  _noteAtelierPurchase() {
+    this._lastPurchase = true;
+    const who = ATELIER_CHARS[Math.floor(Math.random() * ATELIER_CHARS.length)];
+    const pool = who.pools.purchase;
+    const i = (this._atelierSayIdx[who.name] || 0) % pool.length;
+    this._atelierSayIdx[who.name] = (i + 1) % pool.length;
+    this._atelierSay = { name: who.name, text: pool[i], revealed: 0 };
   }
 
   // ---- layout: single source of truth for BOTH draw and click handling ----
@@ -340,6 +454,10 @@ export class Game {
 
   _updateAtelier(dt) {
     const dismissIntro = () => { this._atelierIntro = false; };
+    // A1: advance the typewriter reveal of the current one-liner
+    if (this._atelierSay && this._atelierSay.revealed < this._atelierSay.text.length) {
+      this._atelierSay.revealed = Math.min(this._atelierSay.text.length, this._atelierSay.revealed + dt * 28);
+    }
     if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._quitToTitle(); return; }
     if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); this._beginExpedition(); return; }
     if (this.input.pressed('1')) { if (this.atelierTab !== 0) this.sfx('ui'); this.atelierTab = 0; dismissIntro(); }
@@ -374,6 +492,7 @@ export class Game {
     this.save.upgrades[id] = lv + 1;
     this.sfx('paint-create');
     SaveSys.save(this.save);
+    this._noteAtelierPurchase();
   }
 
   _ptLocked(pt) {
@@ -398,6 +517,7 @@ export class Game {
       for (const k of ['red', 'blue', 'green']) this.save.bank[k] += 5;
     }
     SaveSys.save(this.save);
+    this._noteAtelierPurchase();
   }
 
   _toggleLoadout(id) {
@@ -652,6 +772,25 @@ _drawAtelier(ctx) {
       lines.forEach((ln, i) => centerText(c, ln, cx, py + 84 + i * 32, '15px Georgia, serif', INK, 0.85));
       centerText(c, 'press 1 / 2 / 3 to browse the shelves, paintings, and gallery — any action closes this note', cx, py + ph - 24, 'italic 12px Georgia, serif', INK, 0.55);
       paperEnd(ctx);
+    }
+
+    // A1: the resident's one-liner — a small paper chip with a speaker tag
+    // and a typewriter reveal. Sits in the left margin (clear of the 2-col
+    // card grids on every tab) so it reads like a note pinned to the studio.
+    if (this._atelierSay) {
+      const chipW = 460, chipH = 60, cxp = 16, cyp = this.ch / 2 - 30;
+      this._paperChip(ctx, cxp, cyp, chipW, chipH, 140);
+      const say = this._atelierSay;
+      const shown = say.text.slice(0, Math.floor(say.revealed));
+      ctx.save();
+      ctx.fillStyle = '#8a5a2b';
+      ctx.font = '700 13px Georgia, serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(say.name, cxp + 18, cyp + 17);
+      ctx.fillStyle = INK;
+      ctx.font = 'italic 15px Georgia, serif';
+      ctx.fillText(shown, cxp + 18, cyp + 40, chipW - 36);
+      ctx.restore();
     }
 
     // footer
@@ -1141,6 +1280,9 @@ _drawAtelier(ctx) {
     if (this.state === 'end') return;
     this.state = 'end';
     this.endKind = kind;
+    // A1: remember the outcome so the atelier's one-liner can react to it
+    // (endKind itself resets when a new expedition begins).
+    this.lastResult = kind === 'victory' ? 'victory' : 'defeat';
     this.endT = 0;
     this.paused = false;
     const victory = kind === 'victory';

@@ -1256,5 +1256,56 @@ console.log('== stage 29: M8 P9 — Options overlay (music/SFX sliders + shake/v
   assert(g9.options.vignette === false, 'a fresh Game loads the saved vignette toggle (OFF)');
 }
 
+// ---------------------------------------------------------------------
+// stage 30 — v1.2 M9 A1: atelier one-liners (context pools + typewriter)
+// ---------------------------------------------------------------------
+console.log('== stage 30: v1.2 M9 A1 — atelier one-liners ==');
+{
+  const cv30 = makeCanvas();
+  const g30 = new Game(cv30);
+  g30.start();
+  g30._quitToTitle();
+  g30._beginAtelier();
+  // a line is always present with a known speaker + typewriter state
+  assert(g30._atelierSay && ['Mabel', 'Giuseppe', 'Monet'].includes(g30._atelierSay.name), 'A1: a resident speaks on atelier entry');
+  assert(typeof g30._atelierSay.text === 'string' && g30._atelierSay.text.length > 0, 'A1: one-liner has text');
+  assert(g30._atelierSay.revealed === 0, 'A1: typewriter starts unrevealed');
+
+  // typewriter advances over frames and clamps at the full line length
+  const before = g30._atelierSay.revealed;
+  frames(60); // ~1s at 60fps -> 28 chars/s should reveal most of a ~50-char line
+  assert(g30._atelierSay.revealed > before, 'A1: typewriter reveal advances over frames');
+  frames(120);
+  assert(g30._atelierSay.revealed === g30._atelierSay.text.length, 'A1: reveal clamps at the full line');
+
+  // context: a finished victory still resolves a valid speaker + line
+  for (const name of ['Mabel', 'Giuseppe', 'Monet']) {
+    g30._atelierSayIdx = { [name]: 0 };
+    g30.lastResult = 'victory';
+    g30._lastPurchase = null;
+    g30._pickAtelierSay();
+    assert(['Mabel', 'Giuseppe', 'Monet'].includes(g30._atelierSay.name), 'A1: victory context resolves (speaker ' + g30._atelierSay.name + ')');
+    assert(g30._atelierSay.revealed === 0, 'A1: each pick starts the typewriter fresh');
+  }
+
+  // purchase context re-rolls from the purchase pool (reacts to a just-made buy)
+  g30._lastPurchase = false;
+  g30._noteAtelierPurchase();
+  assert(g30._lastPurchase === true, 'A1: purchase is noted');
+  assert(g30._atelierSay.revealed === 0, 'A1: purchase re-rolls a fresh line (typewriter reset)');
+
+  // rotation: consecutive picks across visits produce varied lines
+  g30._lastPurchase = null; g30.lastResult = 'defeat';
+  const lines = new Set();
+  for (let i = 0; i < 12; i++) { g30._pickAtelierSay(); lines.add(g30._atelierSay.name + ':' + g30._atelierSay.text); }
+  assert(lines.size >= 3, 'A1: rotation produces varied lines across visits');
+
+  // nothing persisted: a fresh atelier visit does not touch the saved save
+  const KEY = 'frogue_gallery_save';
+  const before2 = JSON.stringify(store.get(KEY));
+  g30._beginAtelier();
+  assert(JSON.stringify(store.get(KEY)) === before2, 'A1: one-liners persist nothing new to the save');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

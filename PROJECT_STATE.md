@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 29 STAGES PASSED** (…stage 29 = M8 P9 Options overlay). Pacing probes green: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs` (P11, new — simulated imperfect human on the real sim: measured cross-swamp ~52s + measured heron ~134–166s → full-run 18.3–19.4 min across 4 seeds, in the 15–20 min target)** + `bosspace.mjs`. Real-browser probe (P9): audio buses + options overlay verified live. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 30 STAGES PASSED** (…stage 30 = v1.2 M9 A1 atelier one-liners). Pacing probes green: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs` (P11 — simulated imperfect human on the real sim: measured cross-swamp ~52s + measured heron ~134–166s → full-run 18.3–19.4 min across 4 seeds, in the 15–20 min target)** + `bosspace.mjs`. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 A1 ✅ (atelier one-liners) — A2 next.**_
 
 ## Current Status
 
@@ -35,7 +35,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 29 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 30 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss) |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
@@ -129,7 +129,7 @@ session can pick up). Full scope in `docs/ROADMAP.md` §v1.2 (M9 M10 M11 M13;
 accessibility deferred).
 
 **Batch order (one commit per item, docs + suite green per commit):**
-1. M9: A1 (atelier one-liners) → A2 (painting synergy pairs) → A3 (Curator's Ledger)
+1. M9: A1 ✅ (atelier one-liners) → A2 (painting synergy pairs) → A3 (Curator's Ledger)
 2. M9: A4 (Rehung Frame) → M10: E1 (Painted Heron) → E2 (weather/tide)
 3. M10: E3 (Bold hazards) → E4 (orb streak) → M11: V1 (color-reveal bar)
 4. M11: V2 (heron bloom beat) → V3 (zone audio) → V4 (exhibition end-screen)
@@ -141,6 +141,17 @@ Acceptance (per batch): suite green, pace/humance probes still in the
 15–20 min band (any in-run change), zero new dependencies, loopback-only.
 
 The two most recent passes, for the record:
+
+**M9 A1 (atelier one-liners) — implemented + tested (v1.2 Batch 1, item 1).**
+Mabel / Giuseppe / Monet now speak a short, rotating one-liner in the Atelier,
+on a pinned paper chip with a typewriter reveal (~28 chars/s). Context
+priority: a purchase just made this visit → the last finished run
+(victory/defeat) → the player's best run → general banter. Each character has
+victory/defeat/purchase/general pools and rotates without repeating the last
+line. Pure display data in `src/game.js` (`ATELIER_CHARS`, `_pickAtelierSay`,
+`_noteAtelierPurchase`); no new art, no save changes (persisted fields
+untouched). Smoke stage 30 (rotation, typewriter clamp, context resolution,
+purchase re-roll, nothing persisted). Suite green: 30/30.
 
 **M8 P9 (audio/options polish) — implemented + tested.** The single
 master volume is split into **independent music / SFX buses** and the title
