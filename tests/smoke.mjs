@@ -2165,7 +2165,7 @@ console.log('== stage 42: T1 — guided first expedition (tutorial) ==');
     g42.player.pigment = pigment;
     const before = g42.tutorial.idx;
     const pred0 = L42.tutorialDrillSatisfied(drill, g42.tutorial.target);
-    assert(pred0 === false, `T1: the ${drill} predicate is unsatisfied before the action`);
+    assert(pred0 === false, `T1: the ${drill} predicate is unsatisfied before the action (idx ${before})`);
     let f = 0;
     while (g42.tutorial.idx === before && f < framesCap) {
       const e = g42.tutorial.target;
@@ -2175,14 +2175,24 @@ console.log('== stage 42: T1 — guided first expedition (tutorial) ==');
     }
     g42.input.mouse.lDown = false;
     assert(g42.tutorial.idx === before + 1, `T1: the ${drill} goal advanced after the real effect (idx ${before} -> ${g42.tutorial.idx}, ${f} frames)`);
-    assert(g42.tutorial.idx < 3 || g42.tutorial.done, `T1: no spurious advancement past the ${drill} goal`);
   };
 
+  // T1 — the three 'learn' goals (teaching run).
   advance('burn', 'red');    // a beetle that actually burned to death
   advance('freeze', 'blue'); // a mosquito that actually froze (blue-on-slow chain)
   advance('root', 'green');  // a toad that actually rooted
-
-  assert(g42.tutorial.done, 'T1: all three guided goals complete the practice');
+  assert(g42.tutorial.idx === 3, 'T1: the three learn goals advance into the drills phase');
+  // T2 — the three 'drills' (same guided run, a later phase): explicit per-
+  // pigment "do it" checks. Each advancement reads the enemy's REAL status/
+  // death and persists save.tutorialDrills on completion.
+  advance('burn', 'red');    // a beetle that actually DIED from burn
+  assert(g42.save.tutorialDrills.burn === true, 'T2: the burn drill completion is persisted (tutorialDrills.burn)');
+  advance('freeze', 'blue'); // a mosquito that actually froze
+  assert(g42.save.tutorialDrills.freeze === true, 'T2: the freeze drill completion is persisted (tutorialDrills.freeze)');
+  advance('root', 'green');  // a toad that actually rooted
+  assert(g42.save.tutorialDrills.root === true, 'T2: the root drill completion is persisted (tutorialDrills.root)');
+  assert(L42.tutorialDrillsAllDone(g42.save), 'T2: all three drills are recorded as done on the save');
+  assert(g42.tutorial.done, 'T1/T2: all six guided phases (3 learn + 3 drills) complete the practice');
   assert(Math.abs(g42.runT - runT0) < 0.5, `T1: the timed clock stayed frozen through the practice (runT ${runT0} -> ${g42.runT})`);
   assert(g42.heron._intro < 10 && g42.heron._intro > 0, 'T1: the heron resumes once the practice ends (intro reset)');
 
@@ -2236,6 +2246,74 @@ console.log('== stage 42: T1 — guided first expedition (tutorial) ==');
   g42d.save = L42.freshSave(); g42d.save.flags.heronDefeated = true;
   g42d._beginExpedition(true); // guided path on an ineligible (finished) save
   assert(g42d.tutorial === null, 'T1: a finished-run save is refused the guided run (guard)');
+}
+
+console.log('== stage 43: T2 — interactive pigment drills (real status/death) ==');
+{
+  const S43 = await import('../src/save.js');
+  const L43 = await import('../src/logic.js');
+  store.clear();
+  const g43 = new Game(makeCanvas());
+  g43.start();
+  g43.save = L43.freshSave();
+  g43._beginExpedition(true);
+  let t43 = 1000;
+  const fr43 = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t43 += step; g43._frame(t43); } };
+  const aim43 = (e) => { const v = g43._view(); g43.input.mouse.x = (e.x - v.x) * v.scale; g43.input.mouse.y = (e.y - v.y) * v.scale; };
+  fr43(6);
+  g43.player.iframes = 99;
+  // Fresh save: no drill is done yet.
+  assert(!L43.tutorialDrillsAllDone(g43.save), 'T2: a fresh save has no drills completed yet');
+
+  // The drills are a LATER phase of the SAME guided run: idx 0-2 are the
+  // 'learn' goals, idx 3-5 are the 'drills'. Clear the three learn goals (each
+  // with its own pigment, advancing exactly one goal at a time).
+  const finishLearn = (fromIdx, pigment) => {
+    g43.player.pigment = pigment;
+    let f = 0;
+    while (g43.tutorial.idx === fromIdx && f < 400) { const e = g43.tutorial.target; if (e) e.dizzyPaintChance = 0; aim43(g43.tutorial.target); g43.input.mouse.lDown = true; fr43(1); f++; }
+    g43.input.mouse.lDown = false;
+  };
+  finishLearn(0, 'red'); finishLearn(1, 'blue'); finishLearn(2, 'green');
+  assert(g43.tutorial.idx === 3, 'T2: the drills begin after the three learn goals (a later phase of the same run)');
+
+  // Drill #1 — burn the beetle. Advancement must read the beetle's REAL death
+  // (died from burn), not "a brush stroke happened".
+  const burnTarget = g43.tutorial.target;
+  assert(burnTarget.kind === 'beetle', 'T2: drill #1 targets a beetle (burn)');
+  assert(L43.tutorialDrillSatisfied('burn', burnTarget) === false, 'T2: the burn predicate is false before the beetle burns to death');
+  assert(!g43.save.tutorialDrills.burn, 'T2: tutorialDrills.burn starts false');
+  g43.player.pigment = 'red';
+  let bf = 0;
+  while (g43.tutorial.idx === 3 && bf < 400) { aim43(g43.tutorial.target); g43.input.mouse.lDown = true; fr43(1); bf++; }
+  g43.input.mouse.lDown = false;
+  assert(g43.save.tutorialDrills.burn === true, `T2: the burn drill is recorded on the save once the beetle dies from burn (${bf} frames)`);
+  assert(burnTarget.dead, 'T2: the burn drill requires the beetle to actually be dead (not just a stroke)');
+  // The predicate is satisfied by real state: the beetle is down AND its
+  // terminal status was burn (burn tick or burn lapse) — never by "a stroke
+  // happened". (deathCause is not a real field; the beetle may die from the
+  // red swipe's direct damage while still in burn status, which still counts.)
+  assert((burnTarget._burnedOut || (burnTarget.status && burnTarget.status.type === 'burn')) , `T2: the beetle died while burning (status ${burnTarget.status && burnTarget.status.type}, burnedOut ${burnTarget._burnedOut})`);
+  assert(g43.tutorial.idx === 4, 'T2: completing the burn drill advances to the next drill');
+
+  // Drill #2 — freeze the mosquito, then SKIP mid-drills to prove partial
+  // persistence (the T3/T4 "Watch me" retraining reference).
+  const freezeTarget = g43.tutorial.target;
+  assert(freezeTarget.kind === 'mosquito', 'T2: drill #2 targets a mosquito (freeze)');
+  g43.player.pigment = 'blue';
+  let zf = 0;
+  while (g43.tutorial.idx === 4 && zf < 400) { aim43(g43.tutorial.target); g43.input.mouse.lDown = true; fr43(1); zf++; }
+  g43.input.mouse.lDown = false;
+  assert(g43.save.tutorialDrills.freeze === true, 'T2: the freeze drill is recorded once the mosquito actually freezes');
+  assert(g43.save.tutorialDrills.root === false, 'T2: the root drill is NOT recorded (not done yet)');
+  // Skip now (before the root drill): burn + freeze stay, root stays false.
+  g43._skipTutorial();
+  assert(g43.tutorial.done, 'T2: skipping mid-drills ends the run');
+  assert(g43.save.tutorialDrills.burn === true && g43.save.tutorialDrills.freeze === true && g43.save.tutorialDrills.root === false, 'T2: partial completion is preserved (burn+freeze done, root not)');
+  // The partial map round-trips through disk — T3/T4 can re-open the undone drill.
+  const reloaded = S43.SaveSys.load();
+  assert(reloaded.tutorialDrills.burn === true && reloaded.tutorialDrills.freeze === true && reloaded.tutorialDrills.root === false, 'T2: the partial drill map persists to disk (survives a reload)');
+  assert(L43.tutorialDrillDone(reloaded, 'burn') && !L43.tutorialDrillDone(reloaded, 'root'), 'T2: retraining can reference exactly which drills were completed');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

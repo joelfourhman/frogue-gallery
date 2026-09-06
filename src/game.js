@@ -155,6 +155,19 @@ const TUTORIAL_PHASES = [
     chip: 'Paint the mosquito with BLUE twice — freeze it mid-air', done: 'Frozen solid — blue chains into a freeze on a slowed target.' },
   { phase: 'learn', pigment: 'green', enemy: 'toad',     drill: 'root',
     chip: 'Paint the toad with GREEN — root it in place', done: 'Rooted to the spot — green holds a target still.' },
+  // T2 — the interactive pigment drills: the SAME three effects as an explicit
+  // per-pigment "do it" check, a LATER phase of this same guided run. The
+  // advancement predicate reads the enemy's REAL status/death (a beetle that
+  // actually DIED from burn / a mosquito actually frozen / a toad actually
+  // rooted) — not "a brush stroke happened" — and each completion is persisted
+  // to save.tutorialDrills so T3/T4 "Watch me" retraining can reference which
+  // drills were completed.
+  { phase: 'drills', pigment: 'red',   enemy: 'beetle',   drill: 'burn',
+    chip: 'Do it: burn a beetle with RED until it dies — prove the fire', done: 'Bolt drilled ✓ — the beetle died from your red burn.' },
+  { phase: 'drills', pigment: 'blue',  enemy: 'mosquito', drill: 'freeze',
+    chip: 'Do it: freeze a mosquito with BLUE until it stops — prove the ice', done: 'Frozen drilled ✓ — the mosquito is locked solid.' },
+  { phase: 'drills', pigment: 'green', enemy: 'toad',     drill: 'root',
+    chip: 'Do it: root a toad with GREEN until it stops — prove the grip', done: 'Rooted drilled ✓ — the toad is nailed to the spot.' },
 ];
 
 export class Game {
@@ -1284,10 +1297,20 @@ _drawAtelier(ctx) {
   // Advance once the current goal's real-state predicate is satisfied.
   _tutorialAdvance() {
     const t = this.tutorial;
-    const ph = TUTORIAL_PHASES[t.idx];
+    const ph = TUTORIAL_PHASES[t.idx];   // the phase just completed
     this.enemies = this.enemies.filter(e => e !== t.target);
     t.target = null; t.targetPos = null;
     t.idx += 1;
+    // T2: a completed drill is persisted to save.tutorialDrills so T3/T4
+    // "Watch me" retraining can reference which drills were completed. The
+    // predicate already guaranteed the REAL effect landed before we got here.
+    if (ph.phase === 'drills') {
+      if (!this.save.tutorialDrills) this.save.tutorialDrills = { burn: false, freeze: false, root: false };
+      if (!this.save.tutorialDrills[ph.drill]) {
+        this.save.tutorialDrills[ph.drill] = true;
+        SaveSys.save(this.save);
+      }
+    }
     if (t.idx >= TUTORIAL_PHASES.length) {
       t.done = true;
       this.heron._intro = 3.2;     // practice over — the timed expedition resumes
@@ -1295,7 +1318,13 @@ _drawAtelier(ctx) {
       this.sfx('victory');
       return;
     }
-    this.addBanner(ph.done, 3.4, this.ch * 0.3);
+    // T2: crossing from the 'learn' goals into the 'drills' — a "now prove it"
+    // beat (replaces the last learn done-banner at that juncture).
+    if (TUTORIAL_PHASES[t.idx].phase === 'drills' && ph.phase !== 'drills') {
+      this.addBanner('You know the tools. Now prove each one — do it for real.', 3.8, this.ch * 0.3);
+    } else {
+      this.addBanner(ph.done, 3.4, this.ch * 0.3);
+    }
     this.sfx('ui');
     this._tutorialSpawnTarget();
   }

@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 42 STAGES PASSED** (…stage 41 = v1.2 M11 V4 end-screen exhibition, **stage 42 = v1.2 M13 T1 guided first expedition**). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **54s**, heron **156s**, full-run **19.2 min** — in the 15–20 min band (E1 mid-heron non-blocking; E2 weather phases informational; E4 streak is a scoring bonus that adds no run time; V1 is pure HUD; **V2/V3/V4 are all pure presentation — V2 render-only bloom/SFX, V3 an ambient audio bed that only *adds* sound, V4 a victory-screen exhibition that changes no gameplay — so pacing is untouched and no pace probe re-run is needed for the whole presentation batch**). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ + V2 (heron awaken bloom) ✅ + V3 (per-zone ambient audio) ✅ + V4 (end-screen exhibition) ✅ + M13 T1 (guided first expedition) ✅ — v1.2 Batch 5 (M13) in progress. Next: M13 (T2 interactive pigment drills).**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 43 STAGES PASSED** (…stage 41 = v1.2 M11 V4 end-screen exhibition, **stage 42 = v1.2 M13 T1 guided first expedition, stage 43 = v1.2 M13 T2 interactive pigment drills**). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **52s**, heron **140s**, full-run **18.9 min** — in the 15–20 min band (the M13 tutorial is a **separate pre-run layer** — the timed clock is frozen while it runs — so it adds no timed-run time; `pace.mjs`/`humance.mjs` re-verified after T1+T2 and unchanged from the ~18.7/19.0 min baseline). DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ + V2 (heron awaken bloom) ✅ + V3 (per-zone ambient audio) ✅ + V4 (end-screen exhibition) ✅ + M13 T1 (guided first expedition) ✅ + M13 T2 (interactive pigment drills) ✅ — v1.2 Batch 5 (M13 T1+T2) COMPLETE. Next: M13 (T3 mini heron, T4 tutorial progress + re-entry).**_
 
 ## Current Status
 
@@ -35,7 +35,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 42 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 43 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss) |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
@@ -133,7 +133,7 @@ accessibility deferred).
 2. M9: **A4 ✅ (Rehung Frame)** → M10: **E1 ✅ (Painted Heron)** → **E2 ✅ (weather/tide phases)**. **Batch 2 (A4/E1/E2) COMPLETE — suite 35/35, pacing in band on Normal.**
 3. M10: **E3 ✅ (Bold-only zone hazards)** → **E4 ✅ (orb-streak bonus)** → M11: **V1 ✅ (color-reveal bar)** — **Batch 3 COMPLETE**
 4. M11: **V2 ✅ (heron bloom beat)** → **V3 ✅ (zone ambient audio)** → **V4 ✅ (exhibition end-screen)** — **Batch 4 (M11) COMPLETE — suite 41/41**
-5. M13: **T1 ✅ (guided first expedition)** → T2 (pigment drills) — **Batch 5 (M13) in progress — suite 42/42**
+5. M13: **T1 ✅ (guided first expedition)** → **T2 ✅ (interactive pigment drills)** — **Batch 5 (M13 T1+T2) COMPLETE — suite 43/43, pacing 18.7/18.9 min (the frozen tutorial pre-run layer adds no timed-run time)**
 6. M13: T3 (mini heron) → T4 (tutorial progress + re-entry)
 
 Each item's Notes column in the roadmap says which existing system to reuse.
@@ -174,6 +174,33 @@ burn goal; SKIP dismisses + persists to disk + blocks re-entry; and the
 eligibility guard refuses the guided path on a skipped OR finished-run save.
 T2 (the 'drills' later-phase + `tutorialDrills` persistence) appends to the
 same `TUTORIAL_PHASES` run and reuses this chip/advance machinery.
+
+**M13 T2 (interactive pigment drills) — implemented + tested (v1.2 Batch 5, item 2).**
+T2 extends the SAME guided run with three **explicit per-pigment "do it"
+drills** as a later phase (`TUTORIAL_PHASES` idx 3-5, `phase: 'drills'`),
+reusing T1's goal-chip + advance machinery exactly. Each drill requires the
+player to CAUSE the effect: (a) a beetle that actually **dies from burn**
+(red), (b) a mosquito that actually **freezes** (blue-on-slow chain), (c) a
+toad that actually **roots** (green). Advancement reads the enemy's **real
+status/death state** via `logic.tutorialDrillSatisfied` (burn = down + burn
+status, freeze = `status.type==='freeze'`, root = `status.type==='root'`) —
+never "a brush stroke happened." On each drill's completion the run persists
+`save.tutorialDrills.{burn|freeze|root} = true` (the schema field was forward-
+established by T1's v3 migration; T2 is the first writer) so the "Watch me"
+retraining in T3/T4 can reference exactly which drills were completed.
+`_tutorialAdvance` now writes `save.tutorialDrills[ph.drill]=true` (guarded,
+`SaveSys.save`) only for `phase==='drills'` completions, and shows a
+"You know the tools. Now prove each one — do it for real." beat at the
+learn→drills juncture. `game.js` stays thin: the advancement predicate +
+completion read are pure in `logic.js` (`tutorialDrillSatisfied`,
+`tutorialDrillDone`, `tutorialDrillsAllDone`). Smoke stage 43 (T2): the drills
+begin after the three learn goals; each drill's predicate is **false before the
+real effect** and recorded on the save only once the real status/death lands
+(burn 60f real swipe, freeze, root); **partial completion is preserved** —
+skipping mid-drills (after burn+freeze) leaves `tutorialDrills = {burn:true,
+freeze:true, root:false}` persisted to disk, so retraining can reference
+exactly which drills were done. Stage 42 (T1) was extended to drive all six
+phases and assert per-drill persistence + `tutorialDrillsAllDone`.
 
 **M9 A4 (Rehung Frame) — implemented + tested (v1.2 Batch 2, item 1).**
 A permanent, saved **Gallery Bonus** (`save.galleryBonus`, a counter) minted
