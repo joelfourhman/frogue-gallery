@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 37 STAGES PASSED** (…stage 35 = v1.2 M10 E2 weather/tide phases, stage 36 = v1.2 M10 E3 Bold-only zone hazards, stage 37 = v1.2 M10 E4 orb-streak bonus). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **54s**, heron **156s**, full-run **19.2 min** — in the 15–20 min band (E1 mid-heron non-blocking; E2 weather phases informational; E4 streak is a scoring bonus that adds no run time). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ — next V1 (color-reveal bar) / M11.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 38 STAGES PASSED** (…stage 37 = v1.2 M10 E4 orb-streak bonus, stage 38 = v1.2 M11 V1 color-reveal progress bar). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **54s**, heron **156s**, full-run **19.2 min** — in the 15–20 min band (E1 mid-heron non-blocking; E2 weather phases informational; E4 streak is a scoring bonus that adds no run time; V1 is pure HUD, zero gameplay change). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ — v1.2 Batch 3 COMPLETE. Next: V2 (bloom beat) / M11.**_
 
 ## Current Status
 
@@ -35,7 +35,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 37 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 38 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss) |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
@@ -131,7 +131,7 @@ accessibility deferred).
 **Batch order (one commit per item, docs + suite green per commit):**
 1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 ✅ (Curator's Ledger). **Batch 1 (A1–A3) COMPLETE.**
 2. M9: **A4 ✅ (Rehung Frame)** → M10: **E1 ✅ (Painted Heron)** → **E2 ✅ (weather/tide phases)**. **Batch 2 (A4/E1/E2) COMPLETE — suite 35/35, pacing in band on Normal.**
-3. M10: **E3 ✅ (Bold-only zone hazards)** → **E4 ✅ (orb-streak bonus)** → M11: V1 (color-reveal bar)
+3. M10: **E3 ✅ (Bold-only zone hazards)** → **E4 ✅ (orb-streak bonus)** → M11: **V1 ✅ (color-reveal bar)** — **Batch 3 COMPLETE**
 4. M11: V2 (heron bloom beat) → V3 (zone audio) → V4 (exhibition end-screen)
 5. M13: T1 (guided first expedition) → T2 (pigment drills)
 6. M13: T3 (mini heron) → T4 (tutorial progress + re-entry)
@@ -247,6 +247,25 @@ pure `orbStreakState`, so the HUD always matches the scoring. A distinct
 (E4): no bonus below 4, +10% at 4, plateau at the cap, and in the real loop the
 streak **builds on collect, boosts orb value (1.21 vs base 1.10), and resets on
 a hit** (then pays base again). Suite green: 37/37.
+
+**M11 V1 (color-reveal progress bar) — implemented + tested (v1.2 Batch 3, item 3).**
+A **thin HUD bar along the very top edge** that fills **gray → full color as the
+swamp's saturation recovers** this run — the "paint the swamp back to life"
+fantasy made legible at a glance. It is a **pure HUD read**: the single source
+of truth is `world.worldColorSat()` (the same value the terrain draw uses), fed
+through a **pure `revealProgress()` mapping in `logic.js`** that normalizes the
+world's real saturation span (gray baseline **0.25 = 0% restored** → **1.0 =
+100% restored**), so the bar always matches what the world actually shows and
+cannot drift from it. Because it is **pure HUD (zero gameplay change)** it adds
+no run time — pacing untouched. `game.js` stays thin: `revealProgress()` just
+calls the pure mapping on the world's live saturation, and `_drawHud` draws the
+bar (gray track + a green fill whose width + saturation scale with progress,
+plus a small "color restored N%" label). Smoke stage 38 (V1): the baseline maps
+to 0%, a fully-saturated world maps to 100%, below-baseline clamps to 0%,
+mid-saturation maps to mid-progress, progress is monotonic in saturation, a
+fresh run reads 0%, the bar value **exactly matches the pure mapping of
+`worldColorSat()` at every sample**, and after painting the bar tracks the
+restored color to 100%. Suite green: 38/38.
 
 **M9 A3 (Curator's Ledger) — implemented + tested (v1.2 Batch 1, item 3).**
 A 4th atelier tab, "Curator's Ledger" (key `4`), lists all 8 paintings in a

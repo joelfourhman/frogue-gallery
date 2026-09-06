@@ -1866,5 +1866,56 @@ console.log('== stage 37: v1.2 M10 E4 — orb streak bonus ==');
   g37._onPlayerDead(); g37._endRun('defeat');
 }
 
+// stage 38 — v1.2 M11 V1: painted-world "color-reveal" progress bar.
+// A thin HUD bar showing expedition progress AS the swamp's color saturating
+// (gray -> full color) as the frog paints. `revealProgress()` in logic.js is
+// the single source of truth: it maps the world's real saturation
+// (`world.worldColorSat()`, the same value the terrain draw uses) to a clean
+// 0..1 "color restored" fraction (baseline gray = 0%, fully colored = 100%).
+// The HUD is a pure read of it — so the bar always matches the world. No
+// gameplay change.
+console.log('== stage 38: v1.2 M11 V1 — color-reveal progress bar ==');
+{
+  const L = await import('../src/logic.js');
+
+  // --- the pure mapping: 0% at baseline, 100% at full saturation, monotonic ---
+  assert(L.REVEAL_BASELINE === 0.25, `V1: the reveal baseline matches the world's un-restored gray (${L.REVEAL_BASELINE})`);
+  assert(L.revealProgress(L.REVEAL_BASELINE) === 0, 'V1: at the gray baseline the bar reads 0% restored');
+  assert(L.revealProgress(1.0) === 1, 'V1: a fully-saturated world reads 100% restored');
+  assert(L.revealProgress(0) === 0, 'V1: below the baseline is clamped to 0%');
+  const mid = L.revealProgress(0.625); // halfway between 0.25 and 1.0
+  assert(Math.abs(mid - 0.5) < 1e-9, `V1: mid-saturation maps to mid-progress (${mid})`);
+  let monotone = true;
+  for (let i = 1; i < 10; i++) if (L.revealProgress(0.25 + i * 0.075) <= L.revealProgress(0.25 + (i - 1) * 0.075)) monotone = false;
+  assert(monotone, 'V1: progress increases monotonically with world saturation');
+
+  // --- REAL loop: the bar starts at 0% and tracks the world's actual
+  // saturation from 0% to 100%, matching it exactly at every sample point. ---
+  const cv38 = makeCanvas();
+  const g38 = new Game(cv38);
+  g38.start();
+  fireKey('keydown', 'Enter'); frames(2);
+  // fresh run: the world is at its gray baseline -> the bar is at 0%
+  const satStart = g38.world.worldColorSat();
+  assert(g38.revealProgress() === 0, `V1: a fresh run reads 0% color-restored (world sat ${satStart.toFixed(3)} = baseline)`);
+  // the bar is a pure read: it always equals the mapping of the world's sat
+  assert(Math.abs(g38.revealProgress() - L.revealProgress(g38.world.worldColorSat())) < 1e-9, 'V1: the bar value matches the pure mapping of worldColorSat()');
+  // restore color in stages (as painting does) and confirm the bar tracks it,
+  // climbing from 0% toward 100% and always matching the world at each sample
+  g38.world.restoreColor(0.15);
+  const s1 = g38.world.worldColorSat();
+  assert(Math.abs(g38.revealProgress() - L.revealProgress(s1)) < 1e-9, `V1: after some painting the bar still matches the world (sat ${s1.toFixed(3)} -> ${g38.revealProgress().toFixed(3)})`);
+  assert(g38.revealProgress() > 0, `V1: painting has restored measurable color (${(g38.revealProgress() * 100).toFixed(1)}%)`);
+  // drive the world to fully colored and confirm the bar reaches 100%
+  g38.world.restoreColor(1.0);
+  const sMax = g38.world.worldColorSat();
+  assert(sMax === 1, `V1: the world is now fully colored (sat ${sMax})`);
+  assert(g38.revealProgress() === 1, `V1: the bar reaches 100% color-restored (sat ${sMax})`);
+  assert(Math.abs(g38.revealProgress() - L.revealProgress(sMax)) < 1e-9, 'V1: at 100% the bar matches the pure mapping exactly');
+
+  // cleanup
+  g38._onPlayerDead(); g38._endRun('defeat');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

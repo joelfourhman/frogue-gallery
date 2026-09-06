@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -2175,10 +2175,45 @@ _drawAtelier(ctx) {
     }
   }
 
+  // V1 (v1.2 M11): painted-world "color-reveal" progress — the swamp's
+  // saturation recovering (gray -> full color) as the frog paints. The single
+  // source of truth is `world.worldColorSat()` (the same value the terrain
+  // draw uses); we feed it through the pure `revealProgress()` mapping in
+  // logic.js so the HUD bar always matches what the world actually shows.
+  // Pure read — no gameplay change.
+  revealProgress() {
+    return revealProgressOf(this.world ? this.world.worldColorSat() : 0);
+  }
+
   _drawHud(ctx) {
     const p = this.player;
     const t = this.tuning;
     if (!p) return;
+
+    // ---- V1: color-reveal progress bar (top edge, full-width, thin) ----
+    // A thin bar along the very top whose fill = the world's actual color
+    // saturation (gray -> full color). It is a HUD read of `worldColorSat()`,
+    // so it always matches the terrain the frog is literally painting.
+    const rev = this.revealProgress();
+    const barH = 5, barW = this.cw;
+    ctx.save();
+    // track: desaturated gray (the "un-restored" swamp)
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = sat('#8d9aa0', 0.18);
+    ctx.fillRect(0, 0, barW, barH);
+    // fill: the recovered color, growing left -> right
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = sat('#5c9a76', 0.35 + 0.65 * rev);
+    ctx.fillRect(0, 0, barW * rev, barH);
+    ctx.globalAlpha = 0.5;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = INK;
+    ctx.strokeRect(0.5, 0.5, barW - 1, barH - 1);
+    // small label at the right end so the fantasy reads as "color restored"
+    ctx.globalAlpha = 0.72;
+    centerText(ctx, `color restored ${Math.round(rev * 100)}%`, this.cw - 66, barH + 10,
+      'italic 10px Georgia, serif', INK, 0.75);
+    ctx.restore();
 
     // ---- heart pips (top-left) ----
     ctx.save();

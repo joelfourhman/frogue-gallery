@@ -391,6 +391,26 @@ export function orbStreakState(streak) {
   return { streak: s, tiers, active: tiers > 0, mult: orbStreakMult(s), max: orbStreakMax() };
 }
 
+// ---------------------------------------------------------------- color-reveal progress (V1, v1.2 M11)
+// The painted-world "color-reveal" progress: how much of the swamp's color has
+// been restored THIS run (gray -> full color) as the frog paints. The single
+// source of truth is the world's actual saturation, `world.worldColorSat()` —
+// the same value the terrain draw uses — so a HUD bar reading this always
+// matches what the world actually shows.
+//
+// The world starts slightly gray (a natural "before" state, `_colorSat ?? 0.25`
+// in world.js) and is clamped to [0,1]. We map that real span to a clean 0..1
+// "color restored" fraction: the baseline reads as 0% restored, a fully-saturated
+// world (1.0) reads as 100%. Pure + testable (takes the raw saturation in, so a
+// test can sample it directly against `worldColorSat()`).
+export const REVEAL_BASELINE = 0.25; // the world's un-restored gray (matches world.js)
+export function revealProgress(worldColorSat) {
+  const sat = Math.max(0, Math.min(1, worldColorSat ?? REVEAL_BASELINE));
+  const span = 1 - REVEAL_BASELINE;              // 0.75 of recoverable saturation
+  if (sat <= REVEAL_BASELINE) return 0;          // at/under baseline -> 0% restored
+  return Math.max(0, Math.min(1, (sat - REVEAL_BASELINE) / span));
+}
+
 // ----------------------------------------------------------------
 // E1 (v1.2 M10): the Painted Heron — a mid-expedition "half-heron" set-piece.
 // A small re-use of the existing bossStep + 3-hue awaken machinery at reduced
