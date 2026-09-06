@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -1191,6 +1191,9 @@ _drawAtelier(ctx) {
     this.ngCycle = Math.max(0, Math.floor(this.save.ngCycle) || 0);
     this.world = new World(mulberry32(seed), seed % 99991);
     this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0);
+    // N2 (v1.3 M14): NG+ per-cycle scaling — applied ONLY when ngCycle >= 1 so
+    // a first-time (cycle 0) run's tuning stays byte-identical to pre-NG+.
+    if (this.ngCycle >= 1) applyNGPlus(this.tuning, this.ngCycle);
     this.player = new Player(PLAYER_START_X, PLAYER_START_Y, this.tuning);
     this.paint = new Paint(this.player, this.world, this.tuning, (n, o) => this.sfx(n, o), this.particles);
     this.tutorial = null;   // T1 (v1.2 M13): fresh state each run; set below if guided
@@ -2034,7 +2037,12 @@ _drawAtelier(ctx) {
     this.spawnT -= dt;
     if (this.spawnT > 0) return;
     const t = this.runT;
-    const interval = Math.max(1.15, 2.7 - t / 60);
+    // N2 (v1.3 M14): divide the spawn interval by the NG+ spawn-rate multiplier
+    // (1.0 on cycle 0, so the first-time run is byte-identical). The floor is
+    // scaled too, so the bump is felt in the late run (where the base interval
+    // is normally pinned at the floor), not just the first ~75s.
+    const sr = this.tuning.spawnRate || 1;
+    const interval = Math.max(1.15 / sr, (2.7 - t / 60) / sr);
     this.spawnT = interval;
     const cap = 4 + Math.min(5, Math.floor(t / 25));
     if (this.enemies.length >= cap) return;

@@ -228,6 +228,51 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', g
 }
 
 // ----------------------------------------------------------------
+// N2 (v1.3 M14): New Game+ per-cycle scaling — PURE.
+//
+// ngPlusScaling(cycle) returns the multipliers for an NG+ cycle:
+//   cycle 0 (the base, first-time game)  →  everything 1.0 (NO change to the
+//                first-time run's 15–20 min pace band — the invariant).
+//   cycle >= 1                          →  modest escalation:
+//                · enemyHp   cycle 1 ≈ +30%  (beetles/mosquitoes/toads hit harder)
+//                · enemyDmg  cycle 1 ≈ +15%  (contact hits sting a little more)
+//                · spawnRate cycle 1 ≈ +10%  (waves arrive a touch sooner)
+//     Growth is CAPPED from cycle 3 onward (a hard ceiling at cycle 3) so the
+//     escalation is a deliberate "one more step up" rather than an unbounded
+//     difficulty spiral. The cap keeps later cycles readable and the pacing
+//     probes meaningful.
+//
+// Only applied in run setup when ngCycle >= 1. Because cycle 0 returns
+// all-ones, a first-time player's tuning is byte-identical to pre-NG+ (the
+// smoke suite asserts this), so the first-time 15–20 min run is unchanged.
+export const NG_CAP_CYCLE = 3; // escalation is capped at cycle 3 (and every cycle after)
+// per-cycle multipliers; index 0 = base game (no NG+). Grows +30/+15/+10 HP/dmg/spawn
+// per step up to NG_CAP_CYCLE, then holds.
+export const NG_STEPS = [
+  { hp: 1.00, dmg: 1.00, spawn: 1.00 }, // cycle 0 (base)
+  { hp: 1.30, dmg: 1.15, spawn: 1.10 }, // cycle 1  (~ +30% / +15% / +10%)
+  { hp: 1.60, dmg: 1.30, spawn: 1.20 }, // cycle 2
+  { hp: 1.90, dmg: 1.45, spawn: 1.30 }, // cycle 3 (CAP — held for all later cycles)
+];
+export function ngPlusScaling(cycle) {
+  let c = Math.floor(Number(cycle));
+  if (!Number.isFinite(c) || c < 0) c = 0;
+  // clamp into the table; anything >= NG_CAP_CYCLE uses the capped (cycle 3) row.
+  const idx = Math.min(c, NG_STEPS.length - 1);
+  return NG_STEPS[idx];
+}
+
+// N2: apply the NG+ cycle multipliers to a tuning object (mutates it). No-op
+// for cycle 0 (all-ones) so first-time tuning is byte-identical. Pure.
+export function applyNGPlus(t, cycle) {
+  const s = ngPlusScaling(cycle);
+  if (s.hp !== 1) t.enemyHp = Math.round((t.enemyHp || 1) * s.hp * 100) / 100;
+  if (s.dmg !== 1) t.enemyDmg = Math.round((t.enemyDmg || 1) * s.dmg * 100) / 100;
+  if (s.spawn !== 1) t.spawnRate = Math.round(s.spawn * 100) / 100;
+  return t;
+}
+
+// ----------------------------------------------------------------
 // A4 (v1.2 M9): 'Rehung Frame' — a prestige-lite, NOT save-wipe. Retiring a
 // fully-completed collection (all 8 paintings owned + at least one ★-hung)
 // mints a permanent, saved `galleryBonus` level. Each level is a small

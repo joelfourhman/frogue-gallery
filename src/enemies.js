@@ -16,7 +16,7 @@ export class Enemy {
     this.hp = Math.round(base.hp * (tuning.enemyHp || 1));
     this.maxHp = this.hp;
     this.speed = base.speed;
-    this.dmg = base.dmg;
+    this.dmg = base.dmg * (tuning.enemyDmg || 1); // N2: NG+ contact-damage multiplier (1 on cycle 0)
     this.r = base.radius;
     this.armor = base.armor;
     this.fly = !!base.fly;

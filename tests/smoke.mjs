@@ -2604,5 +2604,72 @@ console.log('== stage 46: N1 — NG+ unlock + Next Expedition flow ==');
   S46.SaveSys.save(migrated46);
 }
 
+console.log('== stage 47: N2 — NG+ scaling (ngPlusScaling / applyNGPlus) ==');
+{
+  const L47 = await import('../src/logic.js');
+  const { spawnEnemy } = await import('../src/enemies.js');
+
+  // ---- (0) the pure scaling table: cycle 0 is all-ones (NO change); growth capped at cycle 3 ----
+  const s0 = L47.ngPlusScaling(0);
+  assert(s0.hp === 1 && s0.dmg === 1 && s0.spawn === 1, 'N2: ngPlusScaling(0) returns all-ones (first-time run unchanged)');
+  const s1 = L47.ngPlusScaling(1);
+  // cycle-1 target: ~+25-35% enemy HP, ~+10-20% damage, modest spawn bump
+  assert(s1.hp >= 1.25 && s1.hp <= 1.35, `N2: cycle-1 enemy HP is +25-35% (got ×${s1.hp})`);
+  assert(s1.dmg >= 1.10 && s1.dmg <= 1.20, `N2: cycle-1 enemy damage is +10-20% (got ×${s1.dmg})`);
+  assert(s1.spawn > 1, `N2: cycle-1 spawn rate is bumped (got ×${s1.spawn})`);
+  // growth is capped from cycle 3 onward: cycle 3 == cycle 4 == cycle 99 (no unbounded spiral)
+  const s3 = L47.ngPlusScaling(3), s4 = L47.ngPlusScaling(4), s99 = L47.ngPlusScaling(99);
+  assert(s3.hp === s4.hp && s3.dmg === s4.dmg && s3.spawn === s4.spawn, 'N2: scaling is capped at cycle 3 (cycle 4 == cycle 3)');
+  assert(s3.hp === s99.hp && s3.dmg === s99.dmg && s3.spawn === s99.spawn, 'N2: the cap holds for arbitrarily large cycles');
+  assert(s3.hp > s1.hp && s3.dmg > s1.dmg && s3.spawn > s1.spawn, 'N2: cycle 3 is strictly harder than cycle 1 (the cap is an upper bound, not a plateau at cycle 1)');
+  // non-finite / negative input normalizes to the cycle-0 all-ones row (never a NaN multiplier)
+  assert(L47.ngPlusScaling(-5).hp === 1 && L47.ngPlusScaling('garbage').hp === 1, 'N2: non-finite / negative cycle normalizes to cycle 0');
+
+  // ---- (1) cycle 0 tuning is byte-identical to pre-NG+ (the 15-20 min first-time invariant) ----
+  // The scaling fields must NOT be added when ngCycle is 0: a fresh makeTuning()
+  // (exactly what the pre-NG+ code produced) and the NG+ path for cycle 0 must be
+  // the same object with no extra keys.
+  const { Game } = await import('../src/game.js');
+  const g47a = new Game(makeCanvas());
+  g47a.start();
+  g47a.save = L47.freshSave();       // ngCycle 0, base upgrades
+  g47a.save.upgrades = { capacity: 1, power: 2, vitality: 1 };
+  g47a._beginExpedition();
+  const base47 = g47a.tuning;
+  assert(g47a.ngCycle === 0, 'N2: the fresh-save run is cycle 0');
+  // The scaling must NOT alter anything for cycle 0: applyNGPlus is only called
+  // when ngCycle >= 1, so a cycle-0 run's tuning is the literal pre-NG+ makeTuning
+  // object (enemyHp stays at its base value of 1; no enemyDmg/spawnRate added).
+  assert(base47.enemyHp === 1, `N2: cycle-0 enemyHp stays at base 1 (got ${base47.enemyHp})`);
+  assert(base47.enemyDmg === undefined && base47.spawnRate === undefined,
+    'N2: cycle-0 tuning adds no NG+ enemyDmg/spawnRate fields (applyNGPlus not run)');
+  // and it equals a plain makeTuning (the literal pre-NG+ code path)
+  const plain47 = L47.makeTuning({ capacity: 1, power: 2, vitality: 1 }, [], 'normal');
+  assert(JSON.stringify(base47) === JSON.stringify(plain47), 'N2: cycle-0 tuning deep-equals a plain makeTuning (no NG+ delta)');
+
+  // ---- (2) cycle-1 tuning differs as specified, applied only when ngCycle >= 1 ----
+  const g47b = new Game(makeCanvas());
+  g47b.start();
+  g47b.save = L47.freshSave();
+  g47b.save.ngCycle = 1;
+  g47b.save.upgrades = { capacity: 1, power: 2, vitality: 1 };
+  g47b._beginExpedition();
+  const ng47 = g47b.tuning;
+  assert(ng47.enemyHp === s1.hp, `N2: cycle-1 run carries enemyHp ×${s1.hp} (got ${ng47.enemyHp})`);
+  assert(ng47.enemyDmg === s1.dmg, `N2: cycle-1 run carries enemyDmg ×${s1.dmg} (got ${ng47.enemyDmg})`);
+  assert(ng47.spawnRate === s1.spawn, `N2: cycle-1 run carries spawnRate ×${s1.spawn} (got ${ng47.spawnRate})`);
+
+  // ---- (3) the multipliers actually reach the enemies ----
+  const baseBeetle = spawnEnemy('beetle', 200, 100, base47);
+  const ngBeetle = spawnEnemy('beetle', 200, 100, ng47);
+  assert(ngBeetle.hp > baseBeetle.hp, `N2: NG+ enemies are tankier (beetle ${baseBeetle.hp} -> ${ngBeetle.hp})`);
+  assert(ngBeetle.hp === Math.round(baseBeetle.hp * s1.hp), `N2: NG+ beetle HP == base × ${s1.hp} (got ${ngBeetle.hp})`);
+  assert(ngBeetle.dmg > baseBeetle.dmg, `N2: NG+ enemies hit harder (beetle dmg ${baseBeetle.dmg} -> ${ngBeetle.dmg})`);
+
+  // ---- (4) the heron is NOT scaled (its HP is a fixed tuning value, not NG+-bumped) ----
+  assert(base47.bossMaxHp === ng47.bossMaxHp, 'N2: the final heron HP is not NG+-scaled in run setup (fixed 30k; N3 replaces it with a different boss)');
+  console.log('ok — N2: NG+ scaling is pure, cycle-0 is byte-identical, cycle-1 is applied only when ngCycle>=1, and caps at cycle 3');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
