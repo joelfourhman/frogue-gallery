@@ -1014,5 +1014,59 @@ console.log('== stage 25: M8 P12 — zone character: accent wash + signature gua
   assert(g3.state === 'end', 'run ended cleanly after the P12 stage');
 }
 
+console.log('== stage 26: M8 P7 — difficulty select (Gentle/Normal/Bold) ==');
+{
+  const L = await import('../src/logic.js');
+  const { DIFFICULTIES, makeTuning, applyDifficulty, freshOptions, migrateOptions } = L;
+
+  // pure logic: Normal is the unchanged released balance
+  const n = makeTuning({}, [], 'normal');
+  assert(n.bossMaxHp === 30000, `Normal keeps the released boss HP (30000, got ${n.bossMaxHp})`);
+  assert(n.enemyHp === 1.0 && n.dmgTakenMult === 1.0, 'Normal multipliers are identity (no change to released balance)');
+
+  // each difficulty is a real, distinct scale
+  const g = makeTuning({}, [], 'gentle');
+  const b = makeTuning({}, [], 'bold');
+  assert(g.bossMaxHp < n.bossMaxHp && g.dmgTakenMult < 1, `Gentle softens boss + damage (boss ${g.bossMaxHp}, dmgTaken ${g.dmgTakenMult})`);
+  assert(b.bossMaxHp > n.bossMaxHp && b.enemyHp > 1 && b.dmgTakenMult > 1, `Bold hardens boss + enemies + damage (boss ${b.bossMaxHp}, enemyHp ${b.enemyHp}, dmgTaken ${b.dmgTakenMult})`);
+  assert(DIFFICULTIES.gentle.label === 'Gentle' && DIFFICULTIES.normal.label === 'Normal' && DIFFICULTIES.bold.label === 'Bold', 'all three difficulties have display labels');
+
+  // applyDifficulty is pure and idempotent-ish (returns the same object)
+  const t = makeTuning({}, [], 'normal');
+  const ret = applyDifficulty(t, 'bold');
+  assert(ret === t && t.dmgTakenMult === DIFFICULTIES.bold.dmgTaken, 'applyDifficulty mutates in place and returns the tuning');
+  // unknown difficulty falls back to normal, never crashes
+  applyDifficulty(t, 'nonsense');
+  assert(t.dmgTakenMult === 1.0, 'unknown difficulty id falls back to Normal');
+
+  // options persist the difficulty + migrate safely (legacy options w/o the field)
+  assert(freshOptions().difficulty === 'normal', 'fresh options default to Normal');
+  assert(migrateOptions({}).difficulty === 'normal', 'legacy options (no field) migrate to Normal');
+  assert(migrateOptions({ difficulty: 'bold' }).difficulty === 'bold', 'a saved bold difficulty is migrated back');
+  assert(migrateOptions({ difficulty: 'nope' }).difficulty === 'normal', 'an invalid saved difficulty falls back to Normal');
+
+  // end-to-end through the real loop: title -> press B (Bold) -> begin run
+  // -> the heron uses the Bold-scaled HP.
+  const cv4 = makeCanvas();
+  const g4 = new Game(cv4);
+  g4.start();
+  fireKey('keydown', 'Enter'); frames(3); // title -> expedition (Normal default)
+  const normalBoss = g4.heron.maxHp;
+  assert(normalBoss === 30000, `Normal run heron is the released 30000 HP (got ${normalBoss})`);
+  g4.player.iframes = 0; g4.player.hurt(99, g4.tuning); frames(140);
+  assert(g4.state === 'end', 'run ended cleanly (Normal baseline)');
+  fireKey('keydown', 'Escape'); frames(2); // end -> title
+  assert(g4.state === 'title', 'back on the title to pick a difficulty');
+  fireKey('keydown', 'b'); frames(2); // Bold via the G/N/B key
+  assert(g4.options.difficulty === 'bold', 'pressing B on the title sets the difficulty to Bold');
+  assert(g4.tuning.bossMaxHp > normalBoss, `title difficulty rebuilds the tuning (boss ${g4.tuning.bossMaxHp} > Normal ${normalBoss})`);
+  fireKey('keydown', 'Enter'); frames(3); // begin the Bold run from the title
+  assert(g4.state === 'expedition', 'the Bold run started');
+  assert(g4.heron.maxHp === g4.tuning.bossMaxHp && g4.heron.maxHp > normalBoss, `the Bold run starts the heron at the scaled HP (${g4.heron.maxHp})`);
+  // back to Normal for a clean finish
+  g4.player.iframes = 0; g4.player.hurt(99, g4.tuning); frames(140);
+  assert(g4.state === 'end', 'run ended cleanly after the P7 stage');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

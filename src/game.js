@@ -10,8 +10,8 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT } from './logic.js';
-import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor } from './ui.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT } from './logic.js';
+import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // P5: 4 named expedition zones + a rest checkpoint between each — structure
 // the run so a full expedition reads as a journey, not one long hallway.
@@ -47,7 +47,7 @@ export class Game {
     // ---------- persistence + tuning ----------
     this.save = SaveSys.load() || freshSave();
     this.options = SaveSys.loadOptions();
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty);
     // B5: persistent storage unavailable (privacy mode, quota, disabled)? We
     // still run on the in-memory save, but surface a one-time warning so the
     // player knows progress may not survive a reload. storageOK forces the
@@ -650,11 +650,14 @@ _drawAtelier(ctx) {
     }
     if (this.input.pressed('a')) { this.sfx('ui'); this._beginAtelier(); return; }
     if (this.input.pressed('m')) { this._muteToggle(); return; }
-    // mouse buttons (see _drawTitle layout)
+    // M8 P7: difficulty select (G/N/B = Gentle/Normal/Bold; 1/2/3 are pigment
+    // hotkeys in-game, so avoid them). Persists in options; applied at run start.
+    if (this.input.pressed('g')) { this._setDifficulty('gentle'); return; }
+    if (this.input.pressed('n')) { this._setDifficulty('normal'); return; }
+    if (this.input.pressed('b')) { this._setDifficulty('bold'); return; }
+    // mouse buttons (see _drawTitle layout, shared via _titleLayout)
     if (this.input.mouse.lPressed) {
-      const cx = this.cw / 2, py = 300, ph = 300;
-      const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 18;
-      const abw = 200, abh = 44, abx = cx - abw / 2, aby = by + bh + 16;
+      const g = this._titleLayout();
       // erase-save link: two clicks within 3 s (see _drawTitle for same rect)
       if (this._mouseIn(16, this.ch - 40, 240, 28)) {
         if ((this.now - (this._eraseArm || -99)) < 3) {
@@ -670,8 +673,9 @@ _drawAtelier(ctx) {
         this.sfx('ui');
         return;
       }
-      if (this._mouseIn(bx, by, bw, bh)) { this.sfx('ui'); this._beginExpedition(); }
-      else if (this._mouseIn(abx, aby, abw, abh)) { this.sfx('ui'); this._beginAtelier(); }
+      for (const p of g.diff) if (this._mouseIn(p.x, p.y, p.w, p.h)) { this._setDifficulty(p.id); return; }
+      if (this._mouseIn(g.bx, g.by, g.bw, g.bh)) { this.sfx('ui'); this._beginExpedition(); }
+      else if (this._mouseIn(g.abx, g.aby, g.abw, g.abh)) { this.sfx('ui'); this._beginAtelier(); }
     }
   }
 
@@ -679,7 +683,7 @@ _drawAtelier(ctx) {
     // fresh world each run (title keeps drifting over whatever is left)
     const seed = (Math.random() * 2 ** 31) | 0;
     this.world = new World(mulberry32(seed), seed % 99991);
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty);
     this.player = new Player(PLAYER_START_X, PLAYER_START_Y, this.tuning);
     this.paint = new Paint(this.player, this.world, this.tuning, (n, o) => this.sfx(n, o), this.particles);
     this.enemies = [];
@@ -1129,7 +1133,7 @@ _drawAtelier(ctx) {
     const p = this.player;
     if (!p || !p.alive || p.iframes > 0) return;
     if (dist(p.x, p.y, hx, hy) < r + p.r) {
-      if (p.hurt(dmg, this.tuning)) {
+      if (p.hurt(dmg * (this.tuning.dmgTakenMult || 1), this.tuning)) {
         this.sfx('hurt');
         this.addShake(6);
         const a = Math.atan2(p.y - hy, p.x - hx);
@@ -1671,6 +1675,28 @@ _drawAtelier(ctx) {
     return m.x >= x && m.x <= x + w && m.y >= y && m.y <= y + h;
   }
 
+  // M8 P7: difficulty selector on the title + a single source of truth for
+  // every title-screen rect, shared by _drawTitle and _updateTitle so the
+  // visuals and the click targets can never drift apart.
+  _titleLayout() {
+    const cx = this.cw / 2;
+    const pw = 520, ph = 254, px = cx - pw / 2, py = 300;
+    const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 18;
+    const dy = by + bh + 12, dH = 30, dW = 88, dGap = 10;
+    const dTotal = dW * 3 + dGap * 2, dStartX = cx - dTotal / 2;
+    const diff = ['gentle', 'normal', 'bold'].map((id, i) => ({ id, x: dStartX + i * (dW + dGap), y: dy, w: dW, h: dH, label: (DIFFICULTIES[id] || {}).label }));
+    const abw = 200, abh = 44, abx = cx - abw / 2, aby = dy + dH + 12;
+    return { cx, pw, ph, px, py, bx, by, bw, bh, diff, abx, aby, abw, abh };
+  }
+  _setDifficulty(id) {
+    if (!DIFFICULTIES[id] || this.options.difficulty === id) return;
+    this.options.difficulty = id;
+    SaveSys.saveOptions(this.options);
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty);
+    this._prevHp = this.tuning.maxHp;
+    this.sfx('ui');
+  }
+
   _drawTitle(ctx) {
     ctx.save();
     ctx.fillStyle = 'rgba(30,25,22,0.45)';
@@ -1682,8 +1708,12 @@ _drawAtelier(ctx) {
     outlineText(ctx, 'Frogue Gallery', cx, 190 + bob, '700 72px Georgia, serif', '#f4ead8', INK, 10);
     centerText(ctx, 'a cozy action roguelite about a tiny frog painter', cx, 248 + bob, 'italic 20px Georgia, serif', '#fdf6e9', 0.92);
 
+    // M8 P7: single source of truth for every title-screen rect (shared with the
+    // click handling in _updateTitle).
+    const g = this._titleLayout();
+    const { pw, ph, px, py } = g;
+
     // controls card
-    const pw = 520, ph = 300, px = cx - pw / 2, py = 300;
     const c = paperPanel(ctx, px, py, pw, ph, { seed: 11 });
     centerText(c, 'The swamp is fading to gray.', cx, py + 34, '600 17px Georgia, serif');
     centerText(c, 'Paint it back to color — then face the Great Gray Heron.', cx, py + 58, '600 17px Georgia, serif');
@@ -1709,21 +1739,35 @@ _drawAtelier(ctx) {
     const hasProgress = this.save.stats.expeditions > 0 || this.save.owned.length > 0 ||
       b.red > 0 || b.blue > 0 || b.green > 0 || this.save.loadout.length > 0 ||
       (this.save.upgrades && (this.save.upgrades.power > 0 || this.save.upgrades.vitality > 0 || this.save.upgrades.capacity > 0));
-        const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 18;
-        uiButton(ctx, bx, by, bw, bh, hasProgress ? 'Continue Expedition' : 'Begin Expedition', this._mouseIn(bx, by, bw, bh), false, { seed: 5, size: 20, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        uiButton(ctx, g.bx, g.by, g.bw, g.bh, hasProgress ? 'Continue Expedition' : 'Begin Expedition', this._mouseIn(g.bx, g.by, g.bw, g.bh), false, { seed: 5, size: 20, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        // M8 P7: difficulty pills (Gentle / Normal / Bold) between the two buttons.
+        centerText(ctx, 'difficulty', cx - g.diff[0].x + 34, g.diff[0].y + 20, '11px Georgia, serif', INK, 0.55);
+        for (const p of g.diff) {
+          const sel = this.options.difficulty === p.id;
+          const hov = this._mouseIn(p.x, p.y, p.w, p.h);
+          ctx.save();
+          ctx.globalAlpha = sel ? 1 : (hov ? 0.92 : 0.78);
+          roundRectPath(ctx, p.x, p.y, p.w, p.h, 8);
+          ctx.fillStyle = sel ? '#3a5a3f' : (hov ? '#e8dcc4' : '#f2e8d4');
+          ctx.fill();
+          ctx.lineWidth = sel ? 2.4 : 1.4;
+          ctx.strokeStyle = sel ? '#2b4a34' : INK;
+          ctx.stroke();
+          centerText(ctx, p.label, p.x + p.w / 2, p.y + p.h / 2 + 4, sel ? '700 13px Georgia, serif' : '12px Georgia, serif', sel ? '#fdf6e9' : INK, sel ? 1 : 0.85);
+          ctx.restore();
+        }
         // atelier button (visual; A / click handled in _updateTitle)
-        const abw = 200, abh = 44, abx = cx - abw / 2, aby = by + bh + 16;
-        uiButton(ctx, abx, aby, abw, abh, 'Visit the Atelier', this._mouseIn(abx, aby, abw, abh), false, { seed: 6, size: 15 });
+        uiButton(ctx, g.abx, g.aby, g.abw, g.abh, 'Visit the Atelier', this._mouseIn(g.abx, g.aby, g.abw, g.abh), false, { seed: 6, size: 15 });
 
         // little footer stats
         const s = this.save.stats;
-        centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, aby + abh + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
+        centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, g.aby + g.abh + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
         const br = this.save.bestRun;
         if (br) {
           const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
-          centerText(ctx, `best run — ${what}`, cx, aby + abh + 38, '700 14px Georgia, serif', '#e8c86a', 0.95);
+          centerText(ctx, `best run — ${what}`, cx, g.aby + g.abh + 38, '700 14px Georgia, serif', '#e8c86a', 0.95);
         }
-        centerText(ctx, hasProgress ? 'M to mute · A for the atelier · "New Game" = erase save data (bottom left)' : 'M to mute · A for the atelier', cx, aby + abh + (br ? 58 : 38), '12px Georgia, serif', '#fdf6e9', 0.5);
+        centerText(ctx, 'G/N/B to set difficulty · M to mute · A for the atelier · "New Game" = erase save (bottom left)', cx, g.aby + g.abh + (br ? 58 : 38), '12px Georgia, serif', '#fdf6e9', 0.5);
         // erase-save link (bottom-left; two-click confirm, see _updateTitle)
         const ex = 16, ey = this.ch - 40;
         const armed = (this.now - (this._eraseArm || -99)) < 3;

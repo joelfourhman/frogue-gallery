@@ -4,23 +4,24 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-05 (v1.1 pass: B6 + PT5 + B5 + M7.5 PT1–PT4 + M8 P10 + M8 P12 landed)**
+**Last PM audit: 2026-09-05 (v1.1 pass: B6 + PT5 + B5 + M7.5 PT1–PT4 + M8 P10 + M8 P12 + M8 P7 landed)**
 
 ## Current state
 
 - Release DoD: **all 12 items satisfied** (final audit 2026-09-05).
-- Active phase: **v1.1 — M8 player-facing improvements** (P6–P12); P10 + P12 done.
-- Smoke suite: **25 stages, ALL PASSED** (stage 20 = B5; 21–23 = M7.5;
-  24 = M8 P10 perf culling; 25 = M8 P12 zone character). Pacing probes green
-  (human est. ~18.7 min). Real-browser probe: 60.2 fps full world / 60.5 fps
-  with a signature guardian, zero JS errors.
-- Git: P10 committed (`5e95fbf`); **P12 in this pass, committed next.**
-- Milestones: B1–B6 ✅, **M7.5: PT1–PT5 all ✅. M8: P10 ✅, P12 ✅ (this pass).**
+- Active phase: **v1.1 — M8 player-facing improvements** (P6–P12); P10 + P12 + P7 done.
+- Smoke suite: **26 stages, ALL PASSED** (stage 20 = B5; 21–23 = M7.5;
+  24 = M8 P10 perf culling; 25 = M8 P12 zone character; 26 = M8 P7
+  difficulty select). Pacing probes green (human est. ~18.7 min). Real-browser
+  probe: 60.2 fps full world / 60.5 fps with a signature guardian / title 60 fps
+  with difficulty pills, zero JS errors.
+- Git: P10 committed (`5e95fbf`), P12 committed (`0ab27e8`), **P7 in this pass, committed next.**
+- Milestones: B1–B6 ✅, **M7.5: PT1–PT5 all ✅. M8: P10 ✅, P12 ✅, P7 ✅ (this pass).**
 
 ## Active work (next, in order)
 
-1. **M8 remaining: P7 → P8 → P6 → P9 → P11** (P10 perf + P12 zone character done):
-   P7 (difficulty select) → P8 (gallery wall) → P6 (?) overlay →
+1. **M8 remaining: P8 → P6 → P9 → P11** (P10 perf + P12 zone character + P7
+   difficulty select done): P8 (gallery wall) → P6 (?) overlay →
    P9 (audio polish) → P11 (human-pace probe).
 
 Full plan: `docs/PLAN-v1.1-next.md`.
@@ -46,10 +47,11 @@ None. Loopback dev server, Node, and all tests are healthy.
 
 ## Next priority
 
-**M8 remaining** in value order P7 (difficulty select) → P8 (gallery wall) →
-P6 (?) overlay → P9 (audio polish) → P11 (human-pace probe). B1–B6,
-M7.5 PT1–PT5, and M8 P10 (perf culling) + P12 (zone character) are complete.
+**M8 remaining** in value order P8 (gallery wall) → P6 (?) overlay →
+P9 (audio polish) → P11 (human-pace probe). B1–B6, M7.5 PT1–PT5, and M8
+P10 (perf culling), P12 (zone character), and P7 (difficulty select) are
+complete.
 
 ## Release readiness
 
-Release: ready (DoD met, suite green). v1.1: M8 in progress (P10 + P12 done).
+Release: ready (DoD met, suite green). v1.1: M8 in progress (P10 + P12 + P7 done).

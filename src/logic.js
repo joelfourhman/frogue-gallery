@@ -97,7 +97,25 @@ export function paintDamage(base, pigmentId, tuning, opts = {}) {
 }
 
 // ---------------------------------------------------------------- tuning
-export function makeTuning(upgrades = {}, loadout = []) {
+// M8 P7: difficulty multipliers. Normal = 1 across the board (current
+// released balance). Gentle eases the heron fight and the damage you take;
+// Bold is the challenge run. Difficulty is a per-run choice on the title and
+// never changes save/upgrade state.
+export const DIFFICULTIES = {
+  gentle: { id: 'gentle',   label: 'Gentle', desc: 'the swamp is kind',            enemyHp: 0.85, bossHp: 0.75, dmgTaken: 0.75 },
+  normal: { id: 'normal',   label: 'Normal', desc: 'the released balance',         enemyHp: 1.0,  bossHp: 1.0,  dmgTaken: 1.0  },
+  bold:   { id: 'bold',     label: 'Bold',   desc: 'for frogs who like it gray',   enemyHp: 1.35, bossHp: 1.4,  dmgTaken: 1.3  },
+};
+// Apply a difficulty multiplier to a tuning object, in place and returning it.
+// Pure (no DOM). Unknown ids are ignored (treated as normal).
+export function applyDifficulty(t, difficulty) {
+  const d = DIFFICULTIES[difficulty] || DIFFICULTIES.normal;
+  t.enemyHp = d.enemyHp;
+  t.bossMaxHp = Math.round(t.bossMaxHp * d.bossHp);
+  t.dmgTakenMult = d.dmgTaken;
+  return t;
+}
+export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal') {
   const t = {
     // player
     maxHp: 10 + (upgrades.vitality || 0),
@@ -150,6 +168,8 @@ export function makeTuning(upgrades = {}, loadout = []) {
   if (has('storm-cloud')) { t.splashRadius *= 1.35; t.splashDamage *= 1.15; }
   if (has('beetle-armor')) { t.dmgReduce = 0.1; }
   if (has('croaksworth')) { t.power *= 1.18; }
+  // M8 P7: scale the run by the chosen difficulty (after loadout modifiers).
+  applyDifficulty(t, difficulty);
   return t;
 }
 
@@ -472,13 +492,14 @@ export function migrateSave(raw) {
 }
 
 export function freshOptions() {
-  return { volume: 0.7, muted: false };
+  return { volume: 0.7, muted: false, difficulty: 'normal' };
 }
 export function migrateOptions(raw) {
   const o = freshOptions();
   if (raw && typeof raw === 'object') {
     o.volume = Math.min(1, Math.max(0, Number(raw.volume) || 0.7));
     o.muted = !!raw.muted;
+    o.difficulty = (DIFFICULTIES[raw.difficulty] ? raw.difficulty : 'normal');
   }
   return o;
 }

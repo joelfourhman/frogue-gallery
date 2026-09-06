@@ -94,7 +94,7 @@ export class Enemy {
       const d = dist(this.x, this.y, player.x, player.y);
       if (d < this.r + player.r + 2) {
         this.attackCd = 0.9;
-        const dmg = physicalDamage(this.dmg, this, tuning, tuning.playerDmgReduce || 0);
+        const dmg = physicalDamage(this.dmg, this, tuning, tuning.playerDmgReduce || 0) * (tuning.dmgTakenMult || 1);
         if (player.hurt(dmg, tuning)) this._lastHit = now;
       }
     }

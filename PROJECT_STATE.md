@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 25 STAGES PASSED** (stages 21–23 = M7.5 PT1/PT3/PT4, stage 24 = M8 P10 perf culling, **stage 25 = M8 P12 zone character**). Pacing probes green (human est. ~18.8 min). Real-browser probe: 60.5 fps (zone with signature guardian) / 60.2 fps full world. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT1–PT5 ✅, **M8 P10 ✅, M8 P12 ✅ (this pass)**. **Next: M8 P7 → P8 → P6 → P9 → P11.**_
+_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 26 STAGES PASSED** (stages 21–23 = M7.5 PT1/PT3/PT4, stage 24 = M8 P10 perf culling, stage 25 = M8 P12 zone character, **stage 26 = M8 P7 difficulty select**). Pacing probes green (human est. ~18.8 min). Real-browser probe: 60.5 fps (zone with signature guardian) / 60.2 fps full world / title 60 fps with the P7 pills, no JS errors. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT1–PT5 ✅, **M8 P10 ✅, M8 P12 ✅, M8 P7 ✅ (this pass)**. **Next: M8 P8 → P6 → P9 → P11.**_
 
 ## Current Status
 
@@ -89,7 +89,7 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 | PT3 | Fly/dodge fairness: audit cost/range/stamina + rebalance | ✅ 2026-09-05 — Space-hop now has a `hopCooldown = 0.7s` stamina gate (was unlimited; i-frames 0.30s > 0.22s hop = near-continuous invuln when mashing). Hop i-frames/range unchanged. Smoke stage 22. |
 | PT4 | Early-economy safety net: fresh save can afford ≥1 upgrade/painting | ✅ 2026-09-05 — one-time `WELCOME_GRANT = {red:3, blue:6, green:4}` (+13) on first expedition (pure `applyWelcomeGrant`, gated on `flags.welcomeGranted`). Fresh save now buys capacity/vitality lvl1 + moonlit-pond/self-portrait. Smoke stage 23. |
 | P6 | In-game "?" reference overlay (pigment roles, counterplay, heron hint, controls) | ⬜ |
-| P7 | Difficulty select (Easy/Normal/Hard, persisted; Normal = current balance) | ⬜ |
+| P7 | Difficulty select (Gentle/Normal/Bold, persisted; Normal = current balance) | ✅ 2026-09-05 — `logic.js` `applyDifficulty()` + `DIFFICULTIES` (Gentle 0.75× boss/dmg, Bold 1.35× boss/enemy/dmg, Normal identity); `options.difficulty` persisted; three pills on the title (G/N/B keys + click). |
 | P8 | The Gallery Wall — framed, titled owned paintings in the Atelier with passive tooltips | ⬜ |
 | P9 | Audio/options polish: separate music/SFX sliders, screen-shake + vignette toggles | ⬜ |
 | P10 | Performance pass: cull off-screen enemy AI/decoration updates; 60fps with full 5400px world | ✅ 2026-09-05 — `world.js` view-culls grass/ripples/soil/slicks/veg/reeds/pads/obstacles to the visible rect (draw calls 9527 full-world → ~1464 localized, 0.15×); `game.js` skips full enemy AI beyond 500px (burn still ticks). Smoke stage 24 + real-browser probe (60.2 fps across x=5%→95%). |
@@ -116,39 +116,42 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 |---|---|---|---|---|
 | P12 | zone combat beat | named zone beat only (beetle/mosquito/toad `mix`) | + an elite **signature guardian** of the zone's emblematic enemy, `ELITE = {hp:1.9, dmg:1.3, radius:1.35, score:3}` (6 across the run) | v1.1 wanted each zone to have "character." An elite + a per-zone accent wash gives a memorable set-piece without a wall: 1.9× HP is a couple of swipes, and the pace probe still lands inside the 15–20 min target (~18.7 min). |
 | P12 | zone entry cue | banner text only | + 2.6s fading full-screen zone-accent wash (`_drawZoneTint`), peak alpha 0.16 | A color shift on crossing a boundary reads as a place-shift, not just a new banner; kept subtle so it never obscures the world. |
+| P7 | difficulty select | none (single Normal tuning) | 3 tiers via `applyDifficulty()`: **Gentle** bossHp 0.75 / dmgTaken 0.75, **Normal** identity, **Bold** bossHp 1.35 / enemyHp 1.35 / dmgTaken 1.3. Normal is byte-for-byte the released tuning (boss 30000). | v1.1 asked for an Easy/Normal/Hard select with Normal unchanged. Scaling boss HP + enemy HP + damage-taken (the three levers that change difficulty most, without touching paint/economy) keeps Normal the reference and gives a real range. |
 
 **v1.1 acceptance criteria** (see MISSION.md): every P/B item has a passing smoke stage or regression test; full suite green in one command; 15–20 min run target still holds on Normal; docs accurate; git clean with one conventional commit per chunk.
 
 ## Immediate Next Action
 
 **Tree is clean** — PT5 (ed287a4), B6 (599a599), B5 (7f4fc3e), M7.5 PT1–PT4
-(c92ced1), and the v1.1 status-docs pass (3c590be) are all committed and
-verified.
+(c92ced1), the v1.1 status-docs pass (3c590be), M8 P10 (`5e95fbf`), and M8
+P12 (`0ab27e8`) are all committed and verified.
 
-**M8 P12 (zone character) — implemented + tested this pass.** Each of the 4
-expedition zones now reads as a distinct place. `ZONES` carry a per-zone
-`accent` color and a `sig` signature encounter; on zone entry `_zoneBeat`
-spawns an elite **signature guardian** of the zone's emblematic enemy via
+**M8 P7 (difficulty select) — implemented + tested this pass.** Three tiers
+(**Gentle / Normal / Bold**) selectable on the title via G/N/B keys, the
+three pills, or a click; the choice persists in `options.difficulty`
+(migrated in `logic.js`). `applyDifficulty()` in `logic.js` scales boss HP,
+enemy HP, and damage-taken **after** loadout modifiers; **Normal is
+byte-for-byte the released tuning** (boss 30000, all multipliers 1.0) so the
+existing balance is preserved. Applied at run start in `_beginExpedition` and
+re-applied in the constructor + `_setDifficulty`. The title gains a shared
+`_titleLayout()` source of truth (buttons + difficulty pills) used by both
+`_drawTitle` and `_updateTitle` so click targets and pixels can't drift.
+**Verified:** smoke stage 26 (Normal = released boss HP 30000 + identity
+multipliers; Gentle 22500 / Bold 42000 boss; label presence; migrate in/out
+of the field; real loop title → B → Bold run starts the heron at 42000);
+real-browser title probe 60 fps with the pills, zero JS errors.
+
+**Prior pass — M8 P12 (zone character).** `ZONES` carry a per-zone `accent`
+color and a `sig` signature encounter; on zone entry `_zoneBeat` spawns an
+elite **signature guardian** of the zone's emblematic enemy via
 `_spawnZoneElite` — scaled up and hardened by `ELITE = {hp:1.9, dmg:1.3,
-radius:1.35, score:3}` (a single well-timed splash or a couple of swipes still
-handles it; it adds character, not a wall). `enemies.js drawEnemy` scales the
-body to the elite hitbox and draws a pulsing accent halo; `game.js` also sets
-a 2.6s fading zone-accent wash (`_drawZoneTint`) so crossing a boundary reads
-as a place-shift, not just a new banner. Guards: Reed beetle×1, Slick
-mosquito×2, Bramble toad×1, Gray beetle×2 (6 total). Accents: Reed `#c9a94e`,
-Slick `#5a93c9`, Bramble `#7fb069`, Gray `#9a9a8f`. **Verified:** smoke stage
-25 (accent uniqueness + sig validity per zone; a real loop crossing Reed
-Flats spawns the right elite with the right accent, scaled HP/radius/score,
-and the wash active-then-faded); `pace.mjs` now folds the 6 guardians into the
-human model (~18.7 min, inside the 15–20 target); real-browser probe 60.5 fps
-with zero JS errors while driving through the zone.
+radius:1.35, score:3}`. `enemies.js drawEnemy` scales the body to the elite
+hitbox and draws a pulsing accent halo; `game.js` also sets a 2.6s fading
+zone-accent wash (`_drawZoneTint`). Guards: Reed beetle×1, Slick
+mosquito×2, Bramble toad×1, Gray beetle×2 (6 total). Smoke stage 25; real
+browser 60.5 fps, no JS errors. Committed `0ab27e8`.
 
-**Prior pass — M8 P10 (performance culling).** `world.js` view-culls
-off-screen decor to the visible rect and `game.js` culls far enemy AI (burn
-still ticks); draw calls 9527 → ~1464 localized, 60.2 fps across the full
-world. Committed `5e95fbf`. Smoke stage 24.
-
-**Next: M8 P7 (difficulty select) → P8 (Gallery Wall) → P6 (? overlay) → P9 (audio polish) → P11 (human-pace probe).**
+**Next: M8 P8 (Gallery Wall) → P6 (? overlay) → P9 (audio polish) → P11 (human-pace probe).**
 
 - (recorded) **PT1 — painting consumption (verified, no code change).** The plan flagged
   "painting might be free / infinite wet." Audit result: swipes and splashes
