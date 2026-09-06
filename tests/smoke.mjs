@@ -713,5 +713,40 @@ console.log('== stage 18: B4 — tab-hidden time spike, dt cap holds, no physics
   game.enemies.length = 0; // tidy up the probe enemy before later stages
 }
 
+console.log('== stage 19: B6 - save schema versioning (saveVersion + migration) ==');
+{
+  const L = await import('../src/logic.js');
+  const S = await import('../src/save.js');
+  const KEY = 'frogue_gallery_save';
+  // freshSave stamps the authoritative saveVersion field (legacy `v` is gone)
+  assert(L.freshSave().saveVersion === 1, 'freshSave carries saveVersion: 1');
+  assert(!('v' in L.freshSave()), 'freshSave no longer emits the legacy v field (superseded by saveVersion)');
+  // persist the live game save, then confirm the on-disk blob is version-stamped
+  S.SaveSys.save(game.save);
+  const rawB6 = JSON.parse(store.get(KEY));
+  assert(rawB6 && rawB6.saveVersion === 1, `persisted save is stamped saveVersion: 1 (got ${JSON.stringify(rawB6 && rawB6.saveVersion)})`);
+  // a legacy save written under the old `v` field (no saveVersion) migrates and is re-stamped
+  store.set(KEY, JSON.stringify({
+    v: 0,
+    bank: { red: 42, blue: 0, green: 0 },
+    owned: ['moonlit-pond'], loadout: ['moonlit-pond'],
+    upgrades: { capacity: 1, power: 0, vitality: 0 },
+    flags: { intro: true },
+    stats: { expeditions: 7, victories: 1, deaths: 0, heronsPainted: 0, treasures: 0 },
+    bestRun: { pigments: { red: 5, blue: 0, green: 0 }, time: 120, cleared: true },
+  }));
+  const migratedB6 = S.SaveSys.load();
+  assert(migratedB6 !== null, 'legacy v0 save loads (not dropped as corrupt)');
+  assert(migratedB6.saveVersion === 1, 'legacy v0 save re-stamped to saveVersion: 1 after migration');
+  assert(migratedB6.bank.red === 42 && migratedB6.owned.includes('moonlit-pond'), 'legacy v0 fields preserved through migration (bank.red=42, moonlit-pond owned)');
+  assert(migratedB6._case === 'migrated', 'legacy v0 save classified as migrated (fields recognized)');
+  // the versioned save round-trips with the stamp intact
+  S.SaveSys.save(migratedB6);
+  const rawB6b = JSON.parse(store.get(KEY));
+  assert(rawB6b.saveVersion === 1 && rawB6b.bank.red === 42, 'versioned save round-trips with saveVersion: 1 + preserved fields');
+  // restore the live game save for any later stage
+  game.save = S.SaveSys.load();
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

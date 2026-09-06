@@ -368,9 +368,23 @@ export function paintBoss(h, pigmentId, amount, tuning) {
 export const SAVE_KEY = 'frogue_gallery_save';
 export const OPTIONS_KEY = 'frogue_gallery_options';
 
+// B6: save schema versioning. `saveVersion` is the authoritative current schema
+// version, written into every save and read back on load. Legacy saves stored
+// it under the field `v`; migrateSave() accepts both and re-stamps to the
+// current version.
+export const SAVE_VERSION = 1;
+
+// Ordered schema-migration chain. Each entry upgrades a save from `from` to
+// `to` by remapping an already-normalized save. The loader walks entries in
+// `from` order, so a save written at any older version migrates forward step
+// by step up to SAVE_VERSION. v1 is the initial version, so the chain starts
+// empty — append `{ from: 1, to: 2, fn }` (and bump SAVE_VERSION) when the
+// next schema lands.
+const SAVE_MIGRATIONS = [];
+
 export function freshSave() {
   return {
-    v: 1,
+    saveVersion: SAVE_VERSION,
     bank: { red: 0, blue: 0, green: 0 },
     owned: [],            // painting ids
     loadout: [],          // up to 2 painting ids
@@ -405,7 +419,7 @@ export function migrateSave(raw) {
   if (!recognizable) return withCase(freshSave(), 'fresh'); // junk object: drop everything
   const f = freshSave();
   const out = { ...f };
-  out.v = 1;
+  out.saveVersion = SAVE_VERSION;
   // bank: keep per-color values, coerce/clip the rest
   if (isPlainObj(raw.bank)) {
     for (const c of ['red', 'blue', 'green']) out.bank[c] = Math.max(0, Number(raw.bank[c]) || 0);
@@ -423,6 +437,17 @@ export function migrateSave(raw) {
     for (const k of Object.keys(f.stats)) out.stats[k] = Math.max(0, Number(raw.stats[k]) || 0);
   }
   out.bestRun = isPlainObj(raw.bestRun) ? raw.bestRun : f.bestRun;
+  // B6: apply the version migration chain, then stamp the current version.
+  // Legacy saves stored the version under `v`; read either key. The chain
+  // rewrites `out` in place (mutating the normalized fields) as it walks
+  // forward; it is a no-op today (SAVE_MIGRATIONS empty) and runs on a future
+  // schema bump.
+  const fromVer = Number(raw.saveVersion ?? raw.v ?? 1) || 1;
+  let version = Math.max(1, fromVer);
+  for (const m of SAVE_MIGRATIONS) {
+    if (version === m.from) { m.fn(out); version = m.to; }
+  }
+  out.saveVersion = SAVE_VERSION;
   return withCase(out, 'migrated');
 }
 
