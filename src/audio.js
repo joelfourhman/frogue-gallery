@@ -1,13 +1,20 @@
-// audio.js — Web Audio SFX, all synthesized. No assets.
+// audio.js — Web Audio SFX + procedural ambient bed. All synthesized, no assets.
+// P9: two buses under the master — musicBus (ambient) and sfxBus (effects) —
+// so the user can adjust them independently.
 'use strict';
 
 export class AudioSys {
   constructor() {
     this.ctx = null;
     this.master = null;
+    this.musicBus = null;
+    this.sfxBus = null;
     this.volume = 0.7;
+    this.musicVolume = 0.55;
+    this.sfxVolume = 0.7;
     this.muted = false;
     this._noiseBuf = null;
+    this._musicNodes = []; // [osc1, osc2, gain1, gain2, lfo, lfoGain]
   }
 
   ensure() {
@@ -18,10 +25,15 @@ export class AudioSys {
       this.ctx = new AC();
       this.master = this.ctx.createGain();
       this.master.gain.value = this.muted ? 0 : this.volume;
-      // tiny compressor to keep splashes from clipping
-      this.comp = this.ctx.createDynamicsCompressor();
-      this.master.connect(this.comp);
-      this.comp.connect(this.ctx.destination);
+      this.musicBus = this.ctx.createGain();
+      this.musicBus.gain.value = this.musicVolume;
+      this.sfxBus = this.ctx.createGain();
+      this.sfxBus.gain.value = this.sfxVolume;
+      this.musicBus.connect(this.master);
+      this.sfxBus.connect(this.master);
+      const comp = this.ctx.createDynamicsCompressor();
+      this.master.connect(comp);
+      comp.connect(this.ctx.destination);
       // pre-render a noise buffer
       const len = this.ctx.sampleRate * 1;
       const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
@@ -38,9 +50,56 @@ export class AudioSys {
     this.volume = Math.min(1, Math.max(0, v));
     if (this.master && !this.muted) this.master.gain.value = this.volume;
   }
+  setMusicVolume(v) {
+    this.musicVolume = Math.min(1, Math.max(0, v));
+    if (this.musicBus) this.musicBus.gain.value = this.musicVolume;
+  }
+  setSfxVolume(v) {
+    this.sfxVolume = Math.min(1, Math.max(0, v));
+    if (this.sfxBus) this.sfxBus.gain.value = this.sfxVolume;
+  }
   setMuted(m) {
     this.muted = m;
     if (this.master) this.master.gain.value = m ? 0 : this.volume;
+  }
+
+  // ---- P9: procedural ambient bed (warm two-tone drone + slow LFO) ----
+  // Called by game.js on run start / end. Idempotent: safe to call startMusic
+  // multiple times; only the first call creates nodes.
+  startMusic() {
+    if (!this.ctx || this._musicNodes.length) return;
+    try {
+      const t = this.ctx.currentTime;
+      const mk = (freq, gain) => {
+        const o = this.ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = freq;
+        const g = this.ctx.createGain();
+        g.gain.value = gain;
+        o.connect(g);
+        g.connect(this.musicBus);
+        o.start(t);
+        return [o, g];
+      };
+      const [o1, g1] = mk(110, 0.12);  // A2
+      const [o2, g2] = mk(165, 0.09);  // E3 (perfect fifth)
+      // slow LFO on the second oscillator's gain for a gentle swell
+      const lfo = this.ctx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = 0.08;
+      const lfoG = this.ctx.createGain();
+      lfoG.gain.value = 0.04;
+      lfo.connect(lfoG);
+      lfoG.connect(g2.gain);
+      lfo.start(t);
+      this._musicNodes = [o1, g1, o2, g2, lfo, lfoG];
+    } catch (e) { /* headless / unsupported */ }
+  }
+  stopMusic() {
+    for (const n of this._musicNodes) {
+      try { if (n.stop) n.stop(); n.disconnect(); } catch (e) {}
+    }
+    this._musicNodes = [];
   }
 
   _env(gainNode, t0, peak, attack, decay) {
@@ -58,7 +117,7 @@ export class AudioSys {
     f.type = filterType; f.frequency.value = freq; f.Q.value = q;
     const g = this.ctx.createGain();
     this._env(g, t0, peak, 0.005, dur);
-    src.connect(f); f.connect(g); g.connect(this.master);
+    src.connect(f); f.connect(g); g.connect(this.sfxBus);
     src.start(t0); src.stop(t0 + dur + 0.05);
   }
 
@@ -71,7 +130,7 @@ export class AudioSys {
     o.detune.value = detune;
     const g = this.ctx.createGain();
     this._env(g, t0, peak, 0.004, dur);
-    o.connect(g); g.connect(this.master);
+    o.connect(g); g.connect(this.sfxBus);
     o.start(t0); o.stop(t0 + dur + 0.05);
   }
 

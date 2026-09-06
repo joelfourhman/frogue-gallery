@@ -491,15 +491,27 @@ export function migrateSave(raw) {
   return withCase(out, 'migrated');
 }
 
+// P9: options split into separate music (ambient bed) / SFX volumes and add
+// screen-shake + low-HP vignette accessibility toggles. The legacy `volume`
+// field (a single master) is still honored by migrateOptions so pre-P9 saves
+// keep working; new fields default sensibly.
 export function freshOptions() {
-  return { volume: 0.7, muted: false, difficulty: 'normal' };
+  return { volume: 0.8, muted: false, difficulty: 'normal', musicVol: 0.6, sfxVol: 0.7, shake: true, vignette: true };
 }
 export function migrateOptions(raw) {
   const o = freshOptions();
   if (raw && typeof raw === 'object') {
-    o.volume = Math.min(1, Math.max(0, Number(raw.volume) || 0.7));
+    const v = Math.min(1, Math.max(0, Number(raw.volume) || 0.7));
+    o.volume = v;
     o.muted = !!raw.muted;
     o.difficulty = (DIFFICULTIES[raw.difficulty] ? raw.difficulty : 'normal');
+    // P9: new split volumes. If a field is present, honor it; otherwise seed
+    // from the legacy master `volume` so a pre-P9 save keeps its old level.
+    o.musicVol = raw.musicVol !== undefined ? Math.min(1, Math.max(0, Number(raw.musicVol))) : v;
+    o.sfxVol = raw.sfxVol !== undefined ? Math.min(1, Math.max(0, Number(raw.sfxVol))) : v;
+    // shake / vignette: default on; only an explicit false turns them off.
+    o.shake = raw.shake !== false;
+    o.vignette = raw.vignette !== false;
   }
   return o;
 }

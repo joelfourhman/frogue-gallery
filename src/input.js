@@ -7,6 +7,7 @@ export class Input {
     this.keys = new Set();
     this.kb = new Set();         // "just pressed this frame" (consumed on read)
     this.mouse = { x: 0, y: 0, worldX: 0, worldY: 0, lDown: false, rDown: false, lPressed: false, rPressed: false, wheel: 0 };
+    this.dragging = null;        // P9: name of the UI element being dragged (or null)
     this._bind(canvas);
   }
 

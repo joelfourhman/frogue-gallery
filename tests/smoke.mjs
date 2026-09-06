@@ -542,10 +542,18 @@ console.log('== stage 15: save migration + failure behavior (DoD #11) ==');
   assert(old.loadout.includes('spring-garden') && !old.loadout.includes('bogus-painting') && !old.loadout.includes('moonlit-pond'), 'loadout keeps only owned paintings');
   assert(old.flags.intro === true && old.flags.firstOrb === false && old.flags.firstAtelier === false, 'old flags keep their values, new flags default to false');
   assert(old.upgrades.power === 2 && old.upgrades.capacity === 0, 'upgrades keep valid levels, missing ones default');
-  // options: missing → defaults; out-of-range clamped
-  assert(L.migrateOptions(null).volume === 0.7, 'missing options fall back to defaults');
+  // options: missing → defaults; out-of-range clamped (M8 P9: split music/SFX
+  // volumes + shake/vignette toggles ride along in the same migration)
+  assert(L.migrateOptions(null).volume === 0.8, 'missing options fall back to defaults');
+  assert(L.migrateOptions(null).musicVol === 0.6 && L.migrateOptions(null).sfxVol === 0.7, 'missing options seed new music/SFX splits from defaults');
+  assert(L.migrateOptions(null).shake === true && L.migrateOptions(null).vignette === true, 'missing options default shake+vignette ON');
   const o = L.migrateOptions({ volume: 99, muted: 1 });
   assert(o.volume === 1 && o.muted === true, 'out-of-range volume clamped, truthy mute coerced');
+  // P9: legacy single-volume save (no split fields) seeds the split buses from
+  // the old master so a returning player keeps their previous loudness.
+  const legacy = L.migrateOptions({ volume: 0.4, muted: false });
+  assert(legacy.musicVol === 0.4 && legacy.sfxVol === 0.4, 'legacy master volume seeds the P9 split volumes');
+  assert(L.migrateOptions({ shake: false, vignette: false }).shake === false && L.migrateOptions({ shake: false, vignette: false }).vignette === false, 'explicit false toggles persist');
 }
 
 console.log('== stage 16: DoD #2 — title Continue / New Game affordance ==');
@@ -1143,6 +1151,102 @@ console.log('== stage 28: M8 P6 — the "?" field guide overlay ==');
   fireKey('keydown', 'Enter'); frames(3);        // -> end -> atelier
   fireKey('keydown', 'Escape'); frames(3);       // -> title
   assert(g6.state === 'title', 'returned to the title after the P6 stage');
+}
+
+console.log('== stage 29: M8 P9 — Options overlay (music/SFX sliders + shake/vignette) ==');
+{
+  const cv7 = makeCanvas();
+  const g7 = new Game(cv7);
+  g7.start();
+  frames(3);
+
+  // --- open via 'O' key ----------------------------------------------------
+  fireKey('keydown', 'o'); frames(1);
+  assert(g7.optionsOpen === true, "'O' opens the Options overlay from the title");
+
+  // --- layout geometry -----------------------------------------------------
+  const L = g7._optionsLayout();
+  assert(L.music && L.music.w > 40, 'music slider rect exists with positive width');
+  assert(L.sfx && L.sfx.w > 40, 'sfx slider rect exists with positive width');
+  assert(L.shake && L.shake.w > 0 && L.vignette && L.vignette.w > 0, 'toggle rects exist');
+
+  // --- drag the music slider to ~0.3 (simulate mouse press + move) ---------
+  const m = g7.input.mouse;
+  // press on the left side of the music track
+  m.x = L.music.x + 20; m.y = L.music.y;
+  fireMouse(cv7, m.x, m.y);  // lPressed -> start drag
+  frames(1);
+  assert(g7.options.musicVol < 0.2, `dragging music slider to the left lowers volume (got ${g7.options.musicVol.toFixed(2)})`);
+  // release
+  (windowListeners['mouseup'] || []).forEach((fn) => fn({ button: 0, preventDefault() {} }));
+  m.lDown = false;
+  frames(1);
+
+  // --- drag the sfx slider to ~0.9 ---------------------------------------
+  m.x = L.sfx.x + L.sfx.w - 20; m.y = L.sfx.y;
+  fireMouse(cv7, m.x, m.y);
+  frames(1);
+  assert(g7.options.sfxVol > 0.7, `dragging sfx slider to the right raises volume (got ${g7.options.sfxVol.toFixed(2)})`);
+  (windowListeners['mouseup'] || []).forEach((fn) => fn({ button: 0, preventDefault() {} }));
+  m.lDown = false;
+  frames(1);
+
+  // --- toggle shake OFF ---------------------------------------------------
+  m.x = L.shake.x + L.shake.w / 2; m.y = L.shake.y + L.shake.h / 2;
+  fireMouse(cv7, m.x, m.y); frames(1);
+  assert(g7.options.shake === false, 'clicking the shake toggle turns it OFF');
+  // toggle back ON
+  fireMouse(cv7, m.x, m.y); frames(1);
+  assert(g7.options.shake === true, 'clicking the shake toggle again turns it ON');
+
+  // --- toggle vignette OFF ------------------------------------------------
+  m.x = L.vignette.x + L.vignette.w / 2; m.y = L.vignette.y + L.vignette.h / 2;
+  fireMouse(cv7, m.x, m.y); frames(1);
+  assert(g7.options.vignette === false, 'clicking the vignette toggle turns it OFF');
+  fireMouse(cv7, m.x, m.y); frames(1);
+  assert(g7.options.vignette === true, 'clicking the vignette toggle again turns it ON');
+
+  // --- shake OFF must suppress the camera jitter in _view() ----------------
+  g7.options.shake = false;
+  g7.addShake(20); g7.cam.x = 2000; g7.cam.y = 750;
+  const v0 = g7._view();
+  g7.cam.x = 2000; g7.cam.y = 750; // reset (shake decayed slightly)
+  const v1 = g7._view();
+  const dxOff = Math.abs(v0.x - v1.x);
+  g7.options.shake = true;
+  g7.addShake(20);
+  const v2 = g7._view();
+  const v3 = g7._view();
+  const dxOn = Math.abs(v2.x - v3.x);
+  assert(dxOff < dxOn, `shake OFF suppresses jitter (off=${dxOff.toFixed(3)}px, on=${dxOn.toFixed(3)}px)`);
+  g7.options.shake = true;
+
+  // --- draw for 30 frames without JS errors --------------------------------
+  frames(30);
+  assert(g7.state === 'title' && g7.optionsOpen, 'Options overlay drew cleanly for 30 frames');
+
+  // --- close via Esc -------------------------------------------------------
+  fireKey('keydown', 'Escape'); frames(1);
+  assert(g7.optionsOpen === false, 'Esc closes the Options overlay');
+
+  // --- persist: save known values, then a fresh Game must load them --------
+  // (the localStorage stub is shared by every Game in this file, exactly like
+  //  the real localStorage — so a new instance sees the same store.)
+  const cv8 = makeCanvas();
+  const g8 = new Game(cv8);
+  g8.start();
+  // plant distinctive values via the UI's own setters (which also persist)
+  g8._setVolume('musicVol', 0.31);
+  g8._setVolume('sfxVol', 0.87);
+  g8.options.vignette = false;
+  { const Sv = await import('../src/save.js'); Sv.SaveSys.saveOptions(g8.options); }
+  const cv9 = makeCanvas();
+  const g9 = new Game(cv9);
+  g9.start();
+  frames(2);
+  assert(Math.abs(g9.options.musicVol - 0.31) < 1e-6, `a fresh Game loads the saved music volume (${g9.options.musicVol.toFixed(3)})`);
+  assert(Math.abs(g9.options.sfxVol - 0.87) < 1e-6, `a fresh Game loads the saved sfx volume (${g9.options.sfxVol.toFixed(3)})`);
+  assert(g9.options.vignette === false, 'a fresh Game loads the saved vignette toggle (OFF)');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

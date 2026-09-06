@@ -27,6 +27,7 @@
     const canvas = document.getElementById('game');
     const game = new Game(canvas);
     game.start();
+    window.__game = game; // debug / dev-tooling handle (no UI surface)
   } catch (e) {
     console.error('Frogue Gallery failed to boot', e);
     document.getElementById('game').hidden = true;

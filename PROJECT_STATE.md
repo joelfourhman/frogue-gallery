@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 27 STAGES PASSED** (stages 21–23 = M7.5 PT1/PT3/PT4, stage 24 = M8 P10 perf culling, stage 25 = M8 P12 zone character, stage 26 = M8 P7 difficulty select, **stage 27 = M8 P8 Gallery Wall**). Pacing probes green (human est. ~18.8 min). Real-browser probe: 60.5 fps (zone with signature guardian) / 60.2 fps full world / title 60 fps with the P7 pills, no JS errors. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT1–PT5 ✅, **M8 P10 ✅, P12 ✅, P7 ✅, P8 ✅ (this pass)**. **Next: M8 P6 → P9 → P11.**_
+_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 29 STAGES PASSED** (…stage 26 = M8 P7 difficulty select, stage 27 = M8 P8 Gallery Wall, stage 28 = M8 P6 "?" field guide, **stage 29 = M8 P9 Options overlay**). Pacing probes green (human est. ~18.8 min; `pace.mjs` + `bosspace.mjs`). Real-browser probe (P9): audio buses + options overlay verified live — 6 ambient nodes, music/SFX bus gains track the sliders, shake-gate + vignette toggles work, no JS errors. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT1–PT5 ✅, **M8 P10 ✅, P12 ✅, P7 ✅, P8 ✅, P6 ✅, P9 ✅ (this pass)**. **Next: M8 P11 (human-pace pacing probe) — the last v1.1 item.**_
 
 ## Current Status
 
@@ -91,7 +91,7 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 | P6 | In-game "?" reference overlay (pigment roles, counterplay, heron hint, controls) | ✅ 2026-09-05 — "Field Guide" overlay, H/? to toggle; pauses the run (frozen sim, verified: held W does not move the frog). Controls + keyed pigment swatches + Splash + heron telegraph counterplay; shared `_helpGeom()` for draw + click; fresh runs start closed. Smoke stage 28. |
 | P7 | Difficulty select (Gentle/Normal/Bold, persisted; Normal = current balance) | ✅ 2026-09-05 — `logic.js` `applyDifficulty()` + `DIFFICULTIES` (Gentle 0.75× boss/dmg, Bold 1.35× boss/enemy/dmg, Normal identity); `options.difficulty` persisted; three pills on the title (G/N/B keys + click). |
 | P8 | The Gallery Wall — framed, titled owned paintings in the Atelier with passive tooltips | ✅ 2026-09-05 — third Atelier tab "The Gallery" (key 3 / click): every painting hung in a gold frame; owned = lit full-color motif + title placard + passive bonus + "★ hung" when in loadout, unowned = dimmed silhouette, sealed = "???". Display-only (buying/hanging stays on the Paintings tab). Smoke stage 27. |
-| P9 | Audio/options polish: separate music/SFX sliders, screen-shake + vignette toggles | ⬜ |
+| P9 | Audio/options polish: separate music/SFX sliders, screen-shake + vignette toggles | ✅ 2026-09-05 — `logic.js` `freshOptions`/`migrateOptions` now carry `musicVol`/`sfxVol` (0..1, clamped; legacy `volume` seeds them) + `shake`/`vignette` toggles. `audio.js` splits the graph into `musicBus` (a new synthesized ambient bed: detuned-pair drone + slow LFO + filtered swish pad) and `sfxBus` (all SFX); `setMusicVolume`/`setSfxVolume` drive the buses independently. `game.js` adds an **Options overlay** (title, `O` or the "Options" button): master/music/SFX sliders (drag or click) + shake & vignette toggles + a live "Music/SFX off" note, all persisted via `SaveSys.saveOptions`. `input.js` gains a `dragging` slot for the sliders. Smoke stage 29 (layout, setters→bus gains, toggle round-trip, save→fresh-Game reload). |
 | P10 | Performance pass: cull off-screen enemy AI/decoration updates; 60fps with full 5400px world | ✅ 2026-09-05 — `world.js` view-culls grass/ripples/soil/slicks/veg/reeds/pads/obstacles to the visible rect (draw calls 9527 full-world → ~1464 localized, 0.15×); `game.js` skips full enemy AI beyond 500px (burn still ticks). Smoke stage 24 + real-browser probe (60.2 fps across x=5%→95%). |
 | P11 | Human-pace pacing probe (≈260 px/s walker model) | ⬜ |
 | P12 | Zone character: distinct visual accent + signature encounter motif per zone | ✅ 2026-09-05 — `game.js` `ZONES` now carry a per-zone `accent` + a `sig` signature encounter; `_zoneBeat` spawns an elite "signature guardian" (`_spawnZoneElite`, `ELITE = {hp:1.9, dmg:1.3, radius:1.35, score:3}`) of the zone's emblematic enemy, ringed in the zone accent (`enemies.js` drawEnemy scales the body to the elite hitbox + draws a pulsing accent halo) and sets a 2.6s fading zone-accent wash (`_drawZoneTint`) so crossing a boundary reads as a place-shift. Accents: Reed `#c9a94e`, Slick `#5a93c9`, Bramble `#7fb069`, Gray `#9a9a8f` (guards: Reed beetle×1, Slick mosquito×2, Bramble toad×1, Gray beetle×2 = 6 total). `pace.mjs` folds the 6 guardians into the human model (~18.7 min, inside target). Smoke stage 25. 60.5 fps real-browser (no JS errors). |
@@ -122,44 +122,38 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 
 ## Immediate Next Action
 
-**Tree is clean** — PT5 (ed287a4), B6 (599a599), B5 (7f4fc3e), M7.5 PT1–PT4
-(c92ced1), the v1.1 status-docs pass (3c590be), M8 P10 (`5e95fbf`), M8 P12
-(`0ab27e8`), and M8 P7 (`7457229`) are all committed and verified.
+**Tree is clean** — the v1.1 status-docs pass (3c590be), M8 P10 (`5e95fbf`),
+M8 P12 (`0ab27e8`), M8 P7 (`7457229`), M8 P8 (`4118146`), and M8 P6 (`27bdd22`)
+are all committed and verified (smoke 28/28 at that point).
 
-**M8 P8 (the Gallery Wall) — implemented + tested this pass.** The Atelier
-gains a third tab, **"The Gallery"** (key 3 / click), which hangs every
-painting in a gold frame. Owned works are *lit*: full-color motif + a title
-placard + the passive bonus, with a "★ hung" badge when the painting is in
-the loadout. Unowned works are dimmed silhouettes with a cost hint; sealed
-Croaksworth shows "???" (a portrait someone must earn). It is **display-only**
-— buying and hanging stay on the Paintings tab, so the wall is a place to
-*look at* your collection, not a shop. The tab layout is driven by the same
-`_atelierGeom()` the other tabs use (3 narrower tabs centered on cx), and
-`_atelierRows()` now gates the buy/hang rows behind `atelierTab === 1` so the
-Gallery tab exposes none of them. **Verified:** smoke stage 27 (a `tab2`
-click row exists; key 3 + a click both land on the Gallery; the tab exposes no
-`paint:` rows but keeps `depart`/`leave`; the tab draws cleanly for 30 frames
-both with an empty collection and with owned + hung paintings — the lit path).
+**M8 P9 (audio/options polish) — implemented + tested this pass.** The single
+master volume is split into **independent music / SFX buses** and the title
+gains an **Options** overlay (key `O` or the new "Options" button, right of
+the Atelier button) with three sliders (Master / Music / SFX — click or drag)
+and two accessibility toggles (Screen shake / Low-HP vignette). Concretely:
 
-**Prior pass — M8 P7 (difficulty select).** Three tiers (**Gentle / Normal /
-Bold**) on the title (G/N/B keys, the pills, or a click); persists in
-`options.difficulty`. `applyDifficulty()` in `logic.js` scales boss HP, enemy
-HP, and damage-taken after loadout modifiers; **Normal is byte-for-byte the
-released tuning** (boss 30000, multipliers 1.0). Shared `_titleLayout()` keeps
-draw and click in sync. Smoke stage 26; real-browser title probe 60 fps, no JS
-errors. Committed `7457229`.
+- `src/logic.js` — `freshOptions()` now returns `musicVol`/`sfxVol` (0–1) plus
+  `shake`/`vignette` (both default `true`); `migrateOptions()` seeds the split
+  volumes from the legacy `volume` when absent and clamps/normalizes all four.
+- `src/audio.js` — the graph is split under `master` into `musicBus` and
+  `sfxBus` (each a `GainNode`). A new **synthesized ambient bed** (`startMusic`
+  / `stopMusic`) runs a detuned-pair drone + a slow LFO swell + a filtered
+  swish pad through `musicBus`. All SFX now connect to `sfxBus`.
+  `setMusicVolume` / `setSfxVolume` drive the two buses independently (the
+  `muted` master still wins when on).
+- `src/game.js` — the overlay (`_optionsLayout` / `_updateOptions` /
+  `_drawOptions`, a shared `_drawSliderTrack`), the `O` key + title "Options"
+  button, `shake` gating in `_view()`, `vignette` gating on the low-HP wash,
+  and the options state resets on `_quitToTitle`.
+- `src/input.js` — a `dragging` slot so a slider can be held and dragged.
+- Smoke **stage 29** (layout present, setters drive the bus gains, toggle
+  round-trips, save → fresh-Game reload) + real-browser verification (6
+  ambient nodes, bus gains track the sliders, no JS errors).
 
-**Prior pass — M8 P12 (zone character).** `ZONES` carry a per-zone `accent`
-color and a `sig` signature encounter; on zone entry `_zoneBeat` spawns an
-elite **signature guardian** of the zone's emblematic enemy via
-`_spawnZoneElite` — scaled up and hardened by `ELITE = {hp:1.9, dmg:1.3,
-radius:1.35, score:3}`. `enemies.js drawEnemy` scales the body to the elite
-hitbox and draws a pulsing accent halo; `game.js` also sets a 2.6s fading
-zone-accent wash (`_drawZoneTint`). Guards: Reed beetle×1, Slick
-mosquito×2, Bramble toad×1, Gray beetle×2 (6 total). Smoke stage 25; real
-browser 60.5 fps, no JS errors. Committed `0ab27e8`.
-
-**Next: M8 P6 (? overlay) → P9 (audio polish) → P11 (human-pace probe).**
+**Next: M8 P11 (human-pace pacing probe) — the final v1.1 item.** An
+informational `tests/humance.mjs` in the spirit of `pace.mjs`: an imperfect
+human input model (variable speed, reaction lag, missed swipes, dodges) that
+estimates a real 15–20 min run on Normal and prints the breakdown.
 
 - (recorded) **PT1 — painting consumption (verified, no code change).** The plan flagged
   "painting might be free / infinite wet." Audit result: swipes and splashes

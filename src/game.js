@@ -58,6 +58,8 @@ export class Game {
     this.input = new Input(canvas);
     this.audio = new AudioSys();
     this.audio.setVolume(this.options.volume);
+    this.audio.setMusicVolume(this.options.musicVol);
+    this.audio.setSfxVolume(this.options.sfxVol);
     this.audio.setMuted(this.options.muted);
     this.sfx = (n, o) => { if (this.audio.ctx) this.audio.sfx(n, o); };
     this.particles = new ParticleSystem();
@@ -75,6 +77,7 @@ export class Game {
     this.state = 'title';       // 'title' | 'expedition' | 'end'
     this.paused = false;
     this.help = false;          // M8 P6: "?" reference overlay (pauses the run)
+    this.optionsOpen = false;   // M8 P9: options overlay (volume sliders + toggles)
     this.endKind = null;
     this.endT = 0;
     this.endGains = null;
@@ -97,8 +100,10 @@ export class Game {
     this.dieT = 0;
     this.banners = [];
 
-    // one-time audio unlock on first gesture (browser autoplay rules)
-    this._unlock = () => { this.audio.ensure(); };
+    // one-time audio unlock on first gesture (browser autoplay rules).
+    // P9: also start the ambient bed so the music/SFX sliders have a live
+    // preview. startMusic is a no-op until ensure() has created the context.
+    this._unlock = () => { this.audio.ensure(); this.audio.startMusic(); };
     window.addEventListener('pointerdown', this._unlock);
     window.addEventListener('keydown', this._unlock);
     window.addEventListener('blur', () => {
@@ -131,7 +136,7 @@ export class Game {
     if (vh >= this.world.h) y = (this.world.h - vh) / 2;
     x = clamp(x, 0, this.world.w - vw);
     y = clamp(y, 0, this.world.h - vh);
-    if (this.shake > 0.15) {
+    if (this.shake > 0.15 && this.options.shake) {
       const s = this.shake * 0.16;
       x += (Math.random() - 0.5) * s;
       y += (Math.random() - 0.5) * s;
@@ -164,7 +169,8 @@ export class Game {
       this.titleT += dt;
       this.cam.x = 1200 + Math.sin(this.titleT * 0.12) * 500;
       this.cam.y = 750 + Math.cos(this.titleT * 0.09) * 260;
-      this._updateTitle(dt);
+      if (this.optionsOpen) this._updateOptions(dt);
+      else this._updateTitle(dt);
     } else if (this.state === 'expedition') {
       if (this.dying) {
         this.dieT += dt;
@@ -256,6 +262,7 @@ export class Game {
   _quitToTitle() {
     this.state = 'title';
     this.paused = false;
+    this.optionsOpen = false;
     this.player = null;
     this.heron = null;
     this.enemies = [];
@@ -728,6 +735,7 @@ _drawAtelier(ctx) {
       return;
     }
     if (this.input.pressed('a')) { this.sfx('ui'); this._beginAtelier(); return; }
+    if (this.input.pressed('o')) { this._openOptions(); return; }  // M8 P9
     if (this.input.pressed('m')) { this._muteToggle(); return; }
     // M8 P7: difficulty select (G/N/B = Gentle/Normal/Bold; 1/2/3 are pigment
     // hotkeys in-game, so avoid them). Persists in options; applied at run start.
@@ -755,6 +763,7 @@ _drawAtelier(ctx) {
       for (const p of g.diff) if (this._mouseIn(p.x, p.y, p.w, p.h)) { this._setDifficulty(p.id); return; }
       if (this._mouseIn(g.bx, g.by, g.bw, g.bh)) { this.sfx('ui'); this._beginExpedition(); }
       else if (this._mouseIn(g.abx, g.aby, g.abw, g.abh)) { this.sfx('ui'); this._beginAtelier(); }
+      else if (this._mouseIn(g.ox, g.oy, g.ow, g.oh)) { this.sfx('ui'); this.optionsOpen = true; }
     }
   }
 
@@ -799,6 +808,7 @@ _drawAtelier(ctx) {
       this.addBanner('No persistent storage — progress may not survive a reload.', 5.5, this.ch * 0.3);
     }
     this.audio.ensure();
+    this.audio.startMusic();
     this.sfx('ui');
     this._prevHp = this.tuning.maxHp;
     const firstRun = !this.save.flags.intro;
@@ -1460,6 +1470,7 @@ _drawAtelier(ctx) {
       this._drawHud(ctx);
     }
     if (this.state === 'title') this._drawTitle(ctx);
+    if (this.state === 'title' && this.optionsOpen) this._drawOptions(ctx);
     if (this.state === 'atelier') this._drawAtelier(ctx);
     if (this.paused && this.state === 'expedition') this._drawPause(ctx);
     if (this.help && this.state === 'expedition') this._drawHelp(ctx);   // M8 P6
@@ -1469,8 +1480,8 @@ _drawAtelier(ctx) {
     this._drawZoneTint(ctx);
     this._drawBanners(ctx);
 
-    // ---- M5: low-HP vignette (soft red pulse when at <= 2 hp) ----
-    if (this.state === 'expedition' && !this.paused && this.player && this.player.alive
+    // ---- M5: low-HP vignette (soft red pulse when at <= 2 hp) — P9: user-toggleable ----
+    if (this.state === 'expedition' && !this.paused && this.options.vignette && this.player && this.player.alive
         && this.player.hp <= 2 && this.player.iframes <= 0) {
       const pulse = 0.26 + 0.12 * Math.sin(this.now * 5);
       const g = ctx.createRadialGradient(this.cw / 2, this.ch / 2, this.ch * 0.42, this.cw / 2, this.ch / 2, this.ch * 0.78);
@@ -1772,8 +1783,13 @@ _drawAtelier(ctx) {
     const dy = by + bh + 12, dH = 30, dW = 88, dGap = 10;
     const dTotal = dW * 3 + dGap * 2, dStartX = cx - dTotal / 2;
     const diff = ['gentle', 'normal', 'bold'].map((id, i) => ({ id, x: dStartX + i * (dW + dGap), y: dy, w: dW, h: dH, label: (DIFFICULTIES[id] || {}).label }));
-    const abw = 200, abh = 44, abx = cx - abw / 2, aby = dy + dH + 12;
-    return { cx, pw, ph, px, py, bx, by, bw, bh, diff, abx, aby, abw, abh };
+    const abw = 200, abh = 44, aby = dy + dH + 12;
+    // P9: two secondary buttons (Atelier + Options) as a symmetric pair centered
+    // on the title. No test clicks them by coordinate (smoke calls _beginAtelier
+    // directly), so this pair layout is free to tune.
+    const gap = 24;
+    const abx = cx - (abw + gap / 2), ox = cx + gap / 2, ow = abw, oh = abh, oy = aby;
+    return { cx, pw, ph, px, py, bx, by, bw, bh, diff, abx, aby, abw, abh, ox, oy, ow, oh };
   }
   _setDifficulty(id) {
     if (!DIFFICULTIES[id] || this.options.difficulty === id) return;
@@ -1782,6 +1798,130 @@ _drawAtelier(ctx) {
     this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty);
     this._prevHp = this.tuning.maxHp;
     this.sfx('ui');
+  }
+
+  // ---------------- M8 P9: options overlay (volume + accessibility) --------
+  // Single source of truth for the options panel geometry so draw and input
+  // never drift. Sliders are horizontal bars: value = (handleX - x) / w.
+  _optionsLayout() {
+    const cx = this.cw / 2, cy = this.ch / 2;
+    const pw = 460, ph = 380, px = cx - pw / 2, py = cy - ph / 2;
+    const padX = 46;
+    const trackX = px + padX, trackW = pw - padX * 2;
+    const row = (baseY) => ({ x: trackX, y: baseY, w: trackW, h: 22 });
+    const yMusic = py + 112, ySfx = py + 178, yShake = py + 240, yVign = py + 278;
+    const back = { x: cx - 90, y: py + ph - 66, w: 180, h: 46 };
+    return { cx, cy, pw, ph, px, py, padX, trackX, trackW,
+      music: row(yMusic), sfx: row(ySfx),
+      shake: { x: trackX, y: yShake, w: trackW, h: 26 },
+      vignette: { x: trackX, y: yVign, w: trackW, h: 26 },
+      back };
+  }
+  _sliderValue(rect, val) {
+    // handle center X for a value in [0,1]
+    return rect.x + 10 + val * (rect.w - 20);
+  }
+  _openOptions() {
+    if (this.optionsOpen) return;
+    this.optionsOpen = true;
+    this.audio.ensure();
+    this.audio.startMusic();
+    this.sfx('ui');
+  }
+  _closeOptions() {
+    this.optionsOpen = false;
+    this.sfx('ui-back');
+  }
+  _setVolume(key, v) {
+    v = clamp(v, 0, 1);
+    this.options[key] = v;
+    if (key === 'musicVol') this.audio.setMusicVolume(v);
+    else if (key === 'sfxVol') this.audio.setSfxVolume(v);
+    else this.audio.setVolume(v);
+    SaveSys.saveOptions(this.options);
+  }
+  _toggleOpt(key) {
+    this.options[key] = !this.options[key];
+    SaveSys.saveOptions(this.options);
+    this.sfx('ui');
+  }
+  _updateOptions() {
+    const g = this._optionsLayout();
+    const m = this.input.mouse;
+    // Back / Escape / O / Enter closes.
+    if (this.input.pressed('escape') || this.input.pressed('o') || this.input.pressed('enter')) { this._closeOptions(); return; }
+    if (this.input.pressed('m')) { this._muteToggle(); }
+    if (m.lPressed) {
+      // toggles (shake / vignette) take precedence on their rows
+      if (this._mouseIn(g.shake.x, g.shake.y, g.shake.w, g.shake.h)) { this._toggleOpt('shake'); return; }
+      if (this._mouseIn(g.vignette.x, g.vignette.y, g.vignette.w, g.vignette.h)) { this._toggleOpt('vignette'); return; }
+      if (this._mouseIn(g.back.x, g.back.y, g.back.w, g.back.h)) { this._closeOptions(); return; }
+      // sliders: a fresh press on the track jumps the handle AND starts a drag
+      const hit = (r) => m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y - 8 && m.y <= r.y + r.h + 8;
+      if (hit(g.music)) { this._setVolume('musicVol', clamp((m.x - g.music.x - 10) / (g.music.w - 20), 0, 1)); this.input.dragging = 'musicVol'; return; }
+      if (hit(g.sfx)) { this._setVolume('sfxVol', clamp((m.x - g.sfx.x - 10) / (g.sfx.w - 20), 0, 1)); this.input.dragging = 'sfxVol'; return; }
+    }
+    // dragging: update while the button is held
+    if (this.input.dragging && m.lDown) {
+      if (this.input.dragging === 'musicVol') this._setVolume('musicVol', clamp((m.x - g.music.x - 10) / (g.music.w - 20), 0, 1));
+      else if (this.input.dragging === 'sfxVol') this._setVolume('sfxVol', clamp((m.x - g.sfx.x - 10) / (g.sfx.w - 20), 0, 1));
+    }
+    // release: clear the drag flag once the button is up
+    if (this.input.dragging && !m.lDown) this.input.dragging = null;
+  }
+  _drawSliderTrack(c, rect, val, hover, mouseX, mouseY) {
+    const y = rect.y + rect.h / 2;
+    c.save();
+    c.lineWidth = 6; c.lineCap = 'round';
+    c.strokeStyle = 'rgba(43,35,32,0.25)';
+    c.beginPath(); c.moveTo(rect.x, y); c.lineTo(rect.x + rect.w, y); c.stroke();
+    const hx = this._sliderValue(rect, val);
+    c.strokeStyle = INK;
+    c.beginPath(); c.moveTo(rect.x, y); c.lineTo(hx, y); c.stroke();
+    // handle
+    c.beginPath(); c.arc(hx, y, 9, 0, TAU);
+    c.fillStyle = hover ? '#f4ead8' : PAPER; c.fill();
+    c.lineWidth = 2.5; c.strokeStyle = INK; c.stroke();
+    c.restore();
+  }
+  _drawToggle(c, rect, label, on) {
+    c.save();
+    centerText(c, label, rect.x + 12, rect.y + rect.h / 2, '600 15px Georgia, serif', INK, 0.92);
+    // pill
+    const pw = 56, ph = 28, pxx = rect.x + rect.w - pw, pyy = rect.y + (rect.h - ph) / 2;
+    roundRectPath(c, pxx, pyy, pw, ph, ph / 2);
+    c.fillStyle = on ? '#7fae6a' : 'rgba(43,35,32,0.28)'; c.fill();
+    c.lineWidth = 2; c.strokeStyle = INK; c.stroke();
+    // knob
+    c.beginPath(); c.arc(on ? pxx + pw - ph / 2 : pxx + ph / 2, pyy + ph / 2, ph / 2 - 4, 0, TAU);
+    c.fillStyle = PAPER; c.fill(); c.lineWidth = 1.5; c.strokeStyle = INK; c.stroke();
+    c.restore();
+  }
+  _drawOptions(ctx) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(30,25,22,0.6)';
+    ctx.fillRect(0, 0, this.cw, this.ch);
+    ctx.restore();
+    const g = this._optionsLayout();
+    const c = paperPanel(ctx, g.px, g.py, g.pw, g.ph, { seed: 61 });
+    centerText(c, 'Options', g.cx, g.py + 44, '700 30px Georgia, serif');
+    centerText(c, 'M to mute · Esc / O to close', g.cx, g.py + 74, 'italic 12px Georgia, serif', INK, 0.65);
+    const m = this.input.mouse;
+    const hot = (r) => m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y - 8 && m.y <= r.y + r.h + 8;
+    // music slider
+    centerText(c, 'Music', g.trackX, g.music.y - 18, '700 14px Georgia, serif', INK, 0.9);
+    centerText(c, Math.round(this.options.musicVol * 100) + '%', g.trackX + g.trackW, g.music.y - 18, '700 13px Georgia, serif', INK, 0.8);
+    this._drawSliderTrack(c, g.music, this.options.musicVol, hot(g.music), m.x, m.y);
+    // sfx slider
+    centerText(c, 'Sound effects', g.trackX, g.sfx.y - 18, '700 14px Georgia, serif', INK, 0.9);
+    centerText(c, Math.round(this.options.sfxVol * 100) + '%', g.trackX + g.trackW, g.sfx.y - 18, '700 13px Georgia, serif', INK, 0.8);
+    this._drawSliderTrack(c, g.sfx, this.options.sfxVol, hot(g.sfx), m.x, m.y);
+    // toggles
+    this._drawToggle(c, g.shake, 'Screen shake', this.options.shake);
+    this._drawToggle(c, g.vignette, 'Low-HP vignette', this.options.vignette);
+    // back
+    uiButton(ctx, g.back.x, g.back.y, g.back.w, g.back.h, 'Back', this._mouseIn(g.back.x, g.back.y, g.back.w, g.back.h), false, { seed: 62, size: 16, mouseX: m.x, mouseY: m.y, mouseClicked: false });
+    paperEnd(ctx);
   }
 
   _drawTitle(ctx) {
@@ -1845,6 +1985,8 @@ _drawAtelier(ctx) {
         }
         // atelier button (visual; A / click handled in _updateTitle)
         uiButton(ctx, g.abx, g.aby, g.abw, g.abh, 'Visit the Atelier', this._mouseIn(g.abx, g.aby, g.abw, g.abh), false, { seed: 6, size: 15 });
+        // P9: options button (visual; O / click handled in _updateTitle)
+        uiButton(ctx, g.ox, g.oy, g.ow, g.oh, 'Options', this._mouseIn(g.ox, g.oy, g.ow, g.oh), false, { seed: 7, size: 15 });
 
         // little footer stats
         const s = this.save.stats;
