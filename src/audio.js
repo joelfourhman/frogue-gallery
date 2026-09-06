@@ -15,6 +15,15 @@ export class AudioSys {
     this.muted = false;
     this._noiseBuf = null;
     this._musicNodes = []; // [osc1, osc2, gain1, gain2, lfo, lfoGain]
+    // ---- V3 (v1.2 M11): per-zone ambient bed ----
+    // A soft, looping ambient layer that shifts by zone. It sits under the
+    // musicBus (so it inherits the music-volume slider + mute for free) and
+    // is kept at a modest fraction of the music level. All synthesized from
+    // the existing oscillator / noise-buffer nodes — no new assets.
+    this._ambMaster = null;   // persistent gain -> musicBus (the ambient fraction)
+    this._ambFrac = 0.5;      // ambient bed = a fraction of music volume
+    this._crossFade = 1.6;    // seconds to crossfade between zones
+    this._amb = null;         // { zone, voices: [{ node, gain }] } — current zone bed
   }
 
   ensure() {
@@ -100,6 +109,136 @@ export class AudioSys {
       try { if (n.stop) n.stop(); n.disconnect(); } catch (e) {}
     }
     this._musicNodes = [];
+    this.clearZoneAmbient();
+  }
+
+  // ---- V3 (v1.2 M11): per-zone ambient bed ----------------------------------
+  // A soft looping ambient layer that shifts by the zone the frog is in. It
+  // feeds the existing musicBus, so it inherits the music-volume slider and the
+  // master mute for free; a dedicated _ambMaster (gain 0.6) keeps it a modest
+  // *fraction* of the music level. Crossfades between zones. All synthesized
+  // from the existing oscillator / noise-buffer nodes — no new assets.
+  //
+  // Each zone is a small preset of voices; every voice has its own gain (vg)
+  // -> the per-zone group gain (zg, 0..1, crossfaded) -> _ambMaster -> musicBus.
+  _ZONE_PRESETS() {
+    return [
+      { // index 0 — the calm pre-first-zone opening (a quiet, distant water hush)
+        voices: [
+          { type: 'sine',  f: 82,  g: 0.09 },
+          { type: 'noise', filter: 'lowpass', f: 240, q: 0.5, g: 0.035 },
+        ],
+      },
+      { // Reed Flats — a low water-drone under a soft filtered shimmer
+        voices: [
+          { type: 'sine',   f: 70,  g: 0.13 },
+          { type: 'sine',   f: 95,  g: 0.06 },
+          { type: 'noise',  filter: 'lowpass',  f: 320, q: 0.6, g: 0.05 },
+        ],
+      },
+      { // Slick Hollow — a wind-ish pad: bandpassed air + a soft tone
+        voices: [
+          { type: 'noise',    filter: 'bandpass', f: 480, q: 0.5, g: 0.08 },
+          { type: 'triangle', f: 220, g: 0.045 },
+        ],
+      },
+      { // Bramble Thicket — a warm low drone
+        voices: [
+          { type: 'sine', f: 90,  g: 0.11 },
+          { type: 'sine', f: 135, g: 0.055 },
+        ],
+      },
+      { // The Gray Shore — sparse high chimes near the heron (LFO-gated so they
+        // pulse in and out rather than ring constantly)
+        voices: [
+          { type: 'sine', f: 660, g: 0.030, lfo: { f: 0.14, depth: 0.028 } },
+          { type: 'sine', f: 880, g: 0.020, lfo: { f: 0.09, depth: 0.019 } },
+          { type: 'noise', filter: 'highpass', f: 1300, q: 0.8, g: 0.018 },
+        ],
+      },
+    ];
+  }
+
+  // Enter / crossfade to the ambient bed for the given zone index (0..4).
+  // Index 0 = the calm pre-first-zone opening; 1..4 = the four named zones
+  // (Reed Flats, Slick Hollow, Bramble Thicket, The Gray Shore). Idempotent
+  // per zone: switching to the current zone is a no-op.
+  setZoneAmbient(zoneI) {
+    if (!this.ctx || !this.musicBus) return;
+    const zi = Math.max(0, Math.min(4, (zoneI | 0)));
+    if (this._amb && this._amb.zone === zi) return;
+    // persistent ambient fraction node (created once)
+    if (!this._ambMaster) {
+      this._ambMaster = this.ctx.createGain();
+      this._ambMaster.gain.value = 0.6;      // a modest fraction of the music
+      this._ambMaster.connect(this.musicBus);
+    }
+    // The outgoing bed (if any) — captured BEFORE we replace _amb so the
+    // previous zone keeps sounding while the new one fades in (the crossfade).
+    const prev = this._amb;
+    try {
+      const t = this.ctx.currentTime;
+      const presets = this._ZONE_PRESETS();
+      const zg = this.ctx.createGain();
+      zg.gain.value = 0.0001;
+      zg.connect(this._ambMaster);
+      zg.gain.linearRampToValueAtTime(1, t + this._crossFade); // group eases in
+      const voices = [];
+      for (const spec of presets[zi].voices) {
+        const vg = this.ctx.createGain();
+        vg.gain.value = spec.g ?? 0.08;
+        vg.connect(zg);
+        let node;
+        if (spec.type === 'noise') {
+          node = this.ctx.createBufferSource();
+          node.buffer = this._noiseBuf;
+          node.loop = true;
+          const filt = this.ctx.createBiquadFilter();
+          filt.type = spec.filter; filt.frequency.value = spec.f; filt.Q.value = spec.q ?? 0.7;
+          node.connect(filt); filt.connect(vg);
+          node.start(t);
+        } else {
+          node = this.ctx.createOscillator();
+          node.type = spec.type; node.frequency.value = spec.f;
+          node.connect(vg); node.start(t);
+          if (spec.lfo) {
+            const lfo = this.ctx.createOscillator();
+            lfo.type = 'sine'; lfo.frequency.value = spec.lfo.f;
+            const lg = this.ctx.createGain(); lg.gain.value = spec.lfo.depth;
+            lfo.connect(lg); lg.connect(vg.gain); lfo.start(t);
+            voices.push({ node: lfo, gain: lg }); // track the LFO for cleanup
+          }
+        }
+        voices.push({ node, gain: vg });
+      }
+      this._amb = { zone: zi, zg, voices };
+      // fade the outgoing zone out (crossfade) and tear it down once quiet
+      if (prev && prev !== this._amb) {
+        try {
+          prev.zg.gain.setTargetAtTime(0.0001, t, this._crossFade / 3);
+          const p = prev;
+          setTimeout(() => {
+            try { for (const v of p.voices) v.node.stop(); } catch (e) {}
+            try { p.zg.disconnect(); } catch (e) {}
+          }, this._crossFade * 1.5 * 1000);
+        } catch (e) { /* headless / already torn down */ }
+      }
+    } catch (e) { /* headless / unsupported */ }
+  }
+
+  // Fade out and tear down the ambient bed (run end / music stop).
+  clearZoneAmbient() {
+    if (!this.ctx || !this._amb) return;
+    const a = this._amb;
+    this._amb = null;
+    try {
+      a.zg.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.4);
+      const b = a;
+      setTimeout(() => {
+        try { for (const v of b.voices) v.node.stop(); } catch (e) {}
+        try { b.zg.disconnect(); } catch (e) {}
+      }, 1200);
+    } catch (e) { /* headless */ }
   }
 
   _env(gainNode, t0, peak, attack, decay) {

@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 39 STAGES PASSED** (…stage 37 = v1.2 M10 E4 orb-streak bonus, stage 38 = v1.2 M11 V1 color-reveal progress bar, stage 39 = v1.2 M11 V2 heron awaken bloom). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **54s**, heron **156s**, full-run **19.2 min** — in the 15–20 min band (E1 mid-heron non-blocking; E2 weather phases informational; E4 streak is a scoring bonus that adds no run time; V1 is pure HUD; **V2 is pure presentation — render-only saturation surge + radial wash + SFX, zero gameplay change — so pacing is untouched and no pace probe re-run is needed**). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ + V2 (heron awaken bloom) ✅ — v1.2 Batch 4 in flight (item 1 of 3 done). Next: V3 (zone audio) / M11.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 40 STAGES PASSED** (…stage 38 = v1.2 M11 V1 color-reveal progress bar, stage 39 = v1.2 M11 V2 heron awaken bloom, stage 40 = v1.2 M11 V3 per-zone ambient audio bed). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **54s**, heron **156s**, full-run **19.2 min** — in the 15–20 min band (E1 mid-heron non-blocking; E2 weather phases informational; E4 streak is a scoring bonus that adds no run time; V1 is pure HUD; **V2 + V3 are pure presentation — V2 render-only bloom/SFX, V3 an ambient audio bed that only *adds* sound and changes no gameplay timing — so pacing is untouched and no pace probe re-run is needed**). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ + V2 (heron awaken bloom) ✅ + V3 (per-zone ambient audio) ✅ — v1.2 Batch 4 in flight (2 of 3 done). Next: V4 (exhibition end-screen) / M11.**_
 
 ## Current Status
 
@@ -132,7 +132,7 @@ accessibility deferred).
 1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 ✅ (Curator's Ledger). **Batch 1 (A1–A3) COMPLETE.**
 2. M9: **A4 ✅ (Rehung Frame)** → M10: **E1 ✅ (Painted Heron)** → **E2 ✅ (weather/tide phases)**. **Batch 2 (A4/E1/E2) COMPLETE — suite 35/35, pacing in band on Normal.**
 3. M10: **E3 ✅ (Bold-only zone hazards)** → **E4 ✅ (orb-streak bonus)** → M11: **V1 ✅ (color-reveal bar)** — **Batch 3 COMPLETE**
-4. M11: **V2 ✅ (heron bloom beat)** → V3 (zone audio) → V4 (exhibition end-screen) — Batch 4 in flight (1/3)
+4. M11: **V2 ✅ (heron bloom beat)** → **V3 ✅ (zone ambient audio)** → V4 (exhibition end-screen) — Batch 4 in flight (2/3)
 5. M13: T1 (guided first expedition) → T2 (pigment drills)
 6. M13: T3 (mini heron) → T4 (tutorial progress + re-entry)
 
@@ -247,6 +247,42 @@ pure `orbStreakState`, so the HUD always matches the scoring. A distinct
 (E4): no bonus below 4, +10% at 4, plateau at the cap, and in the real loop the
 streak **builds on collect, boosts orb value (1.21 vs base 1.10), and resets on
 a hit** (then pays base again). Suite green: 37/37.
+
+**M11 V3 (per-zone ambient audio bed) — implemented + tested (v1.2 Batch 4, item 2).**
+A **soft, looping ambient bed that shifts by zone**, layered under the existing
+`musicBus` so it inherits the music-volume slider and mute for free. It is a
+**presentation-only audio layer** — it only *adds* sound, changes no gameplay
+timing, so **pacing is untouched** (no pace/humance re-run needed).
+
+`audio.js` gains `AudioSys.setZoneAmbient(zoneI)` + `_ZONE_PRESETS()` +
+`clearZoneAmbient()`. A persistent `_ambMaster` gain (fixed at **0.6 — a modest
+fraction of the music level**) is created once and connected under `musicBus`;
+each zone's voices route `osc/noise → (filter) → voiceGain → zoneGroup(zg) →
+_ambMaster → musicBus`. Five regions ship: index 0 = the calm pre-first-zone
+opening (a quiet water hush), then the four named zones — **Reed Flats** (low
+water-drone + soft shimmer), **Slick Hollow** (wind-ish filtered-noise pad + a
+fifth), **Bramble Thicket** (a low hum + a beating LFO), and **The Gray Shore**
+(sparse chime oscillators + a soft drone, the "everything gathers" zone). Every
+voice is **synthesized from the existing WebAudio nodes/oscillators + the pre-
+rendered noise buffer** — zero new assets. `game.js` stays thin: `_updateZoneAmbient()`
+calls `audio.setZoneAmbient(this._zoneI)` (no-op headless / unchanged), is wired
+at **run start** (seed the opening region), on **zone entry** (`_zoneBeat` — the
+crossfade point), and **fades out at run end** (`_endRun` → `clearZoneAmbient`,
+so the atelier keeps the base music bed but not a zone). Crossfading is
+handled by easing the incoming zone group in over ~1.6s while the outgoing zone
+fades out and is torn down once quiet; `setZoneAmbient` is idempotent per zone.
+
+Smoke stage 40 (V3) is a **documented headless node-graph check** (no real audio
+device available — the stub has no `AudioContext`, so the graph can't *play*; we
+verify it *builds*). A mock WebAudio context records every created node, and the
+stage asserts: a fresh `AudioSys` has no bed until a zone is entered; **each of
+the 5 regions builds a distinct, correctly-sized graph** (2/3/2/2/5 voices incl.
+LFOs); the `_ambMaster` is a modest fraction (≤0.6) **wired under `musicBus`**;
+the current zone's group gain **feeds `_ambMaster`** (the full chain is really
+routed in); entering a new zone **builds a fresh bed (crossfade hand-off)**;
+re-entering the same zone is a **no-op (no rebuild)**; the **music slider tracks
+the musicBus** (0.5 → 0.8) while the ambient fraction stays its own modest value;
+and `clearZoneAmbient()` **tears the bed down** on run end. Suite green: 40/40.
 
 **M11 V2 (heron awaken bloom) — implemented + tested (v1.2 Batch 4, item 1).**
 The moment the final heron **turns colorful** (its `awakened` flag flips) the

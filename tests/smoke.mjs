@@ -1974,5 +1974,78 @@ console.log('\n== stage 39: V2 — heron awaken bloom ==');
   gV2._onPlayerDead(); gV2._endRun('defeat');
 }
 
+// stage 40: V3 (v1.2 M11) — the per-zone ambient bed. A soft looping ambient
+// layer that shifts by zone, feeds the existing musicBus, and stays a modest
+// fraction of the music level. There's no real audio device here, so we stub
+// the WebAudio API with a mock context and assert on the *built node graph* —
+// a headless check that the graph is built per-zone and the volume tracks the
+// music slider (as required, without a device).
+{
+  console.log('\n== stage 40: V3 — per-zone ambient audio bed ==');
+
+  // Mock WebAudio context: enough node surface for AudioSys.ensure() + the
+  // ambient bed, with every created node recorded for inspection.
+  const created = { osc: [], gain: [], filter: [], buffer: [] };
+  function mockParam(value) { const p = { value, setValueAtTime(v) { this.value = v; }, linearRampToValueAtTime(v) { this.value = v; }, exponentialRampToValueAtTime(v) { this.value = v; }, setTargetAtTime(v) { this.value = v; } }; return p; }
+  function mkNode() { const n = { _to: [], connect(t) { this._to.push(t); }, disconnect() { this._to.length = 0; }, start() {}, stop() {} }; return n; }
+  const mockCtx = {
+    currentTime: 0,
+    sampleRate: 44100,
+    destination: {},
+    createGain: () => { const n = mkNode(); n.gain = mockParam(0); created.gain.push(n); return n; },
+    createOscillator: () => { const n = mkNode(); n.type = 'sine'; n.frequency = mockParam(0); created.osc.push(n); return n; },
+    createBiquadFilter: () => { const n = mkNode(); n.type = 'lowpass'; n.frequency = mockParam(0); n.Q = mockParam(0); created.filter.push(n); return n; },
+    createBufferSource: () => { const n = mkNode(); n.loop = false; n.buffer = null; created.buffer.push(n); return n; },
+    createDynamicsCompressor: () => { const n = mkNode(); created.gain.push(n); return n; },
+    createBuffer: () => ({ getChannelData: () => new Float32Array(2) }),
+  };
+  window.AudioContext = class { constructor() { return mockCtx; } };
+  const { AudioSys } = await import('../src/audio.js');
+  const a = new AudioSys();
+  assert(a.ensure(), 'V3: the audio context initializes (mock)');
+  // a fresh AudioSys has no ambient bed until a zone is entered
+  assert(a._amb === null, 'V3: no ambient bed before a zone is entered');
+
+  const voiceCount = (zi) => { const v = a._ZONE_PRESETS()[zi].voices; let c = v.length; for (const s of v) if (s.lfo) c++; return c; };
+  // each of the 5 regions (0 = calm pre-zone opening, 1..4 = the named zones)
+  // builds a DISTINCT ambient graph, wired under the music bus at a modest fraction
+  for (let zi = 0; zi < 5; zi++) {
+    created.osc.length = 0; created.gain.length = 0; created.filter.length = 0;
+    a.clearZoneAmbient(); a._amb = null; // hard reset between zones
+    a.setZoneAmbient(zi);
+    assert(a._amb && a._amb.zone === zi, `V3: entering region ${zi} builds the ambient bed (zone ${a._amb ? a._amb.zone : 'none'})`);
+    const vc = a._amb.voices.length;
+    assert(vc > 0, `V3: region ${zi} has ${vc} voices built (a distinct preset)`);
+    assert(vc === voiceCount(zi), `V3: region ${zi} built the right node count (${vc} = ${vc} voices+LFOs)`);
+  }
+  // the ambient master is a modest fraction and feeds the music bus
+  assert(a._ambMaster && a._ambMaster.gain.value <= 0.6, `V3: the ambient bed is a modest fraction of music (gain ${a._ambMaster ? a._ambMaster.gain.value : 'none'})`);
+  assert(a._ambMaster._to.includes(a.musicBus), 'V3: the ambient master is wired under the music bus (inherits the music slider + mute)');
+  // the current zone's group gain feeds the ambient master (full chain:
+  // voices -> zg -> _ambMaster -> musicBus), so each zone truly routes in
+  assert(a._amb.zg._to.includes(a._ambMaster), 'V3: the zone group gain feeds the ambient master (per-zone graph is wired in)');
+  // crossfade: switching to a NEW zone rebuilds the bed (new group) without
+  // throwing; switching to the SAME zone is a no-op (idempotent).
+  a.setZoneAmbient(0);
+  const bed0 = a._amb;
+  a.setZoneAmbient(1);
+  assert(a._amb.zone === 1 && a._amb !== bed0, 'V3: entering a new zone builds a fresh bed (crossfade hand-off)');
+  const bed1 = a._amb;
+  a.setZoneAmbient(1);
+  assert(a._amb === bed1, 'V3: re-entering the same zone is a no-op (no rebuild)');
+  // the music-volume slider drives the musicBus, and the ambient bed inherits
+  // it (the ambient master stays its own modest fraction of that bus).
+  a.setMusicVolume(0.5);
+  assert(a.musicBus.gain.value === 0.5, `V3: the music slider sets the musicBus (gain ${a.musicBus.gain.value})`);
+  assert(a._ambMaster.gain.value <= 0.6, 'V3: the ambient fraction is independent of (modest relative to) the music slider');
+  a.setMusicVolume(0.8);
+  assert(a.musicBus.gain.value === 0.8, `V3: raising the music slider tracks the musicBus (gain ${a.musicBus.gain.value})`);
+  // clearing the bed (run end) tears it down
+  a.clearZoneAmbient();
+  assert(a._amb === null, 'V3: clearing the ambient bed on run end tears it down');
+  delete window.AudioContext;
+  a.stopMusic();
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

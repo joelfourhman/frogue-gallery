@@ -1162,6 +1162,7 @@ _drawAtelier(ctx) {
     }
     this.audio.ensure();
     this.audio.startMusic();
+    this._updateZoneAmbient(); // V3: seed the ambient bed for the starting region
     this.sfx('ui');
     this._prevHp = this.tuning.maxHp;
     const firstRun = !this.save.flags.intro;
@@ -1416,6 +1417,8 @@ _drawAtelier(ctx) {
     const W = this.world.w;
     this.sfx('ui');
     this.addBanner(z.tip, 5.2, this.ch * 0.3);
+    // V3 (v1.2 M11): crossfade the per-zone ambient bed to the zone just entered.
+    this._updateZoneAmbient();
     // M8 P12: a brief zone-accent wash so entering a zone reads as a change of
     // place, not just a new banner.
     if (z.accent) this._zoneTint = { color: z.accent, t: 2.6, max: 2.6 };
@@ -1511,6 +1514,15 @@ _drawAtelier(ctx) {
         _cd: 0, // per-hazard re-trigger cooldown (prevents re-rooting every frame)
       });
     }
+  }
+
+  // V3 (v1.2 M11): set the per-zone ambient bed to the zone the frog is in.
+  // `this._zoneI` is the index of the zone just entered (0 = the calm pre-zone
+  // opening, 1..4 = the four named zones). No-op if the context isn't ready
+  // (headless) or the zone is unchanged — audio.js keeps it idempotent too.
+  _updateZoneAmbient() {
+    if (!this.audio || !this.audio.ctx) return;
+    this.audio.setZoneAmbient(this._zoneI);
   }
 
   // E3: apply the active hazards' effects (thorn reed = brief root, mud pool =
@@ -1697,6 +1709,9 @@ _drawAtelier(ctx) {
         SaveSys.save(this.save);
         this.endGains = gains;
         this.sfx(victory ? 'victory' : 'defeat');
+        // V3: fade out the per-zone ambient bed — the run's place has ended;
+        // the atelier keeps the base music bed (startMusic) but not a zone.
+        if (this.audio && this.audio.clearZoneAmbient) this.audio.clearZoneAmbient();
   }
 
   // ================= part 3: boss ========================================
