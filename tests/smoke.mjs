@@ -21,6 +21,7 @@ function makeCtx(canvas) {
       if (prop in t) return t[prop];
       if (prop === 'measureText') return () => ({ width: 10 });
       if (prop === 'createLinearGradient' || prop === 'createRadialGradient') return () => grad;
+      if (prop === 'createPattern') return () => ({ _pattern: true });
       if (prop === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
       t._fns++;
       return () => {};
@@ -3478,7 +3479,82 @@ console.log('== stage 55: v1.3 M16 C2 — victory end-screen "Season" summary ==
   gA._frame(gA.now * 1000 + 5300);
   assert(JSON.stringify(store.get('frogue_gallery_save')) === before55, 'C2: the Season summary persists nothing new to the save');
 
-  console.log('ok — C2: the victory end screen gains a compact "Season" summary block (cycle / modifier / gold earned this expedition + total / Gilded Frame state / paintings carried) in the V4 card\'s spare bottom band — pure display, no new persistence, button geometry untouched');
+  console.log('ok — C2: the victory end screen gains a compact "Season" summary block (cycle / modifier / gold earned this expedition + total / Gilded Frame state / paintings carried) in the spare bottom band of the V4 card — pure display, no new persistence, button geometry untouched');
+}
+
+// stage 56 — v1.3 M16 C3: the "paper grain" presentation toggle. An options
+// toggle (default OFF) that overlays a subtle PROCEDURAL paper-grain texture
+// (two cached offscreen tiles of low-opacity noise speckles — a fine + a coarse
+// scale — tiled across the canvas at low alpha, drawn LAST in the render loop).
+// NO image assets, NO scanlines/CRT. We assert: the option defaults OFF; the
+// render path skips the grain when off and builds+draws it when on (the
+// _grainDraws counter is the test-observable signal); the tile cache is built
+// once and reused; toggling from the options screen flips the flag and persists
+// it; and old options blobs (no `grain` field) migrate without error.
+console.log('== stage 56: v1.3 M16 C3 — paper-grain presentation toggle ==');
+{
+  const L56 = await import('../src/logic.js');
+
+  // (1) Default OFF on fresh + migrated (legacy) options — no error, no throw.
+  assert(L56.freshOptions().grain === false, 'C3: fresh options default grain OFF');
+  assert(L56.migrateOptions(null).grain === false, 'C3: missing options migrate grain OFF');
+  const legacy56 = L56.migrateOptions({ volume: 0.7, muted: false, difficulty: 'normal', musicVol: 0.6, sfxVol: 0.7, shake: true, vignette: true });
+  assert(legacy56.grain === false, 'C3: a legacy options blob (no `grain` field) migrates to OFF without error');
+  const legacyOn = L56.migrateOptions({ grain: true });
+  assert(legacyOn.grain === true, 'C3: an explicit grain:true is honored on migration');
+
+  // (2) A fresh Game defaults to grain OFF and does NOT build the grain overlay
+  // (no tiles, no draws) until the option is turned on.
+  let t56 = 5000;
+  const cv56 = makeCanvas();
+  const g56 = new Game(cv56);
+  g56.start();
+  const fr56 = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t56 += step; g56._frame(t56); } };
+  assert(g56.options.grain === false, 'C3: a fresh Game loads grain OFF by default');
+  fr56(30); // draw a few title frames with grain OFF
+  assert(!g56._grain, 'C3: the grain overlay is NOT built while the option is OFF');
+  assert(!g56._grainDraws || g56._grainDraws === 0, 'C3: the grain overlay is NOT drawn while the option is OFF');
+
+  // (3) Turn the option ON: the overlay is built (two cached tiles) and drawn.
+  g56.options.grain = true;
+  g56._grainDraws = 0;
+  fr56(10);
+  assert(!!g56._grain && !!g56._grain.fine.cv && !!g56._grain.coarse.cv, 'C3: the grain overlay is BUILT (fine + coarse tiles) once the option is ON');
+  assert(g56._grain.fine.pat && g56._grain.coarse.pat, 'C3: both grain patterns are created (fine + coarse scales)');
+  assert(g56._grainDraws >= 1, `C3: the grain overlay is DRAWN when ON (${g56._grainDraws} frames)`);
+
+  // (4) The tile cache is built ONCE and reused (no rebuild on subsequent frames).
+  const fineCv = g56._grain.fine.cv;
+  const coarseCv = g56._grain.coarse.cv;
+  const grCt = g56._grainDraws;
+  fr56(20);
+  assert(g56._grain.fine.cv === fineCv && g56._grain.coarse.cv === coarseCv, 'C3: the grain tiles are CACHED (built once, not rebuilt per frame)');
+  assert(g56._grainDraws > grCt, 'C3: the grain keeps drawing on every frame while ON');
+
+  // (5) The toggle is on the options screen (layout has a grain row) and flipping
+  // it via the click path changes the flag + persists it.
+  g56._quitToTitle();
+  g56.options.grain = false; // reset to a known state
+  g56._openOptions();
+  const g56L = g56._optionsLayout();
+  assert(g56L.grain && g56L.grain.w > 0, 'C3: the options layout exposes a grain toggle row');
+  // simulate a click on the grain row (left mouse press inside the rect)
+  g56.input.mouse.x = g56L.grain.x + 40;
+  g56.input.mouse.y = g56L.grain.y + 10;
+  fireMouse(cv56, g56.input.mouse.x, g56.input.mouse.y);
+  fr56(1);
+  assert(g56.options.grain === true, 'C3: clicking the grain row in the options screen turns it ON');
+  // the toggle persisted to (stub) localStorage options
+  const raw56 = JSON.parse(store.get('frogue_gallery_options') || '{}');
+  assert(raw56.grain === true, 'C3: the grain toggle persists to the saved options blob');
+
+  // (6) Turning it OFF stops the draws (the render path skips it again).
+  g56.options.grain = false;
+  g56._grainDraws = 0;
+  fr56(6);
+  assert(g56._grainDraws === 0, 'C3: with the option back OFF the grain is skipped again (no draws)');
+
+  console.log('ok — C3: a paper-grain presentation toggle (default OFF) overlays a subtle PROCEDURAL paper-grain texture — two cached low-opacity noise tiles (fine + coarse scales) drawn last in the render loop at low alpha; NO image assets / NO scanlines/CRT; the render path skips it when OFF and builds+draws it when ON; the tile cache is built once; the toggle persists and old options blobs migrate to OFF without error');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

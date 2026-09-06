@@ -3071,6 +3071,60 @@ _drawAtelier(ctx) {
       ctx.fillRect(0, 0, this.cw, this.ch);
       ctx.restore();
     }
+
+    // ---- C3 (v1.3 M16): paper-grain overlay (options.grain, default OFF) ----
+    // Drawn LAST (after the vignette) so the subtle procedural paper grain sits
+    // on top of every screen. Pure presentation — no gameplay, no persistence
+    // beyond the options toggle; skipped entirely when the option is off.
+    this._drawGrain(ctx);
+  }
+
+  // C3 (v1.3 M16): build (once) + draw the procedural paper-grain overlay.
+  // NO image assets, NO scanlines/CRT (explicitly excluded — they fight the
+  // watercolor identity): two CACHED offscreen tiles of low-opacity noise
+  // speckles (a fine scale + a coarse scale for variation) are tiled across
+  // the canvas at low alpha. The tiles are cached on `this._grain` so the
+  // per-frame cost is two pattern fills. `createPattern` returning a falsy
+  // value (headless stubs, or a context without pattern support) is a clean
+  // no-op. `this._grainDraws` counts drawn frames (a test-observable signal).
+  _buildGrain() {
+    if (this._grain) return this._grain;
+    const mk = (size, n, a) => {
+      const cv = document.createElement('canvas');
+      cv.width = size; cv.height = size;
+      const g = cv.getContext('2d');
+      for (let i = 0; i < n; i++) {
+        g.globalAlpha = a * (0.4 + Math.random() * 0.6);
+        g.fillStyle = Math.random() < 0.62 ? '#3a2c22' : '#fdf6e9';
+        const r = 0.4 + Math.random() * 1.1;
+        g.beginPath();
+        g.arc(Math.random() * size, Math.random() * size, r, 0, TAU);
+        g.fill();
+      }
+      return cv;
+    };
+    // Two scales: a fine 128px tile (dense, faint) + a coarse 64px tile (sparse,
+    // slightly stronger) so the grain reads as paper texture, not flat noise.
+    this._grain = {
+      fine: { cv: mk(128, 220, 0.05) },
+      coarse: { cv: mk(64, 46, 0.07) },
+    };
+    // Cache the patterns on this context (built once per Game; the tiles are
+    // reused for the life of the Game, so the per-frame cost is two fills).
+    this._grain.fine.pat = this.ctx.createPattern(this._grain.fine.cv, 'repeat');
+    this._grain.coarse.pat = this.ctx.createPattern(this._grain.coarse.cv, 'repeat');
+    return this._grain;
+  }
+  _drawGrain(ctx) {
+    if (!this.options || !this.options.grain) return;   // default OFF: skipped
+    const gr = this._buildGrain();
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    if (gr.fine.pat) { ctx.fillStyle = gr.fine.pat; ctx.fillRect(0, 0, this.cw, this.ch); }
+    ctx.globalAlpha = 0.4;
+    if (gr.coarse.pat) { ctx.fillStyle = gr.coarse.pat; ctx.fillRect(0, 0, this.cw, this.ch); }
+    ctx.restore();
+    this._grainDraws = (this._grainDraws || 0) + 1;
   }
 
   // V2 (v1.2 M11): trigger the heron "awaken bloom" at world position (x, y).
@@ -3496,16 +3550,20 @@ _drawAtelier(ctx) {
   // never drift. Sliders are horizontal bars: value = (handleX - x) / w.
   _optionsLayout() {
     const cx = this.cw / 2, cy = this.ch / 2;
-    const pw = 460, ph = 380, px = cx - pw / 2, py = cy - ph / 2;
+    // C3 (v1.3 M16): the panel grew 380→424 to fit a FOURTH toggle (paper
+    // grain) below the vignette; the back button stays anchored to the panel
+    // bottom (py + ph - 66), so its rect moves down with the taller panel.
+    const pw = 460, ph = 424, px = cx - pw / 2, py = cy - ph / 2;
     const padX = 46;
     const trackX = px + padX, trackW = pw - padX * 2;
     const row = (baseY) => ({ x: trackX, y: baseY, w: trackW, h: 22 });
-    const yMusic = py + 112, ySfx = py + 178, yShake = py + 240, yVign = py + 278;
+    const yMusic = py + 112, ySfx = py + 178, yShake = py + 240, yVign = py + 278, yGrain = py + 316;
     const back = { x: cx - 90, y: py + ph - 66, w: 180, h: 46 };
     return { cx, cy, pw, ph, px, py, padX, trackX, trackW,
       music: row(yMusic), sfx: row(ySfx),
       shake: { x: trackX, y: yShake, w: trackW, h: 26 },
       vignette: { x: trackX, y: yVign, w: trackW, h: 26 },
+      grain: { x: trackX, y: yGrain, w: trackW, h: 26 },
       back };
   }
   _sliderValue(rect, val) {
@@ -3546,6 +3604,7 @@ _drawAtelier(ctx) {
       // toggles (shake / vignette) take precedence on their rows
       if (this._mouseIn(g.shake.x, g.shake.y, g.shake.w, g.shake.h)) { this._toggleOpt('shake'); return; }
       if (this._mouseIn(g.vignette.x, g.vignette.y, g.vignette.w, g.vignette.h)) { this._toggleOpt('vignette'); return; }
+      if (this._mouseIn(g.grain.x, g.grain.y, g.grain.w, g.grain.h)) { this._toggleOpt('grain'); return; }
       if (this._mouseIn(g.back.x, g.back.y, g.back.w, g.back.h)) { this._closeOptions(); return; }
       // sliders: a fresh press on the track jumps the handle AND starts a drag
       const hit = (r) => m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y - 8 && m.y <= r.y + r.h + 8;
@@ -3610,6 +3669,8 @@ _drawAtelier(ctx) {
     // toggles
     this._drawToggle(c, g.shake, 'Screen shake', this.options.shake);
     this._drawToggle(c, g.vignette, 'Low-HP vignette', this.options.vignette);
+    // C3 (v1.3 M16): the paper-grain presentation toggle (default OFF).
+    this._drawToggle(c, g.grain, 'Paper grain', this.options.grain);
     // back
     uiButton(ctx, g.back.x, g.back.y, g.back.w, g.back.h, 'Back', this._mouseIn(g.back.x, g.back.y, g.back.w, g.back.h), false, { seed: 62, size: 16, mouseX: m.x, mouseY: m.y, mouseClicked: false });
     paperEnd(ctx);

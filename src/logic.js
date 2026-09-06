@@ -1330,8 +1330,11 @@ export function migrateSave(raw) {
 // screen-shake + low-HP vignette accessibility toggles. The legacy `volume`
 // field (a single master) is still honored by migrateOptions so pre-P9 saves
 // keep working; new fields default sensibly.
+// C3 (v1.3 M16): `grain` (default OFF) — a subtle PROCEDURAL paper-grain overlay
+// (see game.js _buildGrain/_drawGrain). Presentation-only; an old options blob
+// (no `grain` field) migrates forward to OFF so returning players see no change.
 export function freshOptions() {
-  return { volume: 0.8, muted: false, difficulty: 'normal', musicVol: 0.6, sfxVol: 0.7, shake: true, vignette: true };
+  return { volume: 0.8, muted: false, difficulty: 'normal', musicVol: 0.6, sfxVol: 0.7, shake: true, vignette: true, grain: false };
 }
 export function migrateOptions(raw) {
   const o = freshOptions();
@@ -1347,6 +1350,9 @@ export function migrateOptions(raw) {
     // shake / vignette: default on; only an explicit false turns them off.
     o.shake = raw.shake !== false;
     o.vignette = raw.vignette !== false;
+    // C3: grain defaults OFF; only an explicit true turns it on. A legacy blob
+    // (field absent) migrates to OFF — presentation unchanged.
+    o.grain = !!raw.grain;
   }
   return o;
 }
