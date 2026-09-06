@@ -1437,15 +1437,16 @@ console.log('== stage 32: v1.2 M9 A3 — the Curator\'s Ledger ==');
   // the correct collected / not-yet state is asserted per painting:
   //  - the 3 owned (pigment) ones must carry "collected" (king-frog: "hung")
   //  - the unowned PIGMENT ones carry "not yet collected"
-  //  - the unowned GOLD-tier ones carry "not yet gold" (G2 styling)
+  //  - the unowned GOLD-tier ones carry their gold price + "NG+ only" (G4b: the
+  //    gold price is now shown distinctly on the row, e.g. "25g · NG+ only")
   const owned = g32.save.owned;
   const hung = g32.save.loadout;
   const ownedNonGold = owned.filter(id => !goldIds.includes(id));
   const notYetPigment = (L.PAINTINGS.filter(p => !p.goldTier).length) - ownedNonGold.length;
   const notYetCount = (joined.match(/not yet collected/g) || []).length;
   assert(notYetCount === notYetPigment, `A3: exactly ${notYetPigment} PIGMENT entries marked "not yet collected"`);
-  const notYetGold = (joined.match(/not yet gold/g) || []).length;
-  assert(notYetGold === goldIds.length, `A3: exactly ${goldIds.length} unowned gold-tier entries marked "not yet gold"`);
+  const notYetGold = (joined.match(/g · NG\+ only/g) || []).length;
+  assert(notYetGold === goldIds.length, `A3: exactly ${goldIds.length} unowned gold-tier entries carry their gold price + "NG+ only" (G4b)`);
   // exact "collected" tag count = owned non-gold minus the ones flagged as hung
   const ownedNotHung = ownedNonGold.filter(id => !hung.includes(id)).length;
   const collectedExact = (joined.match(/\u0001collected\u0001/g) || []).length;
@@ -3243,7 +3244,89 @@ console.log('== stage 52: v1.3 M15 G3 — Gilded Frame (NG+ prestige tier) ==');
   frames(20);
   assert(g52.state === 'atelier', 'G3: the Ledger tab (with the Gilded Frame bar) drew cleanly');
 
-  console.log('ok — G3: the ONE-TIME Gilded Frame (50g, +3 start ink, +15% orb) is an NG+/gold-gated, permanent, saved prestige tier that applies LAST in makeTuning ON TOP OF the Rehung Frame (stacking to +7 ink / 1.38× orb at Rehung level 2), is not repeatable, persists across save/load, migrates old v6 saves to not-gilded, and surfaces in the Curator\'s Ledger as a gild bar with a state-aware button');
+  console.log('ok — G3: the ONE-TIME Gilded Frame (50g, +3 start ink, +15% orb) is an NG+/gold-gated, permanent, saved prestige tier that applies LAST in makeTuning ON TOP OF the Rehung Frame (stacking to +7 ink / 1.38x orb at Rehung level 2), is not repeatable, persists across save/load, migrates old v6 saves to not-gilded, and surfaces in the Curators Ledger as a gild bar with a state-aware button');
+}
+
+// stage 53 — v1.3 M15 G4: the gold UI + ledger completion (presentation-only).
+// G4 polishes the gold economy's PRESENTATION with pure UI/data reuse — no new
+// mechanics, no new persistent state. We record every fillText and assert:
+//   (a) the gold BALANCE READOUT renders on the atelier header AND on the
+//       "Next Expedition" (modifier picker) prompt, with a hint of what it buys;
+//   (b) the gold-tier rows in the Curator's Ledger show their gold price +
+//       owned state distinctly ("25g · NG+ only" / "40g · NG+ only");
+//   (c) a short gold LEGEND line explains what gold is + where it comes from.
+// ---------------------------------------------------------------------
+console.log('== stage 53: v1.3 M15 G4 — gold UI + ledger completion ==');
+{
+  const L53 = await import('../src/logic.js');
+  const recCanvas = makeCanvas();
+  const drawn = [];
+  const baseCtx = makeCtx(recCanvas);
+  const recCtx = new Proxy(baseCtx, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas.getContext = () => recCtx;
+
+  // ---- (a1) the atelier HEADER shows the gold balance readout ----
+  // A cycle-0 save (0 gold) shows the "meta pigment" hint; an NG+ save with 70g
+  // shows the "spend 50g ... Gilded Frame" hint. Both render the "gold N" count.
+  const gA = new Game(recCanvas); gA.start(); gA._quitToTitle(); gA._beginAtelier(); gA._atelierIntro = false;
+  gA.save = L53.freshSave(); gA.save.gold = 0;
+  drawn.length = 0; frames(3);
+  let joined = drawn.join('\u0001');
+  assert(joined.includes('gold 0'), 'G4(a): the atelier header renders the gold balance ("gold 0") on a fresh save');
+  assert(/a meta pigment/.test(joined), 'G4(a): the cycle-0 header readout explains gold is a meta pigment (earned from boss defeats / synergies / the 100-orb run)');
+  // now an NG+ save with 70 gold → the readout switches to the Gilded-Frame hint
+  gA.save.ngCycle = 1; gA.save.gold = 70;
+  drawn.length = 0; frames(3);
+  joined = drawn.join('\u0001');
+  assert(joined.includes('gold 70'), 'G4(a): the atelier header renders "gold 70" for an NG+ save');
+  assert(/spend 50g in the Curator/.test(joined), 'G4(a): the NG+ header readout hints at what the gold buys (the Gilded Frame, 50g)');
+
+  // ---- (a2) the "Next Expedition" prompt (modifier picker) shows the readout ----
+  // A returning NG+ player (victory earned, ngCycle 1 — the Next Expedition
+  // button only appears at ngCycle >= 1) opens the modifier picker from the
+  // title; the gold balance + "spend 50g ... Gilded Frame" hint renders below
+  // the "Swim On" button.
+  const gB = new Game(makeCanvas()); gB.start();
+  const bSave = L53.freshSave(); bSave.stats.victories = 1; bSave.flags.heronDefeated = true; bSave.ngCycle = 1; bSave.gold = 55;
+  gB.save = bSave;
+  gB._beginNextExpedition();
+  assert(gB._modPrompt && gB.state === 'title', 'G4(a): "Next Expedition" opens the modifier picker (title state)');
+  // point the drawing canvas at the recording proxy so the picker text is captured
+  gB.canvas = recCanvas; gB.ctx = recCtx;
+  drawn.length = 0; frames(3);
+  joined = drawn.join('\u0001');
+  assert(joined.includes('gold 55'), 'G4(a): the Next Expedition prompt renders the gold balance ("gold 55")');
+  assert(/Gilded Frame/.test(joined) && /50g/.test(joined), 'G4(a): the Next Expedition readout hints at the Gilded Frame (50g)');
+  gB._modPrompt = null;
+
+  // ---- (b) the gold-tier LEDGER rows show price + owned state distinctly ----
+  const gC = new Game(recCanvas); gC.start(); gC._quitToTitle(); gC._beginAtelier(); gC._atelierIntro = false;
+  gC.save = L53.freshSave(); gC.save.ngCycle = 1; gC.save.gold = 70;
+  gC.atelierTab = 3;   // the Curator's Ledger (holds the gold-tier works + Gilded Frame)
+  drawn.length = 0; frames(3);
+  joined = drawn.join('\u0001');
+  const goldPts = L53.PAINTINGS.filter(p => p.goldTier);
+  assert(goldPts.length === 2, `G4(b): the catalog holds exactly 2 gold-tier works (got ${goldPts.length})`);
+  for (const pt of goldPts) {
+    assert(joined.includes(`${pt.goldCost}g · NG+ only`), `G4(b): the unowned "${pt.name}" row shows its gold price + NG+ gate ("${pt.goldCost}g · NG+ only")`);
+    assert(joined.includes('◆ GOLD'), `G4(b): the "${pt.name}" row carries the gilded "◆ GOLD" tag`);
+  }
+  // once owned, the same row flips to the OWNED state (no longer a price)
+  gC.save.owned = [goldPts[0].id]; gC.save.loadout = [goldPts[0].id];
+  drawn.length = 0; frames(3);
+  joined = drawn.join('\u0001');
+  assert(joined.includes('★ hung in the loadout'), 'G4(b): an owned + hung gold-tier row shows the "★ hung in the loadout" state');
+  assert(!joined.includes(`${goldPts[0].goldCost}g · NG+ only`), `G4(b): the owned gold-tier row no longer shows its price`);
+
+  // ---- (c) the gold LEGEND line explains what gold is + where it comes from ----
+  // (the ledger tab is still active, so its legend line is the gold one)
+  assert(/gold is a meta pigment/.test(joined), 'G4(c): the Curator\'s Ledger shows the gold legend line ("gold is a meta pigment — earned from boss defeats, first synergies & the 100-orb run ...")');
+  assert(joined.includes('Gilded Frame') && joined.includes('boss defeats'), 'G4(c): the gold legend names its sources + what it buys (boss defeats / Gilded Frame)');
+
+  console.log('ok — G4: the gold economy\'s presentation is complete — the gold BALANCE READOUT (balance + "what it buys") renders on the atelier header AND the Next Expedition prompt, the gold-tier Curator\'s Ledger rows show their gold price + owned state distinctly ("25g/40g · NG+ only", "★ hung in the loadout"), and a short gold LEGEND line explains what gold is + where it comes from — all pure UI/data reuse (no new mechanics, no new persistent state)');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

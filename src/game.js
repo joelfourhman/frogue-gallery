@@ -612,6 +612,13 @@ export class Game {
     });
     // Continue button
     uiButton(ctx, g.cont.x, g.cont.y, g.cont.w, g.cont.h, 'Swim On', this._mouseIn(g.cont.x, g.cont.y, g.cont.w, g.cont.h), false, { seed: 5, size: 18 });
+    // G4 (v1.3 M15): the gold BALANCE READOUT on the Next Expedition prompt —
+    // shows the available gold + what it buys, so a returning player knows what
+    // they can spend before they dive. PURE read of save.gold (no new mechanics).
+    {
+      const ro = this._goldReadout();
+      centerText(c, `◆ ${ro.text}`, g.cx, g.cont.y + g.cont.h + 20, '700 12.5px Georgia, serif', '#c9922a', 0.95);
+    }
     ctx.restore();
   }
 
@@ -872,6 +879,25 @@ export class Game {
     return cx0 + 56;
   }
 
+  // G4 (v1.3 M15): the gold BALANCE READOUT — a short, reusable line that shows
+  // the available gold + a hint of what it buys. Shown in the atelier header
+  // (always) and on the Next Expedition prompt (NG+). PURE presentation (reads
+  // save.gold + the GILDED_FRAME constant) — no new mechanics, no new state.
+  _goldReadout() {
+    const gold = Math.floor(this.save.gold) || 0;
+    const ngOk = (Math.floor(this.save.ngCycle) || 0) >= 1;
+    const gilded = isGilded(this.save);
+    const canGild = ngOk && !gilded && gold >= GILDED_FRAME.cost;
+    const hint = gilded
+      ? 'the Gilded Frame is hung — it is forever yours'
+      : canGild
+        ? `spend ${GILDED_FRAME.cost}g in the Curator's Ledger to hang the Gilded Frame (+${GILDED_FRAME.ink} ink · +${Math.round(GILDED_FRAME.orbMult * 100 - 100)}% orb)`
+        : ngOk
+          ? `earned from boss defeats, first synergies & the 100-orb run — spend it in the Curator's Ledger (${GILDED_FRAME.cost}g = Gilded Frame)`
+          : 'a meta pigment — earned from boss defeats, first synergies & the 100-orb run (spent in NG+ only)';
+    return { gold, text: `gold ${gold} · ${hint}` };
+  }
+
   _toggleLoadout(id) {
     const i = this.save.loadout.indexOf(id);
     if (i >= 0) { this.save.loadout.splice(i, 1); this.sfx('ui-back'); }
@@ -940,9 +966,23 @@ _drawAtelier(ctx) {
     const cx = g.cx;
     outlineText(ctx, 'The Atelier', cx, 40, '700 40px Georgia, serif', '#f4ead8', INK, 6);
     centerText(ctx, 'a quiet studio above the water — spend your pigments well', cx, 78, 'italic 15px Georgia, serif', '#fdf6e9', 0.85);
+    // G4 (v1.3 M15): the gold BALANCE READOUT — a header line showing the
+    // available gold + a hint of what it buys (a pure read of save.gold).
+    // Sits between the subtitle and the bank strip; the bank strip moves down
+    // a touch (96→104) to make room. No new mechanics.
+    {
+      const ro = this._goldReadout();
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx - ctx.measureText(ro.text).width / 2 - 46, 93, 6, 0, TAU);
+      ctx.fillStyle = '#d9a520'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.restore();
+      centerText(ctx, ro.text, cx, 93, '700 12px Georgia, serif', '#c9922a', 0.95);
+    }
 
     // bank strip with loadout preview
-    const stripW = 640, stripH = 40, sx = cx - stripW / 2, sy = 96;
+    const stripW = 640, stripH = 40, sx = cx - stripW / 2, sy = 104;
     ctx.save();
     ctx.fillStyle = 'rgba(244,234,216,0.92)';
     ctx.strokeStyle = INK;
@@ -1012,6 +1052,11 @@ _drawAtelier(ctx) {
       const duo = activeSynergy(this.save.loadout);
       if (duo) centerText(ctx, `✦ duo active: ${duo.name} — ${duo.desc}`, cx, g.tabY + g.tabH + 18, '700 14px Georgia, serif', '#c9922a', 1);
       else centerText(ctx, 'buy once, then hang up to 2 — hung paintings are real passive bonuses on your runs', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
+    } else if (this.atelierTab === 3) {
+      // G4 (v1.3 M15): the gold LEGEND line — a short "what gold is + where it
+      // comes from" note, so the meta currency is explained right where it is
+      // spent (the Curator's Ledger holds the gold-tier works + the Gilded Frame).
+      centerText(ctx, `◆ gold is a meta pigment — earned from boss defeats, first synergies & the 100-orb run, spent here on gold-tier works & the Gilded Frame (NG+ only)`, cx, g.tabY + g.tabH + 18, '700 12.5px Georgia, serif', '#c9922a', 0.95);
     } else {
       centerText(ctx, 'your collection — every painting you own, hung on the wall (owned frames are lit)', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
     }
@@ -1219,9 +1264,12 @@ _drawAtelier(ctx) {
         }
         // line 2: state tag + a short lore blurb
         const hung = this.save.loadout.includes(pt.id);
+        // G4: gold-tier rows carry a distinct STATE — the gold price when not
+        // yet owned (the "what it costs" + "you can't buy it yet"), or the
+        // owned state when collected/hung.
         let state;
         if (owned) state = hung ? '★ hung in the loadout' : 'collected';
-        else state = isGold ? 'not yet gold' : 'not yet collected';
+        else state = isGold ? `${pt.goldCost}g · NG+ only` : 'not yet collected';
         c.font = '700 11px Georgia, serif';
         c.fillStyle = owned ? (hung ? '#c9922a' : '#4e8a5a') : (isGold ? '#8a6d1f' : '#9a9078');
         c.globalAlpha = 1;
@@ -1241,38 +1289,6 @@ _drawAtelier(ctx) {
       const ownCt = PAINTINGS.filter(pt => this.save.owned.includes(pt.id)).length;
       const goldCt = PAINTINGS.filter(pt => pt.goldTier).length;
       centerText(ctx, `the curator's ledger — ${ownCt} of ${PAINTINGS.length} collected · ${goldCt} gold-tier · a display only`, cx, gy0 + gridH + 15, 'italic 12.5px Georgia, serif', '#fdf6e9', 0.7);
-      // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier — a 50g
-      // permanent, saved tuning bump (NG+ + gold-gated) that stacks ON TOP OF
-      // the Rehung Frame below. Sits in its own bar above the Rehung Frame.
-      {
-        const gilded = isGilded(this.save);
-        const canGild = canBuyGildedFrame(this.save);
-        const ngOk = (Math.floor(this.save.ngCycle) || 0) >= 1;
-        const bw = 560, bh = 78, bx = cx - bw / 2, by = g.ch - 248;
-        const c = paperPanel(ctx, bx, by, bw, bh, { seed: 502, fill: gilded ? '#f6edc8' : '#efe8d6' });
-        c.save();
-        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-        c.fillStyle = gilded ? '#8a6d1f' : INK;
-        c.font = '700 15px Georgia, serif';
-        c.globalAlpha = 1;
-        c.fillText('Gilded Frame', bx + 20, by + 25);
-        if (gilded) { c.font = '700 11px Georgia, serif'; c.fillText('◆ gilded', bx + 118, by + 25); }
-        c.font = '12px Georgia, serif';
-        c.globalAlpha = 0.8;
-        c.fillStyle = INK;
-        c.fillText('A one-time, permanent prestige tier on top of the Rehung Frame: +3 start ink · +15% orb value.', bx + 20, by + 44);
-        c.fillText('Earned with gold after a first NG+ victory. Bought once, kept forever.', bx + 20, by + 62);
-        c.restore();
-        // the gild button on the right (label reflects state: bought / price / NG+ hint)
-        const bbw = 150, bbh = 52, bbx = bx + bw - bbw - 14, bby = by + (bh - bbh) / 2;
-        let label = 'Not yet';
-        if (gilded) label = '◆ Gilded';
-        else if (!ngOk) label = 'NG+ needed';
-        else if (!canGild) label = `${GILDED_FRAME.cost}g needed`;
-        else label = `Gild · ${GILDED_FRAME.cost}g`;
-        uiButton(c, bbx, bby, bbw, bbh, label, false, false, { seed: 503 });
-        paperEnd(ctx);
-      }
       // A4 (v1.2 M9): the 'Rehung Frame' retirement — a permanent, saved
       // gallery bonus minted once the collection is complete. Sits above the
       // Depart button (same geometry as the retire row in _atelierRows).
