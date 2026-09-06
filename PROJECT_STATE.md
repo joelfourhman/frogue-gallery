@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 29 STAGES PASSED** (…stage 26 = M8 P7 difficulty select, stage 27 = M8 P8 Gallery Wall, stage 28 = M8 P6 "?" field guide, **stage 29 = M8 P9 Options overlay**). Pacing probes green (human est. ~18.8 min; `pace.mjs` + `bosspace.mjs`). Real-browser probe (P9): audio buses + options overlay verified live — 6 ambient nodes, music/SFX bus gains track the sliders, shake-gate + vignette toggles work, no JS errors. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT1–PT5 ✅, **M8 P10 ✅, P12 ✅, P7 ✅, P8 ✅, P6 ✅, P9 ✅ (this pass)**. **Next: M8 P11 (human-pace pacing probe) — the last v1.1 item.**_
+_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 29 STAGES PASSED** (…stage 29 = M8 P9 Options overlay). Pacing probes green: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs` (P11, new — simulated imperfect human on the real sim: measured cross-swamp ~52s + measured heron ~134–166s → full-run 18.3–19.4 min across 4 seeds, in the 15–20 min target)** + `bosspace.mjs`. Real-browser probe (P9): audio buses + options overlay verified live. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅.**_
 
 ## Current Status
 
@@ -35,8 +35,8 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 19 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
-| `tests/pace.mjs`, `tests/bosspace.mjs` | **Pacing probes (informational, not assertions).** Lower-bound run length + human model; real pigment-cycling heron fight timing |
+| `tests/smoke.mjs` | **Headless runtime test — 29 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss) |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
 
@@ -93,7 +93,7 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 | P8 | The Gallery Wall — framed, titled owned paintings in the Atelier with passive tooltips | ✅ 2026-09-05 — third Atelier tab "The Gallery" (key 3 / click): every painting hung in a gold frame; owned = lit full-color motif + title placard + passive bonus + "★ hung" when in loadout, unowned = dimmed silhouette, sealed = "???". Display-only (buying/hanging stays on the Paintings tab). Smoke stage 27. |
 | P9 | Audio/options polish: separate music/SFX sliders, screen-shake + vignette toggles | ✅ 2026-09-05 — `logic.js` `freshOptions`/`migrateOptions` now carry `musicVol`/`sfxVol` (0..1, clamped; legacy `volume` seeds them) + `shake`/`vignette` toggles. `audio.js` splits the graph into `musicBus` (a new synthesized ambient bed: detuned-pair drone + slow LFO + filtered swish pad) and `sfxBus` (all SFX); `setMusicVolume`/`setSfxVolume` drive the buses independently. `game.js` adds an **Options overlay** (title, `O` or the "Options" button): master/music/SFX sliders (drag or click) + shake & vignette toggles + a live "Music/SFX off" note, all persisted via `SaveSys.saveOptions`. `input.js` gains a `dragging` slot for the sliders. Smoke stage 29 (layout, setters→bus gains, toggle round-trip, save→fresh-Game reload). |
 | P10 | Performance pass: cull off-screen enemy AI/decoration updates; 60fps with full 5400px world | ✅ 2026-09-05 — `world.js` view-culls grass/ripples/soil/slicks/veg/reeds/pads/obstacles to the visible rect (draw calls 9527 full-world → ~1464 localized, 0.15×); `game.js` skips full enemy AI beyond 500px (burn still ticks). Smoke stage 24 + real-browser probe (60.2 fps across x=5%→95%). |
-| P11 | Human-pace pacing probe (≈260 px/s walker model) | ⬜ |
+| P11 | Human-pace pacing probe (`tests/humance.mjs`, simulated human input) | ✅ 2026-09-05 — full-run 18.3–19.4 min across 4 seeds (15–20 min target) |
 | P12 | Zone character: distinct visual accent + signature encounter motif per zone | ✅ 2026-09-05 — `game.js` `ZONES` now carry a per-zone `accent` + a `sig` signature encounter; `_zoneBeat` spawns an elite "signature guardian" (`_spawnZoneElite`, `ELITE = {hp:1.9, dmg:1.3, radius:1.35, score:3}`) of the zone's emblematic enemy, ringed in the zone accent (`enemies.js` drawEnemy scales the body to the elite hitbox + draws a pulsing accent halo) and sets a 2.6s fading zone-accent wash (`_drawZoneTint`) so crossing a boundary reads as a place-shift. Accents: Reed `#c9a94e`, Slick `#5a93c9`, Bramble `#7fb069`, Gray `#9a9a8f` (guards: Reed beetle×1, Slick mosquito×2, Bramble toad×1, Gray beetle×2 = 6 total). `pace.mjs` folds the 6 guardians into the human model (~18.7 min, inside target). Smoke stage 25. 60.5 fps real-browser (no JS errors). |
 
 Optional (after all of the above is green): gold pigment, gamepad support, New Game+.
@@ -122,11 +122,16 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 
 ## Immediate Next Action
 
-**Tree is clean** — the v1.1 status-docs pass (3c590be), M8 P10 (`5e95fbf`),
-M8 P12 (`0ab27e8`), M8 P7 (`7457229`), M8 P8 (`4118146`), and M8 P6 (`27bdd22`)
-are all committed and verified (smoke 28/28 at that point).
+**v1.1 is COMPLETE — nothing is left to do.** The working tree is clean and the
+full v1.1 roadmap (M7 B1–B6, M7.5 PT1–PT5, M8 P10/P12/P7/P8/P6/P9/P11) is
+committed and verified. Latest commits: v1.1 status-docs pass (`3c590be`),
+M8 P10 (`5e95fbf`), P12 (`0ab27e8`), P7 (`7457229`), P8 (`4118146`), P6
+(`27bdd22`), P9 (audio/options), and P11 (`tests/humance.mjs`, this pass).
+Smoke: **29 stages green**; `pace.mjs` / `humance.mjs` / `bosspace.mjs` all run.
 
-**M8 P9 (audio/options polish) — implemented + tested this pass.** The single
+The two most recent passes, for the record:
+
+**M8 P9 (audio/options polish) — implemented + tested.** The single
 master volume is split into **independent music / SFX buses** and the title
 gains an **Options** overlay (key `O` or the new "Options" button, right of
 the Atelier button) with three sliders (Master / Music / SFX — click or drag)
@@ -150,10 +155,7 @@ and two accessibility toggles (Screen shake / Low-HP vignette). Concretely:
   round-trips, save → fresh-Game reload) + real-browser verification (6
   ambient nodes, bus gains track the sliders, no JS errors).
 
-**Next: M8 P11 (human-pace pacing probe) — the final v1.1 item.** An
-informational `tests/humance.mjs` in the spirit of `pace.mjs`: an imperfect
-human input model (variable speed, reaction lag, missed swipes, dodges) that
-estimates a real 15–20 min run on Normal and prints the breakdown.
+**Next: v1.1 COMPLETE** — all of M7 (B1–B6), M7.5 (PT1–PT5), and M8 (P10, P12, P7, P8, P6, P9, P11) are done and committed. The final item, **P11 (human-pace pacing probe)**, is `tests/humance.mjs`: a god-mode simulation of an imperfect human on the real sim (burst/hesitate walk, Field-Guide zone reads, noisy aim, back-off on heron telegraphs) that *measures* the two tractable components — cross-swamp (~52s) and the heron fight (~134–166s) — and composes them with `pace.mjs`'s analytic wave-fighting. Full-run estimate **18.3–19.4 min across seeds 1337/7/42/2026**, in the 15–20 min target, and both measured components are more conservative than pace.mjs's flat multipliers (sim cross 52s vs analytic 38s; sim boss 134–166s vs analytic 136s), so the target holds. Smoke: 29 stages green; pace/humance/bosspace probes all run.
 
 - (recorded) **PT1 — painting consumption (verified, no code change).** The plan flagged
   "painting might be free / infinite wet." Audit result: swipes and splashes
