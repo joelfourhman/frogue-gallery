@@ -86,6 +86,24 @@ const ATELIER_CHARS = [
   } },
 ];
 
+// A3 (v1.2 M9): the Curator's Ledger — a short lore/collectible blurb per
+// painting, shown in its own atelier tab (a display-only collection book).
+// Data-only (strings), keyed by painting id; the collected/not-yet state is
+// read live from the save, so nothing extra is persisted.
+const LEDGER_LORE = {
+  'moonlit-pond': 'The only pond that ever held the whole sky at once. Mabel paints it by memory; the moon forgives.',
+  'dancing-salamander': 'It never sat still long enough to paint — so Giuseppe painted it mid-leap and dared it to finish the sentence.',
+  'spring-garden': 'A garden that bloomed through a single, impossibly green afternoon. You can almost smell the rain in it.',
+  'self-portrait': 'Frogue, unposed and unflattering, exactly as the swamp sees you. It is the bravest thing you have owned.',
+  'king-frog': 'Painted for a frog who never sat on a throne but somehow ruled the lily pads anyway. Royalty is a matter of drops.',
+  'storm-cloud': 'A single cloud caught at the exact second it decided to rain. Monet insists it was raining on him, not the canvas.',
+  "beetle-armor": 'Chitin borrowed, not stolen — the beetle grew a second shell and kept its dignity. So did you.',
+  'croaksworth': 'The one portrait he finally let himself be. Even the old heron looks a little proud, and a little green.',
+};
+export function ledgerEntry(pt) {
+  return { id: pt.id, name: pt.name, lore: LEDGER_LORE[pt.id] || 'A blank page, still waiting for its story.' };
+}
+
 // P5: 4 named expedition zones + a rest checkpoint between each — structure
 // the run so a full expedition reads as a journey, not one long hallway.
 // M8 P12: each zone carries a distinct accent color and a `sig` signature
@@ -405,9 +423,9 @@ export class Game {
     const listX = cx - 560, listW = 1120;
     return {
       cx, ch, listX, listW,
-      // M8 P8: three tabs (Upgrades / Paintings / Gallery); narrower than the old
-      // two so all three sit on one row.
-      tabY: 148, tabW: 176, tabH: 44, tabGap: 8,
+      // M8 P8 + A3: four tabs (Upgrades / Paintings / Gallery / Ledger);
+      // narrow + tight so all four sit on one symmetric row about cx.
+      tabY: 148, tabW: 180, tabH: 44, tabGap: 8,
       rowY0: 204, rowH: 104, rowGap: 12,
       cardW: (listW - 24) / 2, cardH: 112, cardGap: 12, cols: 2,
       depart: { x: cx - 150, y: ch - 92, w: 300, h: 54 },
@@ -418,13 +436,16 @@ export class Game {
   _atelierRows() {
     // [{x, y, w, h, enabled?, act()}] — the full click map for this frame.
     const g = this._atelierGeom();
-    const rows = [
-          // M8 P8: three tabs (Upgrades / Paintings / Gallery), centered on cx.
-          // Spacing between left edges = tabW + tabGap; the group is symmetric about cx.
-          { tag: 'tab0', x: g.cx - 1.5 * g.tabW - g.tabGap, y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== 0) this.sfx('ui'); this.atelierTab = 0; } },
-          { tag: 'tab1', x: g.cx - 0.5 * g.tabW, y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== 1) this.sfx('ui'); this.atelierTab = 1; } },
-          { tag: 'tab2', x: g.cx + 0.5 * g.tabW + g.tabGap, y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== 2) this.sfx('ui'); this.atelierTab = 2; } },
-        ];
+    const rows = [];
+    {
+      // M8 P8 + A3: four tabs (Upgrades / Paintings / Gallery / Ledger),
+      // centered on cx. Total span = 4*tabW + 3*tabGap; each tab's left edge
+      // steps by (tabW + tabGap). Symmetric about cx by construction.
+      const N = 4, span = N * g.tabW + (N - 1) * g.tabGap, x0 = g.cx - span / 2;
+      for (let i = 0; i < N; i++) {
+        rows.push({ tag: `tab${i}`, x: x0 + i * (g.tabW + g.tabGap), y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== i) this.sfx('ui'); this.atelierTab = i; } });
+      }
+    }
     if (this.atelierTab === 0) {
       Object.keys(UPGRADES).forEach((id, i) => {
         const u = UPGRADES[id];
@@ -463,6 +484,7 @@ export class Game {
     if (this.input.pressed('1')) { if (this.atelierTab !== 0) this.sfx('ui'); this.atelierTab = 0; dismissIntro(); }
     if (this.input.pressed('2')) { if (this.atelierTab !== 1) this.sfx('ui'); this.atelierTab = 1; dismissIntro(); }
     if (this.input.pressed('3')) { if (this.atelierTab !== 2) this.sfx('ui'); this.atelierTab = 2; dismissIntro(); }
+    if (this.input.pressed('4')) { if (this.atelierTab !== 3) this.sfx('ui'); this.atelierTab = 3; dismissIntro(); }
     if (this.atelierTab === 0) {
       if (this.input.pressed('a')) { this._buyUpgrade('capacity'); dismissIntro(); }
       if (this.input.pressed('s')) { this._buyUpgrade('power'); dismissIntro(); }
@@ -613,11 +635,13 @@ _drawAtelier(ctx) {
       else centerText(ctx, '·', fx + fs / 2, fy + fs / 2 + 1, '700 14px Georgia, serif', INK, 0.35);
     }
 
-    // tabs (M8 P8: three) — same centered layout as the click map in _atelierRows
-    [['Studio Upgrades', 0], ['Paintings', 1], ['The Gallery', 2]].forEach(([label, idx]) => {
+    // tabs (M8 P8 + A3: four) — same centered layout as the click map in
+    // _atelierRows (span = 4*tabW + 3*tabGap, left edge stepping by tabW+tabGap).
+    const tN = 4, tSpan = tN * g.tabW + (tN - 1) * g.tabGap, tX0 = cx - tSpan / 2;
+    [['Studio Upgrades', 0], ['Paintings', 1], ['The Gallery', 2], ["Curator's Ledger", 3]].forEach(([label, idx]) => {
       const active = this.atelierTab === idx;
-      const bx = cx - 1.5 * g.tabW - g.tabGap + idx * (g.tabW + g.tabGap);
-      uiButton(ctx, bx, g.tabY, g.tabW, g.tabH, label, this._mouseIn(bx, g.tabY, g.tabW, g.tabH) && !active, active, { seed: 30 + idx, size: 15 });
+      const bx = tX0 + idx * (g.tabW + g.tabGap);
+      uiButton(ctx, bx, g.tabY, g.tabW, g.tabH, label, this._mouseIn(bx, g.tabY, g.tabW, g.tabH) && !active, active, { seed: 30 + idx, size: 14 });
     });
     // persistent one-line legends, so returning players never have to guess
     if (this.atelierTab === 0) {
@@ -760,6 +784,82 @@ _drawAtelier(ctx) {
       });
       const ownedCount = PAINTINGS.filter(pt => this.save.owned.includes(pt.id)).length;
       centerText(ctx, `${ownedCount} of ${PAINTINGS.length} paintings in your collection`, cx, gy0 + gridH + 16, '700 14px Georgia, serif', '#fdf6e9', 0.85);
+    } else if (this.atelierTab === 3) {
+      // A3 — the Curator's Ledger: a display-only collection book. Every
+      // painting is listed with a short lore blurb and its collected /
+      // not-yet state. Reuses the P8 Gallery wall's framed look (paperPanel +
+      // the gilded frame + the generative motif) and the same painting data;
+      // no buying here — the ledger only reads the collection.
+      // 2 cols x 4 rows; sized so the grid ends well above the Depart button.
+      const fw = 548, fh = 104, fgap = 10, cols = 2, rows = 4;
+      const gridW = cols * fw + (cols - 1) * fgap, gridH = rows * fh + (rows - 1) * fgap;
+      const gx0 = cx - gridW / 2, gy0 = g.rowY0 + 2;
+      PAINTINGS.forEach((pt, i) => {
+        const col = i % cols, row = (i / cols) | 0;
+        const x = gx0 + col * (fw + fgap), y = gy0 + row * (fh + fgap);
+        const owned = this.save.owned.includes(pt.id);
+        const entry = ledgerEntry(pt);
+        const c = paperPanel(ctx, x, y, fw, fh, { seed: 300 + i, fill: owned ? '#f9f3e2' : '#efe8d6' });
+        // left: a framed thumbnail, gilded when collected (P8 frame look)
+        const fs = fh - 24, fx = x + 14, fy = y + 12;
+        c.save();
+        c.lineWidth = 4;
+        c.strokeStyle = owned ? '#b8912e' : '#b7ab8c';
+        c.beginPath(); c.roundRect(fx - 2, fy - 2, fs + 4, fs + 4, 3); c.stroke();
+        c.lineWidth = 1.5;
+        c.strokeStyle = owned ? '#8a6d1f' : '#9a9078';
+        c.beginPath(); c.roundRect(fx, fy, fs, fs, 2); c.stroke();
+        if (owned) {
+          c.fillStyle = pt.art.bg;
+          c.fillRect(fx, fy, fs, fs);
+          this._drawPaintingMotif(c, pt, fx, fy, fs);
+        } else {
+          c.fillStyle = '#e3dac4';
+          c.fillRect(fx, fy, fs, fs);
+          c.globalAlpha = 0.4;
+          c.fillStyle = INK;
+          c.font = '700 30px Georgia, serif';
+          c.textAlign = 'center'; c.textBaseline = 'middle';
+          c.fillText('✕', fx + fs / 2, fy + fs / 2);
+        }
+        c.restore();
+        // right: title, state tag, and the lore blurb (wrapped)
+        const tx = fx + fs + 14, tw = fw - (fs + 28) - 14;
+        c.save();
+        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+        c.fillStyle = INK;
+        c.font = '700 16px Georgia, serif';
+        c.globalAlpha = owned ? 1 : 0.7;
+        c.fillText(pt.name, tx, y + 30);
+        // state tag: collected / not yet (hung noted for loadout members)
+        const hung = this.save.loadout.includes(pt.id);
+        c.font = '700 11px Georgia, serif';
+        if (owned) {
+          c.fillStyle = hung ? '#c9922a' : '#4e8a5a';
+          c.fillText(hung ? '★ hung in the loadout' : 'collected', tx, y + 47);
+        } else {
+          c.fillStyle = '#9a9078';
+          c.fillText('not yet collected', tx, y + 47);
+        }
+        // lore blurb — simple word wrap in the remaining height
+        c.fillStyle = INK;
+        c.globalAlpha = owned ? 0.85 : 0.55;
+        c.font = 'italic 12.5px Georgia, serif';
+        const words = entry.lore.split(' ');
+        let line = '', ly = y + 66, lh = 15, maxLines = 3;
+        for (let w = 0; w < words.length; w++) {
+          const test = line ? line + ' ' + words[w] : words[w];
+          if (c.measureText(test).width > tw && line) {
+            c.fillText(line, tx, ly); line = words[w]; ly += lh;
+            if (ly > y + fh - 12) { c.fillText(line + '…', tx, ly); line = ''; w = words.length; break; }
+          } else { line = test; }
+        }
+        if (line) c.fillText(line, tx, ly);
+        c.restore();
+        paperEnd(ctx);
+      });
+      const ownCt = PAINTINGS.filter(pt => this.save.owned.includes(pt.id)).length;
+      centerText(ctx, `the curator's ledger — ${ownCt} of ${PAINTINGS.length} collected · a display only, nothing is sold here`, cx, gy0 + gridH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
     }
 
     // first-visit how-it-works panel (one-time; any tab/buy/action dismisses it)
@@ -779,10 +879,11 @@ _drawAtelier(ctx) {
     }
 
     // A1: the resident's one-liner — a small paper chip with a speaker tag
-    // and a typewriter reveal. Sits in the left margin (clear of the 2-col
-    // card grids on every tab) so it reads like a note pinned to the studio.
+    // and a typewriter reveal. Sits in the clear band under the title (the
+    // bank strip is centered, the tabs start at y148) so it never covers a
+    // card grid and reads like a note pinned to the studio wall.
     if (this._atelierSay) {
-      const chipW = 460, chipH = 60, cxp = 16, cyp = this.ch / 2 - 30;
+      const chipW = 452, chipH = 32, cxp = 16, cyp = 82;
       this._paperChip(ctx, cxp, cyp, chipW, chipH, 140);
       const say = this._atelierSay;
       const shown = say.text.slice(0, Math.floor(say.revealed));
@@ -790,10 +891,11 @@ _drawAtelier(ctx) {
       ctx.fillStyle = '#8a5a2b';
       ctx.font = '700 13px Georgia, serif';
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillText(say.name, cxp + 18, cyp + 17);
+      ctx.fillText(say.name, cxp + 16, cyp + chipH / 2);
+      const nameW = ctx.measureText(say.name).width;
       ctx.fillStyle = INK;
-      ctx.font = 'italic 15px Georgia, serif';
-      ctx.fillText(shown, cxp + 18, cyp + 40, chipW - 36);
+      ctx.font = 'italic 14px Georgia, serif';
+      ctx.fillText('“' + shown, cxp + 24 + nameW, cyp + chipH / 2, chipW - 34 - nameW);
       ctx.restore();
     }
 

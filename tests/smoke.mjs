@@ -1376,5 +1376,87 @@ console.log('== stage 31: v1.2 M9 A2 — painting synergy pairs ==');
   }
 }
 
+// ---------------------------------------------------------------------
+// stage 32 — v1.2 M9 A3: the Curator's Ledger (4th atelier tab, display-only)
+// Asserts the ledger renders ALL 8 paintings, each with the correct
+// collected / not-yet state, reusing the P8 frame look. We do this by
+// wrapping the canvas 2d context's fillText so every placard string is
+// captured, then checking the names + states.
+// ---------------------------------------------------------------------
+console.log('== stage 32: v1.2 M9 A3 — the Curator\'s Ledger ==');
+{
+  // a Game whose canvas records every fillText call (cached recording proxy)
+  const recCanvas = makeCanvas();
+  const drawnTexts = [];
+  const baseCtx = makeCtx(recCanvas);
+  const recCtx = new Proxy(baseCtx, {
+    get(t, prop) {
+      if (prop === 'fillText') return (str, ...rest) => { drawnTexts.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; };
+      return t[prop];
+    },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas.getContext = () => recCtx;
+  const g32 = new Game(recCanvas);
+  g32.start();
+  g32._quitToTitle();
+  g32._beginAtelier();
+  // a partial collection: 3 of 8 owned (one also hung in the loadout)
+  g32.save.owned = ['moonlit-pond', 'spring-garden', 'king-frog'];
+  g32.save.loadout = ['king-frog'];
+  g32._atelierIntro = false;
+  g32.lastResult = 'victory';
+
+  // the 4th tab is reachable by key and by its click target
+  const findRow = (tag) => g32._atelierRows().find(r => r.tag === tag);
+  assert(findRow('tab3'), 'a tab3 (Ledger) row exists in the click map');
+  fireKey('keydown', '4'); frames(2);
+  assert(g32.atelierTab === 3, 'key 4 switched to the Ledger tab');
+  const t3 = findRow('tab3');
+  fireMouse(recCanvas, t3.x + t3.w / 2, t3.y + t3.h / 2); frames(2);
+  assert(g32.atelierTab === 3, 'clicking the Ledger tab keeps it active');
+
+  // the Ledger is display-only: no buy/hang rows, but depart/leave remain
+  const rows = g32._atelierRows();
+  assert(!rows.some(r => /^paint:/.test(r.tag)), 'the Ledger tab exposes no buy/hang rows (display-only)');
+  assert(rows.some(r => r.tag === 'depart') && rows.some(r => r.tag === 'leave'), 'depart/leave rows remain on the Ledger tab');
+
+  // draw the ledger and capture every string it writes (one frame = one render
+  // pass, so per-painting tags are counted exactly once)
+  drawnTexts.length = 0;
+  frames(1);
+  const joined = drawnTexts.join('\u0001');
+  const L = await import('../src/logic.js');
+  const expected = L.PAINTINGS; // 8 entries
+  assert(expected.length === 8, 'A3: the collection holds 8 paintings');
+  // every painting name appears at least once
+  for (const pt of expected) {
+    assert(joined.includes(pt.name), `A3: ledger renders "${pt.name}"`);
+  }
+  // the correct collected / not-yet state is asserted per painting:
+  //  - the 3 owned ones must carry "collected" (king-frog: "hung in the loadout")
+  //  - the 5 unowned ones must carry "not yet collected"
+  const owned = g32.save.owned;
+  const hung = g32.save.loadout;
+  // "not yet collected" count (one per unowned entry)
+  const notYetCount = (joined.match(/not yet collected/g) || []).length;
+  assert(notYetCount === expected.length - owned.length, `A3: exactly ${expected.length - owned.length} entries marked "not yet collected"`);
+  // exact "collected" tag count = owned minus the ones flagged as hung
+  const ownedNotHung = owned.filter(id => !hung.includes(id)).length;
+  const collectedExact = (joined.match(/\u0001collected\u0001/g) || []).length;
+  assert(collectedExact === ownedNotHung, `A3: ${ownedNotHung} owned (non-hung) entries carry the exact "collected" tag`);
+  // the hung one is flagged distinctly
+  assert(joined.includes('hung in the loadout'), 'A3: the hung painting is flagged "★ hung in the loadout"');
+  // the curator caption + display-only note render
+  assert(joined.includes('of 8 collected') || joined.includes("curator's ledger"), 'A3: the ledger footer caption renders');
+  assert(joined.includes('nothing is sold here'), 'A3: the display-only note renders');
+
+  // drew cleanly for a sustained stretch (no JS errors in the render path)
+  frames(30);
+  assert(g32.state === 'atelier', 'the Ledger tab drew cleanly for 30 frames (no JS errors)');
+  fireKey('keydown', 'Escape'); frames(2);
+  assert(g32.state === 'title', 'Escape returned from the Ledger to the title');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

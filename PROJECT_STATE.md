@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 31 STAGES PASSED** (…stage 31 = v1.2 M9 A2 painting synergy pairs). Pacing probes green: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs` (P11 — simulated imperfect human on the real sim: measured cross-swamp ~52s + measured heron ~134–166s → full-run 18.3–19.4 min across 4 seeds, in the 15–20 min target)** + `bosspace.mjs`. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 A1 ✅ + A2 ✅ — A3 next.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 32 STAGES PASSED** (…stage 32 = v1.2 M9 A3 Curator's Ledger). Pacing probes green: `pace.mjs` (analytic, human est. ~18.8 min) + **`humance.mjs` (P11 — simulated imperfect human on the real sim: measured cross-swamp + measured heron → full-run 18.4 min, in the 15–20 min target)** + `bosspace.mjs`. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ — next A4 / M10.**_
 
 ## Current Status
 
@@ -35,7 +35,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 31 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 32 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss) |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
@@ -129,7 +129,7 @@ session can pick up). Full scope in `docs/ROADMAP.md` §v1.2 (M9 M10 M11 M13;
 accessibility deferred).
 
 **Batch order (one commit per item, docs + suite green per commit):**
-1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 (Curator's Ledger)
+1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 ✅ (Curator's Ledger). **Batch 1 (A1–A3) COMPLETE.**
 2. M9: A4 (Rehung Frame) → M10: E1 (Painted Heron) → E2 (weather/tide)
 3. M10: E3 (Bold hazards) → E4 (orb streak) → M11: V1 (color-reveal bar)
 4. M11: V2 (heron bloom beat) → V3 (zone audio) → V4 (exhibition end-screen)
@@ -139,6 +139,18 @@ accessibility deferred).
 Each item's Notes column in the roadmap says which existing system to reuse.
 Acceptance (per batch): suite green, pace/humance probes still in the
 15–20 min band (any in-run change), zero new dependencies, loopback-only.
+
+**M9 A3 (Curator's Ledger) — implemented + tested (v1.2 Batch 1, item 3).**
+A 4th atelier tab, "Curator's Ledger" (key `4`), lists all 8 paintings in a
+2×4 grid. Each entry shows a short lore/collectible blurb and the painting's
+state — "collected", "★ hung in the loadout", or "not yet collected" — and
+reuses the P8 Gallery wall frame look (paperPanel + gilded frame + the
+generative motif) plus the same painting data. It is display-only (no buy
+rows). The lore is data-only strings in `src/game.js` (`LEDGER_LORE`,
+`ledgerEntry`) — no new art, nothing persisted. Smoke stage 32 uses a
+fillText-recording canvas to assert every painting renders with its
+collected-state correct (5 "not yet", 2 exact "collected", 1 "★ hung") and
+that the tab exposes no buy/hang rows. Suite green: 32/32.
 
 **M9 A2 (painting synergy pairs) — implemented + tested (v1.2 Batch 1, item 2).**
 When two specific paintings are both in the 2-slot loadout, a named "duo"
@@ -154,7 +166,7 @@ spring-garden → `greenHeal +2`). The active duo is named in the Atelier's
 Paintings-tab legend. Smoke stage 31 (table shape, order-independent
 resolution, paired vs unpaired tuning differs, holds across gentle/normal/bold).
 Normal pacing intact (default loadout unchanged): `pace.mjs` ~18.7 min,
-`humance.mjs` 19.4 min. Suite green: 31/31.
+`humance.mjs` 19.4 min. Suite green: 32/32.
 
 The two most recent passes, for the record:
 
