@@ -2415,5 +2415,104 @@ console.log('== stage 44: T3 — the sketch heron (3-hue awaken teaching beat) =
   assert(g44b.state === 'expedition', 'T3: the run proceeds to the timed expedition after the skip');
 }
 
+console.log('== stage 45: T4 — tutorial progress + "Watch me" re-entry ==');
+{
+  const L45 = await import('../src/logic.js');
+  // ---- progress is READABLE (which drills are done) from the save ----
+  const prog = L45.freshSave();
+  assert(L45.tutorialDrillDone(prog, 'burn') === false && L45.tutorialDone(prog) === false, 'T4: a fresh save reads as "nothing done"');
+  prog.tutorialDrills.burn = true; prog.tutorialDrills.freeze = true;
+  assert(L45.tutorialDrillDone(prog, 'burn') && L45.tutorialDrillDone(prog, 'freeze') && !L45.tutorialDrillDone(prog, 'root'), 'T4: progress is readable per-drill (burn+freeze done, root not)');
+  assert(L45.tutorialDone(prog) === false, 'T4: not complete until all drills + the sketch are done');
+  prog.tutorialDrills.root = true; prog.tutorialDrills.awaken = true;
+  assert(L45.tutorialDone(prog) === true, 'T4: progress reads COMPLETE once all drills + the sketch are done');
+
+  // ---- the "Watch me" retrain band is OFFERED to a returning player ----
+  const returning = L45.freshSave(); returning.flags.heronDefeated = true;
+  assert(L45.retrainAllowed(returning) === true, 'T4: a returning save (finished a run) can retrain');
+  // a player who completed some drills (progress) — even mid-tutorial — has lessons to replay
+  const partial = L45.freshSave(); partial.tutorialDrills.burn = true;
+  assert(L45.retrainAllowed(partial) === true, 'T4: a save with some completed drills can retrain');
+  // a player who skipped the guided run also has context to replay
+  const skipped = L45.freshSave(); skipped.flags.tutorialSkipped = true;
+  assert(L45.retrainAllowed(skipped) === true, 'T4: a save that skipped the guided run can retrain');
+  // a TRULY fresh save (nothing done) has no lesson to replay yet — the guided
+  // run itself is the first-time path, so "Watch me" offers nothing.
+  assert(L45.retrainAllowed(L45.freshSave()) === false, 'T4: a fresh save (no progress yet) offers nothing to retrain');
+  assert(L45.retrainAllowed({ flags: {}, tutorialDrills: null }) === false, 'T4: a truly empty save (no context) offers nothing to retrain');
+
+  // ---- a RETURNING player can replay a SINGLE drill on demand, and it is NOT
+  // counted toward the timed run (the frozen clock resumes at the same value) ----
+  const g45 = new Game(makeCanvas());
+  g45.start();
+  g45.save = returning;                 // a returning save (never auto-enters the guided run)
+  g45._beginExpedition();               // the ordinary TIMED expedition
+  let t45 = 1000;
+  const fr45 = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t45 += step; g45._frame(t45); } };
+  fr45(8);
+  assert(g45.state === 'expedition' && g45.tutorial === null, 'T4: a returning save starts the timed run with NO auto-entered tutorial');
+  assert(g45.sketchHeron === null, 'T4: no sketch heron is present in the timed run');
+  // advance the timed clock, then open the field guide and start a retrain.
+  fr45(150);
+  const runTBefore = g45.runT;
+  assert(runTBefore > 1, `T4: the timed run had a live clock before the retrain (runT ${runTBefore.toFixed(1)})`);
+  // open the Field Guide (H) — the reference tool that carries "Watch me".
+  g45.help = true; fr45(2);
+  const geom = g45._helpGeom();
+  assert(geom.retrain && geom.retrain.enabled, 'T4: the Field Guide offers a "Watch me" band for a returning player');
+  assert(geom.retrain.buttons.length === 4, 'T4: the band offers the 3 drills + the sketch heron (4 lessons)');
+  // replay the FREEZE drill (phase idx 4) by clicking its button (the real input path).
+  const freezeBtn = geom.retrain.buttons[1];
+  g45.input.mouse.x = freezeBtn.x + freezeBtn.w / 2;
+  g45.input.mouse.y = freezeBtn.y + freezeBtn.h / 2;
+  g45.input.mouse.lPressed = true;
+  fr45(1);
+  g45.input.mouse.lPressed = false;
+  assert(g45.help === false, 'T4: clicking a "Watch me" lesson closes the Field Guide');
+  assert(g45.tutorial && g45.tutorial.retrain === true, 'T4: the retrain replay is active (reusing the guided teaching layer)');
+  assert(g45.tutorial.idx === 4, 'T4: the replay re-enters the REQUESTED phase (the freeze drill, idx 4)');
+  assert(g45.tutorial.target && g45.tutorial.target.kind === 'mosquito', 'T4: the freeze drill spawns its target (a mosquito)');
+  assert(g45.helpRetrain === true, 'T4: the retrain flag is set for a returning save');
+  assert(g45.runT === g45.tutorial.frozen, `T4: the replay is FROZEN at the run's clock (runT ${g45.runT.toFixed(1)})`);
+  assert(g45.heron._intro >= 999, 'T4: the real heron is held during the replay (cannot wake mid-replay)');
+  g45.player.iframes = 99;
+  // ---- the replay is NOT counted toward the timed run (clock stays put) ----
+  fr45(60);
+  assert(g45.runT === g45.tutorial.frozen, `T4: the timed clock did NOT advance during the replay (still ${g45.runT.toFixed(1)})`);
+  // ---- complete the replayed drill: the real freeze effect ends the replay ----
+  const target45 = g45.tutorial.target;
+  g45.player.pigment = 'blue';
+  const aim45 = () => { const v = g45._view(); g45.input.mouse.x = (target45.x - v.x) * v.scale; g45.input.mouse.y = (target45.y - v.y) * v.scale; };
+  let f45 = 0;
+  while (g45.tutorial && g45.tutorial.idx === 4 && f45 < 400) {
+    target45.dizzyPaintChance = 0; aim45(); g45.input.mouse.lDown = true; fr45(1); f45++;
+  }
+  g45.input.mouse.lDown = false;
+  assert(g45.tutorial === null, 'T4: completing the replayed drill ends the replay and returns to the run');
+  assert(g45.runT === runTBefore, `T4: the replay did NOT count toward the timed run (runT ${runTBefore.toFixed(1)} before === ${g45.runT.toFixed(1)} after)`);
+  assert(g45.save.tutorialDrills.freeze === true, 'T4: the replayed drill is recorded in progress (tutorialDrills.freeze)');
+  assert(g45.state === 'expedition', 'T4: the timed run resumes after the replay');
+
+  // ---- the replay can be SKIPPED (a returning player is never forced) ----
+  g45.help = true; fr45(2);
+  const geom2 = g45._helpGeom();
+  const sketchBtn = geom2.retrain.buttons[3]; // the sketch-heron lesson
+  g45.input.mouse.x = sketchBtn.x + sketchBtn.w / 2; g45.input.mouse.y = sketchBtn.y + sketchBtn.h / 2;
+  g45.input.mouse.lPressed = true; fr45(1); g45.input.mouse.lPressed = false;
+  assert(g45.tutorial && g45.tutorial.idx === 6 && g45.sketchHeron, 'T4: the sketch-heron lesson re-enters the sketch phase (idx 6) with the heron spawned');
+  g45._skipTutorial(); // skipping a retrain does NOT mark the tutorial skipped
+  assert(!g45.save.flags.tutorialSkipped, 'T4: skipping a "Watch me" replay does NOT mark the tutorial skipped');
+  assert(g45.tutorial === null, 'T4: skipping ends the retrain replay');
+
+  // ---- retraining never auto-enters: a guided run already active blocks it ----
+  const g45c = new Game(makeCanvas());
+  g45c.start(); g45c.save = L45.freshSave(); g45c._beginExpedition(true);
+  let t45c = 1000; const fr45c = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t45c += step; g45c._frame(t45c); } };
+  fr45c(6);
+  assert(g45c.tutorial && g45c.tutorial.idx === 0, 'T4: a fresh save is mid guided run (idx 0)');
+  g45c._startRetrain(6); // must be a no-op: never nest a replay in an active guided run
+  assert(g45c.tutorial.idx === 0 && g45c.tutorial.retrain !== true, 'T4: _startRetrain is a no-op while a guided run is active (no nesting / no hijack)');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

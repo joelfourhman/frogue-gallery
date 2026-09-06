@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 44 STAGES PASSED** (…stage 41 = v1.2 M11 V4 end-screen exhibition, **stage 42 = v1.2 M13 T1 guided first expedition, stage 43 = v1.2 M13 T2 interactive pigment drills, stage 44 = v1.2 M13 T3 mini sketch heron**). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **53s**, heron **124s**, full-run **18.7 min** — in the 15–20 min band (the M13 tutorial is a **separate pre-run layer** — the timed clock is frozen while it runs — so it adds no timed-run time; `pace.mjs`/`humance.mjs` re-verified after T1/T2/T3 and unchanged from the ~18.7/18.7 min baseline). DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ + E4 (orb-streak bonus) ✅ + V1 (color-reveal bar) ✅ + V2 (heron awaken bloom) ✅ + V3 (per-zone ambient audio) ✅ + V4 (end-screen exhibition) ✅ + M13 T1 (guided first expedition) ✅ + M13 T2 (interactive pigment drills) ✅ + M13 T3 (mini sketch heron) ✅ — v1.2 Batch 6 (M13 T3) committed, T4 next.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 45 STAGES PASSED** (…stage 41 = v1.2 M11 V4 end-screen exhibition, **stage 42 = v1.2 M13 T1 guided first expedition, stage 43 = v1.2 M13 T2 interactive pigment drills, stage 44 = v1.2 M13 T3 mini sketch heron, stage 45 = v1.2 M13 T4 tutorial progress + "Watch me" re-entry**). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): full-run **18.8 min** — in the 15–20 min band (the M13 tutorial + "Watch me" retraining are a **separate frozen layer** — the timed clock is frozen while they run — so they add no timed-run time; `pace.mjs`/`humance.mjs` re-verified after T1/T2/T3/T4 and unchanged from the ~18.7/18.8 min baseline). DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 COMPLETE: M9 (A1–A4) ✅ + M10 (E1–E4) ✅ + M11 (V1–V4) ✅ + M13 (T1–T4) ✅ — all four milestones done; Batch 6 (M13 T3+T4) committed.**_
 
 ## Current Status
 
@@ -134,7 +134,7 @@ accessibility deferred).
 3. M10: **E3 ✅ (Bold-only zone hazards)** → **E4 ✅ (orb-streak bonus)** → M11: **V1 ✅ (color-reveal bar)** — **Batch 3 COMPLETE**
 4. M11: **V2 ✅ (heron bloom beat)** → **V3 ✅ (zone ambient audio)** → **V4 ✅ (exhibition end-screen)** — **Batch 4 (M11) COMPLETE — suite 41/41**
 5. M13: **T1 ✅ (guided first expedition)** → **T2 ✅ (interactive pigment drills)** — **Batch 5 (M13 T1+T2) COMPLETE — suite 43/43, pacing 18.7/18.9 min (the frozen tutorial pre-run layer adds no timed-run time)**
-6. M13: **T3 ✅ (mini sketch heron)** → T4 (tutorial progress + re-entry) — **Batch 6 in progress**
+6. M13: **T3 ✅ (mini sketch heron)** → **T4 ✅ (tutorial progress + "Watch me" re-entry)** — **Batch 6 (M13 T3+T4) COMPLETE**
 
 Each item's Notes column in the roadmap says which existing system to reuse.
 Acceptance (per batch): suite green, pace/humance probes still in the
@@ -236,6 +236,38 @@ begins the timed expedition. Stage 42 (T1) was updated: the guided run now has
 target, `maxHp<1000`) and the practice is NOT yet complete. Pacing unchanged:
 the sketch is tutorial-only, so `pace.mjs` ~18.7 min and `humance.mjs` 18.7 min
 stay in the 15–20 min band.
+
+**M13 T4 (tutorial progress + "Watch me" re-entry) — implemented + tested (v1.2 Batch 6, item 2).**
+T4 makes the **Field Guide (H/?)** the reference+retraining tool and gives a
+RETURNING player on-demand re-entry into any single lesson. The Field Guide gains
+a **"Watch me" retraining band** (drawn in `_drawHelp`; geometry shared via
+`_helpGeom()`, so the click target and the visual never drift): four one-click
+lessons (burn/freeze/root drills + the sketch heron). **`_startRetrain(phaseIdx)`**
+re-enters the guided teaching layer at the requested phase (`retrain:true`,
+`runT` frozen at its current value) — **reusing the T1–T3 phases** (the same
+`TUTORIAL_PHASES` chips + advance machinery). Completing OR skipping the replay
+resumes the timed run at its **exact frozen clock** (a retrain is a paused aside,
+never counted), and the real heron's intro is stashed + held at 999 during the
+replay, restored exactly on end (a retrain never snaps the boss awake). A retrain
+skip does **NOT** set `tutorialSkipped` (the retrain check runs BEFORE the
+skip-persistence in `_skipTutorial`, so the flag is never touched on a replay).
+**Opt-in + never auto-enters:** a guarded `_startRetrain` refuses to run while a
+guided run is already active (no nesting / no hijack), and the guided button only
+appears on a fresh save. **Never enters the timed expedition:** the replay only
+ever runs inside an in-progress run's frozen layer. Progress is **readable +
+persisted** via the existing `save.tutorialDrills` (+ `tutorialSkipped`) — **no
+new save field, no v4 migration**. Pure references in `logic.js`:
+`tutorialDone(save)` (all four drills + awaken) and `retrainAllowed(save)` (a
+returning player with ≥1 completed lesson — a fresh save with no progress has
+nothing to replay yet; the guided run itself is the first-time path). Smoke
+stage 45: progress is readable per-drill + complete; the band is offered to a
+returning save (hidden for a fresh one); clicking a lesson **re-enters that phase
+on demand** (the freeze drill, and the sketch heron) with its target spawned; the
+frozen clock is unchanged before/after (the replay is not counted); the replayed
+drill is recorded; skipping a replay does NOT mark the tutorial skipped; and
+`_startRetrain` is a no-op while a guided run is active. Pacing unchanged
+(tutorial-only): `pace.mjs` ~18.7 min + `humance.mjs` 18.8 min stay in the
+15–20 min band.
 
 **M9 A4 (Rehung Frame) — implemented + tested (v1.2 Batch 2, item 1).**
 A permanent, saved **Gallery Bonus** (`save.galleryBonus`, a counter) minted

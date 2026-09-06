@@ -800,18 +800,18 @@ export function tutorialDone(save) {
   return !!(d.burn && d.freeze && d.root && d.awaken);
 }
 
-// T4 (v1.2 M13): is "Watch me" retraining available for this save? It must be
-// reachable only for a player who has some tutorial context to replay — i.e. a
-// fresh save (eligible to run the guided expedition) or a save that has already
-// started/completed at least one drill or the sketch. A truly empty save
-// (nothing done, not eligible) offers nothing to retrain. Pure.
+// T4 (v1.2 M13): is "Watch me" retraining available for this save? It is the
+// RE-ENTRY for a RETURNING player: there must be some lesson already completed
+// to replay (a finished run, a dismissed guided run, or at least one completed
+// drill/sketch). A truly fresh save (nothing done) has no lesson to replay yet
+// and offers nothing — the guided run itself is the first-time path. Pure.
 export function retrainAllowed(save) {
   if (!save || !isPlainObj(save.flags)) return false;
   if (save.flags.heronDefeated) return true;          // finished at least one run
   if (save.flags.tutorialSkipped) return true;        // dismissed the guided run
   const d = isPlainObj(save.tutorialDrills) ? save.tutorialDrills : null;
   if (d && (d.burn || d.freeze || d.root || d.awaken)) return true; // some progress
-  return tutorialEligible(save);                       // fresh, eligible to start
+  return false;                                        // nothing done yet — nothing to replay
 }
 
 // B2: corrupt-save handling. migrateSave never throws and always returns a

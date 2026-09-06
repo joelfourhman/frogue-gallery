@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -368,7 +368,16 @@ export class Game {
           this.sfx('ui');
         } else if (this.input.mouse.lPressed) {
           const h = this._helpGeom();
-          if (this._mouseIn(h.close.x, h.close.y, h.close.w, h.close.h)) { this.help = false; this.sfx('ui'); }
+          // T4 (v1.2 M13): a "Watch me" lesson button starts a retrain replay of
+          // that phase on demand — close the guide and enter the frozen teaching
+          // layer at the requested phase (opt-in; it never counts toward the run).
+          let started = false;
+          if (h.retrain && h.retrain.enabled) {
+            for (const b of h.retrain.buttons) {
+              if (this._mouseIn(b.x, b.y, b.w, b.h)) { this.help = false; this.helpRetrain = true; this._startRetrain(b.phase); started = true; break; }
+            }
+          }
+          if (!started && this._mouseIn(h.close.x, h.close.y, h.close.w, h.close.h)) { this.help = false; this.sfx('ui'); }
         }
       } else if (!this.dying) {
         // M5: the pause menu owns input while paused — _updateExpedition is
@@ -1378,6 +1387,10 @@ _drawAtelier(ctx) {
         SaveSys.save(this.save);
       }
     }
+    // T4: a "Watch me" retrain replay ends the moment its REQUESTED phase
+    // completes — resume the timed run (runT stays at its frozen value, so the
+    // replay is never counted toward the timed expedition).
+    if (t.retrain) { this._endRetrain(); return; }
     if (t.idx >= TUTORIAL_PHASES.length) {
       t.done = true;
       this._clearSketchHeron();   // the sketch beat is the last phase
@@ -1400,8 +1413,13 @@ _drawAtelier(ctx) {
   }
 
   // Skip the whole tutorial at any time. Persists the skip so it never returns.
+  // T4: a "Watch me" retrain replay can be skipped too — but that does NOT mark
+  // the tutorial skipped (the player already dismissed it once); it just ends
+  // the replay and resumes the timed run at its frozen clock. (Checked FIRST,
+  // before the skip-persistence, so a retrain skip never sets tutorialSkipped.)
   _skipTutorial() {
     if (!this.tutorial || this.tutorial.done) return;
+    if (this.tutorial.retrain) { this._endRetrain(); return; }
     this.tutorial.done = true;
     if (!this.save.flags.tutorialSkipped) {
       this.save.flags.tutorialSkipped = true;
@@ -1413,6 +1431,52 @@ _drawAtelier(ctx) {
     this.runT = 0;
     this.heron._intro = 3.2;       // the timed expedition begins
     this.addBanner('Practice skipped — the expedition begins.', 3.2, this.ch * 0.3);
+    this.sfx('ui-back');
+  }
+
+  // T4 (v1.2 M13): start a "Watch me" retrain replay of a SINGLE tutorial phase
+  // (the three pigment drills, or the sketch-heron beat) ON DEMAND, from a
+  // RETURNING player. It re-enters the guided teaching layer at the requested
+  // phase, reusing the T1–T3 phases. It is OPT-IN and NEVER auto-enters:
+  //   - the timed clock (runT) is frozen at its current value and resumes at the
+  //     SAME value when the replay ends (the replay is never counted);
+  //   - the real heron's intro is held at 999 so it cannot wake mid-replay;
+  //   - it is dismissed (completed OR skipped) by the same chip controls.
+  // `phaseIdx` is the index into TUTORIAL_PHASES (0-2 = drills, 3 = sketch).
+  _startRetrain(phaseIdx) {
+    if (this.state !== 'expedition' || this.dying) return; // in-run only
+    // never nest a replay inside an active guided run (fresh save's teaching run)
+    if (this.tutorial && !this.tutorial.done) return;
+    const idx = Math.max(0, Math.min(TUTORIAL_PHASES.length - 1, phaseIdx | 0));
+    this.tutorial = {
+      idx, target: null, targetPos: null, done: false,
+      frozen: this.runT,            // remember where the timed run was
+      retrain: true,                 // T4: this is a replay, not the first run
+    };
+    this._sketchDefeated = false;
+    // stash the real heron's intro exactly, so a retrain is a paused aside, not
+    // a run event; the boss is held at 999 while the replay is live.
+    this._retrainIntro = (this.heron && typeof this.heron._intro === 'number') ? this.heron._intro : 999;
+    if (this.heron) this.heron._intro = 999;
+    this.addBanner('Watch me — replaying a lesson. Finish or skip to resume the run.', 3.4, this.ch * 0.3);
+    this._tutorialSpawnTarget();    // spawns the drill bug or the sketch heron
+    this.sfx('ui');
+  }
+
+  // T4 (v1.2 M13): end a "Watch me" retrain replay — resume the timed run at the
+  // exact value it was frozen at (so the replay never inflates the run length).
+  _endRetrain() {
+    this.tutorial = null;
+    this.sketchHeron = null;
+    this._sketchDefeated = false;
+    // restore the real heron's intro to exactly where it was before the replay.
+    // If the boss was already active (intro <= 0) before the replay, keep it
+    // deferred — a retrain must never snap the boss awake the moment it ends.
+    if (this.heron) {
+      const ri = (typeof this._retrainIntro === 'number') ? this._retrainIntro : 999;
+      this.heron._intro = ri > 0 ? ri : 999;
+    }
+    this.addBanner('Lesson replayed. Back to the swamp.', 2.6, this.ch * 0.3);
     this.sfx('ui-back');
   }
 
@@ -3114,9 +3178,24 @@ _drawAtelier(ctx) {
   // click handling (in the frame router) and the draw never drift apart.
   _helpGeom() {
     const cx = this.cw / 2, cw = this.cw;
-    const pw = 720, ph = 470, px = cx - pw / 2, py = 150;
+    const pw = 720, px = cx - pw / 2, py = 150;
+    // T4 (v1.2 M13): the "Watch me" retraining band — replay a single pigment
+    // drill or the sketch-heron phase ON DEMAND. Shown only when retraining is
+    // available for this save (a returning player) AND no guided run is already
+    // active. The panel grows a little to make room; a single source of truth
+    // for both the draw (_drawHelp) and the click handling (frame router).
+    const retrainOn = retrainAllowed(this.save) && !this._tutorialActive();
+    const ph = retrainOn ? 512 : 470;
+    const bw = 150, bh = 34, gap = 16, totalW = 4 * bw + 3 * gap;
+    const bx0 = cx - totalW / 2, by = py + ph - 92;
+    const phases = [3, 4, 5, 6]; // burn / freeze / root drills, then the sketch heron
+    const labels = ['Burn drill', 'Freeze drill', 'Root drill', 'Sketch heron'];
+    const buttons = phases.map((phase, i) => ({
+      phase, label: labels[i], x: bx0 + i * (bw + gap), y: by, w: bw, h: bh,
+    }));
     return { cx, pw, ph, px, py,
-      close: { x: px + pw - 120, y: py + 18, w: 100, h: 40 } };
+      close: { x: px + pw - 120, y: py + 18, w: 100, h: 40 },
+      retrain: { enabled: retrainOn, titleY: by - 18, buttons } };
   }
 
   _drawHelp(ctx) {
@@ -3174,6 +3253,26 @@ _drawAtelier(ctx) {
 
     // footer
     centerText(c, 'WASD / arrows to move  ·  Space to hop (brief invulnerability)  ·  P to pause  ·  M to mute', g.cx, g.py + g.ph - 22, 'italic 13px Georgia, serif', INK, 0.6);
+    // T4 (v1.2 M13): the "Watch me" retraining band — replay a single pigment
+    // drill or the sketch-heron phase on demand (opt-in; never auto-enters, and
+    // the replay is a frozen aside that never counts toward the timed run).
+    if (g.retrain && g.retrain.enabled) {
+      const rt = g.retrain;
+      centerText(c, 'Watch me — replay a lesson (frozen; the run keeps its clock)', g.cx, rt.titleY, '700 14px Georgia, serif', INK, 0.9);
+      for (const b of rt.buttons) {
+        const hov = this._mouseIn(b.x, b.y, b.w, b.h);
+        ctx.save();
+        ctx.globalAlpha = hov ? 1 : 0.86;
+        roundRectPath(ctx, b.x, b.y, b.w, b.h, 7);
+        ctx.fillStyle = hov ? '#7a5fb0' : '#8d7bb0';
+        ctx.fill();
+        ctx.lineWidth = hov ? 2 : 1.2;
+        ctx.strokeStyle = INK;
+        ctx.stroke();
+        ctx.restore();
+        centerText(ctx, b.label, b.x + b.w / 2, b.y + b.h / 2 + 1, '700 12px Georgia, serif', '#fdf6e9', 1);
+      }
+    }
     paperEnd(ctx);
   }
 

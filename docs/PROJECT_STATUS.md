@@ -4,7 +4,7 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 Batch 1 A1–A3 done + A4 Rehung Frame done + E1 Painted Heron done + E2 weather/tide phases done + E3 Bold-only zone hazards done + E4 orb-streak bonus done + V1 color-reveal bar done + V2 heron awaken bloom done + V3 per-zone ambient audio done + V4 end-screen exhibition done + M13 T1 guided first expedition done + M13 T2 interactive pigment drills done + M13 T3 mini sketch heron done; Batch 2/3/4/5 COMPLETE, Batch 6 T3 committed)**
+**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 Batch 1 A1–A3 done + A4 Rehung Frame done + E1 Painted Heron done + E2 weather/tide phases done + E3 Bold-only zone hazards done + E4 orb-streak bonus done + V1 color-reveal bar done + V2 heron awaken bloom done + V3 per-zone ambient audio done + V4 end-screen exhibition done + M13 T1 guided first expedition done + M13 T2 interactive pigment drills done + M13 T3 mini sketch heron done + M13 T4 tutorial progress + "Watch me" re-entry done; Batch 2/3/4/5/6 COMPLETE — **v1.2 COMPLETE**)**
 
 ## Current state
 
@@ -71,20 +71,31 @@ consequential decisions in `docs/DECISIONS.md`.
   fight uses, so the real boss is a known pattern; completion persists
   save.tutorialDrills.awaken=true (tutorialDone reads it), SKIP during the
   sketch does NOT record awaken (finishing is optional); frozen teaching layer
-  so it adds no timed-run time).**
-  - Smoke suite: **44 stages, ALL PASSED** (stage 34 = v1.2 M10 E1 Painted Heron; stage 35 = v1.2 M10 E2 weather/tide phases; stage 36 = v1.2 M10 E3 Bold-only zone hazards; stage 37 = v1.2 M10 E4 orb-streak bonus; stage 38 = v1.2 M11 V1 color-reveal bar; stage 39 = v1.2 M11 V2 heron awaken bloom; stage 40 = v1.2 M11 V3 per-zone ambient audio bed; stage 41 = v1.2 M11 V4 end-screen exhibition; **stage 42 = v1.2 M13 T1 guided first expedition; stage 43 = v1.2 M13 T2 interactive pigment drills; stage 44 = v1.2 M13 T3 mini sketch heron**). Pacing
+  so it adds no timed-run time),
+  T4 ✅ (tutorial progress + "Watch me" re-entry — the Field Guide (H/?) becomes
+  the reference+retraining tool: a "Watch me" band (drawn in _drawHelp, geometry
+  shared via _helpGeom) offers one-click replays of the 3 drills + the sketch
+  heron; _startRetrain re-enters the guided teaching layer at the requested
+  phase reusing the T1–T3 chips, freezing the timed clock at its current value
+  (the replay is a paused aside, never counted) and holding the real heron's
+  intro; completing OR skipping the replay resumes the run at its exact frozen
+  clock; a retrain skip does NOT set tutorialSkipped; OPT-IN and never
+  auto-enters (no nesting in an active guided run; never enters the timed
+  expedition); progress readable + persisted via save.tutorialDrills — no new
+  save field, no v4 migration).**
+  - Smoke suite: **45 stages, ALL PASSED** (stage 34 = v1.2 M10 E1 Painted Heron; stage 35 = v1.2 M10 E2 weather/tide phases; stage 36 = v1.2 M10 E3 Bold-only zone hazards; stage 37 = v1.2 M10 E4 orb-streak bonus; stage 38 = v1.2 M11 V1 color-reveal bar; stage 39 = v1.2 M11 V2 heron awaken bloom; stage 40 = v1.2 M11 V3 per-zone ambient audio bed; stage 41 = v1.2 M11 V4 end-screen exhibition; **stage 42 = v1.2 M13 T1 guided first expedition; stage 43 = v1.2 M13 T2 interactive pigment drills; stage 44 = v1.2 M13 T3 mini sketch heron; stage 45 = v1.2 M13 T4 tutorial progress + "Watch me" re-entry**). Pacing
   probes green on Normal: `pace.mjs` (analytic ~18.7 min) + `humance.mjs` (simulated
-  human, ~18.7 min full-run / 53s cross-swamp) + `bosspace.mjs` (re-verified after
-  T1/T2/T3; the frozen tutorial pre-run layer adds no timed-run time). Real-browser: 60 fps title / full world.
+  human, ~18.8 min full-run) + `bosspace.mjs` (re-verified after
+  T1/T2/T3/T4; the frozen tutorial + "Watch me" retraining layer adds no timed-run time). Real-browser: 60 fps title / full world.
 - Git: v1.1 fully committed; v1.2 roadmap + M13 tutorial
   swap committed (`5258d13`, `543d1cd`).
 
 ## Active work
 
-**v1.2 "The Collection" — in progress, driven in bounded batches of ~3 items.**
+**v1.2 "The Collection" — COMPLETE.**
 Batch order (one conventional commit per item, docs + suite green per commit):
 M9 A1→A2→A3 → A4 / M10 E1→E2 → E3→E4 / M11 V1 → V2→V3→V4 → M13 T1→T2→T3→T4.
-**Batch 1 (A1–A3) COMPLETE. Batch 2 (A4 Rehung Frame ✅ + E1 Painted Heron ✅ + E2 weather/tide phases ✅) COMPLETE — suite 35/35, pacing in band on Normal. Batch 3 (E3 Bold-only zone hazards ✅ → E4 orb-streak bonus ✅ → V1 color-reveal bar ✅) COMPLETE — suite 38/38, pacing 18.7/19.2 min in band. Batch 4 (M11 Presentation, presentation-only — pacing untouched): V2 ✅ (heron awaken bloom) + V3 ✅ (per-zone ambient audio) + V4 ✅ (end-screen exhibition) COMPLETE — suite 41/41. Batch 5 (M13 Tutorial): T1 ✅ (guided first expedition) + T2 ✅ (interactive pigment drills) COMPLETE — suite 43/43, pacing 18.7/18.9 min (the tutorial is a frozen pre-run layer that adds no timed-run time).** See
+**Batch 1 (A1–A3) COMPLETE. Batch 2 (A4 Rehung Frame ✅ + E1 Painted Heron ✅ + E2 weather/tide phases ✅) COMPLETE — suite 35/35, pacing in band on Normal. Batch 3 (E3 Bold-only zone hazards ✅ → E4 orb-streak bonus ✅ → V1 color-reveal bar ✅) COMPLETE — suite 38/38, pacing 18.7/19.2 min in band. Batch 4 (M11 Presentation, presentation-only — pacing untouched): V2 ✅ (heron awaken bloom) + V3 ✅ (per-zone ambient audio) + V4 ✅ (end-screen exhibition) COMPLETE — suite 41/41. Batch 5 (M13 Tutorial): T1 ✅ (guided first expedition) + T2 ✅ (interactive pigment drills) COMPLETE — suite 43/43, pacing 18.7/18.9 min (the tutorial is a frozen pre-run layer that adds no timed-run time). Batch 6 (M13 Tutorial): T3 ✅ (mini sketch heron) + T4 ✅ (tutorial progress + "Watch me" re-entry) COMPLETE — suite 45/45, pacing 18.7/18.8 min. All four v1.2 milestones (M9/M10/M11/M13) are done.** See
 `PROJECT_STATE.md` → Immediate Next Action.
 
 ## Blockers
