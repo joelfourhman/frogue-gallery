@@ -4,7 +4,7 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 Batch 1 A1–A3 done + A4 Rehung Frame done + E1 Painted Heron done + E2 weather/tide phases done; Batch 2 COMPLETE)**
+**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 Batch 1 A1–A3 done + A4 Rehung Frame done + E1 Painted Heron done + E2 weather/tide phases done + E3 Bold-only zone hazards done; Batch 2 COMPLETE, Batch 3 in progress)**
 
 ## Current state
 
@@ -20,8 +20,11 @@ consequential decisions in `docs/DECISIONS.md`.
   "half-heron" set-piece, non-blocking, reuses `bossStep`/`paintBossHit`),
   E2 ✅ (weather/tide phases — Rain/Drought ambient buffs, deterministic
   per run seed + zone, eased transient multiplier on live tuning).**
-  - Smoke suite: **35 stages, ALL PASSED** (stage 33 = v1.2 M9 A4 Rehung Frame gallery
-  bonus; stage 34 = v1.2 M10 E1 Painted Heron; stage 35 = v1.2 M10 E2 weather/tide phases). Pacing
+  **Batch 3 (in progress): E3 ✅ (Bold-only zone hazards — Thorn Reed roots,
+  Mud Pool slows; Bold-only gate so Normal 15–20 min pacing untouched,
+  difficulty-gated so pacing probes intentionally NOT re-run; pure seeded
+  placement in logic.js, player slow/root state, thin game.js wiring).**
+  - Smoke suite: **36 stages, ALL PASSED** (stage 34 = v1.2 M10 E1 Painted Heron; stage 35 = v1.2 M10 E2 weather/tide phases; stage 36 = v1.2 M10 E3 Bold-only zone hazards). Pacing
   probes green on Normal: `pace.mjs` (analytic ~18.6 min) + `humance.mjs` (simulated
   human, ~18.8 min full-run / 55s cross-swamp) + `bosspace.mjs`. Real-browser: 60 fps title / full world.
 - Git: v1.1 fully committed; v1.2 A1 committed; v1.2 roadmap + M13 tutorial
@@ -32,7 +35,7 @@ consequential decisions in `docs/DECISIONS.md`.
 **v1.2 "The Collection" — in progress, driven in bounded batches of ~3 items.**
 Batch order (one conventional commit per item, docs + suite green per commit):
 M9 A1→A2→A3 → A4 / M10 E1→E2 → E3→E4 / M11 V1 → V2→V3→V4 → M13 T1→T2→T3→T4.
-**Batch 1 (A1–A3) COMPLETE. Batch 2 (A4 Rehung Frame ✅ + E1 Painted Heron ✅ + E2 weather/tide phases ✅) COMPLETE — suite 35/35, pacing in band on Normal. Next E3 (Bold hazards).** See
+**Batch 1 (A1–A3) COMPLETE. Batch 2 (A4 Rehung Frame ✅ + E1 Painted Heron ✅ + E2 weather/tide phases ✅) COMPLETE — suite 35/35, pacing in band on Normal. Batch 3 (E3 Bold-only zone hazards ✅ → E4 orb streak → V1 color-reveal bar) in progress — suite 36/36 after E3.** See
 `PROJECT_STATE.md` → Immediate Next Action.
 
 ## Blockers

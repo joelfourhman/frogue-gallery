@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -181,6 +181,7 @@ export class Game {
     this.paint = null;
     this.enemies = [];
     this.orbs = [];
+    this.hazards = [];
     this.heron = null;
     this.runT = 0;
     this.spawnT = 3;
@@ -370,6 +371,7 @@ export class Game {
     this.heron = null;
     this.enemies = [];
     this.orbs = [];
+    this.hazards = [];
     this.sfx('ui-back');
   }
 
@@ -1081,6 +1083,7 @@ _drawAtelier(ctx) {
     this.paint = new Paint(this.player, this.world, this.tuning, (n, o) => this.sfx(n, o), this.particles);
     this.enemies = [];
     this.orbs = [];
+    this.hazards = []; // E3: Bold-only environmental hazards (thorn reeds / mud pools)
     this.heron = {
       x: this.world.w - 350, y: HERON_Y, hp: this.tuning.bossMaxHp, maxHp: this.tuning.bossMaxHp,
       phase: 1, state: 'idle', stateT: 2.2, hue: { red: 0, blue: 0, green: 0 },
@@ -1244,6 +1247,9 @@ _drawAtelier(ctx) {
 
     p.update(dt, this.input, this.tuning, this.world, this._view());
     this.paint.update(dt);
+    // E3 (v1.2 M10): Bold-only zone hazards (root/slow) apply after movement so
+    // they gate the *next* frame's speed. No-op on Gentle/Normal (no hazards).
+    this._updateHazards(dt);
     // E2 (v1.2 M10): advance the zone's weather/tide phase (banner, live tuning
     // multiplier, fade-out). Informational — it never blocks or punishes.
     this._updateWeather(dt);
@@ -1394,6 +1400,10 @@ _drawAtelier(ctx) {
     // M8 P12: a signature guardian of the zone's emblematic enemy — scaled up
     // and ringed in the zone's accent. It leads the zone's combat beat.
     if (z.sig) this._spawnZoneElite(p, z);
+    // E3 (v1.2 M10): Bold-only environmental hazards for this zone (thorn reeds
+    // that root, mud pools that slow). Gentle/Normal skip this entirely, so the
+    // 15-20 min Normal pacing is untouched (difficulty-gated).
+    if (boldHazardsAllowed(this.options.difficulty)) this._spawnZoneHazards(z);
     // combat beat, staged ahead of the frog so it plays out gradually
     for (const [kind, n] of Object.entries(z.mix)) {
       for (let i = 0; i < n; i++) {
@@ -1464,6 +1474,84 @@ _drawAtelier(ctx) {
       e.score = base.score * ELITE.score;
       e.accent = z.accent;
       this.enemies.push(e);
+    }
+  }
+
+  // E3 (v1.2 M10): place this zone's Bold-only hazards deterministically from
+  // the run seed + zone index (so a Bold run replays the same layout) and push
+  // them into `this.hazards`. Called only from _zoneBeat on Bold.
+  _spawnZoneHazards(z) {
+    const placed = placeZoneHazards(this.runSeed || 0, this._zoneI, z, this.world.w, this.world.h);
+    for (const hz of placed) {
+      const t = BOLD_HAZARDS.types[hz.kind];
+      this.hazards.push({
+        kind: hz.kind, x: hz.x, y: hz.y, r: t.r, seed: Math.floor((hz.x * 3 + hz.y) % 997),
+        _cd: 0, // per-hazard re-trigger cooldown (prevents re-rooting every frame)
+      });
+    }
+  }
+
+  // E3: apply the active hazards' effects (thorn reed = brief root, mud pool =
+  // slow) when the frog is inside them. Gentle/Normal never populate hazards,
+  // so this is a no-op there. Non-damaging: it costs time/space, not HP.
+  _updateHazards(dt) {
+    const p = this.player;
+    if (!p || !p.alive || this.hazards.length === 0) return;
+    for (const hz of this.hazards) {
+      if (hz._cd > 0) { hz._cd -= dt; continue; }
+      if (dist(p.x, p.y, hz.x, hz.y) >= hz.r + p.r * 0.5) continue;
+      const t = BOLD_HAZARDS.types[hz.kind];
+      if (hz.kind === 'thornReed') {
+        p.rootT = Math.max(p.rootT, t.rootDur);
+        hz._cd = t.rootDur + 0.5;
+        this.sfx('paint-create');
+        this.particles.sparkles(p.x, p.y - 8, t.color, 5);
+        this.paint.note(p.x, p.y - 14, 'rooted!', 'green');
+      } else if (hz.kind === 'mudPool') {
+        p.slowT = Math.max(p.slowT, t.slowDur);
+        hz._cd = t.slowDur * 0.5;
+        this.particles.splatter(p.x, p.y, t.color, 3, 60);
+      }
+    }
+  }
+
+  // E3: draw the zone hazards in world space (thorn reeds = spiky green, mud
+  // pools = flat brown). Pure presentation; no gameplay.
+  _drawHazards(ctx, sat01) {
+    if (!this.hazards || this.hazards.length === 0) return;
+    for (const hz of this.hazards) {
+      const t = BOLD_HAZARDS.types[hz.kind];
+      ctx.save();
+      ctx.translate(hz.x, hz.y);
+      if (hz.kind === 'mudPool') {
+        ctx.fillStyle = sat(t.color, sat01);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, hz.r, hz.r * 0.55, 0, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = INK;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else { // thornReed
+        ctx.fillStyle = sat(t.color, sat01);
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 6; i++) {
+          const a = i / 6 * TAU + hz.seed;
+          const len = hz.r * (0.7 + 0.3 * ((hz.seed + i) % 5) / 5);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+          ctx.lineTo(Math.cos(a + 0.3) * len * 0.5, Math.sin(a + 0.3) * len * 0.5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.globalAlpha = 0.5;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+      ctx.restore();
     }
   }
 
@@ -1940,6 +2028,7 @@ _drawAtelier(ctx) {
       if (this.heron) this._drawHeron(ctx, this.heron, this.now);
       if (this.midHeron) this._drawHeron(ctx, this.midHeron, this.now); // E1: Painted Heron
       for (const e of this.enemies) drawEnemy(ctx, e, this.now);
+      this._drawHazards(ctx, sat01); // E3: Bold-only zone hazards
       if (this.player && this.player.alive) this.player.draw(ctx, v, this.now);
       this._drawOrbs(ctx);
     }

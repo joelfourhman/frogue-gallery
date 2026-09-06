@@ -388,6 +388,46 @@ export function midHeronAllowed(difficulty) {
 }
 
 // ----------------------------------------------------------------
+// E3 (v1.2 M10): Bold-only zone hazards. Two environmental hazards give
+// Bold a reason to exist beyond "harder numbers": a THORN REED that briefly
+// roots the frog on touch, and a MUD POOL that slows it. They spawn ONLY on
+// Bold (Gentle/Normal are untouched, so the 15-20 min Normal pacing target is
+// unaffected — difficulty-gated, no in-run time added on Normal). The player
+// slow/root state is applied by game.js; placement is here so it is pure +
+// deterministically seeded per (runSeed, zone) and testable headless.
+export const BOLD_HAZARDS = {
+  allowed: ['bold'],                       // Gentle/Normal never spawn them
+  types: {
+    thornReed: { id: 'thornReed', name: 'Thorn Reed', r: 46,  rootDur: 1.1, color: '#7fb069', desc: 'roots you for a moment' },
+    mudPool:   { id: 'mudPool',   name: 'Mud Pool',   r: 56,  slowDur: 2.0, color: '#6b5644', desc: 'slows your stride'   },
+  },
+};
+// Pure: is a hazard run active for this difficulty? (Bold only)
+export function boldHazardsAllowed(difficulty) {
+  return BOLD_HAZARDS.allowed.includes(difficulty);
+}
+// Place this zone's hazards (deterministic per (seed, zoneIndex)). Returns an
+// array of { kind, x, y } placed along the corridor the frog actually travels
+// (world h ~1500, walkable band y 480-980), a little ahead of the zone entry.
+export function placeZoneHazards(seed, zoneIndex, zone, worldW, worldH) {
+  const start = worldW * (zone.x - 0.04);
+  const end = worldW * (zone.x + 0.16);
+  const yMin = Math.max(500, worldH * 0.32), yMax = Math.min(980, worldH * 0.66);
+  const rng = mulberry32(((seed + 1) ^ 0) * 2654435761 + zoneIndex * 7919 + 13) >>> 0;
+  const r = mulberry32(rng);
+  const n = 2 + (Math.floor(r() * 2));    // 2-3 hazards per zone
+  const kinds = Object.keys(BOLD_HAZARDS.types);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const kind = kinds[Math.floor(r() * kinds.length) % kinds.length];
+    const x = start + (i + 0.5) * ((end - start) / n) + (r() - 0.5) * 90;
+    const y = yMin + r() * (yMax - yMin);
+    out.push({ kind, x: Math.round(x), y: Math.round(y) });
+  }
+  return out;
+}
+
+// ----------------------------------------------------------------
 // E2 (v1.2 M10): weather / tide phases — short ambient "phase" events during a
 // zone that nudge the run's tuning for their duration (informational buffs,
 // non-punishing). Each phase multiplies one already-consumed tuning field (via

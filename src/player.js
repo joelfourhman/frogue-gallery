@@ -20,13 +20,25 @@ export class Player {
     this.iframes = 0;
     this.hurtT = 0;         // red flash timer
     this.squash = 1;        // squash-and-stretch scale
-    this.swipeT = 0;        // brush swing animation timer
+    this.swipeT = 0;         // brush swing animation timer
+    this.slowT = 0;          // E3: slowed (mud pool)
+    this.rootT = 0;          // E3: rooted (thorn reed) — cannot move
     this.splashCharge = 0;
     this.alive = true;
     this._blinkT = 1.5 + Math.random() * 3;
   }
 
   get speed() { return 230; }
+
+  // E3: movement speed factor from environmental hazard states (1 = free).
+  // Root (thorn reed) is hard: it zeros speed in update; slow (mud pool) eases
+  // back. Pure enough to read headless.
+  speedFactor() {
+    let f = 1;
+    if (this.rootT > 0) f = 0;
+    else if (this.slowT > 0) f = 0.55;
+    return f;
+  }
 
   update(dt, input, tuning, world, view) {
     const mv = input.moveVec();
@@ -48,9 +60,11 @@ export class Player {
     if (this.hopT > 0) this.hopT -= dt;
     if (this.hopCd > 0) this.hopCd -= dt;
 
-    // movement: base speed, boosted mid-hop
+    // movement: base speed, boosted mid-hop; E3 slow/root modifiers
     let spd = this.speed;
     if (this.hopT > 0.04) spd *= 2.6;
+    spd *= this.speedFactor();
+    if (this.rootT > 0) spd = 0;
     this.vx = lerp(this.vx, mv[0] * spd, 1 - Math.exp(-14 * dt));
     this.vy = lerp(this.vy, mv[1] * spd, 1 - Math.exp(-14 * dt));
     this.x += this.vx * dt;
@@ -62,6 +76,8 @@ export class Player {
     if (this.iframes > 0) this.iframes -= dt;
     if (this.hurtT > 0) this.hurtT -= dt;
     if (this.swipeT > 0) this.swipeT -= dt;
+    if (this.slowT > 0) this.slowT -= dt;
+    if (this.rootT > 0) this.rootT -= dt;
     // squash relaxes toward 1
     this.squash = lerp(this.squash, 1, 1 - Math.exp(-10 * dt));
     this._blinkT -= dt;

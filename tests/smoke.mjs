@@ -1715,5 +1715,88 @@ console.log('== stage 35: v1.2 M10 E2 — weather/tide phases ==');
   g36._onPlayerDead(); g36._endRun('defeat');
 }
 
+// stage 36 — v1.2 M10 E3: Bold-only zone hazards (thorn reed root / mud pool
+// slow). Difficulty-gated (Bold only): the 15-20 min Normal pacing target is
+// untouched, so the pacing probes are intentionally NOT re-run for this item.
+console.log('== stage 36: v1.2 M10 E3 — Bold-only zone hazards ==');
+{
+  const L = await import('../src/logic.js');
+  const { ZONES } = await import('../src/game.js');
+
+  // --- the difficulty gate is pure + correct (Bold only) ---
+  assert(L.boldHazardsAllowed('bold') === true, 'E3: hazards are allowed on Bold');
+  assert(L.boldHazardsAllowed('normal') === false, 'E3: hazards are NOT allowed on Normal');
+  assert(L.boldHazardsAllowed('gentle') === false, 'E3: hazards are NOT allowed on Gentle');
+
+  // --- placement is pure, deterministic, and inside the walkable corridor ---
+  const z0 = ZONES[0];
+  const placed = L.placeZoneHazards(12345, 0, z0, 5400, 1500);
+  assert(placed.length >= 2 && placed.length <= 3, `E3: a zone gets 2-3 hazards (got ${placed.length})`);
+  const placedB = L.placeZoneHazards(12345, 0, z0, 5400, 1500);
+  assert(placed.length === placedB.length &&
+    placed.every((h, i) => h.x === placedB[i].x && h.y === placedB[i].y && h.kind === placedB[i].kind),
+    'E3: hazard placement is deterministic per (seed, zone)');
+  assert(new Set(placed.map(h => h.kind)).size >= 1, 'E3: at least one hazard type is present');
+  for (const h of placed) {
+    assert(Object.prototype.hasOwnProperty.call(L.BOLD_HAZARDS.types, h.kind), `E3: hazard kind "${h.kind}" is a known type`);
+    assert(h.y >= 480 && h.y <= 980, `E3: hazard at y=${h.y} sits in the walkable corridor (480-980)`);
+    assert(h.x > 0 && h.x < 5400, `E3: hazard at x=${h.x} is within the world`);
+  }
+  // different zones differ (not one fixed layout)
+  const placedZ1 = L.placeZoneHazards(12345, 1, ZONES[1], 5400, 1500);
+  const same = placedZ1.length === placed.length && placedZ1.every((h, i) => h.x === placed[i].x);
+  assert(!same, 'E3: hazard layout varies by zone (not one fixed map)');
+
+  // --- REAL loop: on Bold, crossing into a zone spawns hazards into this.hazards ---
+  const cv36 = makeCanvas();
+  const g36 = new Game(cv36);
+  g36.options.difficulty = 'bold';
+  g36.tuning = L.makeTuning(g36.save.upgrades, g36.save.loadout, 'bold', g36.save.galleryBonus || 0);
+  g36.start();
+  fireKey('keydown', 'Enter'); frames(3);           // title -> expedition
+  const P36 = g36.player;
+  P36.alive = true; P36.hp = 99; P36.iframes = 999; // god-mode: testing hazards, not survival
+  g36.hazards.length = 0;
+  P36.x = Math.round(g36.world.w * z0.x) + 40;      // just past the zone-0 boundary -> _zoneBeat fires once
+  frames(3);
+  assert(g36.hazards.length > 0, `E3: hazards SPAWN on Bold when entering a zone (got ${g36.hazards.length})`);
+
+  // --- hazard EFFECTS: thorn reed roots the frog, mud pool slows it ---
+  P36.rootT = 0; P36.slowT = 0;
+  P36.x = placed[0].x; P36.y = placed[0].y;
+  g36.hazards.length = 0;
+  g36.hazards.push({ kind: 'thornReed', x: P36.x, y: P36.y, r: L.BOLD_HAZARDS.types.thornReed.r, seed: 1, _cd: 0 });
+  g36.hazards.push({ kind: 'mudPool', x: P36.x + 300, y: P36.y, r: L.BOLD_HAZARDS.types.mudPool.r, seed: 2, _cd: 0 });
+  g36._updateHazards(1 / 60);
+  assert(P36.rootT > 0, `E3: stepping into a thorn reed ROOTS the frog (rootT=${P36.rootT.toFixed(2)})`);
+  assert(P36.speedFactor() === 0, 'E3: while rooted the frog cannot move (speedFactor 0)');
+  P36.rootT = 0;
+  P36.x = P36.x + 300;                              // step into the mud pool
+  g36.hazards[1]._cd = 0;
+  g36._updateHazards(1 / 60);
+  assert(P36.slowT > 0, `E3: stepping into a mud pool SLOWS the frog (slowT=${P36.slowT.toFixed(2)})`);
+  assert(P36.speedFactor() < 1, `E3: while slowed the frog moves slower (speedFactor=${P36.speedFactor()})`);
+  // the slow decays on its own (timed state, not permanent)
+  for (let i = 0; i < 150; i++) P36.update(1 / 60, g36.input, g36.tuning, g36.world, g36._view());
+  assert(P36.slowT <= 0 && P36.speedFactor() === 1, 'E3: the slow wears off and the frog is at full speed again');
+
+  // --- REAL loop, Normal: crossing the SAME zone spawns NO hazards ---
+  const cv36b = makeCanvas();
+  const g36b = new Game(cv36b);
+  g36b.options.difficulty = 'normal';
+  g36b.tuning = L.makeTuning(g36b.save.upgrades, g36b.save.loadout, 'normal', g36b.save.galleryBonus || 0);
+  g36b.start();
+  fireKey('keydown', 'Enter'); frames(3);
+  const Pn = g36b.player;
+  Pn.alive = true; Pn.hp = 99; Pn.iframes = 999;
+  Pn.x = Math.round(g36b.world.w * z0.x) + 40;      // same zone-0 crossing, but on Normal
+  frames(3);
+  assert(g36b.hazards.length === 0, 'E3: NO hazards spawn on Normal (the 15-20 min pacing is untouched)');
+
+  // cleanup: end both runs cleanly
+  g36._onPlayerDead(); g36._endRun('defeat');
+  g36b._onPlayerDead(); g36b._endRun('defeat');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

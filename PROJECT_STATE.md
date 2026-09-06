@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 35 STAGES PASSED** (…stage 32 = v1.2 M9 A3 Curator's Ledger, stage 33 = v1.2 M9 A4 Rehung Frame gallery bonus, stage 34 = v1.2 M10 E1 Painted Heron mid-run set-piece, stage 35 = v1.2 M10 E2 weather/tide phases). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.6 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **55s**, heron **125s**, full-run **18.8 min** — in the 15–20 min band (E1 mid-heron is non-blocking; E2 weather phases are informational buffs). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ — next E3 (Bold hazards) / M10.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 36 STAGES PASSED** (…stage 34 = v1.2 M10 E1 Painted Heron mid-run set-piece, stage 35 = v1.2 M10 E2 weather/tide phases, stage 36 = v1.2 M10 E3 Bold-only zone hazards). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.6 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **55s**, heron **125s**, full-run **18.8 min** — in the 15–20 min band (E1 mid-heron is non-blocking; E2 weather phases are informational buffs). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ + E2 (weather/tide phases) ✅ + E3 (Bold-only zone hazards) ✅ — next E4 (orb streak) / M10.**_
 
 ## Current Status
 
@@ -35,7 +35,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 35 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 36 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss) |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
@@ -131,7 +131,7 @@ accessibility deferred).
 **Batch order (one commit per item, docs + suite green per commit):**
 1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 ✅ (Curator's Ledger). **Batch 1 (A1–A3) COMPLETE.**
 2. M9: **A4 ✅ (Rehung Frame)** → M10: **E1 ✅ (Painted Heron)** → **E2 ✅ (weather/tide phases)**. **Batch 2 (A4/E1/E2) COMPLETE — suite 35/35, pacing in band on Normal.**
-3. M10: E3 (Bold hazards) → E4 (orb streak) → M11: V1 (color-reveal bar)
+3. M10: **E3 ✅ (Bold-only zone hazards)** → E4 (orb streak) → M11: V1 (color-reveal bar)
 4. M11: V2 (heron bloom beat) → V3 (zone audio) → V4 (exhibition end-screen)
 5. M13: T1 (guided first expedition) → T2 (pigment drills)
 6. M13: T3 (mini heron) → T4 (tutorial progress + re-entry)
@@ -203,6 +203,28 @@ durations, factor =1.0 at start/expiry and full mid, deterministic per
 (seed,zone), most-but-not-all zones fire, **a phase triggers mid-zone, mutates
 the active tuning (splashRadius 58→75.4 x1.3), and expires cleanly back to
 base (58===58)**. Suite green: 35/35.
+
+**M10 E3 (Bold-only zone hazards) — implemented + tested (v1.2 Batch 3, item 1).**
+Two **environmental hazards** that spawn **ONLY on Bold** and give Bold a
+reason to exist beyond harder numbers: a **Thorn Reed** that **roots** the frog
+(~1.1s, speed 0) on touch, and a **Mud Pool** that **slows** the frog to ~0.55×
+for 2.0s. **Difficulty-gated via `boldHazardsAllowed(difficulty)`** (pure gate
+in `logic.js` next to `midHeronAllowed`): Gentle/Normal never spawn them, so the
+**15–20 min Normal pacing target is untouched** — because it is difficulty-gated
+the pacing probes were **intentionally NOT re-run** for this item (documented
+here + in ROADMAP, per the batch plan). Placement is **pure + deterministic per
+(runSeed, zone)** in `placeZoneHazards()` (`logic.js`, `mulberry32`-seeded): 2–3
+hazards per zone, spread along the zone, in the walkable corridor (y 480–980).
+Player slow/root state (`slowT`/`rootT` + a `speedFactor()` accessor) lives on
+`player.js` (timed, self-decaying). `game.js` keeps it thin: `_spawnZoneHazards`
+(spawn on `_zoneBeat` when Bold), `_updateHazards` (per-frame contact check,
+cooled per-hazard so a pool doesn't re-trigger every frame), and `_drawHazards`
+(watercolor draw). No new dependencies, no new status system for enemies (the
+frog's own slow/root is the only new state). Smoke stage 36 (E3): gate is
+Bold-only, placement is deterministic + in-corridor + varies by zone, **hazards
+SPAWN on Bold when crossing a zone and NOT on Normal**, thorn reed roots
+(speedFactor 0), mud pool slows (speedFactor 0.55) and wears off. Suite green:
+36/36.
 
 **M9 A3 (Curator's Ledger) — implemented + tested (v1.2 Batch 1, item 3).**
 A 4th atelier tab, "Curator's Ledger" (key `4`), lists all 8 paintings in a
