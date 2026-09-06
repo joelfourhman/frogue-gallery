@@ -3557,5 +3557,94 @@ console.log('== stage 56: v1.3 M16 C3 — paper-grain presentation toggle ==');
   console.log('ok — C3: a paper-grain presentation toggle (default OFF) overlays a subtle PROCEDURAL paper-grain texture — two cached low-opacity noise tiles (fine + coarse scales) drawn last in the render loop at low alpha; NO image assets / NO scanlines/CRT; the render path skips it when OFF and builds+draws it when ON; the tile cache is built once; the toggle persists and old options blobs migrate to OFF without error');
 }
 
+// ======================================================================
+// stage 58 — v1.4 Module J, J1: "wet paint that lingers" (presentation-only)
+// A capped (~120) pool of short-lived wet marks left on the surface + a
+// tapered ~0.4s wet-stroke swipe trail. Draw/particles-time ONLY: no new
+// persistent paint data, no gameplay change. Verify: (a) the pool is capped
+// (never grows unbounded under rapid painting), (b) the marks linger then
+// decay to empty on their own (short-lived), (c) the swipe ribbon now lingers
+// ~0.4s (up from 0.28s) and tapers, and (d) drawWet() actually issues draw
+// calls only while marks exist.
+console.log('== stage 58: v1.4 J1 — wet paint that lingers (capped short-lived marks + 0.4s tapered trail) ==');
+{
+  const cv = makeCanvas();
+  const g = new Game(cv);
+  g.start();
+  g._beginExpedition();           // fresh run: paint + player exist, no tutorial
+  assert(g.state === 'expedition', 'J1: an expedition started (paint + player present)');
+  const P = g.paint, pl = g.player;
+  assert(Array.isArray(P.wet) && P.wet.length === 0, `J1: the wet-mark pool starts empty (len=${P.wet.length})`);
+
+  // the persistent paint layer is the world's per-cell pigment grid — count
+  // the non-empty cells (reliable; the headless paint *canvas* pixel buffer is
+  // not trustworthy to read back).
+  const w = g.world;
+  const countPaintCells = () => { let n = 0; for (const c of w.pigmentGrid.values()) if (c.red > 0 || c.blue > 0 || c.green > 0) n++; return n; };
+  const before = countPaintCells();
+
+  // drive real swipes (respecting the 0.2s cooldown) to build the wet pool
+  pl.iframes = 999; pl.aimA = 0; pl.pigment = 'red';
+  let painted = 0;
+  for (let f = 0; f < 150; f++) {
+    frames(1);
+    const t0 = P.trails.length;
+    P.trySwipe([]);   // ~ every frame; the 0.2s cooldown gates the real rate
+    if (P.trails.length > t0) painted++;
+  }
+  assert(painted > 5, `J1: swipes actually painted (${painted} swipes landed)`);
+  assert(P.wet.length > 0, `J1: painting left wet marks on the surface (len=${P.wet.length})`);
+  assert(P.wet.length <= P.MAX_WET, `J1: the wet-mark pool is capped at ~${P.MAX_WET} (len=${P.wet.length} <= ${P.MAX_WET})`);
+
+  // the persistent world paint layer was still written by the same swipes
+  // (pre-existing behavior is untouched) — J1's marks are additive + transient
+  // residue on TOP of it, not a replacement. Check right after the burst,
+  // before the layer fades.
+  const after = countPaintCells();
+  assert(after > before, `J1: the world's persistent paint layer is still written (cells ${before} -> ${after}); J1 marks are additive + transient, not a second persistent layer`);
+
+  // no UNBOUNDED growth: keep painting for far longer than the cap could hold;
+  // the pool must stay at/below the cap (oldest marks are pushed out).
+  for (let f = 0; f < 400; f++) { frames(1); if (f % 13 === 0) P.trySwipe([]); }
+  assert(P.wet.length <= P.MAX_WET, `J1: after rapid sustained painting the pool is still capped (len=${P.wet.length} <= ${P.MAX_WET})`);
+
+  // short-lived: stop painting and let the marks decay — the pool must drain
+  // to empty on its own (they linger a moment, then dry up).
+  for (let f = 0; f < 90; f++) frames(1);   // ~1.5s
+  assert(P.wet.length === 0, `J1: the wet marks are short-lived and decay to empty on their own (after 1.5s len=${P.wet.length})`);
+
+  // the swipe ribbon lingers ~0.4s now (up from 0.28s) and tapers over that
+  // window: after one swipe the ribbon's max is ~0.4 and it is still alive
+  // well past the old 0.28s lifetime.
+  const trail0 = P.trails.length;
+  P.trySwipe([]);
+  const ribbon = P.trails[P.trails.length - 1];
+  assert(ribbon && !ribbon.ring, 'J1: a swipe produced a wet-stroke ribbon');
+  assert(ribbon.max >= 0.38 && ribbon.max <= 0.45, `J1: the swipe ribbon lingers ~0.4s (max=${ribbon.max.toFixed(2)}, old was 0.28)`);
+  frames(19);   // ~0.32s — beyond the old 0.28s lifetime, still alive now
+  assert(P.trails.length === trail0 + 1, `J1: the ribbon is still on the surface past 0.28s (tapers over ~0.4s) (trails=${P.trails.length - trail0})`);
+
+  // drawWet() issues draw calls only while marks exist (the render hook)
+  const jctx = {
+    n: 0,
+    ctx: new Proxy({}, {
+      get(t, p) {
+        if (p === 'measureText') return () => ({ width: 10 });
+        if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+        jctx.n++;
+        return () => {};
+      },
+      set() { return true; },
+    }),
+    reset: () => { jctx.n = 0; },
+    count: () => jctx.n,
+  };
+  P._addWet(pl.x + 30, pl.y, 10, 'red', 1.0); P._addWet(pl.x - 30, pl.y, 9, 'blue', 1.0);
+  jctx.reset(); P.drawWet(jctx.ctx);
+  assert(jctx.count() >= 4, `J1: drawWet() issues draw calls while marks exist (${jctx.count()} calls)`);
+  P.wet.length = 0; jctx.reset(); P.drawWet(jctx.ctx);
+  assert(jctx.count() === 0, `J1: drawWet() draws nothing once the pool is empty (${jctx.count()} calls)`);
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

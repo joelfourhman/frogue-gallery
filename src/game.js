@@ -3023,6 +3023,9 @@ _drawAtelier(ctx) {
     this.world.drawBackground(ctx, v, drawSat);
     this.world.drawProps(ctx, v, drawSat, this.now);
     this.world.drawObstacles(ctx, v, drawSat);
+    // J1 (v1.4): short-lived wet residue marks sit on the surface, under the
+    // active stroke and all entities (draw-only; never affects logic).
+    this.paint && this.paint.drawWet(ctx);
     this.paint && this.paint.drawTrails(ctx);
     if (this.state === 'expedition' || this.state === 'end') {
       if (this.heron) this._drawHeron(ctx, this.heron, this.now);

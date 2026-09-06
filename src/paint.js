@@ -16,6 +16,17 @@ export class Paint {
     this.splashCd = 0;
     this.trails = [];   // transient stroke ribbons (visual only)
     this.hitNotes = []; // floating status notes ("burning", "frozen", ...)
+    // J1 (v1.4): short-lived "wet" residue marks left on surfaces. Draw-only
+    // (never read by logic/save), capped so the pool can't grow unbounded.
+    this.wet = [];
+    this.MAX_WET = 120;
+  }
+
+  // J1: drop a capped set of wet marks. Oldest are pushed out past the cap so
+  // the array length is always <= MAX_WET (no unbounded allocation).
+  _addWet(x, y, r, pig, life) {
+    this.wet.push({ x, y, r, t: life, max: life, pig, seed: Math.random() * 100 });
+    if (this.wet.length > this.MAX_WET) this.wet.shift();
   }
 
   get swipeRange() { return this.tuning.swipeRange; }
@@ -29,6 +40,11 @@ export class Paint {
     for (let i = this.trails.length - 1; i >= 0; i--) {
       this.trails[i].t -= dt;
       if (this.trails[i].t <= 0) this.trails.splice(i, 1);
+    }
+    // J1: decay the short-lived wet marks (they linger a moment then vanish)
+    for (let i = this.wet.length - 1; i >= 0; i--) {
+      this.wet[i].t -= dt;
+      if (this.wet[i].t <= 0) this.wet.splice(i, 1);
     }
     for (let i = this.hitNotes.length - 1; i >= 0; i--) {
       const n = this.hitNotes[i];
@@ -51,12 +67,19 @@ export class Paint {
 
     // write the stroke into the world paint layer (environmental residue)
     this.world.paintSwipe(p.x, p.y, a, R, pig);
-    // visual ribbon
+    // visual ribbon — J1: a tapered wet-stroke swipe that lingers ~0.4s (up
+    // from 0.28s) so the brush stroke reads as wet before it dries.
+    const TR = 0.4;
     this.trails.push({
       x0: p.x + Math.cos(a) * p.r, y0: p.y + Math.sin(a) * p.r,
       x1: p.x + Math.cos(a) * R, y1: p.y + Math.sin(a) * R,
-      w: 16, t: 0.28, max: 0.28, pig, seed: Math.random() * 100,
+      w: 16, t: TR, max: TR, pig, seed: Math.random() * 100,
     });
+    // J1: a couple of short-lived wet marks left on the surface the stroke
+    // passed over (draw-only residue). Capped by _addWet.
+    const mx = p.x + Math.cos(a) * R * 0.6, my = p.y + Math.sin(a) * R * 0.6;
+    this._addWet(mx, my, 9 + Math.random() * 6, pig, 0.9 + Math.random() * 0.5);
+    this._addWet(p.x + Math.cos(a) * R * 0.9, p.y + Math.sin(a) * R * 0.9, 6 + Math.random() * 4, pig, 0.7 + Math.random() * 0.4);
     this.sfx('swish');
 
     // fan-shaped hit test
@@ -90,6 +113,12 @@ export class Paint {
     this._applyHits(hits, pig, 'splash');
     // cosmetic ring
     this.trails.push({ ring: true, x: p.x, y: p.y, r: R, t: 0.35, max: 0.35, pig });
+    // J1: a wet splash leaves a ring of short-lived marks around the frog
+    for (let s = 0; s < 5; s++) {
+      const aa = Math.random() * TAU;
+      const rr = R * (0.4 + Math.random() * 0.55);
+      this._addWet(p.x + Math.cos(aa) * rr, p.y + Math.sin(aa) * rr, 7 + Math.random() * 7, pig, 0.9 + Math.random() * 0.5);
+    }
     return hits;
   }
 
@@ -200,6 +229,30 @@ export class Paint {
       ctx.restore();
       ctx.globalAlpha = 1;
     }
+  }
+
+  // J1 (v1.4): draw the short-lived wet residue marks. Soft, low-alpha blobs
+  // (watercolor "wet" look) that fade as they dry. Draw-only — these never
+  // influence combat, save data, or pacing; they only linger a moment.
+  drawWet(ctx) {
+    if (!this.wet.length) return;
+    for (const m of this.wet) {
+      const k = Math.max(0, m.t / m.max);
+      const col = PIGMENTS[m.pig];
+      const r = m.r * (0.8 + 0.4 * k); // dries down slightly as it fades
+      ctx.globalAlpha = k * 0.42;
+      ctx.fillStyle = col.color;
+      ctx.beginPath();
+      ctx.ellipse(m.x, m.y, r, r * 0.72, m.seed, 0, TAU);
+      ctx.fill();
+      // a lighter wet sheen at the center
+      ctx.globalAlpha = k * 0.28;
+      ctx.fillStyle = col.light;
+      ctx.beginPath();
+      ctx.ellipse(m.x, m.y, r * 0.55, r * 0.4, m.seed, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 
   drawNotes(ctx) {

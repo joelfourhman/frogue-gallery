@@ -193,7 +193,8 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 **v1.4 "Make It Amazing" is APPROVED by Joel (2026-09-06) — execute in
 bounded batches of ~3 items per session** (local model context ceiling;
 each session MUST end clean: committed + docs + suite green). Read
-`docs/ROADMAP.md` §v1.4 + AGENTS.md. All 14 items Status `TODO`.
+`docs/ROADMAP.md` §v1.4 + AGENTS.md. Module J batch order: J1 → J2 → J3.
+**Status: J1 DONE (2026-09-06); J2 next.**
 
 **Theme: juice, presence, and moments.** The game is mechanically complete;
 v1.4 adds no new rules — it makes the same game feel alive in the hand, the
@@ -249,10 +250,26 @@ band on Normal). Full scope + per-item status in `docs/ROADMAP.md` §v1.2.
 5. M13: **T1 ✅ (guided first expedition)** → **T2 ✅ (interactive pigment drills)** — **Batch 5 (M13 T1+T2) COMPLETE — suite 43/43, pacing 18.7/18.9 min (the frozen tutorial pre-run layer adds no timed-run time)**
 6. M13: **T3 ✅ (mini sketch heron)** → **T4 ✅ (tutorial progress + "Watch me" re-entry)** — **Batch 6 (M13 T3+T4) COMPLETE**
 7. M14: **N1 ✅ (NG+ unlock + Next Expedition flow)** → **N2 ✅ (NG+ scaling + `tests/ngpace.mjs` probe)** → **N3 ✅ (second boss — The Great Green Heron)** — **v1.3 Batch 7 (N1→N2→N3) COMPLETE** (suite 48/48, first-time pacing unchanged, NG+ cycle-1 ~19.5 min in band)
+8. v1.4 Module J: **J1 ✅ (wet paint that lingers)** — **v1.4 Batch 1, item 1** (suite 58/58, P10 stage 24 still green, presentation-only — first-time pacing unaffected)
 
 Each item's Notes column in the roadmap says which existing system to reuse.
 Acceptance (per batch): suite green, pace/humance probes still in the
 15–20 min band (any in-run change), zero new dependencies, loopback-only.
+
+**v1.4 J1 (wet paint that lingers) — implemented + tested (Batch 1, item 1).**
+A capped (~120, `Paint.MAX_WET`) pool of short-lived low-alpha "wet" marks
+lives on `Paint` (`paint.js`). `trySwipe()` drops 2 marks along the stroke and
+`trySplash()` drops 5 around the ring; `_addWet()` pushes oldest past the cap
+so the array is always `<= MAX_WET` (P10 discipline — no unbounded growth);
+`update()` decays them and `drawWet()` renders them as soft fading watercolor
+blobs (a render hook was added in `game.js` `_drawAll`, drawn on the surface
+under the active stroke). The swipe ribbon lifetime went 0.28s → 0.4s so the
+brush stroke reads as wet before it dries. **Draw/particles-time only** — no
+persistent paint data (the world's per-cell `pigmentGrid` layer is untouched),
+no gameplay change, no new dependencies. Smoke stage 58 asserts: marks spawn
+on swipes, the pool never exceeds the cap, all decay to empty on their own,
+the ribbon lingers ~0.4s, and `drawWet()` draws only while marks exist. P10
+(stage 24) still passes; first-time pacing unaffected (presentation-only).
 
 **M13 T1 (guided first expedition) — implemented + tested (v1.2 Batch 5, item 1).**
 A **fresh save only** (no finished run, never skipped — `tutorialEligible(save)`

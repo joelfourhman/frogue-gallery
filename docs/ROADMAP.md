@@ -253,7 +253,7 @@ per-frame budget assertion.
 
 ### Module J — Game feel / juice (the #1 lever)
 
-- [ ] **J1 — Wet paint that lingers** — `paint.js` / `world.js` / `particles.js`
+- [x] **J1 — Wet paint that lingers** — `paint.js` / `game.js`
   - **What:** short-lived "wet marks" on surfaces. When a swipe/splash hits
     terrain or an enemy, 3–6 low-alpha watercolor blots (pigment color,
     wobbly edges via `math.js` shapes, slightly darker wet rim) persist
@@ -266,7 +266,13 @@ per-frame budget assertion.
     the culling invariant). No persistent paint data (deferred list).
   - **Acceptance:** new smoke stage: swipe + splash spawn wet marks, count
     never exceeds the cap, all fade out within 7 s; P10 stage still passes.
-    Status: TODO.
+    Status: DONE (2026-09-06, v1.4 BATCH 1). Implemented in `paint.js`: a
+    capped (~120) `wet` pool of short-lived low-alpha marks, `_addWet()`
+    pushes oldest past the cap, decayed in `update()`, drawn by `drawWet()`
+    (render hook added in `game.js` `_drawAll`, under the active stroke).
+    Swipe ribbon lifetime 0.28s → 0.4s. Draw/particles-time only — no
+    persistent paint data, no gameplay change. Smoke stage 58 green; P10
+    (stage 24) still passes; first-time pacing unaffected (presentation-only).
 
 - [ ] **J2 — Hit-stop, shake escalation, boss-defeat slow-mo** — `game.js`
   - **What:** a single `timeScale` on the frame loop (default 1). Small
