@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -623,7 +623,11 @@ _drawAtelier(ctx) {
     if (this.atelierTab === 0) {
       centerText(ctx, 'training is paid in banked pigments — it is permanent, even after a defeat', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
     } else if (this.atelierTab === 1) {
-      centerText(ctx, 'buy once, then hang up to 2 — hung paintings are real passive bonuses on your runs', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
+      // A2: when the current 2-slot loadout forms a named "duo", the legend
+      // surfaces it (the creative slot choice is visible, not just applied).
+      const duo = activeSynergy(this.save.loadout);
+      if (duo) centerText(ctx, `✦ duo active: ${duo.name} — ${duo.desc}`, cx, g.tabY + g.tabH + 18, '700 14px Georgia, serif', '#c9922a', 1);
+      else centerText(ctx, 'buy once, then hang up to 2 — hung paintings are real passive bonuses on your runs', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
     } else {
       centerText(ctx, 'your collection — every painting you own, hung on the wall (owned frames are lit)', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
     }

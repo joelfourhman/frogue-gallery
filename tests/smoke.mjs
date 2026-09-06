@@ -1307,5 +1307,74 @@ console.log('== stage 30: v1.2 M9 A1 — atelier one-liners ==');
   assert(JSON.stringify(store.get(KEY)) === before2, 'A1: one-liners persist nothing new to the save');
 }
 
+// ---------------------------------------------------------------------
+// stage 31 — v1.2 M9 A2: painting synergy pairs (pure SYNERGIES table)
+// ---------------------------------------------------------------------
+console.log('== stage 31: v1.2 M9 A2 — painting synergy pairs ==');
+{
+  const L = await import('../src/logic.js');
+  // the table is present, pure, and keyed by sorted pair
+  assert(L.SYNERGIES && Object.keys(L.SYNERGIES).length === 3, 'A2: exactly 3 named synergy pairs are defined');
+  for (const s of Object.values(L.SYNERGIES)) {
+    assert(typeof s.name === 'string' && s.name.length > 0, `A2: synergy "${s.name}" has a name`);
+    assert(Array.isArray(s.pair) && s.pair.length === 2 && s.pair[0] < s.pair[1], `A2: "${s.name}" is keyed by a sorted pair`);
+    assert(typeof s.apply === 'function', `A2: "${s.name}" exposes a pure apply(t)`);
+    const [a, b] = s.pair;
+    const fwd = L.activeSynergy([a, b]);
+    const rev = L.activeSynergy([b, a]);
+    assert(fwd && fwd.name === s.name, `A2: "${s.name}" activates when both ${a}+${b} are in the loadout`);
+    assert(rev === fwd, `A2: "${s.name}" is order-independent`);
+    assert(L.activeSynergy([a]) === null, `A2: a single slot never activates a duo`);
+  }
+  // activeSynergy resolves each pair (order-independent) and nothing else
+  const pairs = [['moonlit-pond', 'storm-cloud'], ['dancing-salamander', 'storm-cloud'], ['spring-garden', 'king-frog']];
+  for (const [a, b] of pairs) {
+    const fwd = L.activeSynergy([a, b]);
+    const rev = L.activeSynergy([b, a]);
+    assert(fwd && rev && fwd.name === rev.name, `A2: activeSynergy resolves ${a}+${b} both ways (${fwd ? fwd.name : 'null'})`);
+  }
+  assert(L.activeSynergy(['moonlit-pond', 'moonlit-pond']) === null, 'A2: a duplicate pair is not a synergy');
+  assert(L.activeSynergy(['moonlit-pond']) === null, 'A2: a single-painting loadout is not a synergy');
+  assert(L.activeSynergy(['moonlit-pond', 'spring-garden']) === null, 'A2: a non-paired duo resolves to null');
+  assert(L.activeSynergy([]) === null, 'A2: an empty loadout resolves to null');
+
+  // THE CORE ASSERTION: a paired tuning differs from its unpaired parts.
+  // Build a baseline (no loadout), the two solo paintings, and the pair — the
+  // pair must diverge from the solo sum on a real tuning field.
+  const { makeTuning } = L;
+  const base = makeTuning({}, [], 'normal');
+  // Flooded Night: splashCharge + splashRadius
+  const soloA = makeTuning({}, ['moonlit-pond'], 'normal');
+  const soloB = makeTuning({}, ['storm-cloud'], 'normal');
+  const pairA = makeTuning({}, ['moonlit-pond', 'storm-cloud'], 'normal');
+  assert(pairA.synergy === 'Flooded Night', 'A2: makeTuning tags the active synergy name');
+  assert(pairA.splashCharge < Math.min(soloA.splashCharge, soloB.splashCharge), `A2: Flooded Night lowers splash charge beyond either solo (${pairA.splashCharge.toFixed(3)} < ${Math.min(soloA.splashCharge, soloB.splashCharge).toFixed(3)})`);
+  assert(pairA.splashRadius > soloB.splashRadius, 'A2: Flooded Night widens splash radius beyond solo storm-cloud');
+
+  // Stormfire: burnDps + splashDamage
+  const pairB = makeTuning({}, ['dancing-salamander', 'storm-cloud'], 'normal');
+  const soloS = makeTuning({}, ['dancing-salamander'], 'normal');
+  assert(pairB.synergy === 'Stormfire', 'A2: makeTuning tags the Stormfire synergy');
+  assert(pairB.burnDps > soloS.burnDps, `A2: Stormfire raises burn DPS beyond solo salamander (${pairB.burnDps.toFixed(2)} > ${soloS.burnDps.toFixed(2)})`);
+
+  // Royal Meadow: greenHeal
+  const pairC = makeTuning({}, ['spring-garden', 'king-frog'], 'normal');
+  const soloG = makeTuning({}, ['spring-garden'], 'normal');
+  assert(pairC.synergy === 'Royal Meadow', 'A2: makeTuning tags the Royal Meadow synergy');
+  assert(pairC.greenHeal > soloG.greenHeal, `A2: Royal Meadow raises green heal beyond solo spring-garden (${pairC.greenHeal} > ${soloG.greenHeal})`);
+
+  // an unpaired duo does NOT mutate the tuning vs. the two solos (no phantom effect)
+  const unpaired = makeTuning({}, ['moonlit-pond', 'spring-garden'], 'normal');
+  const soloGarden = makeTuning({}, ['spring-garden'], 'normal');
+  assert(!unpaired.synergy, 'A2: an unpaired loadout carries no synergy tag');
+  assert(Math.abs(unpaired.greenHeal - soloGarden.greenHeal) < 1e-9, 'A2: unpaired greenHeal matches the solo (no phantom bonus)');
+
+  // pure + difficulty-agnostic: the same pair yields the same tuning at each difficulty
+  for (const diff of ['gentle', 'normal', 'bold']) {
+    const a = makeTuning({}, ['moonlit-pond', 'storm-cloud'], diff);
+    assert(a.synergy === 'Flooded Night', `A2: synergy holds at ${diff}`);
+  }
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

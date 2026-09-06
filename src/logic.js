@@ -115,6 +115,43 @@ export function applyDifficulty(t, difficulty) {
   t.dmgTakenMult = d.dmgTaken;
   return t;
 }
+
+// A2 (v1.2 M9): painting synergy pairs. When TWO specific paintings are both
+// in the 2-slot loadout, a named "duo" effect activates. The SYNERGIES table
+// is keyed by the sorted pair key `a|b` (a < b) and each entry carries a name
+// plus a pure `apply(t)` that mutates an already-built tuning object. It is
+// pure + unit-testable (no DOM), and makeTuning calls it AFTER the per-painting
+// loadout modifiers so the duo stacks on top of its two parts.
+//
+// Only real, consumed tuning fields are modified (splashCharge/splashRadius,
+// burnDps, swipeDamage, greenHeal) — no new status system is introduced.
+const _pairKey = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
+export const SYNERGIES = {
+  [_pairKey('moonlit-pond', 'storm-cloud')]: {
+    pair: ['moonlit-pond', 'storm-cloud'],
+    name: 'Flooded Night',
+    desc: 'charged splashes linger far longer over the drowned reeds',
+    apply(t) { t.splashCharge *= 0.7; t.splashRadius *= 1.15; },
+  },
+  [_pairKey('dancing-salamander', 'storm-cloud')]: {
+    pair: ['dancing-salamander', 'storm-cloud'],
+    name: 'Stormfire',
+    desc: 'the storm feeds the smolder — burn and splash bite harder',
+    apply(t) { t.burnDps *= 1.4; t.splashDamage *= 1.2; },
+  },
+  [_pairKey('spring-garden', 'king-frog')]: {
+    pair: ['king-frog', 'spring-garden'],
+    name: 'Royal Meadow',
+    desc: 'the garden mends the court — extra health per green touch',
+    apply(t) { t.greenHeal += 2; },
+  },
+};
+// Active synergy for a loadout, or null. Pure (no DOM).
+export function activeSynergy(loadout = []) {
+  const ids = [...new Set(loadout)].sort();
+  if (ids.length < 2) return null;
+  return SYNERGIES[_pairKey(ids[0], ids[1])] || null;
+}
 export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal') {
   const t = {
     // player
@@ -168,6 +205,10 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal') {
   if (has('storm-cloud')) { t.splashRadius *= 1.35; t.splashDamage *= 1.15; }
   if (has('beetle-armor')) { t.dmgReduce = 0.1; }
   if (has('croaksworth')) { t.power *= 1.18; }
+  // A2: painting synergy pairs — after the per-painting modifiers above, an
+  // active "duo" stacks on top. Pure + testable; surfaces in the Gallery wall.
+  const synergy = activeSynergy(loadout);
+  if (synergy) { t.synergy = synergy.name; synergy.apply(t); }
   // M8 P7: scale the run by the chosen difficulty (after loadout modifiers).
   applyDifficulty(t, difficulty);
   return t;

@@ -14,8 +14,8 @@ consequential decisions in `docs/DECISIONS.md`.
   Expedition depth, M11 Presentation, M13 Tutorial; accessibility deferred).
   Driven in bounded batches of ~3 items — see `PROJECT_STATE.md` →
   Immediate Next Action for the batch order. **Batch 1 in progress: A1 ✅
-  (atelier one-liners), A2 + A3 next.**
-- Smoke suite: **30 stages, ALL PASSED** (stage 30 = v1.2 M9 A1). Pacing
+  (atelier one-liners), A2 ✅ (painting synergy pairs), A3 next.**
+- Smoke suite: **31 stages, ALL PASSED** (stage 31 = v1.2 M9 A2). Pacing
   probes green: `pace.mjs` (analytic ~18.7 min) + `humance.mjs` (simulated
   human, 18.3–19.4 min) + `bosspace.mjs`. Real-browser: 60 fps title / full world.
 - Git: v1.1 fully committed; v1.2 A1 committed; v1.2 roadmap + M13 tutorial
@@ -26,7 +26,7 @@ consequential decisions in `docs/DECISIONS.md`.
 **v1.2 "The Collection" — in progress, driven in bounded batches of ~3 items.**
 Batch order (one conventional commit per item, docs + suite green per commit):
 M9 A1→A2→A3 → A4 / M10 E1→E2 → E3→E4 / M11 V1 → V2→V3→V4 → M13 T1→T2→T3→T4.
-**Now on A2 (painting synergy pairs).** See `PROJECT_STATE.md` → Immediate Next Action.
+**Now on A3 (Curator's Ledger).** See `PROJECT_STATE.md` → Immediate Next Action.
 
 ## Blockers
 
