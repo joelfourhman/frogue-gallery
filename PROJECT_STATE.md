@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 19 STAGES PASSED**. Pacing probes green. DoD: all 12 items satisfied. v1.1: B1–B6 ✅ (B6 = save schema versioning, commit pending this pass; smoke stage 19). M7.5 PT5 ✅ (grey-box double-transform fix in world.js, uncommitted — see Immediate Next Action). **Next: B5 storage-failure fallback, then PT1–PT4 playtest fixes via the new `tests/headless.mjs` browser driver.**_
+_Last verified: 2026-09-05. `node tests/smoke.mjs` = **ALL 23 STAGES PASSED** (stages 21–23 = M7.5 PT1/PT3/PT4). Pacing probes green. DoD: all 12 items satisfied. v1.1: B1–B6 ✅, M7.5 PT5 ✅ (ed287a4), **PT1–PT4 ✅ (this pass)**. **Next: M8 P6–P12** in value order P10 → P12 → P7 → P8 → P6 → P9 → P11._
 
 ## Current Status
 
@@ -83,7 +83,11 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 | B3 | Dry-brush softlock audit: prove a pigment-starved frog can still beat the heron | ✅ 2026-09-05 — commit `a32a721`: audit proves no softlock (dry never damages the heron by design; in-run wet pigment is unlimited; 30k-HP heron falls in bounded ~84 awaken cycles; heron damage-locked states are transient). Regression guard in smoke stage 17 (fails if a wet pigment goes to 0 dmg or awaken becomes unreachable). PM-verified: code claims confirmed + suite green. |
 | B4 | Tab-hidden time spike: verify dt cap / pause behavior on long hidden-tab gaps | ✅ 2026-09-05 — commit `2ed1c9a`: dt cap (0.05s) holds; `last = t` uses the real timestamp so no catch-up spiral; all physics integrates on clamped dt (absolute `now` only for animation/status/UI timing). Smoke stage 18 injects a 300,000ms delta: wall clock jumps 30s, player/enemy motion bounded to one frame, no NaN, clean recovery. PM-verified. |
 | B5 | Storage-failure fallback: localStorage unavailable → in-memory + one-time notice | ✅ 2026-09-05 — `src/save.js` in-memory fallback + `SaveSys.storageOK`; one-time banner in `game.js _beginExpedition`; smoke stage 20 (throwing localStorage). PM-verified. |
-| B6 | Save schema versioning: `saveVersion` field on every write + migration chain + smoke stage | ✅ 2026-09-05 (this pass, commit pending) — `logic.js`: `SAVE_VERSION = 1`, saves stamped `saveVersion` (legacy `v` field read + re-stamped on load), `SAVE_MIGRATIONS` ordered chain for future schema bumps. Smoke stage 19 (19 stages total). PM-verified: diff + full suite green. |
+| B6 | Save schema versioning: `saveVersion` field on every write + migration chain + smoke stage | ✅ 2026-09-05 — commit `599a599`: `logic.js` `SAVE_VERSION = 1`, saves stamped `saveVersion` (legacy `v` field read + re-stamped on load), `SAVE_MIGRATIONS` ordered chain for future schema bumps. Smoke stage 19. PM-verified: diff + full suite green. |
+| PT1 | Painting consumption: verify paint effects consume cost/rate (fix if free) | ✅ 2026-09-05 — audit: swipe/splash already rate-gated (swipeCd 0.2s, splash needs charge + 0.9s cd); in-run wet pigment unlimited by design (B3). No code change; regression guard added as smoke stage 21. |
+| PT2 | Onboarding: tighten/clarify first-run flow | ✅ 2026-09-05 — first-run heron reveal deferred 6.5s → 38s so it lands after the 5-step tutorial (was mid-lesson); returning players unchanged (3.2s). Verified via headless `onb` scenario. |
+| PT3 | Fly/dodge fairness: audit cost/range/stamina + rebalance | ✅ 2026-09-05 — Space-hop now has a `hopCooldown = 0.7s` stamina gate (was unlimited; i-frames 0.30s > 0.22s hop = near-continuous invuln when mashing). Hop i-frames/range unchanged. Smoke stage 22. |
+| PT4 | Early-economy safety net: fresh save can afford ≥1 upgrade/painting | ✅ 2026-09-05 — one-time `WELCOME_GRANT = {red:3, blue:6, green:4}` (+13) on first expedition (pure `applyWelcomeGrant`, gated on `flags.welcomeGranted`). Fresh save now buys capacity/vitality lvl1 + moonlit-pond/self-portrait. Smoke stage 23. |
 | P6 | In-game "?" reference overlay (pigment roles, counterplay, heron hint, controls) | ⬜ |
 | P7 | Difficulty select (Easy/Normal/Hard, persisted; Normal = current balance) | ⬜ |
 | P8 | The Gallery Wall — framed, titled owned paintings in the Atelier with passive tooltips | ⬜ |
@@ -94,31 +98,64 @@ Full spec lives in `MISSION.md` ("Post-release v1.1"). Working order:
 
 Optional (after all of the above is green): gold pigment, gamepad support, New Game+.
 
+### Balance Log (M7.5 — before → after, 2026-09-05)
+
+Normal-difficulty balance is the baseline; every number that moved is logged.
+
+| Item | Knob | Before | After | Why |
+|---|---|---|---|---|
+| PT3 | `tuning.hopCooldown` (Space-hop stamina) | *none* (unlimited hops; effective i-frames 0.30s > 0.22s hop) | `0.7s` (≈1.4 hops/s) | Mashing Space chained into near-continuous invulnerability — the reported "unfair fly." A real dodge is preserved; spam is not. |
+| PT3 | `tuning.hopIframes` | `0.18` (+0.12 = 0.30 effective) | unchanged | A single hop keeps its dodge value; only the repeat rate changed. |
+| PT2 | `heron._intro` (first-run boss reveal) | `6.5s` (mid-tutorial) | `38s` (after 5-step tutorial, ~36s) | Newcomers met the boss before finishing the lesson. Returning players: `3.2s` unchanged. |
+| PT4 | Fresh-save bank | `{red:0, blue:0, green:0}` | `{red:3, blue:6, green:4}` (one-time `WELCOME_GRANT`, +13) | Early death kept ~0 (`deathKeepFraction 0.5` floor) → soft-lock at the shop. Grant buys ≥1 upgrade and ≥1 painting. |
+| PT1 | swipe/splash rate | `swipeCd 0.2s`, splash charge→`0.9s cd` | unchanged (verified, not free) | "Infinite wet" is the attack *rate* gate, already correct; no change. |
+
 **v1.1 acceptance criteria** (see MISSION.md): every P/B item has a passing smoke stage or regression test; full suite green in one command; 15–20 min run target still holds on Normal; docs accurate; git clean with one conventional commit per chunk.
 
 ## Immediate Next Action
 
-**Tree is clean** — PT5 (ed287a4), B6 (599a599), and the v1.1 status-docs pass
-(3c590be) are all committed and verified. **B5 (localStorage fallback) is
-complete and verified (2026-09-05):** `src/save.js` downgrades to an
-in-memory store on any storage failure and exposes `SaveSys.storageOK`;
-`game.js` surfaces a one-time "No persistent storage — progress may not
-survive a reload" banner on the first expedition; smoke stage 20 stubs a
-throwing localStorage and proves the fallback round-trips in-session without
-crashing. Smoke now 20/20; pace + bosspace probes green.
+**Tree is clean** — PT5 (ed287a4), B6 (599a599), B5 (7f4fc3e), and the v1.1
+status-docs pass (3c590be) are all committed and verified.
 
-**Next: M7.5 PT1–PT4 via the headless driver (do not stop at checkpoints):**
-Start `python -m http.server 8901 --bind 127.0.0.1` from the repo root, then
-`node tests/headless.mjs <scenario>` for each fix before committing:
-1. **PT1** — painting consumption (painting effects must actually consume).
-2. **PT2** — onboarding (tighten/clarify first-run flow).
-3. **PT3** — fly fairness (audit + rebalance the frog fly mechanic).
-4. **PT4** — early-economy safety net (new players can soft-lock the bank early).
-Log before/after balance numbers in the Balance Log table.
+**M7.5 PT1–PT4 (playtest fixes) — implemented + tested, committing this pass.**
+Verified with the headless driver (`node tests/headless.mjs <scenario>`,
+loopback :8901) and new smoke stages 21–23. Normal-difficulty balance is the
+baseline; before/after numbers logged below.
 
-**Then: M8 P6–P12** — suggested value order: P10 (perf/cull) → P12 (zone
-character) → P7 (difficulty) → P8 (gallery wall) → P6 (?) overlay →
-P9 (audio polish) → P11 (human-pace probe).
+- **PT1 — painting consumption (verified, no code change).** The plan flagged
+  "painting might be free / infinite wet." Audit result: swipes and splashes
+  are already rate-gated — `swipeCd = tuning.swipeCooldown (0.2s)` arms on every
+  fire and blocks re-fire until it expires; the charged splash requires
+  `splashCharge → 1.0` (a ~1.2s build) then a `splashCooldown (0.9s)` and fires
+  only once. In-run wet pigment is intentionally unlimited (B3 design), so
+  "consumption" = the attack *rate* gate, which holds. Smoke stage 21 asserts
+  the swipe cooldown arms, re-fires are refused, and the swipe rate is bounded
+  to ~floor(budget/cd) (10 in 2s @ 0.2s cd), and splash is refused at 0 charge.
+- **PT2 — onboarding (first-run flow clarified).** The 5-step first-run
+  tutorial runs to ~36s, but the Great Gray Heron boss reveal fired at 6.5s —
+  mid-tutorial — so a newcomer met the boss before finishing the lesson.
+  **Before:** `heron._intro = 6.5s` on first run. **After:** `heron._intro =
+  38s` (just after the last tutorial step) on first run; returning players
+  unchanged at 3.2s. Verified with the `onb` scenario: first-run banners now
+  read the welcome-kit + movement lesson (no premature "THE GREAT GRAY HERON").
+- **PT3 — fly/dodge fairness (rebalanced).** The Space-hop is the frog's only
+  air-dodge. **Before:** no cooldown and effective i-frames
+  (`hopIframes 0.18 + 0.12 = 0.30s`) exceeded the 0.22s hop duration, so
+  mashing Space chained into near-continuous invulnerability. **After:** added a
+  stamina cooldown `hopCooldown = 0.7s` that must expire before the next hop;
+  hop i-frames and range are unchanged (a single hop is still a real dodge).
+  The frog now dodges ~1.4×/s instead of unlimited. Smoke stage 22 asserts the
+  cooldown arms, an immediate re-hop is refused, the timer counts down, and the
+  hop re-arms once it expires.
+- **PT4 — early-economy safety net (welcome grant).** A brand-new player who
+  died early banked ~0 pigment (`deathKeepFraction 0.5`, `floor`) and could not
+  afford anything — a soft-lock. **Before:** fresh bank {0,0,0}. **After:** a
+  one-time `WELCOME_GRANT = {red:3, blue:6, green:4}` (+13 pigment) is granted
+  on the first expedition (pure `applyWelcomeGrant` in logic.js, gated on
+  `flags.welcomeGranted`). A fresh save can now afford ≥1 upgrade and ≥1
+  painting (verified: capacity lvl1, vitality lvl1, moonlit-pond, self-portrait
+  all affordable). Smoke stage 23 asserts the grant is one-time/idempotent and
+  leaves the bank strictly positive.
 
 Full plan: `docs/PLAN-v1.1-next.md`.
 

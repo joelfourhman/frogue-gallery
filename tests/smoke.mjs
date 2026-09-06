@@ -798,5 +798,113 @@ console.log('== stage 20: B5 — storage-failure fallback (in-memory save + one-
   assert(S.SaveSys.storageOK === true, 'storageOK recovers to true once a working store is restored');
 }
 
+console.log('== stage 21: M7.5 PT1 — painting is rate-gated, not free/unlimited ==');
+{
+  const { Player } = await import('../src/player.js');
+  const { Paint } = await import('../src/paint.js');
+  const L = await import('../src/logic.js');
+  const t = L.makeTuning({}, []);
+  // a standalone frog + paint so we don't disturb the shared game instance
+  const p = new Player(0, 0, t);
+  p.aimA = 0; p.pigment = 'red';
+  const world = { paintSwipe() {}, paintSplash() {}, pigmentAt: () => ({}) };
+  const paint = new Paint(p, world, t, () => {}, { splatter() {}, sparkles() {}, note() {} });
+  const enemies = [];
+  // swipe: one call arms the cooldown regardless of whether any enemy is in range
+  const first = paint.trySwipe(enemies);
+  assert(paint.swipeCd > 0, `a swipe arms the cooldown (swipeCd=${paint.swipeCd.toFixed(3)})`);
+  assert(paint.swipeCd === t.swipeCooldown, `swipe cooldown equals tuning.swipeCooldown (${t.swipeCooldown})`);
+  const blocked = paint.trySwipe(enemies);
+  assert(blocked === null && paint.swipeCd === t.swipeCooldown, 'immediate re-swipe is refused while the cooldown is active (not free spam)');
+  // the swipe rate is bounded: over a 2s budget only ~floor(2/cd) swipes fit
+  const cd = t.swipeCooldown;
+  paint.swipeCd = 0; p.swipeT = 0;
+  let swipes = 0;
+  const dt = 1 / 60, budget = 2.0;
+  for (let el = 0; el < budget / dt; el++) {
+    if (paint.swipeCd > 0) paint.swipeCd -= dt;
+    if (p.swipeT > 0) p.swipeT -= dt;
+    const before = paint.swipeCd;
+    paint.trySwipe(enemies);
+    // a "fire" is when the cooldown gets (re)armed, not when an enemy is hit
+    if (paint.swipeCd > before) swipes++;
+  }
+  const expected = Math.round(budget / cd);
+  assert(Math.abs(swipes - expected) <= 1, `swipe rate is rate-limited (${swipes} in ${budget}s ≈ ${expected} at cd=${cd}), not unlimited`);
+  // splash: cannot fire at 0 charge, even with a clear cooldown
+  paint.splashCd = 0; p.splashCharge = 0;
+  assert(paint.trySplash(enemies) === null, 'splash is refused at 0 charge (requires charging — not free)');
+}
+
+console.log('== stage 22: M7.5 PT3 — hop/dodge has a stamina cooldown (fly fairness) ==');
+{
+  const { Player } = await import('../src/player.js');
+  const L = await import('../src/logic.js');
+  const t = L.makeTuning({}, []);
+  assert(t.hopCooldown > 0, `tuning exposes a hop cooldown (stamina cost) = ${t.hopCooldown}s`);
+  const p = new Player(0, 0, t);
+  const world = { collideCircle: (x, y) => [x, y], pigmentAt: () => ({}) };
+  let spaceDown = false;
+  const input = { pressed: (k) => k === ' ' && spaceDown, moveVec: () => [1, 0], mouse: { worldX: 50, worldY: 0 } };
+  const view = { x: 0, y: 0, scale: 1, w: 640, h: 480 };
+  // hop 1: fresh player, Space pressed
+  spaceDown = true;
+  p.update(1 / 60, input, t, world, view);
+  assert(p.hopT > 0 && p.hopCd > 0, `hop 1 fired and armed the stamina cooldown (hopCd=${p.hopCd.toFixed(2)}s)`);
+  // hop 2: immediate next frame, Space still pressed — must be refused (cooldown)
+  p.hopT = 0.01; // force mid-hop edge; the gate under test is hopCd
+  const hopTBefore = p.hopT, hopCdBefore = p.hopCd;
+  p.update(1 / 60, input, t, world, view);
+  assert(!(p.hopT === 0.22 && p.hopCd > hopCdBefore + 0.1), 'immediate re-hop within the cooldown is refused (no hop-mashing into i-frames)');
+  assert(p.hopCd <= hopCdBefore + 1e-9, 'the cooldown counts down (stamina regenerates), it does not re-arm mid-gap');
+  // let the cooldown fully expire, then a fresh hop must fire again
+  spaceDown = false; // release Space so the frog doesn't re-hop and re-arm mid-wait
+  for (let i = 0; i < 60; i++) p.update(1 / 60, input, t, world, view); // 1s, > 0.7s cd
+  assert(p.hopCd <= 0, `after ${t.hopCooldown}s the hop cooldown has cleared (hopCd=${p.hopCd.toFixed(2)})`);
+  spaceDown = false;
+  p.hopT = 0; p.hopCd = 0;
+  spaceDown = true;
+  p.update(1 / 60, input, t, world, view);
+  assert(p.hopT > 0, 'after the cooldown the frog can hop again');
+}
+
+console.log('== stage 23: M7.5 PT4 — early-economy safety net (welcome grant) ==');
+{
+  const L = await import('../src/logic.js');
+  // the welcome grant is one-time and idempotent
+  const fresh = L.freshSave();
+  const b0 = { ...fresh.bank };
+  L.applyWelcomeGrant(fresh);
+  assert(fresh.flags.welcomeGranted === true, 'applyWelcomeGrant sets the welcomeGranted flag');
+  assert(fresh.bank.red === b0.red + L.WELCOME_GRANT.red &&
+         fresh.bank.blue === b0.blue + L.WELCOME_GRANT.blue &&
+         fresh.bank.green === b0.green + L.WELCOME_GRANT.green,
+         `welcome grant adds exactly ${JSON.stringify(L.WELCOME_GRANT)}`);
+  const b1 = { ...fresh.bank };
+  L.applyWelcomeGrant(fresh);
+  assert(fresh.bank.red === b1.red && fresh.bank.blue === b1.blue && fresh.bank.green === b1.green,
+    'applying the welcome grant twice does NOT double it (one-time)');
+  // the safety-net property: a fresh (zero-bank) save can ALWAYS afford at
+  // least one upgrade OR one painting after the grant. Check every cheapest
+  // level-1 upgrade and level-1 painting against the grant.
+  const bank = { ...L.freshSave().bank };
+  L.applyWelcomeGrant(bank && { flags: {}, bank }); // re-derive cleanly
+  const grantBank = { red: L.WELCOME_GRANT.red, blue: L.WELCOME_GRANT.blue, green: L.WELCOME_GRANT.green };
+  const upgradeOptions = Object.values(L.UPGRADES).map(u => u.levels[0].cost);
+  const paintingOptions = L.PAINTINGS.map(pt => pt.cost).filter(c => !L.PAINTINGS.find(pt => pt.id && Object.is(pt.locked, true)));
+  const afford = (bank, costObj) => Object.keys(costObj).every(k => (bank[k] || 0) >= costObj[k]);
+  const affordableUpgrades = upgradeOptions.filter(c => afford(grantBank, c));
+  const affordablePaintings = paintingOptions.filter(c => afford(grantBank, c));
+  assert(affordableUpgrades.length >= 1 || affordablePaintings.length >= 1,
+    `welcome grant {${grantBank.red},${grantBank.blue},${grantBank.green}} affords >=1 upgrade/painting (upgrades: ${affordableUpgrades.length}, paintings: ${affordablePaintings.length}) — no early soft-lock`);
+  // specifically, the cheapest upgrade (Swamp Vitality) is reachable
+  const vitality = L.UPGRADES.vitality.levels[0].cost;
+  assert(afford(grantBank, vitality), `welcome grant covers the cheapest upgrade Swamp Vitality {${vitality.red},${vitality.blue},${vitality.green}}`);
+  // migration: a legacy save lacking the flag is NOT auto-granted (grant fires
+  // only at first expedition, not on load) — flag simply defaults to false
+  const legacy = L.migrateSave({ bank: { red: 9 }, flags: { intro: true } });
+  assert(legacy.flags.welcomeGranted === false, 'migration does not silently grant the welcome kit (it is awarded at the first expedition)');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

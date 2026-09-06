@@ -15,6 +15,7 @@ export class Player {
     this.facing = 1;
     this.pigment = 'red';
     this.hopT = 0;          // 0..1 while hopping
+    this.hopCd = 0;         // PT3: stamina gap before the next hop (fly-fairness)
     this.hopDir = [1, 0];
     this.iframes = 0;
     this.hurtT = 0;         // red flash timer
@@ -33,16 +34,19 @@ export class Player {
     this.aimA = Math.atan2(input.mouse.worldY - this.y, input.mouse.worldX - this.x);
     this.facing = Math.cos(this.aimA) >= 0 ? 1 : -1;
 
-    // hop / dodge (Space)
-    if (input.pressed(' ') && this.hopT <= 0 && this.alive) {
+    // hop / dodge (Space). PT3 (M7.5 fly-fairness): gated on a stamina cooldown
+    // (hopCd) so mashing Space no longer chains into near-continuous i-frames.
+    if (input.pressed(' ') && this.hopT <= 0 && this.hopCd <= 0 && this.alive) {
       let [hx, hy] = mv;
       if (!hx && !hy) { hx = Math.cos(this.aimA); hy = Math.sin(this.aimA); }
       this.hopDir = [hx, hy];
       this.hopT = 0.22;
+      this.hopCd = tuning.hopCooldown || 0.7;
       this.iframes = Math.max(this.iframes, tuning.hopIframes + 0.12);
       this.squash = 1.35;
     }
     if (this.hopT > 0) this.hopT -= dt;
+    if (this.hopCd > 0) this.hopCd -= dt;
 
     // movement: base speed, boosted mid-hop
     let spd = this.speed;

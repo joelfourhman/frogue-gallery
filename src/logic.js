@@ -105,6 +105,11 @@ export function makeTuning(upgrades = {}, loadout = []) {
     capacity: 6 + 3 * (upgrades.capacity || 0),
     iframes: 0.9,
     hopIframes: 0.18,
+    // PT3 (M7.5) fly/dodge fairness: the Space-hop is the frog's only air-dodge.
+    // It previously had NO cooldown and i-frames (0.30s) exceeded the 0.22s hop,
+    // so mashing Space = near-continuous invulnerability. hopCooldown is the
+    // "stamina" cost: a gap after each hop before you may hop again.
+    hopCooldown: 0.7,
     // paint
     swipeDamage: 7,
     swipeRange: 74,
@@ -209,6 +214,21 @@ export function payCost(bank, cost) {
 // Flatten {red,blue,green} cost into [{color,amount}]
 export function costArray(costObj) {
   return Object.keys(costObj).map(k => ({ color: k, amount: costObj[k] })).filter(c => c.amount > 0);
+}
+
+// ---------------------------------------------------------------- early-economy safety net (PT4, M7.5)
+// A brand-new player's very first run can end with almost nothing banked
+// (orbs + enemy drops * deathKeepFraction, floored), leaving them unable to
+// afford ANY upgrade or painting — a soft-lock of the progression. So the
+// first expedition is granted a one-time welcome amount of each pigment:
+// enough to buy the cheapest single-level upgrade (Swamp Vitality,
+// {red:2, blue:5, green:3}) plus a little cushion. Deterministic + pure.
+export const WELCOME_GRANT = { red: 3, blue: 6, green: 4 };
+export function applyWelcomeGrant(save) {
+  if (!save || !save.flags || save.flags.welcomeGranted) return save;
+  save.flags.welcomeGranted = true;
+  for (const k of ['red', 'blue', 'green']) save.bank[k] += WELCOME_GRANT[k];
+  return save;
 }
 
 // ---------------------------------------------------------------- economy
@@ -389,7 +409,7 @@ export function freshSave() {
     owned: [],            // painting ids
     loadout: [],          // up to 2 painting ids
     upgrades: { capacity: 0, power: 0, vitality: 0 },
-    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false },
+    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false },
     stats: { expeditions: 0, victories: 0, deaths: 0, heronsPainted: 0, treasures: 0 },
     bestRun: null,        // {pigments, time, cleared}
   };

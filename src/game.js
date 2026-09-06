@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, makeTuning, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, makeTuning, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor } from './ui.js';
 
 // P5: 4 named expedition zones + a rest checkpoint between each — structure
@@ -703,6 +703,15 @@ _drawAtelier(ctx) {
     const firstRun = !this.save.flags.intro;
     if (firstRun) {
       this.save.flags.intro = true;
+      // PT4 (M7.5): one-time early-economy safety net — a brand-new player
+      // gets enough pigment to afford the cheapest upgrade (Swamp Vitality)
+      // plus a cushion, so a short first run can never soft-lock the bank.
+      // Guarded by flags.welcomeGranted so it fires exactly once, ever.
+      if (!this.save.flags.welcomeGranted) {
+        applyWelcomeGrant(this.save);
+        const total = WELCOME_GRANT.red + WELCOME_GRANT.blue + WELCOME_GRANT.green;
+        this.addBanner(`Sir Croaksworth sets out a starter's kit — +${total} pigment to begin your collection.`, 5.5, this.ch * 0.62);
+      }
       SaveSys.save(this.save);
       // Staged first-run tutorial: one step at a time on a runT schedule, so
       // a newcomer reads a single instruction per beat instead of a wall of
@@ -719,8 +728,12 @@ _drawAtelier(ctx) {
       this._tut = null;
       this.addBanner('Paint the swamp back to color… then face the Great Gray Heron.', 4.2);
     }
-    // give first-timers a longer head start before the heron's reveal + banners
-    this.heron._intro = firstRun ? 6.5 : 3.2;
+    // give first-timers a longer head start before the heron's reveal + banners.
+    // PT2 (M7.5): the 5-step first-run tutorial runs to ~36s, so the boss reveal
+    // (6.5s) used to interrupt it and confused newcomers. Defer the first-run
+    // reveal to 38s — just after the last tutorial step — so the boss lands as
+    // a clean "now you know the tools" moment. Returning players: 3.2s (unchanged).
+    this.heron._intro = firstRun ? 38 : 3.2;
   }
 
   _updateExpedition(dt) {

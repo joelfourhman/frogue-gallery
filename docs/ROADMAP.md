@@ -27,23 +27,23 @@ release v1.1.
 | B3 | Dry-brush softlock audit: prove a pigment-starved frog can still beat the heron | ✅ `a32a721` |
 | B4 | Tab-hidden time-spike verification (dt cap exists: 0.05s; confirm no physics blowups) | ✅ `2ed1c9a` |
 | B5 | localStorage unavailable → in-memory fallback + one-time notice | ✅ 2026-09-05 (save.js in-memory fallback + `storageOK`, one-time banner in `_beginExpedition`, smoke stage 20) |
-| B6 | Save schema versioning: `saveVersion` in the save, migration test (foundations in logic.js) | ✅ 2026-09-05 (commit pending this pass — `SAVE_VERSION`/`SAVE_MIGRATIONS` in logic.js, smoke stage 19) |
+| B6 | Save schema versioning: `saveVersion` in the save, migration test (foundations in logic.js) | ✅ 2026-09-05 (commit `599a599` — `SAVE_VERSION`/`SAVE_MIGRATIONS` in logic.js, smoke stage 19) |
 
 Acceptance: each item has a passing test; smoke suite green; no behavior
 change to Normal difficulty.
 
-### M7.5 — Playtest feedback pass (ACTIVE — user-reported, 2026-09-05)
+### M7.5 — Playtest feedback pass (DONE 2026-09-05 — user-reported)
 
-Player-tested the game; five issues to fix as one cohesive UX pass
+Player-tested the game; five issues fixed as one cohesive UX pass
 (implemented in order, each reported + verified):
 
 | ID | Item | Notes | Status |
 |---|---|---|---|
-| PT1 | Painting consumption | painting effects must actually consume (check cost/rate) | ⬜ |
-| PT2 | Onboarding | tighten/clarify first-run flow | ⬜ |
-| PT3 | Fly fairness | frog fly mechanic judged unfair — audit + rebalance | ⬜ |
-| PT4 | Early-economy safety net | new players can soft-lock the bank early | ⬜ |
-| PT5 | Grey box in the swamp | duplicate camera transform in world.js terrain painters — removed | ✅ 2026-09-05 (commit pending) — smoke 19/19 green |
+| PT1 | Painting consumption | swipe/splash already rate-gated (verified, not free); regression guard added | ✅ 2026-09-05 (smoke stage 21) |
+| PT2 | Onboarding | first-run heron reveal deferred 6.5s → 38s (after tutorial) | ✅ 2026-09-05 (headless `onb`) |
+| PT3 | Fly fairness | Space-hop `hopCooldown 0.7s` stamina gate added | ✅ 2026-09-05 (smoke stage 22) |
+| PT4 | Early-economy safety net | one-time `WELCOME_GRANT {3,6,4}` on first expedition | ✅ 2026-09-05 (smoke stage 23) |
+| PT5 | Grey box in the swamp | duplicate camera transform in world.js terrain painters — removed | ✅ 2026-09-05 (commit `ed287a4`) |
 
 Acceptance: each fix shipped with a test or documented manual check; full
 suite green; Normal-difficulty baseline preserved (balance numbers logged
