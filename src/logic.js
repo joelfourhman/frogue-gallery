@@ -357,6 +357,34 @@ export function bankGain(collected, { died, victory, tuning }) {
   return gain;
 }
 
+// ----------------------------------------------------------------
+// E1 (v1.2 M10): the Painted Heron — a mid-expedition "half-heron" set-piece.
+// A small re-use of the existing bossStep + 3-hue awaken machinery at reduced
+// scale. It is a pure config; game.js spawns it at a zone boundary, wires the
+// paint/draw, and rewards its defeat. Reusing bossStep means the mid-heron
+// inherits the real telegraph/awaken cadence (the "3-hue awaken" reads the same).
+//
+// Scaled down: ~1/10 the final heron's HP, a smaller awaken need (about one
+// hue of each color to trigger the shimmer window), and phase escalation
+// capped at 2 (no phase-3 "Gray Storm") so it reads as a guardian, not a wall.
+// It is NON-blocking — the frog can walk past it (optional), and it appears on
+// Normal+ difficulties.
+export const MID_HERON = {
+  difficulties: ['normal', 'bold'],   // Normal+ (optional; Gentle skips it)
+  x: 0.75,                            // end of zone 3 (Bramble Thicket → The Gray Shore) = 4050/5400
+  y: 750,                             // on the ground corridor
+  trigger: 430,                       // it wakes when the frog comes within this range
+  hp: 3000,                           // ~10% of the final heron's 30000
+  awakenNeed: { red: 24, blue: 24, green: 24 }, // ~1 hue to awaken (final = 45)
+  maxPhase: 2,                        // cap phase escalation at 1-2 phases
+  contactDmg: 4,                      // its body hurts on contact (scaled down)
+  rewardOrbs: 3,                      // pigment orbs granted on defeat
+};
+// Pure: is the Painted Heron active for this difficulty? (Normal+)
+export function midHeronAllowed(difficulty) {
+  return MID_HERON.difficulties.includes(difficulty);
+}
+
 // ---------------------------------------------------------------- boss AI
 // Pure step function for the Great Gray Heron.
 // heron: { hp, maxHp, phase, state, stateT, x, y, hue, awakened, summonT, lungeDir, targetX, jumpSpots }
@@ -377,8 +405,11 @@ export function bossStep(h, dt, view, tuning, now) {
   h.stateT -= dt;
 
   const hpFrac = h.hp / h.maxHp;
-  if (hpFrac <= 0.33 && h.phase < 3) { h.phase = 3; ev.push('phase3'); h.state = 'leap'; h.stateT = 0.8; }
-  else if (hpFrac <= 0.66 && h.phase < 2) { h.phase = 2; ev.push('phase2'); h.state = 'flap'; h.stateT = 0.9; }
+  // E1: a mid-run heron caps its phase escalation via h.maxPhase (default 3 for
+  // the final heron, so the default path is unchanged).
+  const maxPhase = h.maxPhase || 3;
+  if (hpFrac <= 0.33 && h.phase < 3 && h.phase < maxPhase) { h.phase = 3; ev.push('phase3'); h.state = 'leap'; h.stateT = 0.8; }
+  else if (hpFrac <= 0.66 && h.phase < 2 && h.phase < maxPhase) { h.phase = 2; ev.push('phase2'); h.state = 'flap'; h.stateT = 0.9; }
 
   const speed = h.phase === 3 ? 1.4 : h.phase === 2 ? 1.15 : 1.0;
   const px = view.playerX;
@@ -484,10 +515,12 @@ export function bossStep(h, dt, view, tuning, now) {
 }
 
 // Apply paint to boss: accumulates hue; awakens when all thresholds met.
+// E1: a heron may carry its own (smaller) awakenNeed — a mid-run heron "awakens
+// on about one hue"; otherwise the final heron's tuning.bossAwakenNeed is used.
 export function paintBoss(h, pigmentId, amount, tuning) {
   if (!PIGMENTS[pigmentId] || pigmentId === 'dry') return 0;
   h.hue[pigmentId] = Math.min(99, (h.hue[pigmentId] || 0) + amount);
-  const need = tuning.bossAwakenNeed;
+  const need = h.awakenNeed || tuning.bossAwakenNeed;
   if (!h.awakened && h.hue.red >= need.red && h.hue.blue >= need.blue && h.hue.green >= need.green) {
     h.awakened = true;
     h.awakenedT = tuning.bossAwakenDuration;

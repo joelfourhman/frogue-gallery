@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 33 STAGES PASSED** (…stage 32 = v1.2 M9 A3 Curator's Ledger, stage 33 = v1.2 M9 A4 Rehung Frame gallery bonus). Pacing probes green: `pace.mjs` (analytic, human est. ~18.8 min) + **`humance.mjs` (P11 — simulated imperfect human on the real sim: measured cross-swamp + measured heron → full-run 18.4 min, in the 15–20 min target)** + `bosspace.mjs`. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ — next E1 (Painted Heron) / M10.**_
+_Last verified: 2026-09-06. `node tests/smoke.mjs` = **ALL 34 STAGES PASSED** (…stage 32 = v1.2 M9 A3 Curator's Ledger, stage 33 = v1.2 M9 A4 Rehung Frame gallery bonus, stage 34 = v1.2 M10 E1 Painted Heron mid-run set-piece). Pacing probes green on Normal: `pace.mjs` (analytic, human est. ~18.7 min) + **`humance.mjs`** (real-sim, seeded 1337): cross-swamp **58s**, full-run **16.7 min** — in the 15–20 min band; the E1 mid-heron is **optional/non-blocking** (the frog walks past it; cross-swamp 58s unchanged), so it stays optional on Normal (not gated to Bold/Hard). `bosspace.mjs` (boss-only, real sim): ~19.1 min. DoD: all 12 items satisfied. **v1.1 COMPLETE: B1–B6 ✅, M7.5 PT1–PT5 ✅, M8 P10/P12/P7/P8/P6/P9/P11 ✅. v1.2 ACTIVE: M9 Batch 1 (A1–A3) ✅ + A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅ — next E2 (weather/tide phases) / M10.**_
 
 ## Current Status
 
@@ -35,7 +35,7 @@ Frogue Gallery is a **balanced, feature-complete cozy action roguelite** — the
 | `src/audio.js` | WebAudio synth SFX, `setMuted`/`setVolume` |
 | `src/particles.js`, `src/ui.js`, `src/math.js` | FX, paper-UI helpers, math |
 | `src/save.js` | SaveSys: save/options (localStorage, try/catch) |
-| `tests/smoke.mjs` | **Headless runtime test — 33 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
+| `tests/smoke.mjs` | **Headless runtime test — 34 stages, all passing.** Real `Game` class, stubbed canvas/localStorage/AudioContext, synthetic keys/mouse |
 | `tests/pace.mjs`, `tests/bosspace.mjs`, `tests/humance.mjs` | **Pacing probes (informational, not assertions).** pace.mjs = analytic lower-bound + human model; bosspace.mjs = real pigment-cycling bot heron fight; humance.mjs (P11) = simulated imperfect human on the real sim (measured cross + boss) |
 | `PROJECT_STATE.md` | This file (recovery memory) |
 | `SYSTEM_CHANGES.md`, `CLEANUP.md` | System-change + cleanup records for the final report |
@@ -130,7 +130,7 @@ accessibility deferred).
 
 **Batch order (one commit per item, docs + suite green per commit):**
 1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 ✅ (Curator's Ledger). **Batch 1 (A1–A3) COMPLETE.**
-2. M9: **A4 ✅ (Rehung Frame)** → M10: E1 (Painted Heron) → E2 (weather/tide)
+2. M9: **A4 ✅ (Rehung Frame)** → M10: **E1 ✅ (Painted Heron)** → E2 (weather/tide)
 3. M10: E3 (Bold hazards) → E4 (orb streak) → M11: V1 (color-reveal bar)
 4. M11: V2 (heron bloom beat) → V3 (zone audio) → V4 (exhibition end-screen)
 5. M13: T1 (guided first expedition) → T2 (pigment drills)
@@ -161,6 +161,28 @@ Smoke stage 33 asserts: OFF on a fresh save, ON after a simulated retire
 (no field) migrates without error + legacy fields survive. Stage 19 now uses
 `SAVE_VERSION` dynamically. No in-run pacing impact (economy/start only).
 Suite green: 33/33.
+
+**M10 E1 (Painted Heron) — implemented + tested (v1.2 Batch 2, item 2).**
+A mid-expedition "half-heron" set-piece at the **end of zone 3** (x=0.75 =
+4050/5400, Bramble Thicket → Gray Shore) on **Normal+** (Gentle skips it). A
+small re-use of the real heron's `bossStep`/`paintBossHit` machinery at
+reduced scale: **HP 3000** (~1/10 of the 30000 final), **~1 hue to awaken**
+(per-heron `awakenNeed` {24,24,24} vs the final 45 — `paintBoss` now honors
+`h.awakenNeed`), **phase escalation capped at 2** (`bossStep` now respects
+`h.maxPhase`; the final heron keeps its default 3), and its own `contactDmg`
+4. It is **NON-BLOCKING/optional**: dormant until the frog comes within 430px,
+then it announces itself (banner) and runs on the shared `bossStep`; the frog
+can walk past it, so it never gates the run. On defeat it scatters 3 pigment
+orbs and **the run CONTINUES** (no victory/end state). Pure config + gate
+(`MID_HERON`, `midHeronAllowed`) in `logic.js`; spawn/update/draw/paint wiring
+in `game.js` (`_updateMidHeron`, `_onMidHeronDefeated`, painted identically to
+the final heron; drawn via the existing `_drawHeron`). Pacing re-verified on
+Normal: pace.mjs ~18.7 min, humance.mjs 16.7 min (cross-swamp 58s unchanged)
+→ in the 15–20 min band, so it stays optional on Normal (not gated to
+Bold/Hard). Smoke stage 34: spawns on Normal (absent on Gentle), dormant-
+until-approach, awaken-need < final, phase cap, **damaged by wet paint**,
+**defeat clears it + scatters reward orbs + run continues (no victory)**.
+Suite green: 34/34.
 
 **M9 A3 (Curator's Ledger) — implemented + tested (v1.2 Batch 1, item 3).**
 A 4th atelier tab, "Curator's Ledger" (key `4`), lists all 8 paintings in a

@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -1081,6 +1081,23 @@ _drawAtelier(ctx) {
       targetX: this.world.w - 650, diveH: 0, facing: -1,
       flying: 0, _intro: 3.2,
     };
+    // E1 (v1.2 M10): the Painted Heron — a mid-run "half-heron" set-piece on a
+    // zone boundary (end of zone 3) for Normal+. A small re-use of the real
+    // heron's bossStep machinery at reduced scale (much lower HP, ~1 hue to
+    // awaken, phase escalation capped at 2). NON-blocking: the frog can walk
+    // past it (optional), so the 15–20 min pacing target is preserved.
+    this.midHeron = midHeronAllowed(this.options.difficulty) ? {
+      x: this.world.w * MID_HERON.x, y: MID_HERON.y,
+      hp: MID_HERON.hp, maxHp: MID_HERON.hp,
+      phase: 1, state: 'idle', stateT: 2.0, hue: { red: 0, blue: 0, green: 0 },
+      awakened: false, awakenedT: 0, summonT: 9, lungeDir: -1,
+      targetX: this.world.w * MID_HERON.x - 200, diveH: 0, facing: -1,
+      flying: 0, _intro: 9999, _active: false, // dormant until the frog is near
+      awakenNeed: { ...MID_HERON.awakenNeed },   // ~1 hue to awaken (smaller than the final heron)
+      maxPhase: MID_HERON.maxPhase,             // cap escalation at 1–2 phases
+      contactDmg: MID_HERON.contactDmg,
+      mid: true,                                 // flag: this is the mid-heron (defeat rewards, not the final boss)
+    } : null;
     this.cam.x = PLAYER_START_X; this.cam.y = PLAYER_START_Y;
     this.zoomTarget = 1;
     this.shake = 0;
@@ -1229,6 +1246,15 @@ _drawAtelier(ctx) {
           this.addBanner('The Heron AWAKENS — paint it while it shimmers!', 3.4);
         }
       }
+      // E1: paint the Painted Heron (mid-run set-piece) the same way
+      if (this.midHeron && this.midHeron.hp > 0 && !this.midHeron.flying && this.midHeron._intro <= 0) {
+        const res = this.paint.paintBossHit(this.midHeron, p.pigment, this.tuning.bossPaintHit);
+        if (res === 'awaken') {
+          this.sfx('awaken');
+          this.addShake(10);
+          this.addBanner('The Painted Heron shimmers — paint it while it glows!', 3.0);
+        }
+      }
     }
     if (this.input.mouse.rPressed && p.splashCharge >= 1) {
       this.paint.trySplash(targetList);
@@ -1290,6 +1316,31 @@ _drawAtelier(ctx) {
       }
     }
     if (this.heron._intro <= 0) this._updateBoss(dt);
+
+    // ----- E1: the Painted Heron (mid-run set-piece) -----
+    // Non-blocking: dormant until the frog draws near, then it announces
+    // itself and runs on the shared bossStep machinery. The frog can walk past
+    // it (optional) — it never gates the run — so defeating it is a reward.
+    // NOTE: the update runs even at hp<=0 (like the final heron) so bossStep
+    // can emit the 'defeated' event; the update block no-ops once cleared.
+    if (this.midHeron) {
+      const mh = this.midHeron;
+      if (mh.hp <= 0) {
+        this._updateMidHeron(dt);            // fires 'defeated' -> cleared
+      } else if (!mh._active) {
+        if (dist(p.x, p.y, mh.x, mh.y) <= MID_HERON.trigger) {
+          mh._active = true;
+          this.sfx('boss-growl');
+          this.addBanner('The Painted Heron', 2.6, 150);
+          this.addBanner('Paint it to awaken — or walk past. The road on.', 3.4, 190);
+          mh._intro = 1.6;
+        }
+      } else if (mh._intro > 0) {
+        mh._intro -= dt;
+      } else {
+        this._updateMidHeron(dt);
+      }
+    }
 
     // ----- first-hit teaching (once per lifetime) -----
     if (p.alive && p.hp < this._prevHp) {
@@ -1547,6 +1598,75 @@ _drawAtelier(ctx) {
     }
   }
 
+  // E1 (v1.2 M10): drive the Painted Heron with the shared bossStep machinery.
+  // A scaled-down heron: ~1/10 HP, awakens on ~1 hue, phase escalation capped
+  // at 2, and its own contact damage. Its attacks are gentler and its summons
+  // fewer — it's a guardian at the zone boundary, not a wall.
+  _updateMidHeron(dt) {
+    const h = this.midHeron;
+    const p = this.player;
+    // NOTE: let bossStep run even at hp<=0 — it emits the 'defeated' event
+    // (same as the final heron's _updateBoss).
+    if (!h || h.flying > 0 || this.dying) return;
+    const v = this._view();
+    const ev = bossStep(h, dt, { left: v.x, right: v.x + v.w / v.scale, playerX: p.x }, this.tuning, this.now);
+    for (const name of ev) {
+      if (name === 'slam') {
+        this.addShake(8);
+        this.sfx('boss-slam');
+        this.particles.splatter(h.targetX, h.y - 20, '#98a19b', 10, 160);
+        this._hitPlayerFromHeron(110, Math.round(h.contactDmg * 1.6), h.targetX, h.y - 40);
+      } else if (name === 'landing') {
+        this.addShake(7);
+        this.sfx('boss-slam');
+        this.particles.splatter(h.x, h.y - 20, '#7fa8c9', 10, 180);
+        this._hitPlayerFromHeron(95, Math.round(h.contactDmg * 1.4), h.x, h.y - 40);
+      } else if (name === 'summon') {
+        // the mid-heron summons fewer, gentler reinforcements
+        const n = 1 + (h.phase >= 2 ? 1 : 0);
+        for (let i = 0; i < n; i++) {
+          const a = Math.random() * TAU, d = 130 + Math.random() * 100;
+          const x = clamp(h.x + Math.cos(a) * d, 80, this.world.w - 80);
+          const y = clamp(h.y + Math.sin(a) * d, 80, this.world.h - 80);
+          const kind = Math.random() < 0.5 ? 'mosquito' : 'beetle';
+          this.enemies.push(spawnEnemy(kind, x, y, this.tuning));
+        }
+        this.sfx('boss-growl');
+        this.addBanner('The Painted Heron ruffles — a few insects stir!', 2.2, 240);
+      } else if (name === 'phase2') {
+        this.sfx('boss-growl');
+        this.addShake(6);
+        this.addBanner('The Painted Heron darkens…', 2.4, 240);
+      } else if (name === 'defeated') {
+        this._onMidHeronDefeated();
+      }
+    }
+    // contact hazard: its body hurts on touch (scaled), none while airborne/awakened
+    const airborne = (h.diveH || 0) > 50;
+    if (h.hp > 0 && !airborne && !h.awakened && p.alive) {
+      if (h.state === 'scoop') this._hitPlayerFromHeron(70, Math.round(h.contactDmg * 1.3), h.scoopX, h.y - 30);
+      else if (h.state === 'sweep') this._hitPlayerFromHeron(130, h.contactDmg, h.x + (h.sweepSide || -1) * 75, h.y - 100);
+      else if (h.state === 'idle' || h.state === 'flap' || h.state === 'recover') this._hitPlayerFromHeron(70, h.contactDmg, h.x, h.y - 110);
+    }
+  }
+
+  _onMidHeronDefeated() {
+    const h = this.midHeron;
+    this.sfx('awaken');
+    this.addShake(10);
+    this.addBanner('The Painted Heron blooms and takes wing!', 3.2, 200);
+    for (const c of ORB_COLORS) this.particles.sparkles(h.x, h.y - 140, PIGMENTS[c].light, 8);
+    this.particles.splatter(h.x, h.y - 110, '#e0c15a', 14, 200);
+    // reward: pigment orbs scatter where it stood (collectible, bankable)
+    for (let i = 0; i < MID_HERON.rewardOrbs; i++) {
+      const c = ORB_COLORS[i % ORB_COLORS.length];
+      this.orbs.push({ x: h.x + (Math.random() - 0.5) * 120, y: h.y - 60 + (Math.random() - 0.5) * 60, color: c, t: 0 });
+    }
+    // the mid-heron is gone for the rest of the run (no victory state — it's a
+    // set-piece, not the final boss)
+    this.midHeron = null;
+  }
+
   // M4: mute toggle (M key) — works from any screen, saved to options
   _muteToggle() {
     const m = !this.audio.muted;
@@ -1762,6 +1882,7 @@ _drawAtelier(ctx) {
     this.paint && this.paint.drawTrails(ctx);
     if (this.state === 'expedition' || this.state === 'end') {
       if (this.heron) this._drawHeron(ctx, this.heron, this.now);
+      if (this.midHeron) this._drawHeron(ctx, this.midHeron, this.now); // E1: Painted Heron
       for (const e of this.enemies) drawEnemy(ctx, e, this.now);
       if (this.player && this.player.alive) this.player.draw(ctx, v, this.now);
       this._drawOrbs(ctx);

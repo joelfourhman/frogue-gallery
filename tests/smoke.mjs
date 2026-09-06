@@ -1553,5 +1553,95 @@ console.log('== stage 33: v1.2 M9 A4 — Rehung Frame (gallery bonus) ==');
   g33._quitToTitle();
 }
 
+// stage 34 — v1.2 M10 E1: the Painted Heron (mid-run half-heron set-piece)
+// A small re-use of the real heron's bossStep + 3-hue awaken machinery at
+// reduced scale, on Normal+ at a zone boundary. Optional (non-blocking), so it
+// must SPAWN, be DAMAGEABLE, and its DEFEAT must not end the run (no victory).
+console.log('== stage 34: v1.2 M10 E1 — the Painted Heron (mid-run half-heron) ==');
+{
+  const L = await import('../src/logic.js');
+
+  // --- pure config sanity: Normal+ only, reduced scale vs the final heron ---
+  assert(L.MID_HERON && L.midHeronAllowed('normal') === true, 'E1: active on Normal');
+  assert(L.midHeronAllowed('bold') === true, 'E1: active on Bold');
+  assert(L.midHeronAllowed('gentle') === false, 'E1: skipped on Gentle (optional; keeps pacing)');
+  const tFin = L.makeTuning({}, [], 'normal');
+  assert(L.MID_HERON.hp > 0 && L.MID_HERON.hp < tFin.bossMaxHp,
+    `E1: mid-heron HP is a fraction of the final heron (${L.MID_HERON.hp} < ${tFin.bossMaxHp})`);
+  // ~1 hue to awaken: each hue need <= the final heron's per-hue awaken need
+  for (const c of ['red', 'blue', 'green']) {
+    assert(L.MID_HERON.awakenNeed[c] < tFin.bossAwakenNeed[c],
+      `E1: mid-heron awaken need for ${c} is below the final heron (${L.MID_HERON.awakenNeed[c]} < ${tFin.bossAwakenNeed[c]})`);
+  }
+  assert(L.MID_HERON.maxPhase <= 2, 'E1: phase escalation is capped (1-2 phases, no Gray Storm)');
+
+  // --- real loop: it SPAWNS dormant, then ACTIVATES on proximity (Normal) ---
+  const cv34 = makeCanvas();
+  const g34 = new Game(cv34);
+  g34.start();
+  fireKey('keydown', 'Enter'); frames(3); // title -> expedition (Normal is the default)
+  const P34 = g34.player;
+  P34.alive = true; P34.hp = 99; P34.iframes = 999;
+  assert(g34.midHeron && g34.midHeron.hp > 0, 'E1: the Painted Heron spawns on Normal');
+  assert(g34.midHeron._active === false, 'E1: it is dormant until the frog approaches (non-blocking)');
+  assert(g34.midHeron.hp === L.MID_HERON.hp && g34.midHeron.maxHp === g34.midHeron.hp, 'E1: spawned with its reduced HP');
+
+  // walking near it wakes it (announces + activates)
+  P34.x = g34.midHeron.x + 60; P34.y = g34.midHeron.y + 10;
+  frames(4);
+  assert(g34.midHeron._active === true, 'E1: approaching the Painted Heron activates it');
+  assert(g34.banners.some(b => b.text.includes('Painted Heron')), 'E1: its activation is announced with a banner');
+
+  // --- it can be DAMAGED by wet paint (reuse the real bossStep damage path) ---
+  const mh = g34.midHeron;
+  mh._intro = 0;          // arm it
+  mh.awakened = true;     // shimmerring: wet paint now deals damage (x2)
+  mh.awakenedT = 99;
+  const hpBefore = mh.hp;
+  P34.x = mh.x - 55; P34.y = mh.y - 60;   // stand in swipe range
+  P34.iframes = 999;                       // don't die to contact during the kill
+  const v34 = g34._view();
+  g34.input.mouse.x = (mh.x - v34.x) * v34.scale;
+  g34.input.mouse.y = (mh.y - 100 - v34.y) * v34.scale;
+  g34.input.mouse.lDown = true;
+  frames(60);
+  g34.input.mouse.lDown = false;
+  assert(mh.hp < hpBefore, `E1: the Painted Heron can be damaged by wet paint (hp ${hpBefore} -> ${mh.hp.toFixed(1)})`);
+
+  // --- its DEFEAT advances the run: it is removed, rewards orbs, and the run CONTINUES ---
+  // isolate the reward: clear any stray orbs and disable the pickup magnet so
+  // the reward orbs are counted where they spawn (not sucked into the frog).
+  g34.orbs.length = 0;
+  g34.tuning.pickupMagnet = 0;
+  mh.hp = 6;           // one more swipe ends it
+  mh.state = 'idle'; mh.stateT = 999;
+  P34.x = mh.x; P34.y = mh.y + 90; // in swipe range (dist 90 < 104) but BELOW the heron — clear of the reward-orb scatter band
+  const v34b = g34._view();
+  g34.input.mouse.x = (mh.x - v34b.x) * v34b.scale;
+  g34.input.mouse.y = (mh.y - 100 - v34b.y) * v34b.scale;
+  g34.input.mouse.lDown = true;
+  frames(2);            // one swipe ends it
+  g34.input.mouse.lDown = false;
+  P34.x = mh.x + 400; P34.y = mh.y + 300; // step well clear so no reward orb is auto-collected
+  frames(30);           // let the reward orbs settle in place
+  assert(g34.midHeron === null, 'E1: defeating the Painted Heron clears it (set-piece over)');
+  assert(g34.orbs.length >= L.MID_HERON.rewardOrbs,
+    `E1: its defeat scatters at least ${L.MID_HERON.rewardOrbs} reward pigment orbs (got ${g34.orbs.length})`);
+  assert(g34.state === 'expedition', 'E1: the run CONTINUES after the mid-heron (no victory/end state)');
+  assert(g34.endKind === undefined || g34.endKind === null, 'E1: no victory is recorded for a mid-run set-piece');
+
+  // --- on Gentle it does NOT spawn (optional content, pacing-safe) ---
+  const cv35 = makeCanvas();
+  const g35 = new Game(cv35);
+  g35.options.difficulty = 'gentle';
+  g35.tuning = L.makeTuning(g35.save.upgrades, g35.save.loadout, 'gentle', g35.save.galleryBonus || 0);
+  g35.start();
+  fireKey('keydown', 'Enter'); frames(3);
+  assert(g35.midHeron === null, 'E1: no Painted Heron on Gentle');
+  // cleanup: end both runs cleanly
+  g34._onPlayerDead(); g34._endRun('defeat');
+  g35._onPlayerDead(); g35._endRun('defeat');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

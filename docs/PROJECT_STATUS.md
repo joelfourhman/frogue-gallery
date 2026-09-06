@@ -4,7 +4,7 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 Batch 1 A1–A3 done + A4 Rehung Frame done)**
+**Last PM audit: 2026-09-06 (v1.1 COMPLETE; v1.2 "The Collection" — M9 Batch 1 A1–A3 done + A4 Rehung Frame done + E1 Painted Heron done)**
 
 ## Current state
 
@@ -15,12 +15,13 @@ consequential decisions in `docs/DECISIONS.md`.
   Driven in bounded batches of ~3 items — see `PROJECT_STATE.md` →
   Immediate Next Action for the batch order. **Batch 1 (A1–A3) COMPLETE: A1 ✅
   (atelier one-liners), A2 ✅ (painting synergy pairs), A3 ✅ (Curator's Ledger).**
-  **Batch 2 item 1 done: A4 ✅ (Rehung Frame — permanent saved Gallery Bonus,
-  prestige-lite, `SAVE_VERSION` 1→2).**
-- Smoke suite: **33 stages, ALL PASSED** (stage 33 = v1.2 M9 A4 Rehung Frame gallery
-  bonus). Pacing
-  probes green: `pace.mjs` (analytic ~18.7 min) + `humance.mjs` (simulated
-  human, 18.3–19.4 min) + `bosspace.mjs`. Real-browser: 60 fps title / full world.
+  **Batch 2 done: A4 ✅ (Rehung Frame — permanent saved Gallery Bonus,
+  prestige-lite, `SAVE_VERSION` 1→2), E1 ✅ (Painted Heron — mid-run
+  "half-heron" set-piece, non-blocking, reuses `bossStep`/`paintBossHit`).**
+  - Smoke suite: **34 stages, ALL PASSED** (stage 33 = v1.2 M9 A4 Rehung Frame gallery
+  bonus; stage 34 = v1.2 M10 E1 Painted Heron). Pacing
+  probes green on Normal: `pace.mjs` (analytic ~18.7 min) + `humance.mjs` (simulated
+  human, ~16.7 min full-run / 58s cross-swamp) + `bosspace.mjs`. Real-browser: 60 fps title / full world.
 - Git: v1.1 fully committed; v1.2 A1 committed; v1.2 roadmap + M13 tutorial
   swap committed (`5258d13`, `543d1cd`).
 
@@ -29,7 +30,7 @@ consequential decisions in `docs/DECISIONS.md`.
 **v1.2 "The Collection" — in progress, driven in bounded batches of ~3 items.**
 Batch order (one conventional commit per item, docs + suite green per commit):
 M9 A1→A2→A3 → A4 / M10 E1→E2 → E3→E4 / M11 V1 → V2→V3→V4 → M13 T1→T2→T3→T4.
-**Batch 1 (A1–A3) COMPLETE. Batch 2 item 1 (A4 Rehung Frame) COMPLETE.** See
+**Batch 1 (A1–A3) COMPLETE. Batch 2: A4 (Rehung Frame) ✅ + E1 (Painted Heron) ✅; next E2 (weather/tide phases).** See
 `PROJECT_STATE.md` → Immediate Next Action.
 
 ## Blockers
