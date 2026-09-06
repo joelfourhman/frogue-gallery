@@ -122,12 +122,38 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 
 ## Immediate Next Action
 
-**v1.3 roadmap drafted — awaiting Joel's review/approval before any
-implementation.** The draft lives in `docs/ROADMAP.md` §"v1.3 — 'The Second
-Expedition' (DRAFT — pending Joel approval)": 12 items (N1–N4, G1–G4,
-C1–C4) all marked Status `DRAFT`. Do NOT implement anything in v1.3 until
-Joel approves (and optionally trims) the plan. The v1.2 status below remains
-accurate and complete.
+**v1.3 "The Second Expedition" is APPROVED by Joel (2026-09-06) — execute in
+bounded batches of ~3 items per session** (local model context ceiling;
+each session MUST end clean: committed + docs + suite green). Read
+`docs/ROADMAP.md` §v1.3 + AGENTS.md. All 12 items now Status `TODO` (no
+longer DRAFT).
+
+**Fixed batch order** (each fresh session resumes losslessly from here):
+1. N1 → N2 → N3 (NG+ unlock, scaling + ngpace probe, second boss)
+2. N4 → G1 → G2 (modifiers, gold economy core, 2 gold paintings)
+3. G3 → G4 → C1 (gilded frame, gold UI + ledger, one-liner batch 2)
+4. C2 → C3 → C4 (season summary, paper-grain toggle, regression + audit)
+
+**Per-item discipline:** one conventional commit per item; add a passing
+smoke stage (or documented headless check for pure presentation); update
+docs/ROADMAP.md (mark ✅) + PROJECT_STATE.md + docs/PROJECT_STATUS.md;
+suite green after every commit; zero new dependencies; loopback-only; keep
+game.js thin (rules in logic.js). **Pacing invariants:** the FIRST-TIME
+Normal run must stay ~15–20 min (N1 gates all NG+ content behind a
+completed victory); NG+ cycles get the new `tests/ngpace.mjs` probe with
+its own 15–20 min target.
+
+**v1.3 recap:** spine = New Game+ as a designed loop (M14 N1–N4: unlock +
+"Next Expedition", `ngPlusScaling(cycle)` + ngpace probe, second boss The
+Great Green Heron reusing heron AI with a swapped pinning mechanic,
+player-chosen expedition modifiers). M15 G1–G4: gold pigment as a META
+economy (boss defeats/synergies/milestones earn gold; gold-tier paintings
++ "Gilded Frame" galleryBonus tier) — explicitly NOT a 4th combat color.
+M16 C1–C4: season wrap (one-liner batch 2, victory "Season" summary,
+paper-grain presentation toggle [default OFF, scanlines excluded], full
+regression pass + season audit). Deferred past v1.3: gamepad,
+accessibility (Joel's call), gold-as-combat-color, CRT scanlines, co-op,
+procedural gen, 3rd+ boss archetypes.
 
 **v1.2 "The Collection" is COMPLETE** (2026-09-06) — all four milestones done:
 M9 (A1–A4) ✅, M10 (E1–E4) ✅, M11 (V1–V4) ✅, M13 (T1–T4) ✅. Full suite
