@@ -3329,5 +3329,67 @@ console.log('== stage 53: v1.3 M15 G4 — gold UI + ledger completion ==');
   console.log('ok — G4: the gold economy\'s presentation is complete — the gold BALANCE READOUT (balance + "what it buys") renders on the atelier header AND the Next Expedition prompt, the gold-tier Curator\'s Ledger rows show their gold price + owned state distinctly ("25g/40g · NG+ only", "★ hung in the loadout"), and a short gold LEGEND line explains what gold is + where it comes from — all pure UI/data reuse (no new mechanics, no new persistent state)');
 }
 
+// stage 54 — v1.3 M16 C1: atelier one-liner batch 2 (NG+ reactions).
+// ---------------------------------------------------------------------
+console.log('== stage 54: v1.3 M16 C1 — atelier one-liner batch 2 (NG+) ==');
+{
+  const L54 = await import('../src/game.js'); // Game is global from line 112
+  const cv54 = makeCanvas();
+  const g54 = new Game(cv54); g54.start(); g54._quitToTitle();
+  const KEY = 'frogue_gallery_save';
+  // Clean slate: no purchase hook, no last result, no best run — so the ONLY
+  // thing steering the context is ngCycle.
+  g54._lastPurchase = null; g54.lastResult = null; g54.save.bestRun = null;
+  g54._atelierSayIdx = {};
+
+  const collect = (n) => { const s = new Set(); for (let i = 0; i < n; i++) { g54._pickAtelierSay(); s.add(g54._atelierSay.name + ':' + g54._atelierSay.text); } return s; };
+
+  // (1) An NG+ save (ngCycle >= 1) draws the SECOND, NG+ pool — every line is
+  // DISTINCT from the cycle-0 pool (victory/defeat/general union).
+  g54.save.ngCycle = 1; const ngSet = collect(18);
+  assert(ngSet.size > 0, 'C1: an NG+ save produces one-liner lines');
+  g54.save.ngCycle = 0; g54._lastPurchase = null; g54.lastResult = null; g54.save.bestRun = null; g54._atelierSayIdx = {};
+  const c0Set = collect(18);
+  assert(c0Set.size > 0, 'C1: a cycle-0 save produces one-liner lines');
+  const overlap = [...ngSet].filter(x => c0Set.has(x));
+  assert(overlap.length === 0, `C1: the NG+ pool is DISTINCT from the cycle-0 pool (no overlap; got ${overlap.length} shared lines)`);
+
+  // (2) Rotation / no-repeat-last still holds in the NG+ pool: the same
+  // resident never repeats their last line across consecutive picks.
+  g54.save.ngCycle = 1; g54._lastPurchase = null; g54.lastResult = null; g54.save.bestRun = null; g54._atelierSayIdx = {};
+  let prev = null, noRepeatOK = true, distinct = new Set();
+  for (let i = 0; i < 24; i++) {
+    g54._pickAtelierSay();
+    const cur = g54._atelierSay;
+    if (prev && prev.name === cur.name && prev.text === cur.text) noRepeatOK = false;
+    distinct.add(cur.name + ':' + cur.text);
+    prev = { name: cur.name, text: cur.text };
+  }
+  assert(noRepeatOK, 'C1: no-repeat-last holds in the NG+ pool (a resident never re-says their last line)');
+  assert(distinct.size >= 3, `C1: the NG+ pool rotates across multiple lines (distinct=${distinct.size})`);
+
+  // (3) Context priority: a just-made purchase STILL beats the NG+ pool
+  // (purchase > ng), so a fresh gold buy during NG+ gets a purchase reaction,
+  // not an NG+ line.
+  g54.save.ngCycle = 1; g54._lastPurchase = true; g54.lastResult = null; g54.save.bestRun = null;
+  g54._noteAtelierPurchase();
+  assert(g54._lastPurchase === true && g54._atelierSay.revealed === 0, 'C1: a purchase during NG+ is noted and re-rolls a fresh line');
+  const purchaseLine = g54._atelierSay.name + ':' + g54._atelierSay.text;
+  assert(!ngSet.has(purchaseLine), 'C1: the NG+ just-bought reaction is NOT an NG+-pool line (purchase context still wins over ng)');
+
+  // (4) Typewriter still starts fresh on an NG+ line (the reveal machinery is
+  // shared with A1).
+  g54.save.ngCycle = 1; g54._lastPurchase = null; g54.lastResult = null; g54.save.bestRun = null;
+  g54._pickAtelierSay();
+  assert(g54._atelierSay.revealed === 0, 'C1: the NG+ one-liner starts the typewriter fresh (unrevealed)');
+
+  // (5) No new persist: an NG+ atelier visit touches nothing new in the save.
+  const before54 = JSON.stringify(store.get(KEY));
+  g54._beginAtelier();
+  assert(JSON.stringify(store.get(KEY)) === before54, 'C1: the NG+ one-liner pool persists nothing new to the save');
+
+  console.log('ok — C1: the atelier one-liner system gains a SECOND, NG+-context line pool (drawn only when ngCycle >= 1, above the cycle-0 victory/defeat/general pools but below the just-made-purchase hook) — reusing the EXACT A1 machinery (rotating pools, no-repeat-last, typewriter reveal, context priority) with NO new persistent state');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

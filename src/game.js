@@ -14,9 +14,10 @@ import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICUL
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
-// Four context pools per character (victory / defeat / purchase / general),
-// a typewriter reveal, and rotation so the same line never repeats twice in
-// a row. Pure display data — nothing here is persisted.
+// Five context pools per character (victory / defeat / purchase / general /
+// ng — the NG+ pool is the C1 v1.3 batch-2 addition, drawn only when
+// ngCycle >= 1), a typewriter reveal, and rotation so the same line never
+// repeats twice in a row. Pure display data — nothing here is persisted.
 const ATELIER_CHARS = [
   { name: 'Mabel', pools: {
       victory: [
@@ -38,6 +39,15 @@ const ATELIER_CHARS = [
         'I still cannot tell the moon from a pale lily. You can.',
         'Paint slow, dry fast — that is the whole secret, really.',
         'The reeds were quieter today. Good signs, for a painter.',
+      ],
+      // C1 (v1.3 M16): the NG+ CONTEXT pool — a SECOND line pool drawn only
+      // when ngCycle >= 1 (a returning expedition). Reuses the EXACT A1
+      // machinery (context priority above the cycle-0 pools, rotating, no
+      // repeat, typewriter); nothing persisted.
+      ng: [
+        'The gold is piling up in the safe — spend it well, you have earned it.',
+        'A second expedition! The swamp noticed you. So did the heron.',
+        'Hang the Gilded Frame and the whole wall will glow for you.'
       ],
   } },
   { name: 'Giuseppe', pools: {
@@ -61,6 +71,12 @@ const ATELIER_CHARS = [
         'Best painters in my experience: the ones who keep showing up.',
         'Red for passion, blue for patience, green for a long lunch.',
       ],
+      // C1: the NG+ context pool (Giuseppe reacting to a high ngCycle).
+      ng: [
+        'Third expedition? I am starting to keep a tally, and my prices are climbing.',
+        'Every NG+ you take, the gold shelf gets fuller. My favorite shelf.',
+        'You come back for more. That is either devotion or a very good business plan.'
+      ],
   } },
   { name: 'Monet', pools: {
       victory: [
@@ -82,6 +98,13 @@ const ATELIER_CHARS = [
         'I paint the swamp at dawn. You paint it at its worst. We tie.',
         'Color is just light that got in trouble. So are we, all.',
         'Your frog has manners. It paints over its mistakes. Good.',
+      ],
+      // C1: the NG+ context pool (Monet on the gilded frame / second-campaign
+      // collection).
+      ng: [
+        'A gilded frame would suit your second collection. The light would like it.',
+        'You are collecting twice now. The gallery is becoming a habit — a good one.',
+        'Return, and the swamp returns. I approve of the symmetry.'
       ],
   } },
 ];
@@ -640,16 +663,20 @@ export class Game {
   }
 
   // A1: pick the atelier one-liner for this visit. Context priority:
-  // (1) a purchase just made this visit, (2) the last finished run's result,
-  // (3) the player's best run, (4) general banter. Each character rotates
-  // through their pool without repeating the last line. Pure data read —
-  // nothing persisted.
+  // (1) a purchase just made this visit, (2) NG+ context (C1 — a returning
+  // expedition, ngCycle >= 1), (3) the last finished run's result, (4) the
+  // player's best run, (5) general banter. Each character rotates through
+  // their pool without repeating the last line. Pure data read — nothing
+  // persisted. (The NG+ pool is a SECOND pool; it falls back to general if a
+  // character lacked one, though all three residents have one.)
   _pickAtelierSay() {
     const chars = ATELIER_CHARS;
     const who = chars[Math.floor(Math.random() * chars.length)];
     const best = this.save.bestRun;
+    const ng = (Math.floor(this.save.ngCycle) || 0) >= 1;
     const ctx =
       this._lastPurchase ? 'purchase'
+      : ng ? 'ng'
       : this.lastResult === 'victory' ? 'victory'
       : this.lastResult === 'defeat' ? 'defeat'
       : best && best.cleared ? 'victory'
