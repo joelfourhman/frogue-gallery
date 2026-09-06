@@ -70,13 +70,18 @@ full suite green; 15–20 min run target still holds on Normal; docs accurate.
 - New Game+ (post-victory loop)
 - CRT/paper-texture visual filters beyond current style
 
-## v1.2 — "The Collection" (PLANNED — next milestone after v1.1)
+## v1.2 — "The Collection" (✅ COMPLETE 2026-09-06)
 
 Theme: make the *meta* as fun as the run. v1.1 proved the expedition; v1.2
 gives the player something to collect, master, and show off — while keeping
 the 15–20 min run, the "painting is the game" pillar, and the zero-dependency
 boundary intact. Every item lands with a smoke stage (or documented probe),
 the suite green, and docs updated per commit.
+
+**Status: all four milestones done — M9 (A1–A4) ✅, M10 (E1–E4) ✅, M11 (V1–V4) ✅, M13 (T1–T4) ✅.
+Full suite 45/45; pacing `pace.mjs` ~18.7 min + `humance.mjs` ~18.8 min (15–20 min band on
+Normal). The M13 tutorial + "Watch me" retraining are a separate frozen layer that adds no
+timed-run time.**
 
 ### M9 — Atelier & collection depth
 

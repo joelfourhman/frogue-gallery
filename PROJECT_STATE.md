@@ -122,13 +122,12 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 
 ## Immediate Next Action
 
-**v1.2 "The Collection" is ACTIVE — driven in bounded batches** (the local
-model has a context ceiling, so the PM works in chunks of ~3 items per
-session; each session MUST end with a clean commit + docs update so a fresh
-session can pick up). Full scope in `docs/ROADMAP.md` §v1.2 (M9 M10 M11 M13;
-accessibility deferred).
+**v1.2 "The Collection" is COMPLETE** (2026-09-06) — all four milestones done:
+M9 (A1–A4) ✅, M10 (E1–E4) ✅, M11 (V1–V4) ✅, M13 (T1–T4) ✅. Full suite
+45/45; pacing `pace.mjs` ~18.7 min + `humance.mjs` ~18.8 min (in the 15–20 min
+band on Normal). Full scope + per-item status in `docs/ROADMAP.md` §v1.2.
 
-**Batch order (one commit per item, docs + suite green per commit):**
+**Batch history (one commit per item, docs + suite green per commit):**
 1. M9: A1 ✅ (atelier one-liners) → A2 ✅ (painting synergy pairs) → A3 ✅ (Curator's Ledger). **Batch 1 (A1–A3) COMPLETE.**
 2. M9: **A4 ✅ (Rehung Frame)** → M10: **E1 ✅ (Painted Heron)** → **E2 ✅ (weather/tide phases)**. **Batch 2 (A4/E1/E2) COMPLETE — suite 35/35, pacing in band on Normal.**
 3. M10: **E3 ✅ (Bold-only zone hazards)** → **E4 ✅ (orb-streak bonus)** → M11: **V1 ✅ (color-reveal bar)** — **Batch 3 COMPLETE**
