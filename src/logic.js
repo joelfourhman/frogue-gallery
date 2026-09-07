@@ -950,6 +950,50 @@ export function weatherFor(seed, zoneIndex) {
   return { phase, atSec };
 }
 
+// K3 (v1.5 M3): the STORM SURGE — a short scripted set-piece in the final
+// stretch (past The Gray Shore, i.e. zone index 4 = "zone 5"). A ~15 s beat:
+// a bounded burst of fast mosquitoes + a rain buff (reuses the E2 weatherFactor
+// transient-multiplier machinery on the rain phase). NON-blocking: the frog can
+// push straight through it — the surge NEVER feeds runT / pacing. Clearing it
+// (all its mosquitoes gone before it expires) scatters a bonus orb burst.
+// Deterministic trigger so a run replays the same beat; bounded so the enemy
+// count can never grow unbounded (it rides the shared spawn cap in game.js).
+export const STORM_SURGE = {
+  duration: 15,      // seconds the beat is live (rain buff rides this)
+  burstCount: 9,     // total mosquitoes the surge throws out (bounded)
+  burstWindow: 4.5,  // seconds over which the burst is spread
+  leadIn: 1.0,       // banner/stinger lead-in before the first mosquito (base)
+  rain: { fields: ['splashRadius'], mult: 1.3 },  // = the rain weather phase
+  orbCount: 4,       // bonus orbs scattered on a clear
+};
+// Pure: build a fresh surge state for a given run seed. The opening has a
+// seeded lead-in (0.0..2.0 s of jitter) so the banner + stinger land just
+// before the first mosquito, and the same seed replays the same opening.
+export function stormSurgeFor(seed) {
+  const s = (seed * 2654435761 + 0x9e3779b9) >>> 0;
+  const rng = mulberry32(s);
+  const leadIn = STORM_SURGE.leadIn + rng() * 2;
+  return { active: false, t: 0, leadIn, burst: 0, burstT: 0, spawnT: 0, fired: false, awarded: false, done: false };
+}
+// Pure: the synthetic rain phase the surge drives through the E2 weather
+// machinery (a `weatherFactor`-sized multiplier on splashRadius for the whole
+// beat). Sizing it to the surge means the buff ramps in, holds, and ramps out
+// back to exactly base at expiry — transient, no residue.
+export function stormSurgeRainPhase() {
+  return {
+    id: 'surge-rain', name: 'Storm Surge rain', tint: WEATHER_PHASES[0].tint,
+    duration: STORM_SURGE.duration, mult: STORM_SURGE.rain.mult, fields: [...STORM_SURGE.rain.fields],
+  };
+}
+// Pure: does a surge state count as "cleared" (all burst spawned & all its
+// mosquitoes gone) with no bonus yet awarded? `surgeEnemiesLeft` is the count
+// of live mosquitoes the surge spawned.
+export function stormSurgeCleared(surge, surgeEnemiesLeft) {
+  return surge && surge.active && !surge.awarded && surge.burst >= STORM_SURGE.burstCount
+    && surgeEnemiesLeft === 0;
+}
+
+
 // ---------------------------------------------------------------- boss AI
 // Pure step function for the Great Gray Heron.
 // heron: { hp, maxHp, phase, state, stateT, x, y, hue, awakened, summonT, lungeDir, targetX, jumpSpots }

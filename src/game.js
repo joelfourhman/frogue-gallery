@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -2092,6 +2092,11 @@ _drawAtelier(ctx) {
     this.weatherActive = null;
     this.weatherZoneI = -1;
     this.weatherTriggerAt = 0;
+    // K3 (v1.5 M3): fresh Storm Surge per run (armed when the frog enters the
+    // final stretch — the "zone 5" set-piece). Non-blocking; never feeds runT.
+    this.surge = null;
+    this._surgeEnemies = [];
+    this._surgeRainBase = null;
     this.score = 0;
     this.stock = { red: 0, blue: 0, green: 0 };
     // A4 (v1.2 M9): the permanent 'Rehung Frame' gallery bonus grants +N pigment
@@ -2515,6 +2520,13 @@ _drawAtelier(ctx) {
         const z = ZONES[this._zoneI++];
         this._zoneBeat(z);
       }
+      // K3 (v1.5 M3): once past the last NAMED zone (into the final stretch —
+      // "zone 5"), arm the Storm Surge set-piece. It is a one-shot, seeded beat;
+      // _updateSurge drives it (banner + stinger + bounded mosquito burst + rain
+      // buff + bonus orb burst on clear). Non-blocking: the frog pushes through.
+      if (this._zoneI >= ZONES.length && !this.surge && this.heron && this.heron.x) {
+        this.surge = stormSurgeFor(this.runSeed || 0);
+      }
     }
     // E2 (v1.2 M10): arm this zone's weather/tide phase once we've entered it.
     // `_zoneI` now indexes the zone we're standing in; the phase is derived
@@ -2564,6 +2576,9 @@ _drawAtelier(ctx) {
     // E2 (v1.2 M10): advance the zone's weather/tide phase (banner, live tuning
     // multiplier, fade-out). Informational — it never blocks or punishes.
     this._updateWeather(dt);
+    // K3 (v1.5 M3): drive the Storm Surge set-piece (final stretch). Non-blocking
+    // and never feeds runT — a pure side-channel off its own clock.
+    this._updateSurge(dt);
     // every stroke you paint gives the swamp a little color back (core fantasy)
     const restore = this.paint.restoreAcc;
     if (restore > 0) {
@@ -2830,6 +2845,103 @@ _drawAtelier(ctx) {
       }
     }
   }
+  // K3 (v1.5 M3): drive the Storm Surge — the zone-5 (final-stretch) set-piece.
+  // A short (~15 s) scripted beat, NON-blocking: the frog can push straight
+  // through it, and it NEVER feeds runT or the pacing probes (it is a pure
+  // side-channel driven off `this.surge.t`, not the run clock). On entry it
+  // announces with a banner + the S1-style stormSurgeStinger, throws a BOUNDED
+  // burst of fast mosquitoes (rides the shared spawn cap), applies a transient
+  // rain buff (the E2 weatherFactor machinery on splashRadius, ramping back to
+  // base at expiry), and on a clear scatters a bonus orb burst. Clean expiry:
+  // the rain buff is restored to its captured base and the surge drops.
+  _updateSurge(dt) {
+    const s = this.surge;
+    if (!s || s.done) return;
+    const t = this.tuning;
+    // ---- the beat has started once we're past the seeded lead-in ----
+    if (!s.active) {
+      s.t += dt;
+      if (s.t < s.leadIn) return;
+      s.active = true;
+      s.t = 0;
+      // announce (banner + S1-style stinger) + the transient rain buff.
+      this.addBanner('STORM SURGE!', 2.6, this.ch * 0.22);
+      this.addBanner('The swamp storms — fast bugs, wider rain! Clear them for orbs.', 3.6, this.ch * 0.22 + 32);
+      if (this.audio.stormSurgeStinger) this.audio.stormSurgeStinger(); else this.sfx('boss-growl');
+      const base = {};
+      for (const f of STORM_SURGE.rain.fields) base[f] = t[f];
+      this._surgeRainBase = base;
+      this.sfx('ui');
+    }
+    // ---- advance the live beat ----
+    s.t += dt;
+    // rain buff (transient, rides the E2 eased multiplier; restored at expiry)
+    if (this._surgeRainBase) {
+      const k = weatherFactor(stormSurgeRainPhase(), s.t);
+      for (const f of STORM_SURGE.rain.fields) t[f] = this._surgeRainBase[f] * k;
+    }
+    // the bounded mosquito burst, spread over `burstWindow`
+    if (s.burst < STORM_SURGE.burstCount) {
+      s.burstT += dt;
+      const every = STORM_SURGE.burstWindow / STORM_SURGE.burstCount;
+      s.spawnT -= dt;
+      if (s.spawnT <= 0) {
+        s.spawnT = every;
+        s.burst++;
+        this._spawnSurgeMosquito();
+      }
+    }
+    // a clear: every burst mosquito spawned AND all of them gone (they are
+    // spliced from this.enemies on death, so this reference is a live count)
+    this._surgeEnemies = this._surgeEnemies.filter(e => !e.dead);
+    if (!s.awarded && s.burst >= STORM_SURGE.burstCount && this._surgeEnemies.length === 0) {
+      s.awarded = true;
+      this._awardSurgeOrbs();
+    }
+    // clean expiry: restore the rain buff to base and drop the surge
+    if (s.t >= STORM_SURGE.duration) {
+      if (this._surgeRainBase) {
+        for (const f of STORM_SURGE.rain.fields) t[f] = this._surgeRainBase[f];
+        this._surgeRainBase = null;
+      }
+      s.done = true;
+      this.surge = null;
+      this._surgeEnemies = [];
+    }
+  }
+  // K3: spawn one surge mosquito near the frog (bounded by the shared cap).
+  // It is a normal enemy so the frog can paint it, and it is tracked in
+  // this._surgeEnemies for the clear check.
+  _spawnSurgeMosquito() {
+    if (this.enemies.length >= 14) return; // hard bound on the surge's share
+    const p = this.player;
+    const a = Math.random() * TAU;
+    const rr = 180 + Math.random() * 220;
+    const x = clamp(p.x + Math.cos(a) * rr, 60, this.world.w - 60);
+    const y = clamp(p.y + Math.sin(a) * rr, 60, this.world.h - 60);
+    const e = spawnEnemy('mosquito', x, y, this.tuning);
+    // the surge's mosquitoes are a touch faster (the "fast swarm")
+    e.speed *= 1.25;
+    e._surge = true;
+    this.enemies.push(e);
+    this._surgeEnemies.push(e);
+  }
+  // K3: on a clear, scatter a bonus orb burst around the frog.
+  _awardSurgeOrbs() {
+    const p = this.player;
+    for (let i = 0; i < STORM_SURGE.orbCount; i++) {
+      const a = (i / STORM_SURGE.orbCount) * TAU + Math.random() * 0.5;
+      const rr = 120 + Math.random() * 120;
+      this.orbs.push({
+        x: clamp(p.x + Math.cos(a) * rr, 60, this.world.w - 60),
+        y: clamp(p.y + Math.sin(a) * rr, 60, this.world.h - 60),
+        color: ORB_COLORS[(Math.random() * ORB_COLORS.length) | 0], t: 0,
+      });
+    }
+    this.addBanner('The storm breaks — a scatter of orbs!', 2.6, this.ch * 0.3);
+    this.sfx('pickup-streak');
+  }
+
 
   // M8 P12: spawn the zone's signature guardian(s). Each is a scaled-up elite
   // of the zone's emblematic enemy that wears the zone's accent ring. They are

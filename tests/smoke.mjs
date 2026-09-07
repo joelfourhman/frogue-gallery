@@ -5089,5 +5089,81 @@ console.log('== stage 73: v1.5 K2 — BLIND CRAG FROG (hunts by sound; sleeps wh
   }
 }
 
+console.log('== stage 74: v1.5 K3 — STORM SURGE (zone-5 final-stretch set-piece; bounded mosquito burst + transient rain + orb reward; non-blocking) ==');
+{
+  const L74 = await import('../src/logic.js');
+  const G74 = await import('../src/game.js');
+  const { STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, weatherFactor } = L74;
+  const { Game, ZONES } = G74;
+
+  // ---- pure: the beat is bounded + the rain buff is transient (1 -> mult -> 1)
+  assert(STORM_SURGE.burstCount > 0 && STORM_SURGE.burstCount <= 14, `K3: the surge burst is BOUNDED (burstCount=${STORM_SURGE.burstCount})`);
+  assert(STORM_SURGE.duration >= 12 && STORM_SURGE.duration <= 20, `K3: the beat is ~15s (duration=${STORM_SURGE.duration})`);
+  assert(STORM_SURGE.orbCount > 0, `K3: clearing awards a bonus orb burst (orbCount=${STORM_SURGE.orbCount})`);
+  const ph = stormSurgeRainPhase();
+  assert(weatherFactor(ph, 0) === 1, 'K3: the rain buff is INACTIVE at beat start (factor 1.0)');
+  assert(Math.abs(weatherFactor(ph, 7.5) - STORM_SURGE.rain.mult) < 0.01, `K3: the rain buff is at FULL mid-beat (factor ${weatherFactor(ph,7.5).toFixed(2)})`);
+  assert(weatherFactor(ph, STORM_SURGE.duration) === 1, 'K3: the rain buff EXPIRES back to base (factor 1.0) — transient, no residue');
+  assert(stormSurgeFor(7).leadIn === stormSurgeFor(7).leadIn, 'K3: the surge opening is seeded (deterministic per run)');
+
+  // ---- integration: a real Game arms + drives the beat ----
+  const cv74 = makeCanvas();
+  const g74 = new Game(cv74);
+  g74.start();
+  fireKey('keydown', 'Enter'); frames(3); // title -> expedition
+  const P74 = g74.player;
+  P74.alive = true; P74.hp = 99; P74.iframes = 999;
+
+  // a fresh run has NOT triggered the surge yet
+  assert(g74.surge === null, 'K3: the surge is NOT armed before the final stretch (fresh run)');
+
+  // the arming condition (zone 5 = past the last NAMED zone, heron present):
+  // drive one frame with _zoneI forced past the last zone — the loop arms it once.
+  const runT0 = g74.runT;
+  g74._zoneI = ZONES.length; // "zone 5": past the last named zone
+  frames(1);
+  assert(g74.surge !== null, 'K3: the surge TRIGGERS once on entering zone 5 (final stretch)');
+  const armedRef = g74.surge;
+  frames(1);
+  assert(g74.surge === armedRef, 'K3: the surge is a ONE-SHOT beat (not re-armed each frame)');
+  assert(g74.surge.active === false, 'K3: the surge arms in its lead-in (banner/stinger) before the burst');
+  assert(g74.runT === runT0 + (2 / 60) || Math.abs(g74.runT - (runT0 + 2 / 60)) < 0.02,
+    'K3: the surge does NOT feed runT (it runs on its own clock)');
+
+  // ---- drive the beat: bounded mosquito burst + transient rain buff ----
+  const baseSplash = g74.tuning.splashRadius;
+  // reset to a fresh surge so the beat is clean (the two frames above only ran the lead-in)
+  g74.surge = stormSurgeFor(424242);
+  let guard = 0;
+  while (g74.surge && g74.surge.burst < STORM_SURGE.burstCount && guard++ < 900) g74._updateSurge(1 / 60);
+  assert(g74.surge.burst >= STORM_SURGE.burstCount, `K3: the surge spawns a BOUNDED mosquito burst (burst=${g74.surge.burst}/${STORM_SURGE.burstCount})`);
+  assert(g74._surgeEnemies.length === STORM_SURGE.burstCount, `K3: exactly ${STORM_SURGE.burstCount} surge mosquitoes are live (bounded, no over-spawn)`);
+  const mosqs = g74._surgeEnemies.filter(e => e.kind === 'mosquito');
+  assert(mosqs.length === STORM_SURGE.burstCount, 'K3: the burst is all mosquitoes (the "fast swarm")');
+  assert(g74.tuning.splashRadius > baseSplash, `K3: the rain buff is ACTIVE (splashRadius ${baseSplash.toFixed(1)} -> ${g74.tuning.splashRadius.toFixed(1)})`);
+  // the surge mosquitoes are a touch faster (the "fast" swarm)
+  assert(mosqs.every(e => e._surge === true), 'K3: the surge mosquitoes are tagged (trackable for the clear check)');
+
+  // ---- clear: kill the surge mosquitoes -> a bonus orb burst scatters ----
+  const orbsBefore = g74.orbs.length;
+  for (const e of g74._surgeEnemies) e.dead = true;
+  g74._updateSurge(1 / 60);
+  assert(g74.surge.awarded === true, 'K3: clearing the surge (all mosquitoes gone) is detected');
+  assert(g74.orbs.length >= orbsBefore + STORM_SURGE.orbCount, `K3: clearing scatters a BONUS ORB BURST (orbs ${orbsBefore} -> ${g74.orbs.length})`);
+  // the pure cleared predicate agrees (checked on a PRE-award state — once the
+  // orbs are awarded, awarded=true and the predicate correctly stops matching)
+  assert(stormSurgeCleared({ active: true, burst: STORM_SURGE.burstCount, awarded: false }, 0),
+    'K3: the pure cleared predicate fires (all spawned, none left, not yet awarded)');
+  assert(!stormSurgeCleared({ active: true, burst: STORM_SURGE.burstCount, awarded: true }, 0),
+    'K3: the pure cleared predicate does NOT double-award (already awarded)');
+
+  // ---- expiry: the beat ends cleanly, the rain buff returns to base ----
+  let g2 = 0;
+  while (g74.surge !== null && g2++ < 900) g74._updateSurge(1 / 60);
+  assert(g74.surge === null, 'K3: the surge EXPIRES cleanly (drops after its duration)');
+  assert(Math.abs(g74.tuning.splashRadius - baseSplash) < 1e-6, `K3: on expiry the rain buff returns EXACTLY to base (splashRadius ${g74.tuning.splashRadius.toFixed(1)} == ${baseSplash.toFixed(1)})`);
+  assert(g74._surgeEnemies.length === 0, 'K3: on expiry the surge enemy tracking is cleared');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

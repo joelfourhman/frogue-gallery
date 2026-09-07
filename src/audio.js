@@ -454,6 +454,28 @@ export class AudioSys {
     this._tone(t, 'sine', 110.0, 55.0, 1.4, 0.14, 0, g);
   }
 
+  // K3 (v1.5 M3): the STORM SURGE stinger — a SHORT, RUMBLING BUILD that reads
+  // as "a storm is rolling in" (distinct from stingerVictory's bright cadence
+  // and stingerDefeat's slow descent): a low rumbling bass swell + a rising
+  // tremolo on a dark minor chord + a soft rain-shimmer noise bed. One-shot,
+  // on the melody layer (music slider + mute scale it). No-op when the context
+  // isn't ready (headless).
+  stormSurgeStinger() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const g = this._stingerGain();
+    if (!g) return;
+    // a low, ominous rumble that swells (A1 -> A2), the bed the storm builds on
+    this._tone(t, 'sawtooth', 55.0, 110.0, 1.6, 0.14, -4, g);
+    this._tone(t, 'sine', 110.0, 220.0, 1.6, 0.10, 0, g);
+    // a dark minor chord tremolo rising (A minor: A3 C4 E4) — the "roll-in"
+    for (const [f, dl] of [[220, 0], [261.63, 0.05], [329.63, 0.1]]) {
+      this._tone(t + 0.1 + dl, 'triangle', f, f * 1.02, 1.2, 0.12, 2, g);
+    }
+    // a soft rain shimmer to sit under the swell (the weather reads as rain)
+    this._noise(t + 0.15, 1.3, 'bandpass', 2600, 1.4, 0.05);
+  }
+
   // M1 (v1.4): the FIRST-VICTORY cinematic beat's music — a SOFT, SLOW
   // rising pentatonic arpeggio that swells as the world blooms to full color
   // (the ~4 s beat, before the victory card reveals). Deliberately gentle and
