@@ -227,7 +227,7 @@ combat-color interpretation of the parked deferred item stays deferred
 - **Further boss variety (3rd+ heron, non-heron boss)** — one new heron in
   v1.3; a genuinely new boss archetype is a future-version item.
 
-## v1.4 — "Make It Amazing" (APPROVED — executing)
+## v1.4 — "Make It Amazing" (✅ COMPLETE — 2026-09-07)
 
 **Theme: juice, presence, and moments.** Three versions have made the game
 mechanically deep and complete — the missing layer is how it *feels*. v1.4
