@@ -659,3 +659,48 @@ per-frame budget assertion.
   WebAudio synth.
 - **CRT/scanlines/retro filter** — rejected twice (v1.3); stays rejected.
   The painted-world identity has no retro mode.
+
+## v1.5 — "The Living Swamp" (APPROVED — executing; Joel 2026-09-06: "Don't even pitch me v1.5. Just make it.")
+
+Theme: v1.4 made the game feel alive; v1.5 makes the SWAMP itself feel alive — new
+creatures, deeper NG+, and a challenge mode that gives the loop a "one more run"
+hook. No rule changes to the existing trio (beetle/mosquito/toad keep their
+behavior); everything new is additive and pacing-gated.
+
+### Module K — Encounters (the swamp gets new residents)
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| K1 | New enemy: **Mud Turtle** — armored, high HP; its shell deflects paint from the FRONT arc (damage ~0 within a forward wedge, full damage from the side/back); slow, plodding, heavy contact hit | Reuse Enemy + armor/`physicalDamage` paths; the front-arc deflection is a pure predicate `turtleDeflects(turtle, playerPos)` in logic.js + a visual shell highlight. Spawns from zone 3+, few per run (2–3). Acceptance: smoke stage (paint from front = ~0 dmg, from behind = full), pacing re-run in band | TODO |
+| K2 | New enemy: **Blind Crag Frog** — hunts by SOUND: painting/splashing/charging makes noise events it homes in on; when the frog (player) is still it loses interest and SLEEPS (vulnerable, +50% dmg, wakes on noise); slow tracking when awake | Noise = existing sfx/paint events already fire in paint.js — add a lightweight `world.noiseLevel` decay accumulator (pure, logic.js). Acceptance: smoke stage (noise attracts, stillness sleeps, noise wakes), pacing in band | TODO |
+| K3 | Zone-5 set-piece: **Storm Surge** — a short scripted wave (15s) of fast mosquito swarms + a rain buff, announced with a banner + S1-style stinger; clearing it scatters a bonus orb burst; skippable by moving through (non-blocking, like the Painted Heron) | Reuse wave spawning + E1's non-blocking set-piece pattern + E2 weather machinery. Acceptance: smoke stage (surge spawns in zone 5, non-blocking, orb reward, no timing added when avoided) | TODO |
+
+### Module N2 — NG+ depth (the second expedition gets a second act)
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| K4 | Third boss: **The Gilded Heron** — NG+ cycle 3+ replaces the Green Heron as the final boss: gold-tinted palette, 42k HP, and a new mechanic — its gilded plumage ABSORBS the player's heal sources (green paint heals 0 while the heron is in "plume" phase; the player must use the plume's 30s cooldown to heal); reuses bossStep/paintBoss end-to-end | Extend the heron kind system ('gray'/'green'/'gilded'); plume phase = an existing phase-flag pattern (like pinned). Acceptance: smoke stage (spawns on cycle 3, plume blocks green heal, cooldown window restores it), bosspace-style timing in band | TODO |
+| K5 | 3 new expedition modifiers: **Night Expedition** (darker lighting + +20% mosquito speed, +10% orb value), **Still Waters** (no weather phases, but +15% enemy HP), **Master's Palette** (start with a synergy duo pre-locked in the loadout, +10% contact damage) | Data entries in the existing MODIFIERS table (feeds existing tuning/render paths); NG+-gated like N4. Acceptance: smoke stage (each modifier applies its tuning/render changes, cycle-0 untouched) | TODO |
+| K6 | NG+ "Master" tier: cycle 4+ applies a Master scaling step (capped: enemy HP +50% / dmg +25% over cycle-3 values) — extends ngPlusScaling's cap logic | Pure logic extension. Acceptance: smoke stage (cycle 4 tuning > cycle 3, bounded, ngpace probe updated to model cycle-4) | TODO |
+
+### Module C2 — Curator Challenge (replayability + the "one more run" hook)
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| K7 | **Curator Challenge** — a title-screen "Challenge" button (behind a completed victory, like NG+) that runs a seeded expedition: seed = the current UTC day (so the whole world shares a challenge per day), fixed loadout (a random 2-painting draw from owned), fixed modifier (random), and a SCORE (paintings restored, enemies in time, orbs, boss time bonus). Result is filed to a saved best-score list (top 5, with seed + date) in a new atelier panel | Seed = day → mulberry32 (existing). Scoring = pure `challengeScore(result)` in logic.js. Save field `challengeScores` (SAVE_VERSION 9, migration). Acceptance: smoke stage (same-day seed is stable, scores persist, top-5 sorted, doesn't touch normal runs) | TODO |
+| K8 | Challenge reward: first-ever challenge completion mints a special **Masterpiece painting** (a unique framed "The Heron, Waking" shown in the Gallery Wall + Curator's Ledger, unbuyable, pure collection) + 15 gold; subsequent completions give small gold bonuses by rank | Reuse PAINTINGS/ledger/gallery machinery + goldEarn latch pattern. Acceptance: smoke stage (first completion awards it once, repeatable gold by rank, ledger shows it) | TODO |
+
+### Module P — Polish & proof
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| K9 | Field Guide + tutorial updates for the new creatures: new "Know your quarry" entries (Mud Turtle's front shell, Crag Frog's noise/sleep) + optional one-shot field-guide callout on first sight of each new enemy | Reuse P6 Field Guide + A1-style callout. Acceptance: smoke stage (new entries render, first-sight callout fires once) | TODO |
+| K10 | Full regression pass + season audit: smoke x3, pace/humance/ngpace/bosspace all in band (first-time 15–20, NG+ cycle-1 AND cycle-4 15–20), zero new deps diff audit, tree clean, docs marked v1.5 COMPLETE | Final gate. Acceptance: the commit itself | TODO |
+
+### Explicitly deferred past v1.5 (and why)
+
+- **Gamepad support** — still needs its own input-abstraction milestone + test rig
+- **Accessibility (X1–X3)** — Joel's standing call; parked
+- **Gold as a 4th combat pigment** — fights the 3-hue pillar; stays meta-only
+- **CRT scanlines** — fights the watercolor identity
+- **Co-op / procedural generation / 4th boss archetype** — out of scale for v1.5

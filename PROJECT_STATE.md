@@ -190,29 +190,22 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 
 ## Immediate Next Action
 
-**v1.4 "Make It Amazing" is ✅ COMPLETE (2026-09-07).** All 14 items landed
-across 5 batches, each with a passing smoke stage + one conventional commit;
-the full suite is green (71 stages) and pacing is in band (first-time
-~17.3 / humance 19.2 min; NG+ cycle-1 19.5 min — all 15–20). **BATCH 5
-(M2→M3) COMPLETE 2026-09-07: M2 = the "Encore" gallery-viewing screen + M3 =
-the two title easter eggs.** v1.4 is done — see `docs/ROADMAP.md` §v1.4
-(14/14 DONE) + `docs/PROJECT_STATUS.md`. **Next action: v1.4 is a milestone
-boundary — confirm with Joel before scoping a new version. The game is
-feature-complete, polished, and pacing-verified.**
+**v1.5 "The Living Swamp" is APPROVED (Joel 2026-09-06: "Don't even pitch
+me v1.5. Just make it") — executing in bounded batches.** All 10 items in
+`docs/ROADMAP.md` §v1.5, Status TODO.
 
-**Theme: juice, presence, and moments.** The game is mechanically complete;
-v1.4 adds no new rules — it makes the same game feel alive in the hand, the
-world, and the ear. **Why this order: juice first, because it multiplies
-everything after** — feel on the current art/audio is already a big leap,
-and it makes the art + audio that land on top of it read better.
+**Theme: the swamp gets new residents + a designed second act + a daily
+challenge.** v1.5 adds real content — 2 new enemy archetypes with signature
+mechanics, a zone-5 set-piece, a 3rd NG+ boss, new modifiers + Master tier,
+and a seeded daily Curator Challenge. New creatures scale into zones 3+ and
+NG+ so the first-time 15–20 min run is untouched (verify every time).
 
 **Fixed batch order** (each fresh session resumes losslessly from here;
-one conventional commit per item; groups of 3, last batch 2):
-1. J1 → J2 → J3 (wet paint that lingers · hit-stop/shake/boss-defeat slow-mo · camera polish: lead/lag/boss framing/awaken moment)
-2. J4 → J5 → L1 (frog hop feel: squash/stretch/dust/ripple · pickup/ink/UI micro-animations · living world pass: reeds/mist/shimmer)
-3. L2 → L3 → S1 (layered watercolor render pass · breathing title screen + vignette/lighting · melodic zone themes)
-4. S2 → S3 → M1 (boss music + victory/defeat stingers · painting sound-design pass · first-victory cinematic, SAVE_VERSION 7→8)
-5. M2 → M3 (Encore gallery viewing screen · two tasteful easter eggs) — final batch
+one conventional commit per item):
+1. K1 → K2 → K3 (Mud Turtle front-shell deflection · Blind Crag Frog hunts-sound / sleeps-when-quiet · zone-5 Storm Surge set-piece)
+2. K4 → K5 → K6 (The Gilded Heron 3rd boss · 3 new modifiers · NG+ Master tier c4+)
+3. K7 → K8 (seeded daily Curator Challenge + top-5 scores · Masterpiece reward)
+4. K9 → K10 (Field Guide / ledger updates for new creatures · full regression + season audit)
 
 **Per-item discipline:** one conventional commit per item; add a passing
 smoke stage (or documented headless check for pure presentation); update
