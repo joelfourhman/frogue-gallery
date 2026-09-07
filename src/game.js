@@ -308,6 +308,15 @@ export class Game {
     // Present only on a FRESH player's very first victory (a returning player
     // with the seen flag goes straight to the card); skippable by any input.
     this._cine = null;
+    // M3 (v1.4): two subtle easter eggs — PURE presentation, in-memory only
+    // (zero persisted state). (a) the title frog appreciates the attention:
+    // hold 'F' ~0.5 s OR click the title frog 3x and it does a little
+    // spin-and-blink + a unique chime + a one-time "didYouKnow" banner.
+    // (b) painting the title frog (or the sleeping heron) with the DRY brush
+    // leaves a tiny temporary smile/cheek-blush that fades in a few seconds.
+    // Neither affects gameplay or pacing.
+    this._eggFrog = { holdT: 0, clicks: 0, clickT: 0, stroke: 0, spin: -1, shown: false };
+    this._eggBlush = { frog: -1, heron: -1 };   // remaining real-seconds per target
     // J5 (v1.4): screen-space floating "+n" HUD numbers (pop up + fade near the
     // pigment jars) + a short fading trail behind the frog on an orb streak.
     // Both are presentation only — never touch the measured runT.
@@ -503,6 +512,21 @@ export class Game {
     // V2: the saturation surge decays toward 0 (exponential, ~1.2s feel) so the
     // world's long-run color curve is only nudged for the bloom's lifetime.
     if (this._bloomSurge > 0) this._bloomSurge *= Math.exp(-3.2 * dt);
+    // M3 (v1.4): the two title easter eggs decay in REAL time (presentation
+    // only — they never feed the pacing the probes measure). The spin-and-blink
+    // lasts ~0.8 s; the smile/cheek-blush fades over ~3 s; the click counter
+    // resets after 1 s of no clicks (so a fast triple-click works, stray single
+    // clicks don't accumulate forever).
+    if (this._eggFrog) {
+      const ef = this._eggFrog;
+      if (ef.spin >= 0) { ef.spin += dt; if (ef.spin >= 0.8) ef.spin = -1; }
+      if (ef.clickT > 0) { ef.clickT -= dt; if (ef.clickT <= 0) ef.clicks = 0; }
+    }
+    if (this._eggBlush) {
+      const eb = this._eggBlush;
+      if (eb.frog > 0) { eb.frog -= dt; if (eb.frog < 0) eb.frog = 0; }
+      if (eb.heron > 0) { eb.heron -= dt; if (eb.heron < 0) eb.heron = 0; }
+    }
 
     if (this.state === 'title') {
       this.titleT += dt;
@@ -513,6 +537,7 @@ export class Game {
       this.cam.y = 750 + Math.cos(this.titleT * 0.09) * 260;
       if (this.optionsOpen) this._updateOptions(dt);
       else this._updateTitle(dt);
+      this._updateTitleEgg(dt);   // M3 (v1.4): the two title easter eggs (presentation only)
     } else if (this.state === 'expedition') {
       if (this.dying) {
         this.dieT += dt;
@@ -1925,6 +1950,57 @@ _drawAtelier(ctx) {
     }
   }
 
+  // M3 (v1.4): the two title easter eggs — PURE presentation, in-memory only.
+  // (a) EGG A: hold 'F' (~0.45 s) or click the title frog 3x → a little
+  //     spin-and-blink + a unique chime + a ONE-TIME "didYouKnow" banner.
+  // (b) EGG B: a dry-brush gesture near the title frog (a held sweep) or the
+  //     SLEEPING heron (dry brush held + a stroke near its head, pre-engage)
+  //     leaves a tiny smile/cheek-blush that fades over ~3 s. Neither touches
+  //     gameplay, runT, or persisted state.
+  _updateTitleEgg(dt) {
+    const ef = this._eggFrog;
+    // (a) hold-F trigger.
+    if (this.input.down('f')) {
+      ef.holdT += dt;
+      if (ef.holdT >= 0.45) { this.triggerFrogEgg(); ef.holdT = -1; }
+    } else if (ef.holdT > 0) { ef.holdT = 0; }
+    // (a) triple-click trigger (left click near the title frog).
+    if (this.input.mouse.lPressed) {
+      const m = this.input.mouse;
+      if (Math.hypot(m.x - 150, m.y - (this.ch - 162)) < 52) {
+        ef.clicks++; ef.clickT = 1.0;
+        if (ef.clicks >= 3) { this.triggerFrogEgg(); ef.clicks = 0; ef.clickT = 0; }
+      }
+    }
+    // (b) the title frog: a dry-brush gesture = a held left-stroke over it.
+    const eb = this._eggBlush;
+    const m2 = this.input.mouse;
+    if (m2.lDown && Math.hypot(m2.x - 150, m2.y - (this.ch - 162)) < 52) {
+      ef.stroke += dt;
+      if (ef.stroke >= 0.2 && eb.frog <= 0) this.triggerBlush('frog');
+    } else if (ef.stroke > 0) { ef.stroke -= dt * 3; if (ef.stroke < 0) ef.stroke = 0; }
+  }
+
+  // M3 EGG A: the frog appreciates the attention — spin-and-blink + chime + a
+  // ONE-TIME "didYouKnow" banner. In-memory only (the one-time flag is a plain
+  // field, never saved).
+  triggerFrogEgg() {
+    const ef = this._eggFrog;
+    ef.spin = 0;                                  // ~0.8 s spin-and-blink (real time)
+    if (this.sfx) this.sfx('frog-chime');
+    if (!ef.shown) {
+      ef.shown = true;
+      this.addBanner('the frog appreciates the attention.', 3.4, this.ch - 138);
+    }
+  }
+
+  // M3 EGG B: a tiny smile/cheek-blush that fades over ~3 s (presentation only).
+  triggerBlush(which) {
+    const eb = this._eggBlush;
+    eb[which] = 3.0;                              // remaining real-seconds
+    if (this.sfx) this.sfx('paint-swipe', { pig: 'dry' });
+  }
+
   _beginExpedition(guided = false) {
     // fresh world each run (title keeps drifting over whatever is left)
     const seed = (Math.random() * 2 ** 31) | 0;
@@ -2497,6 +2573,18 @@ _drawAtelier(ctx) {
     }
     this.input.setView(this._view());
     this.input.update();
+
+    // M3 (v1.4 easter egg B): a dry-brush stroke on the SLEEPING heron
+    // (pre-engage: _intro > 0) leaves a tiny temporary cheek-blush. Pure
+    // presentation — it never affects the heron's state, damage, or pacing.
+    if (this.heron && this.heron.hp > 0 && !this.heron.flying && this.heron._intro > 0
+        && p.pigment === 'dry' && this.input.mouse.lDown) {
+      const hx = this.heron.x - 44, hy = this.heron.y - 262;   // head (world)
+      if (this._eggBlush.heron <= 0 &&
+          Math.hypot(this.input.mouse.worldX - hx, this.input.mouse.worldY - hy) < 70) {
+        this.triggerBlush('heron');
+      }
+    }
 
     // ----- attacks -----
     const targetList = this.enemies;
@@ -3404,6 +3492,17 @@ _drawAtelier(ctx) {
     ctx.beginPath();
     ctx.ellipse(-44 - neckSway, -262, 17, 14, -0.25, 0, TAU);
     ctx.fill(); ctx.stroke();
+    // M3 (v1.4 easter egg B): a tiny cheek-blush on the heron's face — drawn in
+    // the heron's local space, fading over ~3 s (real time, presentation only).
+    // Triggered by a dry-brush stroke on the SLEEPING heron (pre-engage).
+    const hblush = (this._eggBlush && this._eggBlush.heron > 0)
+      ? Math.max(0, Math.min(1, this._eggBlush.heron / 1.2)) : 0;
+    if (hblush > 0) {
+      ctx.globalAlpha = 0.4 * hblush;
+      ctx.fillStyle = '#f08a8a';
+      ctx.beginPath(); ctx.ellipse(-38 - neckSway, -256, 5, 3.2, 0, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     // beak — long, aimed down toward the frog
     ctx.fillStyle = '#c9a24a';
     ctx.beginPath();
@@ -4307,6 +4406,15 @@ _drawAtelier(ctx) {
     // frog (J4 pose: wobbly blob + squash)
     ctx.save();
     ctx.translate(px, py - 6 + bob);
+    // M3 (v1.4 easter egg A): the "appreciates the attention" spin-and-blink —
+    // a quick 360° spin (real-time, ~0.8 s) around the frog's own center.
+    // Draw-only: it never touches world/player state or pacing.
+    const eggSpin = this._eggFrog ? this._eggFrog.spin : -1;
+    if (eggSpin >= 0) {
+      const sp = Math.min(1, eggSpin / 0.8);
+      ctx.rotate(sp * TAU);                    // one full spin, ease by progress
+      ctx.scale(1 + 0.08 * Math.sin(sp * Math.PI), 1 - 0.06 * Math.sin(sp * Math.PI)); // a tiny hop
+    }
     ctx.scale(breathe, 2 - breathe);
     const r = 20;
     // legs
@@ -4328,11 +4436,24 @@ _drawAtelier(ctx) {
     ctx.beginPath(); ctx.ellipse(0, r * 0.35, r * 0.6, r * 0.4, 0, 0, TAU); ctx.fill();
     // eyes (looking up at the title)
     const blink = (Math.sin(t * 0.8) > 0.96) ? 0.2 : 1; // occasional slow blink
+    // M3 egg A: a happy CLOSED-eye blink during the spin-and-blink.
+    const happy = eggSpin >= 0 ? 0.25 : 1;
+    const eyeBlink = Math.min(blink, happy);
     for (const side of [-1, 1]) {
       const bx = side * r * 0.45, by = -r * 0.55;
       ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.ellipse(bx, by, 5, 5 * blink, 0, 0, TAU); ctx.fill(); ctx.stroke();
-      if (blink > 0.5) { ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(bx, by - 1.5, 2.2, 0, TAU); ctx.fill(); }
+      ctx.beginPath(); ctx.ellipse(bx, by, 5, 5 * eyeBlink, 0, 0, TAU); ctx.fill(); ctx.stroke();
+      if (eyeBlink > 0.5) { ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(bx, by - 1.5, 2.2, 0, TAU); ctx.fill(); }
+    }
+    // M3 egg B: a tiny cheek-blush (a pair of soft rosy ovals) that fades in a
+    // few seconds — drawn after the eyes so it sits on the face. Real-time fade
+    // (_eggBlush.frog), presentation only.
+    const blushA = this._eggBlush ? Math.max(0, Math.min(1, this._eggBlush.frog / 1.2)) : 0;
+    if (blushA > 0) {
+      ctx.globalAlpha = 0.45 * blushA;
+      ctx.fillStyle = '#f08a8a';
+      for (const side of [-1, 1]) { ctx.beginPath(); ctx.ellipse(side * r * 0.5, r * 0.05, 5, 3.4, 0, 0, TAU); ctx.fill(); }
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
   }

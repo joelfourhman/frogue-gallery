@@ -614,20 +614,28 @@ per-frame budget assertion.
     stops the arpeggio; nothing is persisted. Pacing unchanged (presentation
     only). **Status: DONE.**
 
-- [ ] **M3 — Two tasteful easter eggs** — `game.js` / `world.js` / field guide
-  - **What:** (1) **The other frog:** a tiny dark frog in a far Reedy Mire
-    corner; aim the brush at it within 60 px for 2 s and it blinks, croaks
-    once (synth), and paints one small leaf — recorded as a hidden field
-    guide entry ("You are not alone."). (2) **The signed canvas:** after
-    50 total lifetime paintings (save stat `paintingsCreated` already
-    exists), a small signed canvas appears in the atelier with the curator's
-    signature + a one-line joke on hover.
-  - **Notes:** reuse field guide data, atelier UI, and existing save stats;
-    both are discoverable-not-required (no map marker, no objective) —
-    delight, not content.
-  - **Acceptance:** smoke stage: each egg fires deterministically under its
-    condition, is recorded in the save (guide entry / atelier flag), and
-    does not affect run pacing; P10 still passes. Status: TODO.
+- [x] **M3 — Two tasteful easter eggs** — `game.js` / `audio.js` — **DONE (2026-09-07, Batch 5, item 2).**
+  - **What (as built, per the batch brief):**
+    - **(a) The frog:** hold **`F`** (~0.45 s) OR click the title frog **3×** and it does a
+      little **spin-and-blink** (a ~0.8 s 360° spin + a happy closed-eye blink, real-time),
+      plays a **unique "frog-chime"** SFX (a bright rising triad + soft overtone), and shows a
+      **one-time** "didYouKnow" banner — *"the frog appreciates the attention."*
+    - **(b) The dry brush:** painting the **title-screen frog** (a held dry-brush gesture
+      over it) or the **sleeping heron** (pre-engage, `_intro > 0`) with the **dry brush**
+      leaves a **tiny temporary smile/cheek-blush** (a pair of soft rosy ovals) that **fades
+      over ~3 s** (real time). The sleeping heron is otherwise untouched (no damage, no
+      state).
+  - **Notes (as built):** both are **pure presentation**, in-memory only — the one-time
+    flag + spin/blush timers are plain fields (never saved); **zero new persisted state**.
+    Decay runs in `_frame`'s ambient (real-time) block so the eggs never feed the pacing the
+    probes measure. Egg A's draw reuses `_drawIdleFrog` (a rotate + squash + blush); egg B
+    adds a blush oval to the title frog + a cheek-oval to `_drawHeron`'s face (local space).
+    The `frog-chime` SFX is a new `sfx()` case on the SFX bus (no audio files / new deps).
+  - **Acceptance (met):** smoke stage 71 (headless): holding **F** and **triple-clicking**
+    the frog both **fire** the egg (spin latches, the one-time banner is added exactly once);
+    a dry-brush gesture on the **title frog** and on the **sleeping heron** both set the
+    blush (t=3.0 s) and **fade to 0**; the sleeping heron is byte-unchanged; and **nothing
+    is persisted** (the save is identical before/after each egg). **Status: DONE.**
 
 ### Deferred past v1.4 (and why)
 

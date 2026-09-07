@@ -843,6 +843,16 @@ export class AudioSys {
         this._tone(t, 'sine', 700, 1100, 0.1, 0.12);
         break;
       }
+      case 'frog-chime': {
+        // M3 (v1.4 easter egg): the frog appreciates the attention — a unique,
+        // happy three-note "sparkle" chime (a bright rising triad with a soft
+        // overtone). SFX-bus, presentation only (no gameplay / pacing effect).
+        this._tone(t, 'sine', 880, 880, 0.14, 0.18);
+        this._tone(t + 0.09, 'sine', 1109, 1109, 0.14, 0.16);
+        this._tone(t + 0.18, 'sine', 1319, 1760, 0.26, 0.16);
+        this._tone(t + 0.09, 'triangle', 550, 1100, 0.2, 0.05);
+        break;
+      }
     }
   }
 }

@@ -4773,5 +4773,148 @@ console.log('== stage 70: v1.4 M2 — "Encore" gallery viewing screen (headless)
   delete window.AudioContext; // restore
 }
 
+// STAGE 71: v1.4 M3 — the two title easter eggs (headless)
+// ---------------------------------------------------------------------
+// (a) EGG A: hold 'F' (or click the title frog 3x) and the title frog does a
+//     little spin-and-blink + a unique chime + a ONE-TIME "didYouKnow" banner.
+// (b) EGG B: painting the title frog with a dry-brush gesture, or the
+//     SLEEPING heron (pre-engage) with the dry brush, leaves a tiny temporary
+//     smile/cheek-blush that fades in a few seconds.
+//
+// We verify (headless): both triggers FIRE (egg state latches + the banner is
+// added / the chime is scheduled) and both CLEAR (the spin ends, the blush
+// fades to 0) — and that NOTHING is persisted (the save is untouched).
+console.log('== stage 71: v1.4 M3 — two title easter eggs (headless) ==');
+{
+  const L71 = await import('../src/logic.js');
+  // A minimal headless AudioContext (same shape as stages 66/70): enough for
+  // the 'frog-chime' + 'paint-swipe' SFX to be scheduled (no real audio).
+  const param = (v) => ({ value: v, setValueAtTime(x) { this.value = x; }, linearRampToValueAtTime(x) { this.value = x; },
+    exponentialRampToValueAtTime(x) { this.value = x; }, setTargetAtTime(x) { this.value = x; } });
+  const makeNode = () => ({
+    type: 'sine', frequency: param(440), Q: param(1), detune: param(0), gain: param(1),
+    buffer: null, _connections: [],
+    connect(node) { this._connections.push(node); return node; },
+    disconnect() { this._connections.length = 0; },
+    start() {}, stop() {}, getChannelData() { return new Float32Array(0); },
+  });
+  class FakeAudioContext {
+    constructor() { this.currentTime = 0; this._sr = 22050; this._dest = makeNode(); }
+    get sampleRate() { return this._sr; }
+    get destination() { return this._dest; }
+    createGain() { return makeNode(); }
+    createOscillator() { return makeNode(); }
+    createBiquadFilter() { return makeNode(); }
+    createDynamicsCompressor() { return makeNode(); }
+    createBuffer(ch, len) { return { getChannelData: () => new Float32Array(len) }; }
+    createBufferSource() { return makeNode(); }
+  }
+  window.AudioContext = FakeAudioContext;
+
+  const recCanvas = makeCanvas();
+  const g = new Game(recCanvas);
+  g.start();
+  g.audio.ensure();
+  g.save = L71.freshSave();
+  const saveBefore = JSON.stringify(g.save);
+
+  // ---- (a) EGG A: hold 'F' -> spin-and-blink + chime + one-time banner ----
+  // hold the 'F' key down (add it to the input's held-keys set, then release
+  // after the trigger so it doesn't re-fire on every subsequent title frame).
+  g.input.keys.add('f');
+  // hold 'F' across enough real frames to cross the 0.45 s hold threshold
+  // (35 frames @ 1/60 s = ~0.58 s).
+  for (let i = 0; i < 35; i++) g._updateTitleEgg(1 / 60);
+  g.input.keys.delete('f');   // release
+  assert(g._eggFrog.spin >= 0, 'M3(A): holding "F" triggers the spin-and-blink');
+  const bannerA = g.banners.find((b) => b.text === 'the frog appreciates the attention.');
+  assert(!!bannerA, `M3(A): the one-time "didYouKnow" banner is added (got ${g.banners.length} banners)`);
+  assert(g._eggFrog.shown === true, 'M3(A): the one-time flag latches (the banner fires exactly once)');
+
+  // the spin AND the banner CLEAR: advance real time past the ~0.8 s spin +
+  // ~3.4 s banner.
+  g._eggFrog.spin = 0.7;   // near the end of the spin (10 frames at 1/60 = ~0.17s)
+  for (let i = 0; i < 10; i++) {
+    g._eggFrog.spin = (g._eggFrog.spin >= 0) ? g._eggFrog.spin + 1 / 60 : -1;
+    if (g._eggFrog.spin >= 0.8) g._eggFrog.spin = -1;
+  }
+  assert(g._eggFrog.spin < 0, 'M3(A): the spin ends (real-time decay)');
+  for (let i = 0; i < 220; i++) g.banners.forEach((b) => { b.t -= 1 / 60; }); // ~3.6 s
+  g.banners = g.banners.filter((b) => b.t > 0);
+  assert(!g.banners.find((b) => b.text === 'the frog appreciates the attention.'),
+    'M3(A): the banner clears after its duration');
+
+  // (a) EGG A (click path): the one-time flag is reset so the TRIPLE-CLICK path
+  // can be exercised independently (it fires the same spin + banner).
+  g._eggFrog.shown = false;
+  const frogX = 150, frogY = g.ch - 162;
+  for (let c = 0; c < 3; c++) {
+    g.input.mouse.x = frogX + 5; g.input.mouse.y = frogY + 3;
+    g.input.mouse.lDown = true; g.input.mouse.lPressed = true;
+    g._updateTitleEgg(1 / 60);
+    g.input.mouse.lDown = false; g.input.mouse.lPressed = false;
+  }
+  assert(g._eggFrog.spin >= 0, 'M3(A): clicking the title frog 3x triggers the spin-and-blink');
+  assert(g.banners.some((b) => b.text === 'the frog appreciates the attention.'),
+    'M3(A): the triple-click also fires the one-time banner (after the first fired + cleared)');
+
+  // ---- (b) EGG B: dry-brush gesture on the title frog -> cheek-blush ----
+  // (the title frog uses a held left-stroke; the pigment is irrelevant on the
+  // title screen, but the heron branch requires 'dry').
+  g.input.mouse.x = frogX; g.input.mouse.y = frogY;
+  g.input.mouse.lDown = true;
+  for (let i = 0; i < 20; i++) g._updateTitleEgg(1 / 60);   // ~0.33 s held
+  g.input.mouse.lDown = false;
+  assert(g._eggBlush.frog > 0, `M3(B): a dry-brush gesture on the title frog sets the blush (t=${g._eggBlush.frog.toFixed(2)}s)`);
+  // the blush CLEARS (real-time decay): advance ~3.5 s.
+  for (let i = 0; i < 210; i++) {
+    g._eggBlush.frog = (g._eggBlush.frog > 0) ? g._eggBlush.frog - 1 / 60 : 0;
+    if (g._eggBlush.frog < 0) g._eggBlush.frog = 0;
+  }
+  assert(g._eggBlush.frog <= 0, 'M3(B): the title-frog blush fades to 0 (real-time)');
+  // the TITLE-screen eggs (EGG A + the title-frog blush) persisted nothing:
+  // the save is still the pristine fresh save.
+  assert(JSON.stringify(g.save) === saveBefore, 'M3: the title-screen easter eggs persist NOTHING (save unchanged)');
+
+  // ---- (b) EGG B: dry brush on the SLEEPING heron (pre-engage) -> blush ----
+  g._beginExpedition();
+  assert(g.state === 'expedition' && g.heron && g.heron._intro > 0, 'M3(B): the expedition begins with a SLEEPING heron (pre-engage)');
+  // capture the save AFTER _beginExpedition (which legitimately persists the
+  // intro/tutorial flags) so we can prove the heron egg itself persists nothing.
+  const saveAfterBegin = JSON.stringify(g.save);
+  g.player.pigment = 'dry';
+  // aim the mouse at the heron's head. `_updateExpedition` recomputes
+  // `input.mouse.worldX/worldY` from the SCREEN coords (via `_view`), so we
+  // (1) center the camera on the head so it is on-screen, then (2) convert the
+  // head's world position to screen space: screenX = (worldX - view.x) / scale.
+  const headWX = g.heron.x - 44 + 20, headWY = g.heron.y - 262;   // +20 px inside the 70px radius
+  g.cam.x = headWX; g.cam.y = headWY; g.zoom = 1;
+  const vHead = g._view();
+  g.input.mouse.x = (headWX - vHead.x) / vHead.scale;
+  g.input.mouse.y = (headWY - vHead.y) / vHead.scale;
+  g.input.mouse.lDown = true;
+  g._updateExpedition(1 / 60);   // one expedition frame: the egg check runs before the attack
+  g.input.mouse.lDown = false;
+  assert(g._eggBlush.heron > 0, `M3(B): a dry-brush stroke on the sleeping heron sets the blush (t=${g._eggBlush.heron.toFixed(2)}s)`);
+  // the heron is UNCHANGED (the egg is presentation-only — no damage/state).
+  assert(g.heron.hp === g.heron.maxHp && g.heron._intro > 0 && !g.heron.awakened,
+    'M3(B): the sleeping heron is untouched (the blush is presentation-only)');
+  // the blush CLEARS (real-time decay): advance ~3.5 s.
+  for (let i = 0; i < 210; i++) {
+    g._eggBlush.heron = (g._eggBlush.heron > 0) ? g._eggBlush.heron - 1 / 60 : 0;
+    if (g._eggBlush.heron < 0) g._eggBlush.heron = 0;
+  }
+  assert(g._eggBlush.heron <= 0, 'M3(B): the heron blush fades to 0 (real-time)');
+
+  // ---- nothing is persisted ----
+  // The title-screen eggs (EGG A + EGG B on the title frog) must not have
+  // written the save (saveBefore is captured at the start of the stage, before
+  // any egg fired).
+  assert(JSON.stringify(g.save) === saveAfterBegin,
+    'M3: the heron easter egg persists NOTHING (the save is unchanged across the egg trigger)');
+
+  delete window.AudioContext; // restore
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
