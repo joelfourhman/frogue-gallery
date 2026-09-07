@@ -21,6 +21,10 @@ export class Enemy {
     // default to 1 for any save without a modifier, so a first-time (cycle-0)
     // run — which never carries these fields — is byte-identical.
     this.speed = base.speed * (tuning.enemySpeedMult || 1);
+    // K5 (v1.5 M2): Night Expedition — a mosquito-specific speed multiplier
+    // (feeds the existing enemy-speed path). Defaults to 1 (or undefined), so
+    // a first-time run (no modifier) is byte-identical.
+    if (kind === 'mosquito' && tuning.mosquitoSpeedMult) this.speed *= tuning.mosquitoSpeedMult;
     this.dmg = base.dmg * (tuning.enemyDmg || 1) * (tuning.contactDmgMult || 1); // N2: NG+ contact-damage multiplier (1 on cycle 0); N4: modifier contact-damage on top
     this.r = base.radius;
     this.armor = base.armor;

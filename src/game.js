@@ -2009,8 +2009,19 @@ _drawAtelier(ctx) {
     // >= 1 = an NG+ cycle). Read from the save so a "Next Expedition" (which
     // advances save.ngCycle) drives NG+ scaling (N2) and boss selection (N3).
     this.ngCycle = Math.max(0, Math.floor(this.save.ngCycle) || 0);
+    // K5 (v1.5 M2): Master's Palette — when this NG+ modifier is active the
+    // player STARTS with a synergy duo pre-locked in the 2-slot loadout. This
+    // must run BEFORE makeTuning (it changes which paintings the loadout
+    // contains, which makeTuning consumes). Cycle-0 never carries a modifier
+    // (save.ngModifier is null), so the first-time loadout is byte-identical.
+    const _modId = this.ngCycle >= 1 ? saveModifier(this.save) : null;
+    let _loadout = this.save.loadout;
+    if (_modId === 'masters-palette') {
+      const _pl = MODIFIERS[_modId].preLock;
+      _loadout = Array.isArray(_pl) && _pl.length ? _pl.slice() : _loadout;
+    }
     this.world = new World(mulberry32(seed), seed % 99991);
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
+    this.tuning = makeTuning(this.save.upgrades, _loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
     // N2 (v1.3 M14): NG+ per-cycle scaling — applied ONLY when ngCycle >= 1 so
     // a first-time (cycle 0) run's tuning stays byte-identical to pre-NG+.
     if (this.ngCycle >= 1) applyNGPlus(this.tuning, this.ngCycle);
@@ -2018,7 +2029,7 @@ _drawAtelier(ctx) {
     // "Next Expedition" prompt) — applied ONLY on NG+ cycles, AFTER the NG+
     // scaling, through the standard tuning path. A cycle-0 run never reaches
     // this (ngCycle < 1), so a first-time run's tuning is byte-identical.
-    if (this.ngCycle >= 1) applyModifier(this.tuning, saveModifier(this.save));
+    if (this.ngCycle >= 1) applyModifier(this.tuning, _modId);
     // N4: High Tide widens the water — hand the render-side multiplier to the
     // fresh per-run world (defaults to 1; a cycle-0 run never carries it).
     this.world.waterWidthMult = this.tuning.waterWidthMult || 1;
@@ -2542,9 +2553,16 @@ _drawAtelier(ctx) {
     // absolute run-time, atSec seconds after entry).
     if (p.alive && this.weatherZoneI !== this._zoneI) {
       this.weatherZoneI = this._zoneI;
-      const wf = weatherFor(this.runSeed || 0, this._zoneI);
-      this.weatherPending = wf ? { phase: wf.phase, atSec: wf.atSec } : null;
-      if (wf) this.weatherTriggerAt = this.runT + wf.atSec;
+      if (this.tuning.stillWaters) {
+        // K5 (v1.5 M2): Still Waters — no weather phases this cycle. Skip the
+        // weatherFor call entirely (no rain/drought); the weather stays clear.
+        this.weatherPending = null;
+        this.weatherTriggerAt = 0;
+      } else {
+        const wf = weatherFor(this.runSeed || 0, this._zoneI);
+        this.weatherPending = wf ? { phase: wf.phase, atSec: wf.atSec } : null;
+        if (wf) this.weatherTriggerAt = this.runT + wf.atSec;
+      }
     }
 
     // ----- pigment switching (1-4) -----
@@ -3870,6 +3888,19 @@ _drawAtelier(ctx) {
 
     // ---- screen space ----
     this._screenSpace();
+    // K5 (v1.5 M2): Night Expedition — a RENDER-ONLY darkening over the world,
+    // drawn in SCREEN space (after the camera transform is restored) so it
+    // covers the whole visible frame; the HUD is drawn AFTER it, so the UI
+    // stays fully lit/legible. A semi-transparent near-black wash makes the
+    // swamp read as "night" without touching any logic/tuning. Active only
+    // when the modifier set tuning.nightDarkness (NG+ cycles); a cycle-0 run
+    // never carries it (byte-identical render).
+    if ((this.state === 'expedition' || this.state === 'end') && this.tuning && this.tuning.nightDarkness) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(10,14,30,0.34)';
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.restore();
+    }
     if (this.state === 'expedition' || this.state === 'end') {
       this._drawOffscreenHeronArrow(ctx, v);
       this._drawOffscreenEnemyArrows(ctx, v);

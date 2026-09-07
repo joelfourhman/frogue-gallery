@@ -410,8 +410,57 @@ export const MODIFIERS = {
       t.pickupValue = Math.round(t.pickupValue * 1.25 * 100) / 100;
     },
   },
+  // K5 (v1.5 M2): three new expedition modifiers — data entries that feed the
+  // EXISTING tuning/spawn/render paths (no new systems). NG+-gated like N4:
+  // a first-time (cycle-0) run never carries these fields, so it stays
+  // byte-identical.
+  'night-expedition': {
+    id: 'night-expedition',
+    name: 'Night Expedition',
+    desc: 'the swamp sleeps under a dark sky — the world dims, mosquitoes fly 20% faster, every orb is worth +10%',
+    // nightDarkness: a RENDER-ONLY flag read by game.js _drawAll (draws a
+    // semi-transparent dark overlay over the world). It does NOT affect
+    // logic/tuning — purely the "darker lighting" the K5 spec asks for.
+    // mosquitoSpeedMult: feeds the existing enemy-speed path (enemies.js
+    // Enemy constructor multiplies it in for mosquitoes only).
+    // pickupValue: the existing orb/pickup value field (stacks multiplicatively).
+    apply(t) {
+      t.nightDarkness = 1;
+      t.mosquitoSpeedMult = 1.2;
+      t.pickupValue = Math.round(t.pickupValue * 1.10 * 100) / 100;
+    },
+  },
+  'still-waters': {
+    id: 'still-waters',
+    name: 'Still Waters',
+    desc: 'the water lies flat — no weather phases this cycle, but enemies are 15% tougher',
+    // stillWaters: a flag read by game.js _updateExpedition to SKIP the
+    // weatherFor call (no rain/drought phases). It does NOT affect tuning —
+    // purely the "no weather phases" the K5 spec asks for.
+    // enemyHp: the existing enemy-HP multiplier (stacks onto the NG+ cycle
+    // multiplier already applied).
+    apply(t) {
+      t.stillWaters = 1;
+      t.enemyHp = Math.round((t.enemyHp || 1) * 1.15 * 100) / 100;
+    },
+  },
+  "masters-palette": {
+    id: "masters-palette",
+    name: "Master's Palette",
+    desc: 'the atelier hands you a ready-made duo — the Flooded Night synergy is pre-locked in your loadout, and enemy contact does +10% damage',
+    // preLock: the 2-slot loadout that game.js _beginExpedition uses INSTEAD
+    // of the player\'s saved loadout when this modifier is active. It is read
+    // BEFORE makeTuning (not from t) because it changes which paintings the
+    // loadout contains, which makeTuning consumes. The `this` inside apply(t)
+    // is the modifier object, so `this.preLock` is the array.
+    preLock: ['moonlit-pond', 'storm-cloud'],
+    apply(t) {
+      t.contactDmgMult = (t.contactDmgMult || 1) * 1.10;
+      t.preLockLoadout = this.preLock; // marker for tests + the smoke stage
+    },
+  },
 };
-export const MODIFIER_ORDER = ['high-tide', 'grey-morning', 'dry-brush-season'];
+export const MODIFIER_ORDER = ['high-tide', 'grey-morning', 'dry-brush-season', 'night-expedition', 'still-waters', 'masters-palette'];
 // The active modifier for a save: a valid MODIFIERS id, or null (no modifier).
 // Unknown/empty/garbled values normalize to null so old saves (pre-N4) and
 // a "no modifier" choice both read as no-op. Pure (no DOM).
@@ -426,7 +475,7 @@ export function saveModifier(save) {
 export function applyModifier(t, id) {
   const m = MODIFIERS[id];
   if (!m) return t;
-  m.apply(t);
+  m.apply.call(m, t);
   return t;
 }
 

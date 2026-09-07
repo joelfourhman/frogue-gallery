@@ -2814,9 +2814,9 @@ console.log('== stage 49: N4 — Player-chosen expedition modifiers ==');
   const { spawnEnemy } = await import('../src/enemies.js');
   const { Game } = await import('../src/game.js');
 
-  // ---- (0) the MODIFIERS table: exactly 3 data entries, each with name/desc/apply ----
-  assert(Object.keys(L49.MODIFIERS).length === 3, `N4: the MODIFIERS table has 3 entries (got ${Object.keys(L49.MODIFIERS).length})`);
-  assert(L49.MODIFIER_ORDER.length === 3, `N4: MODIFIER_ORDER lists the 3 modifier ids (got ${L49.MODIFIER_ORDER.length})`);
+  // ---- (0) the MODIFIERS table: 6 data entries (N4 x3 + K5 x3), each with name/desc/apply ----
+  assert(Object.keys(L49.MODIFIERS).length === 6, `N4+K5: the MODIFIERS table has 6 entries (got ${Object.keys(L49.MODIFIERS).length})`);
+  assert(L49.MODIFIER_ORDER.length === 6, `N4+K5: MODIFIER_ORDER lists the 6 modifier ids (got ${L49.MODIFIER_ORDER.length})`);
   for (const id of L49.MODIFIER_ORDER) {
     const m = L49.MODIFIERS[id];
     assert(m && m.id === id && typeof m.name === 'string' && typeof m.desc === 'string' && typeof m.apply === 'function',
@@ -5259,6 +5259,83 @@ console.log('== stage 75: v1.5 K4 — THE GILDED HERON (NG+ cycle-3+ third boss;
   assert(p.hp > hpStandGap, `K4: the standing-in-green heal works in the plume gap (hp ${hpStandGap} -> ${p.hp})`);
   cell.green = 0; cell.age = 0;
   console.log('ok — K4: the Gilded Heron appears on NG+ cycle 3+ (42k, gold palette), its plume is a ~30s phase timer that ABSORBS both green heal sources while active (heal works in the gap), and cycle 0/1-2 boss selection is unchanged');
+}
+
+console.log('== stage 76: v1.5 K5 — 3 NEW EXPEDITION MODIFIERS (Night Expedition / Still Waters / Master\'s Palette) ==');
+{
+  const L76 = await import('../src/logic.js');
+  const { spawnEnemy } = await import('../src/enemies.js');
+  const { Game } = await import('../src/game.js');
+
+  // ---- (0) the 3 new modifiers are in the MODIFIERS table ----
+  for (const id of ['night-expedition', 'still-waters', 'masters-palette']) {
+    const m = L76.MODIFIERS[id];
+    assert(m && m.id === id && typeof m.name === 'string' && typeof m.desc === 'string' && typeof m.apply === 'function',
+      `K5: modifier '${id}' is a data entry (id/name/desc/apply)`);
+  }
+
+  // ---- (1) NIGHT EXPEDITION: darker lighting + 20% mosquito speed + 10% orb value ----
+  const gNight = new Game(makeCanvas()); gNight.start();
+  const nightSave = L76.freshSave(); nightSave.ngCycle = 1; nightSave.ngModifier = 'night-expedition'; nightSave.stats.victories = 1; nightSave.flags.heronDefeated = true;
+  gNight.save = nightSave; gNight._beginExpedition();
+  assert(gNight.tuning.nightDarkness === 1, 'K5: Night Expedition sets the nightDarkness flag (render-only darkening)');
+  assert(gNight.tuning.mosquitoSpeedMult === 1.2, `K5: Night Expedition speeds mosquitoes +20% (mosquitoSpeedMult ×${gNight.tuning.mosquitoSpeedMult})`);
+  assert(Math.abs(gNight.tuning.pickupValue - 1.10) < 1e-9, `K5: Night Expedition raises orb value +10% (pickupValue ${gNight.tuning.pickupValue})`);
+  // the mosquito speed multiplier actually affects the enemy (feeds the existing spawn path)
+  const nightMq = spawnEnemy('mosquito', 200, 100, gNight.tuning);
+  const plainMqTuning = L76.makeTuning({}, [], 'normal', 0);
+  L76.applyNGPlus(plainMqTuning, 1); // same NG+ cycle 1, no modifier
+  const plainMq = spawnEnemy('mosquito', 200, 100, plainMqTuning);
+  assert(nightMq.speed > plainMq.speed, `K5: Night Expedition mosquito is faster (speed ${nightMq.speed} > ${plainMq.speed})`);
+  // a beetle (non-mosquito) is NOT sped by night (only mosquitoes)
+  const nightBeetle = spawnEnemy('beetle', 200, 100, gNight.tuning);
+  const plainBeetle = spawnEnemy('beetle', 200, 100, plainMqTuning);
+  assert(nightBeetle.speed === plainBeetle.speed, 'K5: Night Expedition does NOT speed beetles (mosquito-specific only)');
+  assert(!gNight.tuning.stillWaters && !gNight.tuning.preLockLoadout, 'K5: Night Expedition does NOT set stillWaters or preLock fields');
+
+  // ---- (2) STILL WATERS: no weather phases + 15% enemy HP ----
+  const gSW = new Game(makeCanvas()); gSW.start();
+  const swSave = L76.freshSave(); swSave.ngCycle = 1; swSave.ngModifier = 'still-waters'; swSave.stats.victories = 1; swSave.flags.heronDefeated = true;
+  gSW.save = swSave; gSW._beginExpedition();
+  assert(gSW.tuning.stillWaters === 1, 'K5: Still Waters sets the stillWaters flag (no weather phases)');
+  // enemy HP is 15% over the NG+ cycle-1 base (1.30 * 1.15 = 1.50)
+  const swBeetle = spawnEnemy('beetle', 200, 100, gSW.tuning);
+  const plainC1Tuning = L76.makeTuning({}, [], 'normal', 0);
+  L76.applyNGPlus(plainC1Tuning, 1); // cycle 1, no modifier
+  const plainC1Beetle = spawnEnemy('beetle', 200, 100, plainC1Tuning);
+  assert(swBeetle.hp > plainC1Beetle.hp, `K5: Still Waters makes enemies tougher (beetle HP ${swBeetle.hp} > ${plainC1Beetle.hp})`);
+  // the tuning.enemyHp reflects the 15% bump (1.30 * 1.15 ≈ 1.50)
+  assert(Math.abs(gSW.tuning.enemyHp - 1.50) < 0.01, `K5: Still Waters enemy HP multiplier is ~1.50 (got ${gSW.tuning.enemyHp})`);
+  // the weather gate is active (weatherFor is skipped when stillWaters)
+  assert(gSW.tuning.stillWaters === 1 && gSW.weatherPending === null, 'K5: Still Waters run starts with no weather pending');
+  assert(!gSW.tuning.nightDarkness && !gSW.tuning.preLockLoadout, 'K5: Still Waters does NOT set nightDarkness or preLock fields');
+
+  // ---- (3) MASTER'S PALETTE: pre-locked synergy duo + 10% contact damage ----
+  const gMP = new Game(makeCanvas()); gMP.start();
+  const mpSave = L76.freshSave(); mpSave.ngCycle = 1; mpSave.ngModifier = 'masters-palette'; mpSave.stats.victories = 1; mpSave.flags.heronDefeated = true;
+  gMP.save = mpSave; gMP._beginExpedition();
+  assert(Math.abs(gMP.tuning.contactDmgMult - 1.10) < 1e-9, `K5: Master's Palette raises contact dmg +10% (contactDmgMult ×${gMP.tuning.contactDmgMult})`);
+  // the pre-locked loadout is the Flooded Night duo (moonlit-pond + storm-cloud)
+  assert(Array.isArray(gMP.tuning.preLockLoadout) && gMP.tuning.preLockLoadout.length === 2, 'K5: Master\'s Palette sets a pre-locked 2-slot loadout');
+  assert(gMP.tuning.synergy === 'Flooded Night', `K5: Master's Palette pre-locks the Flooded Night synergy (got ${gMP.tuning.synergy})`);
+  // the contact damage multiplier actually affects the enemy
+  const mpBeetle = spawnEnemy('beetle', 200, 100, gMP.tuning);
+  const noModC1Tuning = L76.makeTuning({}, [], 'normal', 0);
+  L76.applyNGPlus(noModC1Tuning, 1);
+  const noModC1Beetle = spawnEnemy('beetle', 200, 100, noModC1Tuning);
+  assert(mpBeetle.dmg > noModC1Beetle.dmg, `K5: Master's Palette increases contact damage (beetle dmg ${mpBeetle.dmg.toFixed(1)} > ${noModC1Beetle.dmg.toFixed(1)})`);
+  assert(!gMP.tuning.nightDarkness && !gMP.tuning.stillWaters, 'K5: Master\'s Palette does NOT set nightDarkness or stillWaters fields');
+
+  // ---- (4) cycle-0 (first-time) is COMPLETELY untouched: no modifier fields ----
+  const gC0 = new Game(makeCanvas()); gC0.start();
+  gC0.save = L76.freshSave();
+  gC0._beginExpedition();
+  assert(!gC0.tuning.nightDarkness && !gC0.tuning.mosquitoSpeedMult && !gC0.tuning.stillWaters && !gC0.tuning.preLockLoadout,
+    'K5: a cycle-0 run carries NO new modifier fields (first-time byte-identical)');
+  const plainC0 = L76.makeTuning(gC0.save.upgrades, gC0.save.loadout, gC0.options.difficulty, gC0.save.galleryBonus || 0);
+  assert(JSON.stringify(gC0.tuning) === JSON.stringify(plainC0), 'K5: cycle-0 tuning deep-equals a plain makeTuning (no modifier delta)');
+
+  console.log('ok — K5: the 3 new modifiers (Night Expedition / Still Waters / Master\'s Palette) each apply their distinct tuning/render effect (darker lighting + mosquito speed + orb value / no weather + enemy HP / pre-locked duo + contact dmg), and cycle-0 is untouched');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

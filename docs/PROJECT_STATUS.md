@@ -4,7 +4,7 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-07 (v1.1 + v1.2 + v1.3 COMPLETE; v1.4 "Make It Amazing" COMPLETE — all 14 items (J1–J5 juice, L1–L3 presence, S1–S3 audio, M1–M3 moments) + the Joel color rework (`012ce0b`); **v1.5 "The Living Swamp" — Batch 1 COMPLETE (K1 Mud Turtle, K2 Blind Crag Frog, K3 Storm Surge) + Batch 2 K4 done (The Gilded Heron, NG+ cycle-3+ 3rd boss: gold palette, 42k HP, plume absorbs green heal; suite 75/75, pacing 17.2/19.1/19.5 min unchanged)**)**
+**Last PM audit: 2026-09-07 (v1.1 + v1.2 + v1.3 COMPLETE; v1.4 "Make It Amazing" COMPLETE — all 14 items (J1–J5 juice, L1–L3 presence, S1–S3 audio, M1–M3 moments) + the Joel color rework (`012ce0b`); **v1.5 "The Living Swamp" — Batch 1 COMPLETE (K1 Mud Turtle, K2 Blind Crag Frog, K3 Storm Surge) + Batch 2 K4 done (The Gilded Heron, NG+ cycle-3+ 3rd boss: gold palette, 42k HP, plume absorbs green heal) + K5 done (3 new modifiers: Night / Still Waters / Master's Palette; suite 76/76, pacing 17.2/16.7/19.5 min unchanged)**)**
 
 ## Current state
 
@@ -20,9 +20,9 @@ consequential decisions in `docs/DECISIONS.md`.
 
 ## Active work
 
-**v1.5 "The Living Swamp" — in progress (Batch 1 COMPLETE: K1 → K2 → K3; Batch 2: K4 done, K5 → K6 next).** One
+**v1.5 "The Living Swamp" — in progress (Batch 1 COMPLETE: K1 → K2 → K3; Batch 2: K4 + K5 done, K6 next).** One
 conventional commit per item; full per-item history lives in git log +
-PROJECT_STATE.md. v1.1–v1.4 are all COMPLETE (see Current state). Batch 1 (the two new enemy archetypes + the zone-5 Storm Surge set-piece) is done and committed — suite 74/74, pacing unchanged. **Batch 2 K4 done: The Gilded Heron (NG+ cycle-3+ 3rd boss — gold palette, 42k HP, plume absorbs both green heal sources; pure `GILDED_HERON` + `gildedPlumeTick`/`gildedPlumeActive` in logic.js; NG+-gated so cycle-0 first-time is byte-identical; smoke stage 75, 24 asserts; suite 75/75; pacing 17.2/19.1/19.5 unchanged).** Next: Batch 2 K5 (3 new modifiers) → K6 (NG+ Master tier c4+).
+PROJECT_STATE.md. v1.1–v1.4 are all COMPLETE (see Current state). Batch 1 (the two new enemy archetypes + the zone-5 Storm Surge set-piece) is done and committed — suite 74/74, pacing unchanged. **Batch 2 K4 done: The Gilded Heron (NG+ cycle-3+ 3rd boss — gold palette, 42k HP, plume absorbs both green heal sources; pure `GILDED_HERON` + `gildedPlumeTick`/`gildedPlumeActive` in logic.js; NG+-gated so cycle-0 first-time is byte-identical; smoke stage 75, 24 asserts; suite 75/75; pacing 17.2/19.1/19.5 unchanged).** **Batch 2 K5 done: 3 new expedition modifiers (Night Expedition / Still Waters / Master's Palette) — data entries in the existing MODIFIERS table (3→6), each feeding the existing tuning/spawn/render paths (Night = render-only darkness + mosquito speed + orb value; Still Waters = no weather + enemy HP; Master's Palette = pre-locked synergy duo + contact dmg); NG+-gated so cycle-0 is byte-identical (smoke stage 76, 24 asserts; suite 76/76; pacing 17.2/16.7/19.5 unchanged).** Next: Batch 2 K6 (NG+ Master tier c4+).
 
 ## Blockers
 
