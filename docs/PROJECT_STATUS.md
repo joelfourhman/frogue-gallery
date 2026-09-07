@@ -66,6 +66,8 @@ audio · M moments) across 5 batches of ~3; theme + order + acceptance in
 ## Release readiness
 
 Release: ready (DoD met, suite green). v1.1 + v1.2 + v1.3 + v1.4: **all
-complete** (smoke 71/71; pacing 17.3/18.3/19.5 min — in the 15–20 min
-target). v1.5 "The Living Swamp": **in progress** (K1–K10, bounded
-batches); the release stays playable at every commit.
+complete**. v1.5 "The Living Swamp": **COMPLETE** (2026-09-07) — all 10
+items (K1–K10) done and committed; smoke 80/80; pacing 17.4 / 18.0 min
+first-time (in the 15–20 min target), NG+ cycle-1 19.5 min (in band),
+NG+ cycle-3 / cycle-4 27.3 / 38.9 min (documented deliberate escalation).
+The release stays playable at every commit.
