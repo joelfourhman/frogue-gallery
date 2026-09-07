@@ -248,6 +248,38 @@ and **4th boss archetype** (→ R4)):
 2. **BATCH 2 — R3, R4, R6** (the bestiary: Wisp/Serpent/Leech light-keyed
    behaviors; The Silt Wyrm boss; `tests/reedspace.mjs` probe +
    full-season pacing re-verification + cycle-0 tuning byte-identity).
+   **Progress (2026-09-07): R3 ✅ DONE + committed** (the LIGHT-REWRITTEN
+   BESTIARY — three Reeds-only archetypes in the `ENEMIES` table, all keyed to
+   THE LANTERN's `lightFactor`/`lanternState`, Reeds-mode-only rare picks in the
+   bounded spawn cap (a cycle-0 run's `_spawnWave` never enters the branch —
+   byte-identical; no new list, count stays bounded). (a) **Glow Wisp**: a slow
+   drifting lure that WINDS toward the lantern's light while lit (the attractor
+   is the frog, who carries it; random drift unlit); a BLUE SPLASH near it
+   BLINDS it (~3s useless spin — pure `wispBlinded()`); nearly invisible unlit
+   (draw alpha scales by `lightFactor`). (b) **Mud Serpent**: burrows under the
+   water line (invisible + UNHITTABLE while burrowed/recovering — the paint.js
+   swipe + splash hit filters skip it in those phases), telegraphs a strike with
+   a growing ripple ring at its surface point (~1.2s, the heron-telegraph draw
+   language), then surfaces + strikes the lane; a painted RING before it surfaces
+   (ANY pigment — `_bestiarySwipe`) interrupts + knocks it back underground with
+   a re-cooldown. (c) **Silt Leech**: clings on contact (drains a small HP/sec via
+   pure `leechDrain(dt)` fractional accumulation + slows movement 25% — the
+   `leechAttached` flag + `Player.leechFactor()` 0.75); comes off when PAINTED
+   (any swipe touching the frog — the dry brush's one combat use) OR when the
+   player HOPS off (one hop breaks the cling — the `_hopStart` frame); a second
+   leech cannot attach for ~6s (the shared `leechCd` window). All rules in
+   `logic.js` (`REEDS_BESTIARY` + `wispBlinded` + `leechDrain`); 4 new quiet
+   sfx (wisp-blind / serpent-dive / leech-attach / leech-peel); M3-style
+   one-shot first-sight callouts for each new creature; new smoke **stage 86,
+   41 assertions** (wisp chases-lit / drifts-unlit / blind window; serpent
+   burrow→telegraph→surface + painted-ring interrupt + re-cooldown; leech
+   attach→drain+slow→paint-off AND hop-off + re-attach cooldown; the draw path
+   renders headless without throwing — P10 allocation-safe). First-time
+   pace/humance re-verified IN band (Reeds-gated — cycle-0 structurally
+   untouched); P10 culling stays green (the serpent's ripple ring is 1 arc + 3
+   concentric rings, capped; the wisp/leech are cheap ellipses; no per-frame
+   allocation). Next: R4 (The Silt Wyrm boss) → R6 (reedspace probe + season
+   audit).
 3. **BATCH 3 — W1, W2, W3** (gamepad: raw-API input feed into `input.js`;
    connection chip + full-screen UI focus; Reeds-mode parity +
    byte-identity regression for kb-only play; mocked `navigator.getGamepad`

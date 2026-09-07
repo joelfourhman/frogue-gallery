@@ -769,6 +769,34 @@ export class AudioSys {
         this._tone(t + 0.05, 'sine', 1500, 1800, 0.08, 0.045);
         break;
       }
+      // R3 (v1.6): the LIGHT-REWRITTEN BESTIARY sfx. Quiet, watery, distinct —
+      // each creature gets its own signature so the Reeds bestiary reads
+      // differently from the swamp pool. (wisp-blind, serpent-dive,
+      // leech-attach, leech-peel.)
+      case 'wisp-blind': {
+        // a soft blue "squelch" + a rising confused wobble (the spin begins)
+        this._noise(t, 0.14, 'bandpass', 2400, 2.2, 0.18);
+        this._tone(t + 0.03, 'sine', 900, 1400, 0.16, 0.08);
+        break;
+      }
+      case 'serpent-dive': {
+        // a deep mud "thwock" — the serpent dropping back under the water line
+        this._tone(t, 'sine', 200, 70, 0.22, 0.2);
+        this._noise(t, 0.18, 'lowpass', 500, 1.2, 0.16);
+        break;
+      }
+      case 'leech-attach': {
+        // a wet sticky "suck" + a low straining hum
+        this._noise(t, 0.1, 'bandpass', 500, 2.4, 0.2);
+        this._tone(t + 0.04, 'triangle', 140, 110, 0.2, 0.12);
+        break;
+      }
+      case 'leech-peel': {
+        // a clean "pop + slide" — the leech peeling off (paint or hop)
+        this._tone(t, 'sine', 500, 900, 0.09, 0.14);
+        this._noise(t + 0.03, 'bandpass', 1800, 1.8, 0.1);
+        break;
+      }
       case 'paint-hit': {
         const p = opt.pigment || 'dry';
         this._noise(t, 0.08, 'bandpass', p === 'red' ? 700 : p === 'blue' ? 500 : 900, 2, 0.35);

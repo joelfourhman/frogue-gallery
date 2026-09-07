@@ -92,6 +92,11 @@ export class Paint {
     const hits = [];
     for (const e of enemies) {
       if (e.dead) continue;
+      // R3 (v1.6 Module R): the MUD SERPENT is invisible + UNHITTABLE while
+      // burrowed / recovering (under the water line). It is paintable while
+      // telegraphing or surfaced (the counterplay is a painted-ring interrupt
+      // before it surfaces; see the game's _bestiarySwipe).
+      if (e.burrower && (e.phase === 'burrowed' || e.phase === 'recover')) continue;
       const d = dist(p.x, p.y, e.x, e.y);
       if (d > R + e.r) continue;
       const ang = Math.atan2(e.y - p.y, e.x - p.x);
@@ -117,7 +122,12 @@ export class Paint {
     // S3 (v1.4): a pigment-colored splash voice (wet "splat" + a per-pigment
     // signature) replaces the plain generic splat.
     this.sfx('paint-splat', { pig, big: 1 });
-    const hits = enemies.filter(e => !e.dead && dist(p.x, p.y, e.x, e.y) <= R + e.r);
+    // R3 (v1.6 Module R): the serpent is unhittable while burrowed/recovering
+    // (see trySwipe) — a blue splash that blinds a wisp still counts, but the
+    // serpent stays planted under the water line.
+    const hits = enemies.filter(e => !e.dead
+      && !(e.burrower && (e.phase === 'burrowed' || e.phase === 'recover'))
+      && dist(p.x, p.y, e.x, e.y) <= R + e.r);
     this._applyHits(hits, pig, 'splash');
     // cosmetic ring
     this.trails.push({ ring: true, x: p.x, y: p.y, r: R, t: 0.35, max: 0.35, pig });

@@ -61,7 +61,85 @@ export const ENEMIES = {
     noiseRadius: 280,         // a noise event within this wakes the frog
     alertDuration: 5.0,       // seconds awake after the most recent noise
   },
+  // R3 (v1.6 Module R): the LIGHT-REWRITTEN BESTIARY — three Reeds archetypes,
+  // all keyed to THE LANTERN (R1's lightFactor / lanternState), Reeds-mode-only
+  // (a rare pick in the bounded spawn cap; never in the cycle-0 swamp pool).
+  //
+  // (a) GLOW WISP — a slow drifting LURE. While the lantern is LIT it WINDS
+  // toward the lantern's light (the attractor is the frog, who carries it);
+  // unlit it takes random drift. A BLUE SPLASH near it BLINDS it (a ~3s
+  // useless spin — the pure wispBlinded() tick). It is nearly INVISIBLE unlit
+  // (draw alpha scales by the lightFactor it receives). Low HP / low contact
+  // damage — a trap that pulls the frog, not a brawler.
+  wisp: {
+    id: 'wisp', name: 'Glow Wisp', hp: 14, speed: 34, dmg: 3, radius: 13,
+    armor: 0, fly: true, score: 22, paintTintDecay: 0.5,
+    lightHoming: true,   // winds toward the lantern's light while lit
+  },
+  // (b) MUD SERPENT — burrows UNDER the water line (invisible + unhittable
+  // while burrowed), TELEGRAPHS a strike with a growing ripple ring at its
+  // fixed surface point (~1.2s, the heron-telegraph draw language), then
+  // SURFACES and strikes the lane. A painted RING on the water before it
+  // surfaces (ANY pigment) interrupts the strike and knocks it back
+  // underground with a cooldown. State machine (burrowed/telegraph/surface)
+  // lives in enemies.js; the surface/strike constants are below.
+  serpent: {
+    id: 'serpent', name: 'Mud Serpent', hp: 40, speed: 0, dmg: 9, radius: 18,
+    armor: 0.2, fly: false, score: 35, paintTintDecay: 0.2,
+    burrower: true,       // unhittable while burrowed (paint.js + game)
+  },
+  // (c) SILT LEECH — CLINGS to the player on contact: drains a small HP/sec
+  // and SLOWS movement 25% while attached (the leechAttached flag + the pure
+  // leechDrain(dt)). Comes off when PAINTED (any swipe touching the frog —
+  // dry brush counts, its one combat use) OR when the player HOPS off (one
+  // hop breaks the cling; a second leech cannot attach for ~6s — the pure
+  // leechReattachCd). It has no contact attack of its own (it clings).
+  leech: {
+    id: 'leech', name: 'Silt Leech', hp: 10, speed: 64, dmg: 0, radius: 11,
+    armor: 0, fly: false, score: 18, paintTintDecay: 0.4,
+    leech: true,         // clings + drains + slows (no contact attack)
+  },
 };
+
+// R3 (v1.6 Module R): the BESTIARY's pure rule constants + tick functions.
+// All Reeds-bestiary numbers live here so a balance pass is one file edit.
+export const REEDS_BESTIARY = {
+  // (a) wisp: the useless spin a blue splash induces.
+  wispBlindDuration: 3.0,      // seconds of spin after a blue splash
+  wispBlindRadius: 140,        // a blue splash this close blinds the wisp
+  wispHoming: 1.0,             // seek gain while the lantern lights the wisp
+  wispDrift: 0.35,             // random-drift gain while unlit / not homing
+  // (b) serpent: the burrow -> telegraph -> surface -> cooldown cycle.
+  serpentTelegraph: 1.2,       // the growing ripple-ring tell (seconds)
+  serpentSurface: 0.9,         // the surfaced strike window (seconds)
+  serpentStrikeReach: 150,     // a frog this close to the strike lane takes the hit
+  serpentBurrow: 4.0,          // time back underground before the next cycle
+  serpentRecover: 1.4,         // the submerged swell after a strike (before re-burrowing)
+  serpentReCooldown: 2.2,      // extra pause after a PAINTED-RING interrupt
+  // (c) leech: the cling / strangle.
+  leechDrainDps: 0.6,          // HP/sec drained while attached
+  leechSlow: 0.25,             // 25% movement slowdown while attached
+  leechReattach: 6.0,          // seconds a second leech cannot attach after one breaks
+};
+
+// R3 (a): the pure WISP-BLIND tick. A wisp carries `wispBlindT` (seconds of
+// spin left, >0 while blind). This decrements it and returns true while it is
+// still blind (the wisp is "useless" — spinning, no homing, no contact). A
+// fresh wisp (0/undefined) is never blind. Pure.
+export function wispBlinded(t) {
+  const v = Number(t);
+  return Number.isFinite(v) ? v > 0 : false;
+}
+
+// R3 (c): the pure LEECH-DRAIN tick. While a leech is attached it drains
+// `dps` HP/sec off the player's hp and returns the HP lost this step (a float,
+// the caller floors into a whole-hit or accumulates; the movement slowdown is
+// the separate `leechSlow` factor applied by the player). No-op (0) with no
+// leech. Pure — no browser APIs.
+export function leechDrain(dt, dps = REEDS_BESTIARY.leechDrainDps) {
+  if (!(dt > 0)) return 0;
+  return Math.max(0, dt) * (Number(dps) || 0);
+}
 
 // K2 (v1.5 M2): an ASLEEP Blind Crag Frog is vulnerable — it takes this much
 // paint damage (×1.5). Applied in paint.js when the target is asleep.

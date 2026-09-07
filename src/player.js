@@ -27,6 +27,12 @@ export class Player {
     this.splashCharge = 0;
     this.alive = true;
     this._blinkT = 1.5 + Math.random() * 3;
+    // R3 (v1.6): the SILT LEECH cling. `leechAttached` is true while a leech is
+    // clung (movement slowed 25% — see speedFactor); the game flips it on
+    // contact / on paint-off / on hop-off. `leechCd` is the shared re-attach
+    // window (seconds, ~6) — while > 0 no leech can latch again.
+    this.leechAttached = false;
+    this.leechCd = 0;
   }
 
   get speed() { return 230; }
@@ -40,6 +46,11 @@ export class Player {
     else if (this.slowT > 0) f = 0.55;
     return f;
   }
+
+  // R3 (v1.6): the leech's STRANGLE — while a leech is clung, ground movement is
+  // reduced 25% (a pure 0.75 factor). Read by update() only when a leech is
+  // attached (Reeds), so a cycle-0 swamp run is byte-identical.
+  leechFactor() { return this.leechAttached ? 0.75 : 1; }
 
   update(dt, input, tuning, world, view) {
     const mv = input.moveVec();
@@ -70,11 +81,18 @@ export class Player {
       if (this.hopT <= 0) { this._hopLanded = true; this.squash = 1.2; }
     }
     if (this.hopCd > 0) this.hopCd -= dt;
+    // R3 (v1.6): tick the shared leech re-attach window (a second leech cannot
+    // latch while > 0). Reeds-only (a cycle-0 player never has a leech attached).
+    if (this.leechCd > 0) this.leechCd -= dt;
 
     // movement: base speed, boosted mid-hop; E3 slow/root modifiers
     let spd = this.speed;
     if (this.hopT > 0.04) spd *= 2.6;
     spd *= this.speedFactor();
+    // R3 (v1.6): a clinging leech STRANGLES the frog — movement reduced 25%
+    // (the pure leechFactor, 0.75 while clung). Reeds-only; byte-identical
+    // otherwise (a cycle-0 player never has a leech attached).
+    if (this.leechAttached) spd *= this.leechFactor();
     // R2 (v1.6): the Reeds FLOODED LOWER BANKS — moving through the open dark
     // water (low elevation) slows ground movement. A pure factor from
     // logic.js (1.0 outside a flood band, 0.72 inside). Gated by the world
@@ -111,9 +129,17 @@ export class Player {
     return this;
   }
 
-  hurt(dmg, tuning) {
-    if (!this.alive || this.iframes > 0) return false;
+  hurt(dmg, tuning, drain = false) {
+    // R3 (v1.6): a leech DRAIN tick (drain=true) bypasses i-frames and does no
+    // hit-flash/iframes — it is a continuous small HP loss while the leech
+    // clings (like burn ticking), not a discrete contact hit. Default (drain
+    // false) is the normal contact/strike path — byte-identical.
+    if (!this.alive || (!drain && this.iframes > 0)) return false;
     this.hp -= Math.max(1, Math.round(dmg));
+    if (drain) {
+      if (this.hp <= 0) { this.hp = 0; this.alive = false; }
+      return true;
+    }
     this.iframes = tuning.iframes;
     this.hurtT = 0.35;
     this.squash = 0.7;

@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, inGravityPocket, hopLift, floodedWaterFactor } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, inGravityPocket, hopLift, floodedWaterFactor } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -2967,6 +2967,11 @@ _drawAtelier(ctx) {
     p._plumeSuppress = !!(this.heron && this.heron.gilded && !this.heron.flying
       && this.heron._intro <= 0 && this.heron.plumeT > 0);
     p.update(dt, this.input, this.tuning, this.world, this._view());
+    // R3 (v1.6): detect the frame a hop STARTS (hopT goes from <=0 to >0) so the
+    // bestiary can peel a clinging leech (one hop breaks the cling). Reeds-only
+    // effect — a cycle-0 run has no leech to peel.
+    this._hopStart = p.hopT > 0 && !this._hopWas;
+    this._hopWas = p.hopT > 0;
     // R1 (v1.6): THE LANTERN (Reeds variant only). The L key toggles the paper
     // lantern; the pure lanternTick drains the candle fuel (and auto-snuffs an
     // empty lantern) and refills it at nearby fireflies / lantern-rest spots.
@@ -3043,6 +3048,7 @@ _drawAtelier(ctx) {
     if (this.input.mouse.lDown) {
       this.paint.trySwipe(targetList);
       this._noiseEvent(p.x, p.y); // K2: a paint swipe is a noise
+      this._bestiarySwipe(p); // R3 (v1.6): leech paint-off + serpent ring-interrupt
       // paint the heron too (only while boss is "live" and player not dying)
       if (this.heron && this.heron.hp > 0 && !this.heron.flying && this.heron._intro <= 0) {
         const res = this.paint.paintBossHit(this.heron, p.pigment, this.tuning.bossPaintHit);
@@ -3100,6 +3106,7 @@ _drawAtelier(ctx) {
       this.paint.trySplash(targetList);
       this.addShake(8);
       this._noiseEvent(p.x, p.y); // K2: a splash is a loud noise
+      this._bestiarySplash(p); // R3 (v1.6): a BLUE splash BLINDS a nearby wisp
       // splash the heron if it's in the burst
       if (this.heron && this.heron.hp > 0 && !this.heron.flying) {
         const d = dist(p.x, p.y, this.heron.x, this.heron.y - 140);
@@ -3116,6 +3123,10 @@ _drawAtelier(ctx) {
     // seek/move/contact work is skipped. A 500px buffer keeps enemies from
     // visibly freezing at the edge. `p` is the player (declared above).
     const CULL2 = 500 * 500;
+    // R3 (v1.6): the Reeds bestiary's per-frame touch-up (wisp light refresh +
+    // leech cling-on-contact / hop-off). Reeds-only — a cycle-0 run's enemy list
+    // has no wisp/serpent/leech, so this is a no-op there (byte-identical).
+    if (this.world.reedsVariant) this._bestiaryTick(dt, p);
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       if (!e.dead && p.alive) {
@@ -3591,6 +3602,19 @@ _drawAtelier(ctx) {
     // is the rarest pick, just below the turtle, so it never crowds the pool.
     const cragAllowed = this._zoneI >= 3 || this.ngCycle >= 1;
     if (cragAllowed && t > 30 && roll > 0.86 && roll <= 0.9) kind = 'cragfrog';
+    // R3 (v1.6 Module R): the LIGHT-REWRITTEN BESTIARY — three Reeds-only
+    // archetypes (wisp / serpent / leech). Reeds-mode ONLY (the victory-gated
+    // Reeds variant): a cycle-0 swamp run's _spawnWave never enters this branch,
+    // so the first-time run is byte-identical. Each is a RARE pick (the top of a
+    // separate roll, so they never crowd the swamp pool) and shares the EXISTING
+    // spawn cap (`cap` check above) — no extra list, so the enemy count can never
+    // grow unbounded.
+    if (this.world.reedsVariant && t > 15) {
+      const rr = Math.random();
+      if (rr > 0.965) kind = 'wisp';
+      else if (rr > 0.935) kind = 'serpent';
+      else if (rr > 0.905) kind = 'leech';
+    }
     this.enemies.push(spawnEnemy(kind, x, y, this.tuning));
     // K9 (v1.5 M4): one-shot first-sight callout for the new creatures (UI
     // banner only — see _firstSightNote).
@@ -3598,6 +3622,116 @@ _drawAtelier(ctx) {
       this._firstSightNote('turtle', 'New in the swamp — the Mud Turtle. Its shell bounces paint from the FRONT; circle behind, or burn it with red.');
     } else if (kind === 'cragfrog') {
       this._firstSightNote('cragfrog', 'New in the swamp — the Blind Crag Frog. It hunts by SOUND; stay quiet and it sleeps (and takes +50% damage).');
+    } else if (kind === 'wisp') {
+      this._firstSightNote('wisp', 'New beneath the Reeds — the Glow Wisp. It homes to your LANTERN\u2019s glow; a BLUE splash BLINDS it.');
+    } else if (kind === 'serpent') {
+      this._firstSightNote('serpent', 'New beneath the Reeds — the Mud Serpent. It burrows and telegraphs a lunge; PAINT THE RING before it surfaces.');
+    } else if (kind === 'leech') {
+      this._firstSightNote('leech', 'New beneath the Reeds — the Silt Leech. It clings and STRANGLES your color; PAINT it off or HOP clear.');
+    }
+  }
+
+  // R3 (v1.6 Module R): the Reeds bestiary's per-frame touch-up. Called from the
+  // enemy-update loop so the three archetypes get the light / cling hooks they
+  // can't compute on their own (they need the lantern light + the player's hop):
+  //   · wisp._light  — the lightFactor it receives (drives draw alpha + homing)
+  //   · leech cling  — arm on contact (respecting the re-attach window), peel on
+  //     HOP (one hop breaks the cling; a second leech can't latch for ~6s)
+  _bestiaryTick(dt, p) {
+    const L = this.lantern;
+    const cx = p.x, cy = p.y;   // the lantern is carried by the frog
+    for (const e of this.enemies) {
+      if (e.wisp) {
+        // R3 (a): the wisp's lightFactor at ITS position (how much light it
+        // actually gets) — drives its draw alpha + its lit-homing vs unlit-drift.
+        e._light = lightFactor(L, e.x, e.y, cx, cy);
+      }
+      if (e.leech && !e.clinging) {
+        // R3 (c): a detached leech that touches the frog CLINGS — but only if
+        // the re-attach window is closed (a second leech can't latch for ~6s
+        // after the last cling ended) and the frog isn't in i-frames.
+        const d = dist(e.x, e.y, p.x, p.y);
+        if (p.alive && p.iframes <= 0 && p.leechCd <= 0 && d < e.r + p.r + 2) {
+          e.clinging = true; e._drainAcc = 0;
+          p.leechAttached = true;
+          p.leechCd = REEDS_BESTIARY.leechReattach;
+          this.sfx('leech-attach');
+        }
+      }
+    }
+    // R3 (c): HOP-OFF — one hop breaks a clinging leech (the frog's hop start is
+    // the frame hopT goes from <=0 to >0). Peel it, arm the re-attach window.
+    if (p.leechAttached && this._hopStart) {
+      this._hopStart = false;
+      for (const e of this.enemies) {
+        if (e.leech && e.clinging) { e.clinging = false; e._drainAcc = 0; }
+      }
+      p.leechAttached = false;
+      p.leechCd = REEDS_BESTIARY.leechReattach;
+      this.sfx('leech-peel');
+    } else if (!this._hopStart) {
+      this._hopStart = false;
+    }
+  }
+
+  // R3 (v1.6 Module R): a paint SWIPE's bestiary hooks (any pigment counts —
+  // the leech's "one combat use" for the dry brush is here):
+  //   · a swipe touching a CLINGING leech peels it OFF (same as a hop).
+  //   · a swipe that paints a RIPPLE RING at a telegraphing serpent's surface
+  //     point INTERRUPTS its strike (knocks it back underground + re-cooldowns).
+  // The swipe fan is the brush's aim at the mouse (same geometry as trySwipe).
+  _bestiarySwipe(p) {
+    const aimA = p.aimA;
+    const range = this.tuning.swipeRange;
+    const arc = this.tuning.swipeArc;
+    const inFan = (ex, ey) => {
+      const dx = ex - p.x, dy = ey - p.y;
+      const d = Math.hypot(dx, dy);
+      if (d > range) return false;
+      let a = Math.atan2(dy, dx) - aimA;
+      while (a > Math.PI) a -= TAU;
+      while (a < -Math.PI) a += TAU;
+      return Math.abs(a) <= arc;
+    };
+    for (const e of this.enemies) {
+      if (e.leech && e.clinging) {
+        // R3 (c): PAINT-OFF — any swipe TOUCHING THE FROG peels the leech (the
+        // dry brush's one combat use). A clinging leech rides the frog, so this
+        // is a simple range-of-the-frog test (not an aim-direction fan): the
+        // frog can peel it off without precisely aiming at a tiny leech.
+        if (dist(e.x, e.y, p.x, p.y) <= range + e.r) {
+          e.clinging = false; e._drainAcc = 0;
+          p.leechAttached = false;
+          p.leechCd = REEDS_BESTIARY.leechReattach;
+          this.sfx('leech-peel');
+          this.paint.note(e.x, e.y - 14, 'painted off', p.pigment);
+        }
+      }
+      if (e.burrower && e.phase === 'telegraph' && inFan(e.burrowX, e.burrowY)) {
+        // R3 (b): a painted RING on the water before the serpent surfaces
+        // INTERRUPTS the strike — knock it back underground + re-cooldown.
+        if (!e.interrupted) {
+          e.interrupted = true;
+          this.sfx('serpent-dive');
+          this.particles.ripple(e.burrowX, e.burrowY);
+          this.paint.note(e.burrowX, e.burrowY - 16, 'interrupted!', p.pigment);
+        }
+      }
+    }
+  }
+
+  // R3 (v1.6 Module R): a charged SPLASH's bestiary hook — a BLUE splash within
+  // the burst BLINDS a nearby wisp (the documented ~3s useless spin).
+  _bestiarySplash(p) {
+    if (p.pigment !== 'blue') return;
+    const R = this.tuning.splashRadius + 40;
+    for (const e of this.enemies) {
+      if (e.wisp && dist(e.x, e.y, p.x, p.y) <= R) {
+        e.wispBlindT = REEDS_BESTIARY.wispBlindDuration;
+        this.sfx('wisp-blind');
+        this.particles.ripple(e.x, e.y);
+        this.paint.note(e.x, e.y - 14, 'blinded!', 'blue');
+      }
     }
   }
 

@@ -6148,5 +6148,186 @@ console.log('== stage 85: v1.6 R5 — REEDS SAVE GATE (save.flags.reedsUnlocked,
   console.log('ok — R5: the Reeds save gate works — save.flags.reedsUnlocked (set on the first swamp victory, same place ngUnlocked is set; a defeat never sets it) opens the title/atelier entry, SAVE_VERSION bumped 9 -> 10 with a v9->v10 migration + normalizeReedsUnlocked (every pre-v1.6 save loads false — nobody backfills access; a legacy victory save keeps access via the victory fallback), and the P6 Field Guide renders the four BENEATH-THE-REEDS placeholder cards (Wisp / Serpent / Leech / The Silt Wyrm, with their counterplay notes) only when unlocked (a first-time guide is byte-identical).');
 }
 
+// ====================================================================
+// Stage 86 — v1.6 R3: the LIGHT-REWRITTEN BESTIARY (three Reeds archetypes)
+// ====================================================================
+console.log('== stage 86: v1.6 R3 — THE LIGHT-REWRITTEN BESTIARY (wisp / serpent / leech, all keyed to THE LANTERN, Reeds-only) ==');
+{
+  const L86 = await import('../src/logic.js');
+  const E86 = await import('../src/enemies.js');
+  const { spawnEnemy, drawEnemy } = E86;
+
+  // ---- (0) the three archetypes are declared in the ENEMIES table, Reeds-only ----
+  const W = L86.ENEMIES.wisp, S = L86.ENEMIES.serpent, L = L86.ENEMIES.leech;
+  assert(W && W.name === 'Glow Wisp', 'R3: the Glow Wisp is declared in the ENEMIES table');
+  assert(S && S.name === 'Mud Serpent', 'R3: the Mud Serpent is declared in the ENEMIES table');
+  assert(L && L.name === 'Silt Leech', 'R3: the Silt Leech is declared in the ENEMIES table');
+  assert(W.lightHoming === true && S.burrower === true && L.leech === true, 'R3: each archetype carries its bestiary flag (lightHoming / burrower / leech)');
+  assert(L86.REEDS_BESTIARY && L86.REEDS_BESTIARY.wispBlindDuration > 0 && L86.REEDS_BESTIARY.serpentTelegraph > 0 && L86.REEDS_BESTIARY.leechReattach > 0, 'R3: the bestiary constants are declared');
+
+  // ---- (0b) the PURE ticks: wispBlinded() + leechDrain(dt) ----
+  assert(L86.wispBlinded(3.0) === true && L86.wispBlinded(0.001) === true, 'R3 (pure): wispBlinded is true while spin time remains');
+  assert(L86.wispBlinded(0) === false && L86.wispBlinded(-1) === false && L86.wispBlinded(undefined) === false, 'R3 (pure): wispBlinded is false when the spin has run out (0 / negative / undefined)');
+  assert(L86.leechDrain(1.0) === L86.REEDS_BESTIARY.leechDrainDps, 'R3 (pure): leechDrain(dt) drains dps*dt (1s = full dps)');
+  assert(Math.abs(L86.leechDrain(0.5) - L86.REEDS_BESTIARY.leechDrainDps * 0.5) < 1e-9, 'R3 (pure): leechDrain scales with dt (0.5s = half dps)');
+  assert(L86.leechDrain(0) === 0, 'R3 (pure): leechDrain(0) is a no-op');
+
+  // a Reeds expedition to drive the game-level bestiary hooks.
+  const vSave = L86.freshSave(); vSave.stats.victories = 1; vSave.flags.heronDefeated = true;
+  const g = new Game(makeCanvas()); g.start(); g._quitToTitle();
+  g.save = vSave; g._beginExpedition(false, { reeds: true });
+  const p = g.player;
+  p.alive = true; p.hp = p.maxHp; p.iframes = 999; p.leechAttached = false; p.leechCd = 0;
+  const world = { collideCircle: (x, y, r) => [x, y] };
+  const lit = { fuel: 1, lit: true };
+  const unlit = { fuel: 1, lit: false };
+
+  // ====================================================================
+  // (a) GLOW WISP — winds toward the lantern while lit; drifts unlit; a blue
+  //     splash near it blinds it (the ~3s useless spin).
+  // ====================================================================
+  const w = spawnEnemy('wisp', 550, 700, g.tuning);
+  // lit + inside the lantern's reach (the frog carries it, R=260px): the wisp
+  // homes to the frog. Spawn 150px away — inside the light radius AND above the
+  // 0.15 homing gate — so homing engages from the first frame.
+  p.x = 400; p.y = 700; p.alive = true;
+  const d0 = Math.hypot(w.x - p.x, w.y - p.y); // 150px
+  let wmax = 0;
+  for (let j = 0; j < 240; j++) { w._light = L86.lightFactor(lit, w.x, w.y, p.x, p.y); w.update(1 / 60, p, g.tuning, world, j / 60); if (w._light > wmax) wmax = w._light; }
+  const d1 = Math.hypot(w.x - p.x, w.y - p.y);
+  assert(wmax > 0.3, "R3 wisp: lit, it sits in the lantern light (peak " + wmax.toFixed(2) + ")");
+  assert(d1 < d0 - 40, "R3 wisp: lit, it winds toward the frog (" + d0.toFixed(0) + " -> " + d1.toFixed(0) + "px)");
+  // unlit: the wisp no longer homes (it keeps only random drift, so the homing
+  // bias toward the frog is gone).
+  const wu = spawnEnemy('wisp', 400, 700, g.tuning);
+  p.x = 400; p.y = 700;
+  let towardFrog = 0;
+  for (let i = 0; i < 240; i++) {
+    const before = { x: wu.x, y: wu.y };
+    wu._light = L86.lightFactor(unlit, wu.x, wu.y, p.x, p.y);
+    wu.update(1 / 60, p, g.tuning, world, i / 60);
+    // measure the drift component toward the frog
+    towardFrog += (Math.sign(p.x - before.x) * (wu.x - before.x) + Math.sign(p.y - before.y) * (wu.y - before.y)) / 1;
+  }
+  assert(wu._light === 0, 'R3 wisp: UNLIT, the lantern lights nothing (lightFactor 0)');
+  assert(towardFrog < 20, `R3 wisp: unlit it takes RANDOM DRIFT, not a steady wind toward the frog (net frog-ward drift ${towardFrog.toFixed(1)} is small, not homing)`);
+  // the blue splash blinds it (game hook _bestiarySplash). A RED splash must not.
+  const wb = spawnEnemy('wisp', p.x + 40, p.y, g.tuning); g.enemies.push(wb);
+  p.pigment = 'blue';
+  g._bestiarySplash(p);
+  assert(Math.abs(wb.wispBlindT - L86.REEDS_BESTIARY.wispBlindDuration) < 0.01, `R3 wisp: a BLUE splash near it BLINDS it (blindT ${wb.wispBlindT.toFixed(2)}s)`);
+  assert(L86.wispBlinded(wb.wispBlindT) === true, 'R3 wisp: the blind window is live (wispBlinded true right after the splash)');
+  const wr = spawnEnemy('wisp', p.x + 40, p.y, g.tuning); g.enemies.push(wr);
+  p.pigment = 'red';
+  g._bestiarySplash(p);
+  assert(wr.wispBlindT === 0, 'R3 wisp: a non-blue splash does NOT blind it (red keeps blindT 0)');
+  // while blind it spins uselessly (no homing toward the frog even lit) — it
+  // holds its distance (a lit wisp winds in by >=40px, a blind one does not).
+  const ws = spawnEnemy('wisp', 400, 700, g.tuning); ws.wispBlindT = L86.REEDS_BESTIARY.wispBlindDuration;
+  p.x = 500; p.y = 700;
+  const wsd0 = Math.hypot(ws.x - p.x, ws.y - p.y);
+  for (let i = 0; i < 60; i++) { ws._light = L86.lightFactor(lit, ws.x, ws.y, p.x, p.y); ws.update(1 / 60, p, g.tuning, world, i / 60); }
+  const wsd1 = Math.hypot(ws.x - p.x, ws.y - p.y);
+  assert(wsd1 >= wsd0 - 5, `R3 wisp: while blind it SPINS uselessly, no homing (distance to frog ${wsd0.toFixed(1)} -> ${wsd1.toFixed(1)}px, it does not wind in)`);
+  assert(ws.wispBlindT < L86.REEDS_BESTIARY.wispBlindDuration, 'R3 wisp: the blind window ticks DOWN over time (the ~3s spin lapses)');
+
+  // ====================================================================
+  // ====================================================================
+  // (b) MUD SERPENT — burrow (invisible/unhittable) -> telegraph (growing ring)
+  //     -> surface (strike the lane). A painted ring interrupts + re-cools.
+  //     (The serpent's initial burrow time is randomized, so these drives are
+  //     PHASE-DETECTION based — deterministic regardless of the random timer.)
+  // ====================================================================
+  const s = spawnEnemy('serpent', 400, 700, g.tuning);
+  assert(s.phase === 'burrowed' && s.striking === false, 'R3 serpent: starts BURROWED (invisible + unhittable, no strike armed)');
+  // unhittable while burrowed: a swipe that would reach it deals nothing.
+  const sb = spawnEnemy('serpent', p.x + 40, p.y, g.tuning); // fresh, burrowed
+  g.enemies.length = 0; g.enemies.push(sb);
+  const sbhp = sb.hp;
+  g.paint.swipeCd = 0; p.swipeT = 0;
+  g._bestiarySwipe(p); // a swipe on it while burrowed
+  assert(sb.hp === sbhp, 'R3 serpent: while BURROWED it is unhittable (a swipe deals nothing)');
+  // drive the fresh serpent into its telegraph (phase-detection: bounded).
+  for (let i = 0; i < 600 && s.phase === 'burrowed'; i++) s.update(1 / 60, p, g.tuning, world, i / 60);
+  assert(s.phase === 'telegraph', `R3 serpent: after its burrow it TELEGRAPHS (phase=${s.phase})`);
+  assert(s.striking === false, 'R3 serpent: during the telegraph the strike is not yet armed');
+  // the growing ripple ring: telegraph progress goes 0 -> 1 over serpentTelegraph.
+  const tprog = () => 1 - s.phaseT / L86.REEDS_BESTIARY.serpentTelegraph;
+  const t0 = tprog(); s.update(1 / 60, p, g.tuning, world, 0.0);
+  const t1 = tprog();
+  assert(t1 > t0, `R3 serpent: the telegraph RING GROWS (progress ${t0.toFixed(2)} -> ${t1.toFixed(2)})`);
+  // PAINT THE RING: a swipe on the surface point before it surfaces INTERRUPTS.
+  g.enemies.length = 0; g.enemies.push(s);
+  p.x = s.burrowX + 40; p.y = s.burrowY; p.aimA = Math.PI; // aim at the ring (left)
+  g.paint.swipeCd = 0; p.swipeT = 0; s.interrupted = false;
+  g._bestiarySwipe(p);
+  assert(s.interrupted === true, 'R3 serpent: a painted RING before it surfaces INTERRUPTS the strike');
+  s.update(1 / 60, p, g.tuning, world, 0.0); // the interrupt takes effect next tick
+  assert(s.phase === 'recover', `R3 serpent: after the interrupt it is knocked back UNDERGROUND (phase=${s.phase})`);
+  assert(Math.abs(s.phaseT - L86.REEDS_BESTIARY.serpentReCooldown) < 0.01, `R3 serpent: the interrupt sets a RE-COOLDOWN before the next cycle (recover ${s.phaseT.toFixed(2)}s)`);
+  // the full natural cycle: telegraph -> surface (armed strike) -> recover.
+  const s2 = spawnEnemy('serpent', 400, 700, g.tuning);
+  for (let i = 0; i < 900 && s2.phase === 'burrowed'; i++) s2.update(1 / 60, p, g.tuning, world, i / 60);
+  assert(s2.phase === 'telegraph', 'R3 serpent: the cycle reaches TELEGRAPH again');
+  s2.interrupted = false;
+  for (let i = 0; i < 120 && s2.phase === 'telegraph'; i++) s2.update(1 / 60, p, g.tuning, world, 0.0);
+  assert(s2.phase === 'surface' && s2.striking === true, `R3 serpent: it then SURFACES and arms the strike (phase=${s2.phase}, striking=${s2.striking})`);
+  // a frog in the strike lane takes the hit.
+  p.iframes = 0; p.alive = true; p.hp = p.maxHp; const hp0 = p.hp;
+  s2.x = p.x + 40; s2.y = p.y; s2.update(1 / 60, p, g.tuning, world, 0.0);
+  assert(p.hp < hp0, `R3 serpent: a surfacing strike HITS a frog in the lane (lost ${hp0 - p.hp} hp)`);
+  for (let i = 0; i < 120 && s2.phase === 'surface'; i++) s2.update(1 / 60, p, g.tuning, world, 0.0);
+  assert(s2.phase === 'recover', `R3 serpent: after the strike it recovers/withdraws (phase=${s2.phase})`);
+
+  // ---- draw path: exercise drawBestiary across every state (no throw; the
+  //      serpent's ripple ring + the wisp's light-alpha are the P10 allocation
+  //      risks — draw is capped arcs/ellipses, no per-frame allocation). ----
+  const drawCtx = makeCtx(makeCanvas());
+  const dw = spawnEnemy('wisp', 500, 700, g.tuning); dw._light = 0.5;
+  drawEnemy(drawCtx, dw, 0.4); drawEnemy(drawCtx, dw, 0.4); dw.wispBlindT = 2;
+  drawEnemy(drawCtx, dw, 0.5);                                  // blind spin pose
+  const ds = spawnEnemy('serpent', 500, 700, g.tuning);
+  for (const ph of ['burrowed', 'telegraph', 'surface', 'recover']) { ds.phase = ph; ds.phaseT = 0.5; drawEnemy(drawCtx, ds, 0.4); }
+  const dl = spawnEnemy('leech', 500, 700, g.tuning); dl.clinging = true;
+  drawEnemy(drawCtx, dl, 0.4);                                  // clinging pose
+  assert(true, 'R3: the bestiary draw path (wisp light-alpha + blind spin, serpent burrowed/telegraph/surface/recover ripple rings, leech cling) renders headless without throwing (P10 allocation-safe)');
+
+  // ====================================================================
+  // (c) SILT LEECH — clings on contact (drains a small HP/sec + slows 25%);
+  //     comes off when PAINTED (any swipe touching the frog) OR when the frog
+  //     hopped off; a second leech cannot attach for ~6s.
+  // ====================================================================
+  p.x = 400; p.y = 700; p.alive = true; p.leechAttached = false; p.leechCd = 0; p.iframes = 0; p.hopT = 0; p.hp = p.maxHp;
+  g._hopStart = false; g.enemies.length = 0;
+  const lee = spawnEnemy('leech', p.x, p.y, g.tuning); // spawned ON the frog
+  g.enemies.push(lee);
+  g._bestiaryTick(1 / 60, p);
+  assert(p.leechAttached === true && lee.clinging === true, 'R3 leech: on contact it CLINGS (player.leechAttached + leech.clinging)');
+  assert(p.leechFactor() === 0.75, 'R3 leech: while attached it SLOWS the frog 25% (leechFactor 0.75)');
+  const hpBefore = p.hp;
+  for (let i = 0; i < 360; i++) lee.update(1 / 60, p, g.tuning, world, i / 60); // 6s of cling
+  const drained = hpBefore - p.hp;
+  assert(drained >= 1, `R3 leech: while attached it DRAINS hp (~${L86.REEDS_BESTIARY.leechDrainDps}/s: lost ${drained} whole hp over 6s)`);
+  assert(p.alive === true, 'R3 leech: the drain is small (a small HP/sec) — the frog survives');
+  // PAINT-OFF: a swipe touching the frog peels it off (dry brush counts).
+  p.aimA = Math.PI; p.x = 400; p.y = 700; p.swipeT = 0; g.paint.swipeCd = 0; g._hopStart = false; g.enemies.length = 0; g.enemies.push(lee);
+  g._bestiarySwipe(p);
+  assert(lee.clinging === false && p.leechAttached === false, 'R3 leech: PAINTED off (a swipe touching the frog breaks the cling)');
+  assert(p.leechCd > 5.5, `R3 leech: after peeling, the re-attach window is set (~6s, cd=${p.leechCd.toFixed(1)})`);
+  // a second leech CANNOT attach while the re-attach window is live.
+  const lee2 = spawnEnemy('leech', p.x, p.y, g.tuning); g.enemies.length = 0; g.enemies.push(lee2);
+  g._bestiaryTick(1 / 60, p);
+  assert(lee2.clinging === false && p.leechAttached === false, 'R3 leech: a second leech CANNOT attach while the re-attach cooldown is live');
+  // HOP-OFF: a fresh attach, then one hop breaks the cling.
+  p.leechCd = 0; p.leechAttached = false; g.enemies.length = 0;
+  const lee3 = spawnEnemy('leech', p.x, p.y, g.tuning); g.enemies.push(lee3);
+  g._bestiaryTick(1 / 60, p);
+  assert(p.leechAttached === true && lee3.clinging === true, 'R3 leech (hop-off): re-attaches once the cooldown lapses');
+  g._hopStart = true; g._bestiaryTick(1 / 60, p);
+  assert(lee3.clinging === false && p.leechAttached === false, 'R3 leech: a single HOP breaks the cling (hop-off works)');
+
+  console.log('ok — R3: the light-rewritten bestiary — three Reeds archetypes (Glow Wisp / Mud Serpent / Silt Leech), all keyed to THE LANTERN (R1 lightFactor/lanternState) and Reeds-mode-only (a rare pick in the bounded spawn cap, never in the cycle-0 swamp pool): the wisp winds toward the lantern while lit and drifts unlit, with a ~3s useless spin from a blue splash (the pure wispBlinded tick; draw alpha scales by lightFactor); the serpent burrows (invisible + unhittable), telegraphs a strike with a growing ripple ring (the heron-telegraph draw language), and surfaces to strike the lane, interrupted by a painted ring (any pigment) that knocks it back underground with a cooldown; the leech clings on contact (a small HP/sec drain + 25% movement slow — leechAttached flag + the pure leechDrain tick) and comes off when painted (any swipe touching the frog, dry counts) or when the frog hops off (one hop breaks it; a second leech cannot attach for ~6s). Each carries its own distinct SFX voice.');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
