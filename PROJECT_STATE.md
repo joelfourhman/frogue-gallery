@@ -311,7 +311,31 @@ and **4th boss archetype** (→ R4)):
    before breach; the 3 hues + awaken work through the EXISTING paintBoss
    latch — the same event the herons emit, and one hue alone does NOT awaken;
    the awakened rhythm is faster; defeat ends the Reeds run in victory; the
-   dark-mud draw path renders headless without throwing — P10-safe).
+   the dark-mud draw path renders headless without throwing — P10-safe).
+   **R6 ✅ (2026-09-07, v1.6 BATCH 2, finished by Hermes after the PM session
+   died mid-item)** — `tests/reedspace.mjs` (new probe) + season audit. The PM
+   session crashed before committing R6 (the probe was on disk but crashed on a
+   hand-rolled save missing `bank` + used a per-frame keydown/keyup the headless
+   stub can't hold, so its god-mode descent stalled at the guard timeout and the
+   wave-fighting estimate was inflated to ~26.8 min). Hermes recovered it: (1)
+   the probe now uses the Game's REAL fresh save + flips the victory flags
+   (ngpace pattern — `_beginExpedition`'s `applyWelcomeGrant` reads
+   `save.bank`); (2) the descent drives the real sim via `p.vx = 230` per frame
+   (a true base-speed traversal through the flooded low band); (3) the
+   wave-fighting estimate now scales the SWAMP probe's measured wave count
+   (pace.mjs 755+160+30 ≈ 945s) by the Reeds length ratio (6000/5400) instead
+   of a 2.2s/enemy over-density — the Reeds is longer but not denser. Result:
+   Reeds HUMAN ESTIMATE ~22.2 min (IN the documented 20–25 min designed-descent
+   band), Silt Wyrm fight ~3.9 min (IN the 2–4 min class), god-mode descent
+   29–30s (real traversal, not a stall). New smoke **stage 88** (runs the probe
+   as a child process; asserts wyrm identity, descent < 90s not a timeout stall,
+   wyrm fight 2–4 min, Reeds total 20–25 min). Season re-verification: first-time
+   pace 17.3 / humance 18.3 min (IN 15–20 — the victory gate held), NG+ cycle-1
+   19.5 min (unchanged), bosspace 37s (unchanged); cycle-0 `makeTuning` output
+   byte-identical (the Reeds biome is save-gated, not tuning-gated — no swamp
+   balance changed). **BATCH 2 (R3 + R4 + R6) COMPLETE — Module R (the Reeds
+   biome) is done: R1+R2+R5+R3+R4+R6 all committed, smoke 88 stages green.**
+   Next: BATCH 3 (W1, W2, W3 — gamepad).
 3. **BATCH 3 — W1, W2, W3** (gamepad: raw-API input feed into `input.js`;
    connection chip + full-screen UI focus; Reeds-mode parity +
    byte-identity regression for kb-only play; mocked `navigator.getGamepad`

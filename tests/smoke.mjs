@@ -6414,5 +6414,26 @@ console.log('== stage 86: v1.6 R3 — THE LIGHT-REWRITTEN BESTIARY (wisp / serpe
   console.log('ok — R4: THE SILT WYRM — the 4th boss ARCHETYPE (the deferred item) — the end-of-Reeds boss is a SUBTERRANEAN creature that moves THROUGH the terrain, surfacing only at 3 TELEGRAPHED fixed points on its arena line (each with a ~1.5s ripple-ring tell; between surfaces it is underground + INVULNERABLE + untargetable and its body line slithers beneath). The 3-hue awaken STILL applies through the SAME paintBoss/bossStep path (red burns / blue freezes / green roots the next strike; a single hue repeated does NOT awaken — all three do, the identical awaken latch the herons emit; the full-damage phase speeds the surfacing rhythm). HP in the 48k class (above the gilded 42k — the biome apex); a distinct dark-mud palette + a low rumble SFX layer; Reeds-mode only (a cycle-0 swamp run still spawns the gray heron — byte-identical); defeat ends the Reeds run in victory.');
 }
 
+console.log('== stage 88: v1.6 R6 — Reeds run probe (tests/reedspace.mjs) — the biome has a documented, IN-BAND run-length ==');
+{
+  // Run the reedspace probe as a child process and assert its documented
+  // bands: the Reeds human estimate is a DESIGNED DESCENT (20–25 min —
+  // opt-in post-victory content, allowed past the 15–20 first-time band),
+  // the Silt Wyrm fight lands in the 2–4 min class like the herons, and the
+  // end boss is the wyrm (48k). The first-time swamp pace (15–20) is
+  // victory-gated and structurally untouched (separate probes cover it).
+  const { execFileSync } = await import('node:child_process');
+  const out = execFileSync(process.execPath, ['tests/reedspace.mjs'], { encoding: 'utf8' });
+  const num = (re) => { const m = out.match(re); if (!m) throw new Error('reedspace probe missing: ' + re); return parseFloat(m[1]); };
+  const human = num(/HUMAN ESTIMATE[^\n]*?~([\d.]+) min/);
+  const wyrmMin = num(/Silt Wyrm \(48k hp, human DPS\): ~[\d.]+s = ([\d.]+) min/);
+  const godDescent = num(/A\) god-mode Reeds descent[^\n]*?: ([\d.]+)s/);
+  assert(out.includes('THE SILT WYRM (4th archetype, 48k HP)'), 'R6: the Reeds end boss is THE SILT WYRM (48k HP)');
+  assert(godDescent < 90, `R6: the god-mode descent is a real measured traversal, not a guard-timeout stall (got ${godDescent.toFixed(0)}s < 90s)`);
+  assert(wyrmMin >= 2 && wyrmMin <= 4, `R6: the Silt Wyrm fight lands in the 2–4 min class like the herons (got ${wyrmMin.toFixed(1)} min)`);
+  assert(human >= 20 && human <= 25, `R6: the Reeds run is a DESIGNED DESCENT in the documented 20–25 min band (got ~${human.toFixed(1)} min)`);
+  console.log(`ok — R6: the Reeds run probe documents the biome's run-length (human ~${human.toFixed(1)} min, wyrm fight ${wyrmMin.toFixed(1)} min) — a designed descent, opt-in post-victory, first-time swamp pace untouched`);
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
