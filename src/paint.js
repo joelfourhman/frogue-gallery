@@ -192,7 +192,10 @@ export class Paint {
     // v1.4 color rework (Joel): painting enemies with GREEN heals the frog a
     // little — the heal is per ACTION (not per enemy) so a big green splash
     // is not a free medkit. The float is drained by player.update.
-    if (pig === 'green' && hits.length && p.hp < p.maxHp) {
+    // K4 (v1.5 M2): the GILDED Heron's plume (p._plumeSuppress) ABSORBS this
+    // heal while it is live — both green heal sources (paint-on-green AND
+    // standing-in-green) drop to 0 during the plume. No-op otherwise.
+    if (pig === 'green' && hits.length && p.hp < p.maxHp && !p._plumeSuppress) {
       p._healAcc = (p._healAcc || 0) + (this.tuning.greenHealOnPaint || 0.5);
       this.note(p.x, p.y - p.r - 14, 'heal', 'green');
     }

@@ -24,8 +24,19 @@
 // which offsets most of the +HP on the dominant wave leg. The net result is a
 // cycle-1 run that lands in the SAME 15-20 min window as first-time — the NG+
 // difficulty is a real challenge bump (a rusty/casual player would take longer
-// and take more damage), not a session-length blowout. This probe asserts that
-// band holds.
+// and take more damage), not a session-length blowout.
+//
+// Band semantics (IMPORTANT): the 15-20 min band is the FIRST-TIME / cycle-1
+// reference. Higher NG+ cycles are DELIBERATELY LONGER — the per-cycle
+// NG_STEPS escalation (enemy HP/dmg/spawn +30/+15/+10 per step, capped at
+// cycle 3) grows the wave-fighting leg faster than the returning-player
+// efficiency offsets it, so cycle 2 (~23 min) and cycle 3 (~27 min) sit above
+// the band by design. The default probe run (NG_CYCLE=1) is the green CI gate
+// that asserts the band holds; NG_CYCLE=2/3 runs are informational
+// (deliberately out of band). K4 (NG+ cycle 3+) swaps the cycle-3 boss to the
+// GILDED Heron (42k) but does NOT change the cycle-3 total (the green heron's
+// 2x pin bonus offsets the +6k HP; the plume is a player-side heal mechanic,
+// not a time extender).
 //
 // Run:   node tests/ngpace.mjs
 // Flags: NG_CYCLE=<n>   NG+ cycle to simulate (default 1; 0 = first-time baseline)
@@ -206,12 +217,13 @@ console.log(`Phase 1 — cross-swamp: measured ${crossRaw.toFixed(0)}s × return
 // green play, which a real player uses to shorten that ~3 min; the analytic
 // model is conservative and does not credit the pin).
 {
-  const bossHp = game.heron.maxHp;      // 30k gray (cycle 0) / 36k green (cycle >= 1)
+  const bossHp = game.heron.maxHp;      // 30k gray (cycle 0) / 36k green (cycle 1-2) / 42k gilded (cycle 3+)
   const HUMAN_BOSS_DPS = 30000 / 149;   // calibrated to the measured human gray-heron fight
   const bossRaw = bossHp / HUMAN_BOSS_DPS;
   const boss = bossRaw * RETURNER_BOSS_EFF;
-  const isGreenBoss = game.heron.green === true;
-  console.log(`Phase 2 — heron boss (ANALYTIC, bosspace-style): ${isGreenBoss ? 'Great GREEN Heron' : 'Great Gray Heron'} at ${bossHp} HP ÷ ${HUMAN_BOSS_DPS.toFixed(0)} HP/s human DPS = ${bossRaw.toFixed(0)}s × returner ${RETURNER_BOSS_EFF} = ${boss.toFixed(0)}s = ${(boss / 60).toFixed(1)} min`);
+  const bossKind = game.heron.gilded ? 'GILDED' : (game.heron.green ? 'GREEN' : 'GRAY');
+  const bossName = `Great ${bossKind} Heron`;
+  console.log(`Phase 2 — heron boss (ANALYTIC, bosspace-style): ${bossName} at ${bossHp} HP ÷ ${HUMAN_BOSS_DPS.toFixed(0)} HP/s human DPS = ${bossRaw.toFixed(0)}s × returner ${RETURNER_BOSS_EFF} = ${boss.toFixed(0)}s = ${(boss / 60).toFixed(1)} min`);
 
   // ============================================================ wave leg (analytic)
   // The only NG+-scaled leg: enemies are ×hp tankier, and a returning player
@@ -234,7 +246,7 @@ console.log(`Phase 1 — cross-swamp: measured ${crossRaw.toFixed(0)}s × return
   console.log(`         God-mode on (pacing, not survival).`);
   console.log(`  NG+ scaling: enemyHp ×${scaling.hp}, enemyDmg ×${scaling.dmg}, spawnRate ×${scaling.spawn}`);
   console.log('');
-  console.log(`  result: ${isGreenBoss ? 'Great GREEN Heron (NG+ boss)' : 'Great Gray Heron'}`);
+  console.log(`  result: ${bossName} (NG+ cycle ${CYCLE} final boss)`);
   console.log('  components:');
   console.log(`    cross-swamp (measured × ${RETURNER_CROSS_EFF}):     ${cross.toFixed(0)}s = ${(cross / 60).toFixed(1)} min`);
   console.log(`    wave-fighting (analytic ×${scaling.hp}hp ×${RETURNER_FIGHT_EFF} ret): ${waves.toFixed(0)}s = ${(waves / 60).toFixed(1)} min   [NG+ difficulty alone: ${wavesRaw.toFixed(0)}s]`);

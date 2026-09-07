@@ -456,13 +456,21 @@ export function applyModifier(t, id) {
 //   ----------------------------------------------
 //   max gold a career can bank .................. 67
 export const GOLD = {
-  boss: { gray: 15, green: 20 },
+  // boss: the GILDED Heron (K4, NG+ cycle 3+) pays no new gold of its own — it
+  // is a later-cycle escalation of the NG+ boss (the player already banked the
+  // green heron's 20 gold in cycle 1). goldTotal() counts it as 0.
+  boss: { gray: 15, green: 20, gilded: 0 },
   synergyDuo: 8,
   orbMilestone: { at: 100, amount: 8 },
 };
 
 // Build the gold event for the FIRST kill of a heron boss type (`kind` =
-// 'gray' | 'green'). Returns null for an unknown kind (no event, no gold).
+// 'gray' | 'green' | 'gilded'). Returns null for an unknown kind (no event, no
+// gold). The GILDED Heron (K4, NG+ cycle 3+) awards NO meta gold of its own
+// (boss.gilded === 0): it is a later-cycle escalation of the NG+ boss, and the
+// player has already banked the green heron's gold in cycle 1. Keeping the
+// amount at 0 also leaves goldTotal() (and the G1/C2 smoke assertions)
+// untouched.
 export function goldEventBoss(kind) {
   const amount = GOLD.boss && GOLD.boss[kind];
   if (!amount) return null;
@@ -554,6 +562,81 @@ export function greenHeronPinTick(h, dt) {
   h.pinned -= dt;
   if (h.pinned <= 0) { h.pinned = 0; return 'pin-off'; }
   return 'pinned';
+}
+
+// ----------------------------------------------------------------
+// K4 (v1.5 M2): The GILDED HERON — the NG+ cycle-3+ final boss.
+//
+// A THIRD final boss that REPLACES the Great Green Heron as the cycle-3+ boss
+// (cycle 0 stays the gray heron, cycles 1-2 stay the green heron). It reuses
+// the existing heron AI / phase machine (bossStep) and the 3-hue awakening
+// (paint) end-to-end, exactly like the green heron — the differences are:
+//   · a distinct GOLD-tinted palette (rendered in _drawHeron via h.gilded),
+//   · MORE fixed HP (36k -> 42k, +16% over the green heron — the boss is
+//     deliberately NOT N2-scaled, so the escalation is a fixed bump), and
+//   · ONE new mechanic: its GILDED PLUMAGE ABSORBS the player's heal sources.
+//
+// The plume mechanic: the heron runs a ~30s phase cycle (the GILDED_HERON.plume
+// timing below). While it is in the ACTIVE "plume" phase, its gilded plumage
+// glows and it ABSORBS healing — the player's green-paint heal sources (painting
+// enemies green AND standing in green) heal 0. In the COOLDOWN gap between
+// plumes the player's green heal works normally. This forces the player to
+// heal in the gaps, adding a damage-avoidance rhythm on top of the 3-hue
+// awaken.
+//
+// The plume is a PURE state machine (gildedPlumeTick) driven by h.plumeT so it
+// is testable without a browser — the same pattern as the green heron's reed
+// pin (greenHeronPinTick). game.js calls gildedPlumeTick each frame, reads
+// gildedPlumeActive(h) to decide whether to suppress the player's green heal,
+// and paints the glowing plumage while active. The gray and green herons never
+// carry `plumeT`, so a first-time (cycle-0) and cycle-1/2 (green) run is
+// byte-identical to pre-K4.
+export const GILDED_HERON = {
+  kind: 'gilded',                // the NG+ cycle-3+ boss (vs 'gray' / 'green')
+  minCycle: 3,                   // the NG+ cycle from which it replaces the green heron
+  hp: 42000,                     // +16% over the green heron's 36k (fixed-HP bump)
+  awakenNeed: { red: 45, blue: 45, green: 45 }, // 3-hue rhythm UNCHANGED (core pillar)
+  gildedHue: '#d9a52e',          // gold — the distinct palette
+  gildedHueLight: '#ffe9a8',
+  // The plume phase cycle: the plumage is ACTIVE (absorbing heal) for
+  // plumeActive seconds, then rests (the heal gap) for plumeCooldown seconds,
+  // then re-activates. A ~30s cycle as specced (10s active + 20s gap).
+  plumeActive: 10.0,
+  plumeCooldown: 20.0,
+};
+
+// K4: is the GILDED heron currently in its ACTIVE plume phase (absorbing heal)?
+// Reads the plumeT state machine (see gildedPlumeTick): while plumeT > 0 the
+// plumage is glowing and the player's green heal is suppressed. Pure.
+export function gildedPlumeActive(h) {
+  return !!(h && h.gilded && (h.plumeT || 0) > 0);
+}
+
+// K4: the plume phase state machine, as a PURE timer (testable headless).
+// h.plumeT is the remaining ACTIVE-plume time (>0 = absorbing); h.plumeCd is
+// the cooldown before the next plume fires. Returns 'plume-on' on the frame the
+// plumage activates (glow + heal suppression begins), 'plume-off' on the frame
+// it releases (the heal gap opens), or 0 when steady (no transition this frame).
+//
+// A gilded heron carries { plumeT, plumeCd, gilded: true }; the gray and green
+// herons never carry `gilded`, so this is a no-op for them (byte-identical).
+// The cycle: when the plumage is active (plumeT>0) it counts down to the gap;
+// in the gap (plumeCd>0) it counts down to the next activation.
+export function gildedPlumeTick(h, dt) {
+  if (!h || !h.gilded) return 0;
+  if ((h.plumeT || 0) > 0) {
+    // ACTIVE plume: count down to the gap.
+    h.plumeT -= dt;
+    if (h.plumeT <= 0) { h.plumeT = 0; h.plumeCd = GILDED_HERON.plumeCooldown; return 'plume-off'; }
+    return 0;
+  }
+  if ((h.plumeCd || 0) > 0) {
+    // COOLDOWN gap: count down to the next activation.
+    h.plumeCd -= dt;
+    if (h.plumeCd <= 0) { h.plumeCd = 0; h.plumeT = GILDED_HERON.plumeActive; return 'plume-on'; }
+    return 0;
+  }
+  return 0;
 }
 
 // ----------------------------------------------------------------

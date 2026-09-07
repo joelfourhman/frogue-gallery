@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -2042,12 +2042,16 @@ _drawAtelier(ctx) {
     // place briefly (the E1/MidHeron reed-pin idea, at boss scale). It carries
     // slightly MORE fixed HP than the gray heron (30k -> 36k), keeping the fight
     // in the same ~2-3 min time band (the pin is a small extra damage window).
-    const isGreen = this.ngCycle >= 1;
+    // K4 (v1.5 M2): NG+ cycle 3+ fights the GILDED HERON INSTEAD of the green
+    // heron (cycle 0 = gray, cycles 1-2 = green, cycle 3+ = gilded). Same
+    // bossStep/3-hue machinery; distinct gold palette + a heal-absorbing plume.
+    const isGildedHeron = this.ngCycle >= GILDED_HERON.minCycle;
+    const isGreen = this.ngCycle >= 1 && !isGildedHeron;
     this.heron = {
       x: this.world.w - 350, y: HERON_Y,
-      hp: isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp,
-      maxHp: isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp,
-      kind: isGreen ? GREEN_HERON.kind : 'gray',      // N3: boss selection (smoke asserts this)
+      hp: isGildedHeron ? GILDED_HERON.hp : (isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp),
+      maxHp: isGildedHeron ? GILDED_HERON.hp : (isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp),
+      kind: isGildedHeron ? GILDED_HERON.kind : (isGreen ? GREEN_HERON.kind : 'gray'), // boss selection (smoke asserts this)
       phase: 1, state: 'idle', stateT: 2.2, hue: { red: 0, blue: 0, green: 0 },
       awakened: false, awakenedT: 0, summonT: 9, lungeDir: -1,
       targetX: this.world.w - 650, diveH: 0, facing: -1,
@@ -2055,8 +2059,12 @@ _drawAtelier(ctx) {
       // N3 green-heron-only fields (the gray heron carries undefined for these,
       // so a first-time run's heron behaves byte-identically to pre-N3):
       green: isGreen ? true : undefined,              // distinct green palette in _drawHeron
-      awakenNeed: isGreen ? { ...GREEN_HERON.awakenNeed } : undefined, // same 3-hue rhythm
+      awakenNeed: (isGreen || isGildedHeron) ? { ...GILDED_HERON.awakenNeed } : undefined, // same 3-hue rhythm
       pinned: isGreen ? 0 : undefined,                // the Moss reed-pin timer (green only)
+      // K4 gilded-heron-only fields (the gray + green herons carry undefined):
+      gilded: isGildedHeron ? true : undefined,       // distinct gold palette in _drawHeron
+      plumeT: isGildedHeron ? 0 : undefined,          // the heal-absorbing plume timer (active while >0)
+      plumeCd: isGildedHeron ? 0 : undefined,        // the plume cooldown (the heal gap)
     };
     // E1 (v1.2 M10): the Painted Heron — a mid-run "half-heron" set-piece on a
     // zone boundary (end of zone 3) for Normal+. A small re-use of the real
@@ -2548,6 +2556,16 @@ _drawAtelier(ctx) {
       }
     }
 
+    // K4 (v1.5 M2): derive whether the GILDED Heron's plume is absorbing the
+    // frog's heal sources THIS frame, and publish it on the player so BOTH heal
+    // sources read the same value — the standing-in-green heal (player.update,
+    // next line) and the paint-on-green heal (paint._applyHits, below). It is
+    // derived from heron.plumeT (the plume timer advanced in _updateBoss last
+    // frame — a 1-frame staleness is negligible on a ~30s cycle). No-op for the
+    // gray + green herons (they carry no `plumeT`), so a first-time / cycle-1-2
+    // run heals byte-identically.
+    p._plumeSuppress = !!(this.heron && this.heron.gilded && !this.heron.flying
+      && this.heron._intro <= 0 && this.heron.plumeT > 0);
     p.update(dt, this.input, this.tuning, this.world, this._view());
     // J5 (v1.4): capture the orb-streak trail behind the frog every frame the
     // streak is ACTIVE (presentation only — reads from the already-simmed
@@ -3295,6 +3313,21 @@ _drawAtelier(ctx) {
     // NOTE: let bossStep run even at hp<=0 — it emits the 'defeated' event
     if (!h || h.flying > 0 || this.dying) return;
     const v = this._view();
+    // K4 (v1.5 M2): the GILDED Heron's heal-absorbing plume — a boss-side phase
+    // timer (NOT a hold, unlike the green heron's pin). gildedPlumeTick (pure,
+    // logic.js) drives the ~30s active/cooldown cycle; on the frame the plume
+    // IGNITES it announces (the plumage glows) and the frog's green heal
+    // sources are suppressed until it fades. The gray + green herons never
+    // carry `plumeT` (undefined) so this is a no-op for them.
+    if (h.gilded) {
+      const plumeRes = gildedPlumeTick(h, dt);
+      if (plumeRes === 'plume-on') {
+        this.addBanner('The gilded plumage BLAZES — your healing is devoured!', 3.0, 232);
+        this.sfx('boss-growl');
+      } else if (plumeRes === 'plume-off') {
+        this.addBanner('The plumage dims — the swamp heals again.', 2.4, 232);
+      }
+    }
     // N3 (v1.3 M14): the Great Green Heron's reed pin. While pinned (h.pinned>0)
     // the heron is HELD IN PLACE — no bossStep attacks / no movement — and the
     // player gets a 2x paint-damage window (rewarding green play). greenHeronPinTick
@@ -3533,9 +3566,19 @@ _drawAtelier(ctx) {
     // N3 (v1.3 M14): the Great Green Heron's distinct palette — moss green instead
     // of the gray heron's gray-green. The gray heron keeps the original colors
     // byte-identically (h.green is undefined for it).
-    const bodyCol = h.green
-      ? (gray ? GREEN_HERON.greenHue : '#7a9a6a')   // moss green (awake/flying) / muted moss (asleep)
-      : (gray ? '#7d8f96' : '#98a19b');
+    // K4 (v1.5 M2): the GILDED Heron's gold palette (h.gilded) — a third, gold
+    // tint distinct from both the gray and the green herons (h.gilded/h.green
+    // are undefined for the gray heron, so its colors stay byte-identical).
+    const bodyCol = h.gilded
+      ? (gray ? GILDED_HERON.gildedHue : '#b69a55')  // gold (awake/flying) / muted gilded (asleep)
+      : h.green
+        ? (gray ? GREEN_HERON.greenHue : '#7a9a6a')  // moss green (awake/flying) / muted moss (asleep)
+        : (gray ? '#7d8f96' : '#98a19b');
+    // K4: the plume phase — while the GILDED Heron's plume is live (h.plumeT>0)
+    // the plumage GLOWS GOLD (the visible tell that the frog's heal is being
+    // devoured). Pure presentation (never affects logic); the plume timer is
+    // advanced in _updateBoss.
+    const plumeGlow = !!(h.gilded && h.plumeT > 0);
     const ink = INK;
 
     // ground shadow
@@ -3569,6 +3612,31 @@ _drawAtelier(ctx) {
         ctx.quadraticCurveTo(rx + 6, h.y - 30, rx + 2 + Math.sin(now * 3 + i) * 3, h.y - 58);
         ctx.stroke();
       }
+      ctx.restore();
+    }
+
+    // K4 (v1.5 M2): the GILDED Heron's plume glow — while the plume is live the
+    // plumage BLAZES gold (a soft radial halo + pulsing rim) so the player can
+    // see the heal-absorbing phase is active and time healing in the cooldown
+    // gap. Pure presentation (reads h.plumeT, set in _updateBoss); the gray +
+    // green herons never enter this branch (no `gilded`).
+    if (plumeGlow) {
+      const pulse = 0.5 + Math.sin(now * 7) * 0.3;
+      ctx.save();
+      ctx.globalAlpha = 0.28 + 0.22 * pulse;
+      const g = ctx.createRadialGradient(h.x, fy - 150, 10, h.x, fy - 150, 150);
+      g.addColorStop(0, GILDED_HERON.gildedHueLight);
+      g.addColorStop(1, 'rgba(212,175,55,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(h.x, fy - 150, 150, 190, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.6 * pulse + 0.3;
+      ctx.strokeStyle = GILDED_HERON.gildedHueLight;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(h.x, fy - 150, 70, 95, 0, 0, TAU);
+      ctx.stroke();
       ctx.restore();
     }
 

@@ -5165,5 +5165,101 @@ console.log('== stage 74: v1.5 K3 — STORM SURGE (zone-5 final-stretch set-piec
   assert(g74._surgeEnemies.length === 0, 'K3: on expiry the surge enemy tracking is cleared');
 }
 
+console.log('== stage 75: v1.5 K4 — THE GILDED HERON (NG+ cycle-3+ third boss; gold palette, 42k HP, plume absorbs green heal) ==');
+{
+  const L75 = await import('../src/logic.js');
+  const { spawnEnemy } = await import('../src/enemies.js');
+
+  // ---- (1) boss selection: cycle 3+ fights the GILDED heron; cycle 0/1-2 unchanged ----
+  const gG3 = new Game(makeCanvas()); gG3.start();
+  const g3save = L75.freshSave(); g3save.stats.victories = 3; g3save.ngCycle = 3; g3save.flags.heronDefeated = true;
+  gG3.save = g3save; gG3._beginExpedition();
+  assert(gG3.heron.kind === 'gilded', `K4: ngCycle 3 fights THE GILDED HERON (got kind=${gG3.heron.kind})`);
+  assert(gG3.heron.gilded === true, 'K4: the gilded heron is flagged for the distinct gold palette');
+  assert(gG3.heron.hp === 42000 && gG3.heron.maxHp === 42000, `K4: the gilded heron carries 42k HP (got ${gG3.heron.hp})`);
+  assert(gG3.heron.awakenNeed && gG3.heron.awakenNeed.red === 45 && gG3.heron.awakenNeed.blue === 45 && gG3.heron.awakenNeed.green === 45,
+    'K4: the gilded heron keeps the 3-hue awaken rhythm (core pillar unchanged)');
+  assert(gG3.heron.plumeT === 0 && gG3.heron.plumeCd === 0, 'K4: the gilded heron starts out of its plume phase (the gap)');
+  assert(L75.GILDED_HERON.gildedHue === '#d9a52e' && L75.GILDED_HERON.gildedHueLight === '#ffe9a8', 'K4: the gilded heron has a distinct gold palette');
+  assert(L75.goldEventBoss('gilded') === null, 'K4: the gilded heron awards no NEW meta gold of its own (a later-cycle NG+ escalation)');
+  assert(L75.goldTotal() === 67, `K4: adding the gilded boss leaves career gold total at 67 (got ${L75.goldTotal()})`);
+
+  // cycle 0 = gray (first-time byte-identical), cycles 1-2 = green (K4 must not shift them)
+  const gC0 = new Game(makeCanvas()); gC0.start(); gC0.save = L75.freshSave(); gC0._beginExpedition();
+  assert(gC0.heron.kind === 'gray' && gC0.heron.gilded === undefined && gC0.heron.plumeT === undefined,
+    'K4: ngCycle 0 still fights the GRAY heron (first-time byte-identical; no gilded/plume fields)');
+  const gC1 = new Game(makeCanvas()); gC1.start();
+  const c1save = L75.freshSave(); c1save.stats.victories = 1; c1save.ngCycle = 1; c1save.flags.heronDefeated = true;
+  gC1.save = c1save; gC1._beginExpedition();
+  assert(gC1.heron.kind === 'green' && gC1.heron.gilded === undefined, 'K4: ngCycle 1 still fights the GREEN heron (not the gilded)');
+  const gC2 = new Game(makeCanvas()); gC2.start();
+  const c2save = L75.freshSave(); c2save.stats.victories = 2; c2save.ngCycle = 2; c2save.flags.heronDefeated = true;
+  gC2.save = c2save; gC2._beginExpedition();
+  assert(gC2.heron.kind === 'green', 'K4: ngCycle 2 still fights the GREEN heron (gilded starts at cycle 3)');
+  // cycle 4+ also gilded (the minCycle cap, not a single cycle)
+  const gC4 = new Game(makeCanvas()); gC4.start();
+  const c4save = L75.freshSave(); c4save.stats.victories = 4; c4save.ngCycle = 4; c4save.flags.heronDefeated = true;
+  gC4.save = c4save; gC4._beginExpedition();
+  assert(gC4.heron.kind === 'gilded', 'K4: ngCycle 4 fights the GILDED heron (cycle 3+ is the band, not just 3)');
+
+  // ---- (2) the plume phase is a PURE timer (testable without a browser) ----
+  const ph = { gilded: true, plumeT: 0, plumeCd: 0 };
+  // from the gap the plume ignites once the cooldown elapses (plume-on)
+  ph.plumeCd = L75.GILDED_HERON.plumeCooldown;
+  let r = L75.gildedPlumeTick(ph, 0.5);
+  assert(r === 0 && ph.plumeCd === L75.GILDED_HERON.plumeCooldown - 0.5, 'K4: gildedPlumeTick counts down the cooldown gap');
+  r = L75.gildedPlumeTick(ph, 99);
+  assert(r === 'plume-on' && ph.plumeT === L75.GILDED_HERON.plumeActive, 'K4: gildedPlumeTick reports plume-on and re-arms the plume on the frame it ignites');
+  // while active the plume burns down (absorbing) then releases (plume-off -> the heal gap)
+  r = L75.gildedPlumeTick(ph, 0.5);
+  assert(r === 0 && ph.plumeT === L75.GILDED_HERON.plumeActive - 0.5, 'K4: gildedPlumeTick counts down the active plume');
+  r = L75.gildedPlumeTick(ph, 99);
+  assert(r === 'plume-off' && ph.plumeCd === L75.GILDED_HERON.plumeCooldown, 'K4: gildedPlumeTick reports plume-off and re-arms the cooldown on release');
+  // the ~30s cycle is 10s active + 20s gap as specced
+  assert(L75.GILDED_HERON.plumeActive + L75.GILDED_HERON.plumeCooldown === 30, 'K4: the plume cycle is ~30s (10s active + 20s heal gap)');
+  assert(L75.gildedPlumeActive({ gilded: true, plumeT: 5 }) === true && L75.gildedPlumeActive({ gilded: true, plumeT: 0 }) === false,
+    'K4: gildedPlumeActive reports the heal-absorbing window (plumeT>0) only');
+  // no-op for a non-gilded heron (gray/green never carry `gilded`)
+  const phG = { pinned: 2 };
+  assert(L75.gildedPlumeTick(phG, 99) === 0, 'K4: gildedPlumeTick is a no-op for a non-gilded heron (byte-identical for gray/green)');
+
+  // ---- (3) the plume ABSORBS the frog's green heal while active, and heal works in the gap ----
+  const g75 = new Game(makeCanvas()); g75.start();
+  const s75 = L75.freshSave(); s75.stats.victories = 3; s75.ngCycle = 3; s75.flags.heronDefeated = true;
+  g75.save = s75; g75._beginExpedition();
+  const h = g75.heron, p = g75.player;
+  h._intro = 0;                                   // reveal the boss so its plume + paint path run
+  p.maxHp = 9999; p.hp = 100; p.iframes = 999; p._healAcc = 0;   // low HP + invulnerable (heal test, not combat)
+  const foe = spawnEnemy('beetle', h.x, h.y - 50, g75.tuning); g75.enemies.push(foe); foe.hp = 10000; foe.maxHp = 10000; // a tanky green-paintable enemy
+  const greenPaint = (n) => { g75.input.mouse.lDown = true; p.pigment = 'green'; for (let i = 0; i < n; i++) { p.x = foe.x; p.y = foe.y - 40; p.vx = 0; p.vy = 0; g75._updateExpedition(0.016); } g75.input.mouse.lDown = false; };
+  // (a) GAP: the plume is off (h.plumeT = 0) -> painting green heals the frog
+  p._healAcc = 0;
+  const healGapBefore = p._healAcc;
+  greenPaint(40);
+  assert(h.plumeT === 0 && (p._healAcc > healGapBefore || p.hp > 100), `K4: in the plume GAP green paint HEALS the frog (healAcc ${healGapBefore.toFixed(2)} -> ${p._healAcc.toFixed(2)})`);
+  // (b) ACTIVE: force the plume on -> green paint heals 0 (suppressed)
+  h.plumeT = L75.GILDED_HERON.plumeActive;
+  p._healAcc = 0;
+  const hpActBefore = p.hp;
+  greenPaint(40);
+  assert(h.plumeT > 0 && p._healAcc <= 0.001 && p.hp === hpActBefore, `K4: while the plume is ACTIVE green paint heals 0 (suppressed; hp ${hpActBefore}, healAcc ${p._healAcc.toFixed(2)})`);
+  // (c) the standing-in-green heal is also suppressed while active (player.update path)
+  h.plumeT = L75.GILDED_HERON.plumeActive;
+  const cell = g75.world.pigmentAt(p.x, p.y); cell.green = 3; cell.age = 3.2;   // standing in fresh green
+  p._plumeSuppress = true;                 // the flag game.js publishes each frame (drives player.update)
+  p._healAcc = 0.6;
+  const hpStandBefore = p.hp;
+  p.update(0.5, g75.input, g75.tuning, g75.world, { x: 0, y: 0, scale: 1 });
+  assert(p._healAcc <= 0.6 && p.hp === hpStandBefore, 'K4: the standing-in-green heal is ALSO suppressed while the plume is active');
+  // ...and works when the plume is off
+  p._plumeSuppress = false;
+  p._healAcc = 0.6;
+  const hpStandGap = p.hp;
+  p.update(3.0, g75.input, g75.tuning, g75.world, { x: 0, y: 0, scale: 1 });
+  assert(p.hp > hpStandGap, `K4: the standing-in-green heal works in the plume gap (hp ${hpStandGap} -> ${p.hp})`);
+  cell.green = 0; cell.age = 0;
+  console.log('ok — K4: the Gilded Heron appears on NG+ cycle 3+ (42k, gold palette), its plume is a ~30s phase timer that ABSORBS both green heal sources while active (heal works in the gap), and cycle 0/1-2 boss selection is unchanged');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

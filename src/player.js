@@ -94,9 +94,13 @@ export class Player {
     this._blinkT -= dt;
     if (this._blinkT < -0.12) this._blinkT = 1.5 + Math.random() * 3;
 
-    // fresh-paint residual: standing in green paint heals slowly
+    // fresh-paint residual: standing in green paint heals slowly.
+    // K4 (v1.5 M2): the GILDED Heron's plume (p._plumeSuppress) DEVOURS this heal
+    // while it is live — the frog must heal in the plume's cooldown gap. No-op
+    // for the gray/green herons (flag is false), so first-time runs heal
+    // byte-identically.
     const cell = world.pigmentAt(this.x, this.y);
-    if (cell.green > 0.4 && this.hp < this.maxHp) this._healAcc = (this._healAcc || 0) + dt * (tuning.greenHeal);
+    if (!this._plumeSuppress && cell.green > 0.4 && this.hp < this.maxHp) this._healAcc = (this._healAcc || 0) + dt * (tuning.greenHeal);
     else this._healAcc = (this._healAcc || 0) - dt * 2;
     if (this._healAcc >= 1) { this._healAcc = 0; this.hp = Math.min(this.maxHp, this.hp + 1); }
     return this;
