@@ -6,9 +6,13 @@ import { mulberry32 } from './math.js';
 
 // ---------------------------------------------------------------- pigments
 export const PIGMENTS = {
-  red:   { id: 'red',   name: 'Crimson', color: '#c8452c', light: '#e8836b', dmgMult: 1.3,  status: 'burn'  },
-  blue:  { id: 'blue',  name: 'Cobalt',  color: '#3a6fd8', light: '#8fb0f0', dmgMult: 1.0,  status: 'slow'  },
-  green: { id: 'green', name: 'Moss',    color: '#5a9e3d', light: '#9ed483', dmgMult: 0.9,  status: 'root'  },
+  // v1.4 color rework (Joel): red = big damage + strong burn, blue = medium
+  // damage + freeze (flies freeze solid; ground enemies slow-then-freeze),
+  // green = minimal damage + heals the frog, dry = weak damage but the
+  // world-restorer + status cleanse.
+  red:   { id: 'red',   name: 'Crimson', color: '#c8452c', light: '#e8836b', dmgMult: 1.6,  status: 'burn'  },
+  blue:  { id: 'blue',  name: 'Cobalt',  color: '#3a6fd8', light: '#8fb0f0', dmgMult: 1.0,  status: 'freeze' },
+  green: { id: 'green', name: 'Moss',    color: '#5a9e3d', light: '#9ed483', dmgMult: 0.6,  status: 'root'  },
   dry:   { id: 'dry',   name: 'Dry Brush', color: '#9a8f80', light: '#c9c0b2', dmgMult: 0.5, status: null   },
 };
 export const PIGMENT_ORDER = ['red', 'blue', 'green', 'dry'];
@@ -22,7 +26,7 @@ export const ENEMIES = {
     fly: false, score: 20, paintTintDecay: 0.25,
   },
   mosquito: {
-    id: 'mosquito', name: 'Mosquito', hp: 14, speed: 150, dmg: 5, radius: 10,
+    id: 'mosquito', name: 'Mosquito', hp: 11, speed: 120, dmg: 4, radius: 10,
     armor: 0, fly: true, score: 10, paintTintDecay: 0.4,
   },
   toad: {
@@ -35,18 +39,23 @@ export const ENEMIES = {
 
 // ---------------------------------------------------------------- statuses
 // Status applied when a paint hit lands. Returns { status, note }.
+// v1.4 color rework (Joel): blue now FREEZES. A flying target (mosquito)
+// freezes solid on the first blue hit; a ground target is briefly slowed, and
+// a second blue within that window (or the slow ticking out) turns it to ice.
+// Net effect the player feels: blue = medium damage + freeze. The tutorial /
+// Field Guide already promise "blue freezes," so this aligns the mechanic.
 export function paintStatusFor(pigmentId, enemy, now) {
   if (pigmentId === 'dry') return { status: null, note: null };
   if (pigmentId === 'red') {
-    return { status: { type: 'burn', t: 2.6, appliedAt: now }, note: 'burning' };
+    return { status: { type: 'burn', t: 3.2, appliedAt: now }, note: 'burning' };
   }
   if (pigmentId === 'blue') {
     const prev = enemy.status;
-    if (prev && prev.type === 'slow' && (now - prev.appliedAt) <= 1.0) {
-      return { status: { type: 'freeze', t: 1.3, appliedAt: now }, note: 'frozen' };
+    const alreadySlowed = prev && prev.type === 'slow' && (now - prev.appliedAt) <= 1.2;
+    if (enemy.fly || alreadySlowed) {
+      return { status: { type: 'freeze', t: enemy.fly ? 1.5 : 1.3, appliedAt: now }, note: 'frozen' };
     }
-    const t = enemy.fly ? 1.0 : 1.6; // aerials are nimbler
-    return { status: { type: 'slow', t, appliedAt: now }, note: 'slowed' };
+    return { status: { type: 'slow', t: 1.2, appliedAt: now }, note: 'slowed' };
   }
   // green
   if (enemy.fly) return { status: null, note: 'immune-root' }; // flies ignore root
@@ -178,13 +187,17 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', g
     splashCooldown: 1.5,
     paintResidualDps: 2,     // standing in fresh paint
     // statuses
-    burnDps: 4,
+    burnDps: 7,
     freezeDuration: 1.3,
     slowFactor: 0.45,
     rootDuration: 1.6,
     // P4: green mends 3 HP per paint — meaningful early, still slow to
     // refill a full pool (keeps the heron fight from being a free medkit).
     greenHeal: 3,
+    // v1.4 color rework (Joel): painting an enemy with green also heals the
+    // frog a little (1 hp per ~2 green hits) — green = minimal damage + heal,
+    // not just "stand in green paint."
+    greenHealOnPaint: 0.5,
     // economy
     pickupValue: 1,
     pickupMagnet: 70,

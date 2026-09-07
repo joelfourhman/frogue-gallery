@@ -222,9 +222,9 @@ const TUTORIAL_PHASES = [
   { phase: 'learn', pigment: 'red',   enemy: 'beetle',   drill: 'burn',
     chip: 'Paint the beetle with RED — watch it catch fire and burn away', done: 'The beetle burned away — red is your fire pigment.' },
   { phase: 'learn', pigment: 'blue',  enemy: 'mosquito', drill: 'freeze',
-    chip: 'Paint the mosquito with BLUE twice — freeze it mid-air', done: 'Frozen solid — blue chains into a freeze on a slowed target.' },
+    chip: 'Paint the mosquito with BLUE — freeze it solid in mid-air', done: 'Frozen solid — blue freezes flies on the spot.' },
   { phase: 'learn', pigment: 'green', enemy: 'toad',     drill: 'root',
-    chip: 'Paint the toad with GREEN — root it in place', done: 'Rooted to the spot — green holds a target still.' },
+    chip: 'Paint the toad with GREEN — root it in place and mend yourself', done: 'Rooted to the spot — green holds a target still and mends your wounds.' },
   // T2 — the interactive pigment drills: the SAME three effects as an explicit
   // per-pigment "do it" check, a LATER phase of this same guided run. The
   // advancement predicate reads the enemy's REAL status/death (a beetle that
@@ -4244,9 +4244,9 @@ _drawAtelier(ctx) {
     // ---- left column: painting (the pigments) ----
     c.save(); c.font = '700 16px Georgia, serif'; c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Painting — your brush', colL, y0); c.restore();
     const pig = [
-      ['1', PIGMENTS.red.color, 'Crimson', 'burn — damage over time, ignores armor; your main weapon'],
-      ['2', PIGMENTS.blue.color, 'Cobalt', 'slow, then a second coat within 1s freezes solid'],
-      ['3', PIGMENTS.green.color, 'Moss', 'root ground enemies (flies are immune); heals the frog'],
+      ['1', PIGMENTS.red.color, 'Crimson', 'BIG damage + burn (damage over time, ignores armor); your main weapon'],
+      ['2', PIGMENTS.blue.color, 'Cobalt', 'medium damage + FREEZE: flies freeze solid on the spot, ground enemies slow then freeze'],
+      ['3', PIGMENTS.green.color, 'Moss', 'light damage but HEALS the frog + restores color; roots ground enemies (flies are immune)'],
     ];
     pig.forEach((r, i) => {
       const y = y0 + 34 + i * 58;
@@ -4258,13 +4258,13 @@ _drawAtelier(ctx) {
       this._wrapHelp(c, r[3], colL + 32, y + 16, colW - 32, 14);
     });
     c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.7)'; c.textAlign = 'left'; c.textBaseline = 'middle';
-this._wrapHelp(c, 'Hold left mouse to paint, aim with the cursor. Hold right mouse to charge a Splash burst, release to fire. A dry brush (no pigment) still deals half damage and never runs out.', colL, y0 + 34 + 3 * 58 + 6, colW, 14);
+    this._wrapHelp(c, 'Hold left mouse to paint, aim with the cursor. Hold right mouse to charge a Splash burst, release to fire. A dry brush (no pigment) deals light damage, but it CLEANS enemy status and restores the swamp\u2019s color the fastest — it never runs out.', colL, y0 + 34 + 3 * 58 + 6, colW, 14);
 
     // ---- right column: counterplay + the heron ----
     c.save(); c.font = '700 16px Georgia, serif'; c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Know your quarry', colR, y0); c.restore();
     const foes = [
       ['Mud Beetle', 'armored — burn (red) ignores its shell. Don\u2019t just chip it.'],
-      ['Mosquito', 'fast and airborne — blue slows it; it ignores root.'],
+      ['Mosquito', 'fast and airborne — blue FREEZES it solid; it ignores root.'],
       ['Grumpy Toad', 'tanky — paint it dizzy (green) for a 1.5× open shot.'],
     ];
     foes.forEach((r, i) => {

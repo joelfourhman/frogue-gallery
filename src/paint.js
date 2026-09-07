@@ -63,7 +63,10 @@ export class Paint {
     p.swipeT = 0.14;
     const a = p.aimA;
     const R = this.swipeRange;
-    this._restoreAcc = (this._restoreAcc || 0) + (pig === 'dry' ? 0.004 : 0.009);
+    // v1.4 color rework (Joel): the dry brush is the WORLD-RESTORER — it
+    // recovers swamp color the most of any stroke (it is "cleaning," not
+    // staining), so a dry swipe restores more than a pigment swipe.
+    this._restoreAcc = (this._restoreAcc || 0) + (pig === 'dry' ? 0.010 : 0.009);
 
     // write the stroke into the world paint layer (environmental residue)
     this.world.paintSwipe(p.x, p.y, a, R, pig);
@@ -106,7 +109,8 @@ export class Paint {
     p.splashCharge = 0;
     const R = this.tuning.splashRadius;
     const pig = p.pigment;
-    this._restoreAcc = (this._restoreAcc || 0) + (pig === 'dry' ? 0.01 : 0.025);
+    // v1.4: dry splash is the strongest single world-restore action.
+    this._restoreAcc = (this._restoreAcc || 0) + (pig === 'dry' ? 0.04 : 0.025);
     this.world.paintSplash(p.x, p.y, R, pig);
     this.sfx('splat', { big: 1 });
     const hits = enemies.filter(e => !e.dead && dist(p.x, p.y, e.x, e.y) <= R + e.r);
@@ -130,8 +134,16 @@ export class Paint {
       e.hp -= dmg;
       // floating damage number (pigment-colored)
       this.note(e.x, e.y - e.r - 18, '-' + Math.round(dmg), pig);
+      // v1.4 color rework (Joel): the dry brush CLEANS — scrubbing off the
+      // enemy's active status (burn/slow/freeze/root). Dizzy is a toad quirk,
+      // not a stain, so it's left alone.
+      if (pig === 'dry') {
+        if (e.status && e.status.type !== 'dizzy') {
+          e.status = null; e.burnAccum = 0;
+          this.note(e.x, e.y - e.r - 6, 'cleanse', 'dry');
+        }
       // toad special: any non-dry paint can dizzy instead of the normal status
-      if (e.dizzyPaintChance && pig !== 'dry' && Math.random() < e.dizzyPaintChance) {
+      } else if (e.dizzyPaintChance && Math.random() < e.dizzyPaintChance) {
         e.status = { type: 'dizzy', t: e.dizzyDuration || 1.2, appliedAt: e._now || 0 };
         this.note(e.x, e.y - e.r - 6, 'dizzy!', 'green');
       } else {
@@ -146,6 +158,13 @@ export class Paint {
       // droplet splatter off the enemy
       this.particles.splatter(e.x, e.y, PIGMENTS[pig].color, 6, 160);
       if (e.hp <= 0 && !e.dead) e.onDeath && e.onDeath();
+    }
+    // v1.4 color rework (Joel): painting enemies with GREEN heals the frog a
+    // little — the heal is per ACTION (not per enemy) so a big green splash
+    // is not a free medkit. The float is drained by player.update.
+    if (pig === 'green' && hits.length && p.hp < p.maxHp) {
+      p._healAcc = (p._healAcc || 0) + (this.tuning.greenHealOnPaint || 0.5);
+      this.note(p.x, p.y - p.r - 14, 'heal', 'green');
     }
   }
 
