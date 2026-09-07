@@ -194,7 +194,7 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 bounded batches of ~3 items per session** (local model context ceiling;
 each session MUST end clean: committed + docs + suite green). Read
 `docs/ROADMAP.md` §v1.4 + AGENTS.md. Module J batch order: J1 → J2 → J3.
-**Status: BATCH 1 (J1+J2+J3) ✅ → BATCH 2 (J4→J5→L1) IN PROGRESS — J4 ✅ + J5 ✅ (micro-animations); L1 next (last of Batch 2).**
+**Status: BATCH 2 (J4→J5→L1) COMPLETE (2026-09-06). v1.4 next: BATCH 3 (L2→L3→S1).**
 
 **Theme: juice, presence, and moments.** The game is mechanically complete;
 v1.4 adds no new rules — it makes the same game feel alive in the hand, the
@@ -251,7 +251,7 @@ band on Normal). Full scope + per-item status in `docs/ROADMAP.md` §v1.2.
 6. M13: **T3 ✅ (mini sketch heron)** → **T4 ✅ (tutorial progress + "Watch me" re-entry)** — **Batch 6 (M13 T3+T4) COMPLETE**
 7. M14: **N1 ✅ (NG+ unlock + Next Expedition flow)** → **N2 ✅ (NG+ scaling + `tests/ngpace.mjs` probe)** → **N3 ✅ (second boss — The Great Green Heron)** — **v1.3 Batch 7 (N1→N2→N3) COMPLETE** (suite 48/48, first-time pacing unchanged, NG+ cycle-1 ~19.5 min in band)
 8. v1.4 Module J: **J1 ✅ (wet paint that lingers)** + **J2 ✅ (hit-stop / shake escalation / boss-defeat slow-mo)** + **J3 ✅ (camera polish: look-ahead / lag / boss midpoint / awaken hold)** — **v1.4 Batch 1 (items 1–3) COMPLETE** (suite 60/60, P10 stage 24 still green; all presentation/time-feel only — first-time pacing unaffected, probes re-verified in band)
-9. v1.4 Batch 2, items 1–2: **J4 ✅ (frog hop feel — squash / stretch / dust / ripple + boing SFX)** + **J5 ✅ (micro-animations — HUD "+n" floats / orb-streak fading trail / pause panel 0.15 s slide+fade)** (suite 62/62, P10 stage 24 still green; all presentation-only — `player.js` physics + world-sim `runT` untouched, pace ~18.5 min unchanged). **L1 next.**
+9. v1.4 Batch 2 (J4→J5→L1) COMPLETE: **J4 ✅ (frog hop feel — squash / stretch / dust / ripple + boing SFX)** + **J5 ✅ (micro-animations — HUD "+n" floats / orb-streak fading trail / pause panel 0.15 s slide+fade)** + **L1 ✅ (living world — swaying reeds / drifting mist / water shimmer)** (suite 63/63, P10 stage 24 still green; all presentation/draw-only — `player.js` physics + world-sim `runT` untouched, pace ~18.5 min unchanged). **Next: Batch 3 (L2 → L3 → S1).**
 
 Each item's Notes column in the roadmap says which existing system to reuse.
 Acceptance (per batch): suite green, pace/humance probes still in the
@@ -363,6 +363,29 @@ library, no new dependencies. Smoke stage 62: a pickup pops a HUD "+n" float
 (capped, decays to empty), the pause open state INTERPOLATES 0→0.53→1 (not a
 hard cut) + the frame loop advances the clock, and the pickup pop fires a
 sparkles burst. P10 (stage 24) still passes.
+
+**v1.4 L1 (living world pass: swaying reeds / drifting mist / water shimmer) — implemented + tested (Batch 2, item 3).**
+Pure draw-time in `world.js drawProps` (which already receives `now`), all
+inside the existing view culling — **no new per-world state, no world-sim
+change**, so P10 (stage 24) and the pacing probes (runT) are untouched
+(re-verified: pace ~18.5 min, in band). Three additions, each a small pure
+function of `now` + existing data: (a) **reed sway** — `reedSway(seed, now)`
+(a small ±5px per-reed sine, phase from the reed's `seed`, scaled by the
+growth factor) rides the reed's tip + cattail head while the planted base
+holds (the original bend/wobble + burn color are preserved); (b) **drifting
+mist bands** — a module constant `MIST_BANDS` (3 very-low-alpha procedural
+ellipses, alpha ≤ 0.05) tiled across the view with a slow-parallax tile scroll
+`S = (1+parallax)*view.x + now*speed` (parallax < 1 → each band lags the
+camera = reads farther), plus a slow vertical bob; culled to the visible
+rect; (c) **water shimmer** — a handful of staggered glints on the existing
+`ripples` (open-water markers), capped at `SHIMMER_CAP = 12`, each pulsing on
+`shimmerGlint(i, now)` (a staggered sine so they twinkle out of sync). No new
+dependencies. Smoke stage 63: `reedSway` is time-animated + small (≤~5px),
+`shimmerGlint` is bounded [0,1] + staggered, there are 2-3 very-low-alpha
+slow-parallax mist bands, the world draw is still culled (localized < full),
+and the shimmer count is bounded. P10 (stage 24) still passes (its near-enemy
+"seeks the player" guard was also hardened to a ~0.66s window to remove a
+pre-existing flake). **v1.4 Batch 2 (J4→J5→L1) COMPLETE.**
 
 **M13 T1 (guided first expedition) — implemented + tested (v1.2 Batch 5, item 1).**
 A **fresh save only** (no finished run, never skipped — `tutorialEligible(save)`

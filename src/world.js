@@ -5,6 +5,36 @@ import { INK, sat, mixColor } from './ui.js';
 
 const WSCALE = 0.5; // paint layer resolution factor
 
+// L1 (v1.4 "Make It Amazing"): the living-world pass. All of this is PURE
+// draw-time modulation (functions of `now` + existing world data / constants)
+// drawn inside drawProps's existing view culling — no new per-world state, so
+// P10 (off-screen culling) and the pacing probes (runT) are untouched.
+
+// Per-reed sway offset (world px). A low-frequency sine phased by the reed's
+// own `seed`, small amplitude (painted-world, not bouncy). Deterministic.
+export function reedSway(seed, now) {
+  return Math.sin(now * 1.3 + (seed % 97) * 0.618) * 5;   // ±5 px
+}
+
+// Shimmer glint alpha (0..1) for the i-th open-water glint. A staggered slow
+// pulse so a handful of glints twinkle out of sync. Deterministic, bounded.
+export function shimmerGlint(i, now) {
+  const s = (0.5 + 0.5 * Math.sin(now * 0.9 + i * 1.9));  // 0..1, staggered
+  return s * s;                                            // ease (dimmer mid)
+}
+
+// Drifting mist bands: 2-3 very-low-alpha procedural ellipses. A module
+// constant (not per-world data). `parallax` < 1 → the band lags the camera,
+// reading as farther away; `speed` = slow world-px/s drift.
+export const MIST_BANDS = [
+  { y: 380, h: 210, r: 520, alpha: 0.05, speed: 7,  parallax: 0.78, seed: 11 },
+  { y: 760, h: 250, r: 640, alpha: 0.045, speed: 5, parallax: 0.72, seed: 57 },
+  { y: 1120, h: 200, r: 460, alpha: 0.05, speed: 9, parallax: 0.82, seed: 83 },
+];
+
+// Cap on open-water shimmer glints (bounded so the draw cost never grows).
+export const SHIMMER_CAP = 12;
+
 export class World {
   constructor(rng, seed) {
     this.w = 5400; this.h = 1500;   // P5: widened for 15–20 min run pacing (was 2400)
@@ -356,20 +386,26 @@ export class World {
     // reeds
     for (const rd of this.reeds) {
       if (!inView(rd.x, rd.y)) continue;
-      const k = rd.h;
-      const hgt = 46 * k;
+      const k = rd.h;                    // 0..1 growth factor
+      const hgt = 46 * k;                // pixel height
+      // L1: the reed sways in a gentle breeze — the planted base holds while
+      // the tip drifts on a per-reed sine (reedSway, small ±5px, scaled by the
+      // growth factor so a sprout barely moves). Pure draw-time (a function of
+      // `now` + rd.seed); the original bend/wobble is preserved.
+      const sw = reedSway(rd.seed, now) * k;
+      const tipx = rd.x + wobble(rd.seed, 1, 5) * k + sw;
       ctx.strokeStyle = rd.burn > 0 ? '#5a3b2a' : sat('#3a6d55', colorSat);
       ctx.lineWidth = 4;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(rd.x, rd.y);
-      ctx.quadraticCurveTo(rd.x + 6, rd.y - hgt * 0.6, rd.x + wobble(rd.seed, 1, 5) * k, rd.y - hgt);
+      ctx.quadraticCurveTo(rd.x + 6 + sw * 0.5, rd.y - hgt * 0.6, tipx, rd.y - hgt);
       ctx.stroke();
-      // cattail head
+      // cattail head (rides the swaying tip)
       if (k > 0.6) {
         ctx.fillStyle = rd.burn > 0 ? '#3b2a20' : sat('#7a5a3a', colorSat);
         ctx.beginPath();
-        ctx.ellipse(rd.x + wobble(rd.seed, 1, 5) * k, rd.y - hgt - 4, 4, 9, 0, 0, TAU);
+        ctx.ellipse(tipx, rd.y - hgt - 4, 4, 9, 0, 0, TAU);
         ctx.fill();
       }
     }
@@ -417,6 +453,47 @@ export class World {
       }
       ctx.restore();
     }
+
+    // L1: drifting mist bands — 2-3 very-low-alpha procedural ellipses that
+    // slow-parallax (lag the camera) and drift on their own. Pure draw-time:
+    // the tile scroll S = (1+parallax)*view.x + now*speed, so on screen the
+    // band advances at `parallax`× the camera plus a slow drift. Cull to view.
+    const visL = view.x, visR = view.x + view.w / view.scale;
+    for (const b of MIST_BANDS) {
+      const span = 1200;
+      const S = (1 + b.parallax) * view.x + now * b.speed + b.seed * 173;
+      let k = Math.floor((visL - span - S) / span);
+      for (let x = S + k * span; x < visR + span; x += span) {
+        if (x + b.r < visL || x - b.r > visR) continue;
+        const bob = Math.sin(now * 0.25 + b.seed) * 14;   // slow vertical drift
+        ctx.globalAlpha = b.alpha;
+        ctx.fillStyle = 'rgba(232,238,234,1)';
+        ctx.beginPath();
+        ctx.ellipse(x, b.y + bob, b.r, b.h * 0.5, 0, 0, TAU);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // L1: a handful of staggered shimmer glints on the open water. Positions
+    // come from the existing ripple spots (the open-water markers), capped at
+    // SHIMMER_CAP so the draw cost never grows; each glint pulses on a
+    // staggered sine (shimmerGlint) so they twinkle out of sync. Cull to view.
+    let gl = 0;
+    for (const rp of this.ripples) {
+      if (gl >= SHIMMER_CAP) break;
+      if (rp.x < visL || rp.x > visR || rp.y < view.y - 40 || rp.y > view.y + view.h / view.scale + 40) { gl++; continue; }
+      const a = shimmerGlint(gl, now);
+      if (a <= 0.02) { gl++; continue; }
+      const gw = rp.r * (0.5 + 0.5 * a);
+      ctx.globalAlpha = a * 0.5 * (0.4 + 0.6 * colorSat);
+      ctx.fillStyle = 'rgba(255,255,255,1)';
+      ctx.beginPath();
+      ctx.ellipse(rp.x, rp.y, gw, gw * 0.4, 0, 0, TAU);
+      ctx.fill();
+      gl++;
+    }
+    ctx.globalAlpha = 1;
   }
 
   drawObstacles(ctx, view, colorSat) {

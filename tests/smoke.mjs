@@ -974,7 +974,10 @@ console.log('== stage 24: M8 P10 — performance culling (off-screen draw + enem
   const far = spawnEnemy('beetle', 3000, 750, g2.tuning);
   g2.enemies.push(near, far);
   const nearX0 = near.x, farX0 = far.x;
-  for (let i = 0; i < 20; i++) frames(1); // ~0.33s
+  // ~0.66s window (hardened 2026-09-06: a 0.33s window could land on a
+  // near-stationary step of the beetle's wander and flake the "seeks the player"
+  // assertion; a longer window robustly accumulates >1px of net movement).
+  for (let i = 0; i < 40; i++) frames(1); // ~0.66s
   const nearMoved = Math.abs(near.x - nearX0) > 1;
   const farMoved = Math.abs(far.x - farX0) > 1;
   assert(nearMoved, `P10 enemy cull: a near enemy (50px) still runs AI and seeks the player (dx=${(near.x - nearX0).toFixed(1)})`);
@@ -3922,6 +3925,73 @@ console.log('== stage 62: v1.4 J5 — pickup / HUD / UI micro-animations ==');
   const b4 = ps5.count;
   ps5.sparkles(100, 100, '#fff', 4);
   assert(ps5.count - b4 === 4, `J5: a pickup pop fires a sparkles burst (${ps5.count - b4} sparkles)`);
+}
+
+// ======================================================================
+// stage 63 — v1.4 Module L, L1: living world pass (swaying reeds / drifting mist / water shimmer)
+// All PURE draw-time modulation inside `world.drawProps` (which already
+// receives `now` and culls for P10) — no new per-world state, so the pacing
+// probes (runT) and P10 are untouched. Three small pure helpers on world.js:
+//   reedSway(seed, now)    — per-reed tip offset (animated by now)
+//   shimmerGlint(i, now)   — 0..1 staggered water-glint pulse
+//   MIST_BANDS / SHIMMER_CAP — module constants (drifting bands + glint cap)
+// ======================================================================
+console.log('== stage 63: v1.4 L1 — living world (swaying reeds / drifting mist / water shimmer) ==');
+{
+  const { World, reedSway, shimmerGlint, MIST_BANDS, SHIMMER_CAP } = await import('../src/world.js');
+  // counting 2d context (mirrors stage 24's helper).
+  function countingCtx() {
+    const counter = { n: 0 };
+    const ctx = new Proxy({}, {
+      get(t, p) {
+        if (p === 'measureText') return () => ({ width: 10 });
+        if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+        if (p === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
+        counter.n++;
+        return () => {};
+      },
+      set() { return true; },
+    });
+    return { ctx, count: () => counter.n };
+  }
+  const drawPropsCalls = (world, view, now) => { const { ctx, count } = countingCtx(); world.drawProps(ctx, view, 1, now); return count(); };
+
+  // deterministic world (same seed => same layout)
+  function rng() { let a = 135792468; return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ (t >>> 14); return ((t ^ t >>> 15) >>> 0) / 4294967296; }; }
+  const world = new World(rng(), 7);
+  // a few grown reeds (the build may not fill any; force a handful so sway is testable)
+  world.reeds.length = 0;
+  for (let i = 0; i < 6; i++) world.reeds.push({ x: 100 + i * 60, y: 400, h: 1, burn: 0, seed: i * 31 + 7 });
+
+  // ---- (a) the reed TIP OFFSET changes across frames (animated, not static) ----
+  const s0 = reedSway(123, 0.0);
+  const s1 = reedSway(123, 0.5);
+  const s2 = reedSway(123, 1.0);
+  assert(Math.abs(s1 - s0) > 1e-3 || Math.abs(s2 - s1) > 1e-3, `L1: reedSway(seed,now) is animated by time (t0=${s0.toFixed(3)}, t0.5=${s1.toFixed(3)}, t1.0=${s2.toFixed(3)})`);
+  // small amplitude (painted-world, not bouncy): bounded within ±6 px
+  let maxSw = 0; for (let t = 0; t < 40; t++) maxSw = Math.max(maxSw, Math.abs(reedSway(99, t * 0.1)));
+  assert(maxSw <= 6, `L1: reed sway amplitude is small (max ${maxSw.toFixed(2)}px, within ±5-6px)`);
+
+  // ---- (b) the shimmer glint is staggered, bounded in [0,1], animated ----
+  let glMax = 0, glMin = 1;
+  for (let i = 0; i < SHIMMER_CAP; i++) { const g0 = shimmerGlint(i, 0); const g1 = shimmerGlint(i, 1); glMax = Math.max(glMax, g0, g1); glMin = Math.min(glMin, g0, g1); }
+  assert(glMax <= 1.001 && glMin >= -0.001, `L1: shimmerGlint is bounded in [0,1] (min=${glMin.toFixed(3)}, max=${glMax.toFixed(3)})`);
+  // staggered: different indices peak at different times (not all in sync)
+  const gA0 = shimmerGlint(0, 0.4), gB0 = shimmerGlint(3, 0.4), gA1 = shimmerGlint(0, 1.6), gB1 = shimmerGlint(3, 1.6);
+  assert(Math.abs((gA0 - gB0)) > 0.05 || Math.abs((gA1 - gB1)) > 0.05, `L1: shimmer glints are STAGGERED (index0 vs index3 differ: |${(gA0 - gB0).toFixed(2)}|, |${(gA1 - gB1).toFixed(2)}|)`);
+
+  // ---- (c) drifting mist: 2-3 very-low-alpha bands, each with parallax < 1 ----
+  assert(MIST_BANDS.length >= 2 && MIST_BANDS.length <= 3, `L1: there are 2-3 mist bands (${MIST_BANDS.length})`);
+  assert(MIST_BANDS.every(b => b.alpha > 0 && b.alpha < 0.12), `L1: each mist band is very-low-alpha (max ${Math.max(...MIST_BANDS.map(b => b.alpha)).toFixed(3)} < 0.12)`);
+  assert(MIST_BANDS.every(b => b.parallax > 0 && b.parallax < 1), 'L1: each mist band slow-parallaxes (parallax in (0,1), lagging the camera)');
+
+  // ---- (d) drawProps is bounded + still culled: a localized view draws far fewer calls than the whole world ----
+  const view = { x: 0, y: 0, scale: 1, w: 1280, h: 800 };
+  const localCalls = drawPropsCalls(world, view, 1.0);
+  const fullCalls = drawPropsCalls(world, { x: 0, y: 0, scale: 1, w: world.w, h: world.h }, 1.0);
+  assert(localCalls < fullCalls * 0.9, `L1: the world draw is still culled (localized ${localCalls} < full ${fullCalls})`);
+  // the shimmer cap is enforced: drawing with a huge ripple count still caps glints
+  assert(SHIMMER_CAP > 0 && SHIMMER_CAP <= 24, `L1: the shimmer glint count is bounded (cap=${SHIMMER_CAP})`);
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

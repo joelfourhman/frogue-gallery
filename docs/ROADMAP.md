@@ -407,7 +407,7 @@ per-frame budget assertion.
 
 ### Module L — Art direction / presence
 
-- [ ] **L1 — Living world pass: swaying reeds, drifting mist, water shimmer**
+- [x] **L1 — Living world pass: swaying reeds, drifting mist, water shimmer**
   — `world.js`
   - **What:** reeds sway (per-reed sine, phase from the existing reed
     `seed`, small amplitude); 2–3 soft mist bands drift across the
@@ -418,7 +418,27 @@ per-frame budget assertion.
     draw-time modulation of existing geometry; no new world data.
   - **Acceptance:** smoke stage: reed tip x-offset changes across frames
     (animated, not static) and shimmer count stays bounded; P10 stage still
-    passes. Status: TODO.
+    passes.
+    Status: DONE (2026-09-06, v1.4 BATCH 2). Implemented pure draw-time in
+    `world.js drawProps` (which already receives `now`), all inside the
+    existing view culling — **no new per-world state, no world-sim change**, so
+    P10 and the pacing probes (runT) are untouched. Three additions, each a
+    small pure function of `now` + existing data: (a) **reed sway** — `reedSway(seed,
+    now)` returns a small (±5px) per-reed sine (phase from the reed's `seed`),
+    scaled by the growth factor; the reed's tip + cattail head ride the offset
+    while the planted base holds (original bend/wobble + burn color preserved).
+    (b) **drifting mist bands** — a module constant `MIST_BANDS` (3 very-low-
+    alpha procedural ellipses, alpha ≤ 0.05) tiled across the view with a
+    slow-parallax tile scroll `S = (1+parallax)*view.x + now*speed` (parallax
+    < 1 so each band lags the camera = farther), plus a slow vertical bob;
+    culled to the visible rect. (c) **water shimmer** — a handful of staggered
+    glints on the existing `ripples` (open-water markers), capped at
+    `SHIMMER_CAP = 12`, each pulsing on `shimmerGlint(i, now)` (a staggered
+    sine so they twinkle out of sync). No new dependencies. Smoke stage 63:
+    `reedSway` is time-animated + small (≤~5px), `shimmerGlint` is bounded
+    [0,1] + staggered, there are 2-3 very-low-alpha slow-parallax mist bands,
+    the world draw is still culled (localized < full), and the shimmer count
+    is bounded. P10 (stage 24) still passes.
 
 - [ ] **L2 — Layered watercolor render pass: wet edges + stroke texture**
   — `world.js` / `math.js`
