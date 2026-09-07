@@ -490,6 +490,7 @@ export class AudioSys {
     if (!this.ctx || !this._melodyMaster) return;
     this._tickThemes(this._zoneThemes || []);
     this._tickThemes(this._bossThemes || []);
+    this._tickThemes(this._encoreThemes || []); // M2: the encore arpeggio
   }
 
   // Shared lookahead step-scheduler for a list of { theme, gain, step, nextAt,
@@ -525,19 +526,46 @@ export class AudioSys {
     }
   }
 
+  // M2 (v1.4): the "Encore" viewing screen's soft arpeggio. Reuses the S1
+  // melody step-sequencer (melodyMaster -> musicBus) so it inherits the music
+  // slider + mute, but at a low level (its own gain of 0.5 under the melody
+  // master) with a slow, gentle pattern — a "leisurely walk around the gallery"
+  // arpeggio, not a zone theme. No setInterval / audio files / new deps.
+  setEncoreArpeggio() {
+    if (!this.ctx || !this._melodyMaster) return;
+    if (!this._encoreThemes) this._encoreThemes = [];
+    if (this._encoreThemes.length > 0) return; // idempotent
+    const theme = {
+      root: 261.63,                              // C4 — bright, gallery-warm
+      scale: [0, 4, 7, 12],                      // major-ish pentatonic arpeggio
+      pattern: [0, -1, 1, -1, 2, -1, 3, -1, 2, -1, 1, -1, 0, -1, 1, 2],
+      stepDur: 0.42,                             // slow, leisurely
+      detune: 6,
+    };
+    const zg = this.ctx.createGain();
+    zg.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+    zg.gain.setTargetAtTime(0.5, this.ctx.currentTime + 0.05, 0.6); // LOW level
+    zg.connect(this._melodyMaster);
+    this._encoreThemes.push({ zone: -1, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.3, muted: false, fading: false });
+  }
+
   // Fade the melody out and stop the loop (run end / quit to title). Ramps each
   // live zone gain down (a brief musical fade, not a cut), schedules a
   // disconnect for GC, and clears the active list so a new run starts fresh.
   // S2: the boss loop is stopped here too (it lives on the same melody layer),
-  // so the "stop the melody layer" entry point covers both.
+  // so the "stop the melody layer" entry point covers both. M2: the encore
+  // arpeggio is stopped here as well (it lives on the same melody layer), so
+  // leaving the encore (to the atelier/title) fades it out cleanly.
   clearZoneTheme() {
     if (!this.ctx) return;
     this._fadeMelodyLayer(this._zoneThemes || []);
     this._fadeMelodyLayer(this._bossThemes || []);
+    this._fadeMelodyLayer(this._encoreThemes || []);
     this._zoneThemes = []; // no active loops remain — a new run seeds its own
     this._zoneThemeI = -1;
     this._bossThemes = [];
     this._bossMusic = false;
+    this._encoreThemes = [];
   }
 
   // S2: ramp a list of melody loops to silence + schedule their disconnect.

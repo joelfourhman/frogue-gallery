@@ -586,19 +586,33 @@ per-frame budget assertion.
     first-victory beat. Pacing probes unchanged (17.3 / 18.3 / 19.5 min).
     Status: DONE.
 
-- [ ] **M2 — "Encore" gallery viewing screen** — `game.js` / `ui.js`
-  - **What:** an "Encore" button on the victory screen opens a leisurely
-    browse of the collection: the run's paintings first, then everything
-    unlocked; full-color render, per-painting detail (atelier one-liner,
-    pigments used, time to paint, expedition number), soft page-turn sfx,
-    Esc/vision back. No timers, no fail state — just looking at the art.
-  - **Notes:** reuses the existing gallery-wall rendering (gallery screen)
-    + atelier one-liner pools + save painting records; a new screen in the
-    state machine, no new data.
-  - **Acceptance:** smoke stage: opens from the victory screen, renders
-    every painting in the save, detail view shows one-liner + pigments,
-    closes cleanly back to the victory screen; P10 still passes.
-    Status: TODO.
+- [x] **M2 — "Encore" gallery viewing screen** — `game.js` / `audio.js` — **DONE (2026-09-07, Batch 5, item 1).**
+  - **What (as built):** an "Encore" button on the **Atelier** (a paper chip right of
+    Depart; click row `tag:'encore'` wired through the existing atelier click
+    machinery) opens a leisurely **one-at-a-time** walk of the Gallery Wall.
+    Each painting is shown **large** with its title + the **Curator's Ledger
+    lore blurb** (LEDGER_LORE data); owned gold-tier works get a **gilded (gold)
+    frame** + a "★ gold tier" marker; unowned works sit in a **shadowed
+    silhouette frame** with "not yet". A **soft S1-style ambient arpeggio**
+    plays at a low level, **arrow keys / click** advance between paintings,
+    **Esc returns to the atelier**.
+  - **Notes (as built):** an **overlay** — a `_encoreOpen` flag drawn in
+    `_drawAll` on top of the atelier, **NOT a new state** — with an
+    **in-memory pointer only** (`_encoreIdx`); **NO new persistence** (the
+    save is byte-identical while browsing). Reuses the existing
+    `_drawPaintingMotif` / frame / LEDGER_LORE / melody-layer machinery. The
+    arpeggio is `AudioSys.setEncoreArpeggio()` — a gentle C-major pentatonic
+    on its own gain (0.5) under `melodyMaster -> musicBus`, so it inherits
+    the music slider + mute; `tickMusic` drives `_encoreThemes` through the
+    shared `_tickThemes`, and `clearZoneTheme` fades it on leave (no
+    setInterval / audio files / new deps).
+  - **Acceptance (met):** smoke stage 70 (headless `fillText`-recording):
+    opens from the atelier, renders ALL 10 paintings in sequence — owned
+    titled + lore shown, unowned "not yet", an owned gold-tier work shows the
+    gilded marker; the arpeggio rides a LOW gain under the melody layer;
+    left-arrow + a right-half click advance; Esc returns to the atelier +
+    stops the arpeggio; nothing is persisted. Pacing unchanged (presentation
+    only). **Status: DONE.**
 
 - [ ] **M3 — Two tasteful easter eggs** — `game.js` / `world.js` / field guide
   - **What:** (1) **The other frog:** a tiny dark frog in a far Reedy Mire

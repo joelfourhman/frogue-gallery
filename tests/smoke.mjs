@@ -4168,8 +4168,8 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
   // A minimal-but-sufficient headless AudioContext: enough for AudioSys.ensure()
   // + the ambient bed + the S1 melody step-sequencer to build and SCHEDULE nodes
   // without a real browser. currentTime advances manually so tickMusic schedules.
-  const param = (v) => ({ value: v, setValueAtTime() {}, linearRampToValueAtTime() {},
-    exponentialRampToValueAtTime() {}, setTargetAtTime() {} });
+  const param = (v) => ({ value: v, setValueAtTime(x) { this.value = x; }, linearRampToValueAtTime(x) { this.value = x; },
+    exponentialRampToValueAtTime(x) { this.value = x; }, setTargetAtTime(x) { this.value = x; } });
   const makeNode = () => ({
     type: 'sine', frequency: param(440), Q: param(1), detune: param(0), gain: param(1),
     buffer: null, _connections: [],
@@ -4614,6 +4614,161 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
   g3._endRun('defeat');
   assert(g3._cine === null, 'M1: a defeat never opens the cinematic beat (victory only)');
   assert(g3.save.firstVictoryCinematic === false, 'M1: a defeat does NOT latch the seen-flag (a future victory still gets it)');
+
+  delete window.AudioContext; // restore
+}
+
+// STAGE 70: v1.4 M2 — the "Encore" gallery-viewing screen (headless)
+// ---------------------------------------------------------------------
+// The Encore screen is an overlay opened FROM the atelier: a leisurely
+// one-at-a-time walk of the Gallery Wall. Each painting is shown large with
+// its title + the Curator's Ledger lore blurb; owned gold-tier works get a
+// gilded (gold) frame; unowned works sit in a shadowed silhouette frame with
+// "not yet". A soft S1-style arpeggio plays (low-level, on the melody layer),
+// arrows / click advance, Esc returns to the atelier.
+//
+// We verify with a fillText-recording canvas (every placard string is logged)
+// + a headless AudioContext (the arpeggio schedules on the melody layer):
+//   (a) opening Encore renders ALL 10 paintings in sequence — each owned one
+//       shows its title, each unowned one shows "not yet", and an owned
+//       gold-tier one shows the "★ gold tier" gilded marker;
+//   (b) the soft arpeggio is scheduled on the melody layer at a LOW level;
+//   (c) the right-arrow (and a click on the right half) advance to the next
+//       painting;
+//   (d) Esc returns to the atelier (overlay closed, arpeggio stopped).
+console.log('== stage 70: v1.4 M2 — "Encore" gallery viewing screen (headless) ==');
+{
+  const L70 = await import('../src/logic.js');
+  // A minimal headless AudioContext (same shape as stages 66/67): enough for
+  // AudioSys.ensure() + the melody step-sequencer to build the graph and to
+  // SCHEDULE the encore arpeggio on the melody layer.
+  const param = (v) => ({ value: v, setValueAtTime(x) { this.value = x; }, linearRampToValueAtTime(x) { this.value = x; },
+    exponentialRampToValueAtTime(x) { this.value = x; }, setTargetAtTime(x) { this.value = x; } });
+  const makeNode = () => ({
+    type: 'sine', frequency: param(440), Q: param(1), detune: param(0), gain: param(1),
+    buffer: null, _connections: [],
+    connect(node) { this._connections.push(node); return node; },
+    disconnect() { this._connections.length = 0; },
+    start() {}, stop() {}, getChannelData() { return new Float32Array(0); },
+  });
+  class FakeAudioContext {
+    constructor() { this.currentTime = 0; this._sr = 22050; this._dest = makeNode(); }
+    get sampleRate() { return this._sr; }
+    get destination() { return this._dest; }
+    createGain() { return makeNode(); }
+    createOscillator() { return makeNode(); }
+    createBiquadFilter() { return makeNode(); }
+    createDynamicsCompressor() { return makeNode(); }
+    createBuffer(ch, len) { return { getChannelData: () => new Float32Array(len) }; }
+    createBufferSource() { return makeNode(); }
+  }
+  window.AudioContext = FakeAudioContext;
+
+  const recCanvas = makeCanvas();
+  const drawn = [];
+  const baseCtx = makeCtx(recCanvas);
+  const recCtx = new Proxy(baseCtx, {
+    get(t, prop) {
+      if (prop === 'fillText') return (str, ...rest) => { drawn.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; };
+      return t[prop];
+    },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas.getContext = () => recCtx;
+
+  const g = new Game(recCanvas);
+  g.start();
+  g.audio.ensure();
+  // A save that owns a mix: two ordinary paintings + one owned GOLD-TIER
+  // (gilded-meridian), so the gilded-frame marker is exercised. The rest are
+  // unowned (shadowed). croaksworth stays locked-but-unowned -> "sealed".
+  const sv = L70.freshSave();
+  sv.owned = ['moonlit-pond', 'spring-garden', 'gilded-meridian'];
+  sv.ngCycle = 1; sv.gold = 60;
+  g.save = sv;
+  // the encore button exists in the atelier's click map.
+  const encoreRow = g._atelierRows().find((r) => r.tag === 'encore');
+  assert(!!encoreRow, 'M2: the atelier offers an "Encore" entry (click row present)');
+
+  // enter the atelier first so the encore overlays it (it is an overlay, not a state).
+  g.state = 'title'; g._beginAtelier();
+  assert(g.state === 'atelier', 'M2: the atelier state is active before opening Encore');
+
+  // ---- (a) open the encore + walk every one of the 10 paintings ----
+  g._openEncore();
+  assert(g._encoreOpen === true && g.state === 'atelier', 'M2: opening Encore keeps the atelier underneath (overlay, not a new state)');
+  assert(g.audio._encoreThemes.length === 1, `M2: the encore arpeggio loop is created on the melody layer (1, got ${g.audio._encoreThemes.length})`);
+  g._encoreIdx = 0;   // pin to painting 0 so the walk below is deterministic
+
+  const seenOwned = new Set();
+  let sawGoldTierMarker = false;
+  let sawNotYet = false;
+  // the first painting (index 0 = moonlit-pond, owned) renders immediately.
+  drawn.length = 0; frames(3);
+  const joined0 = drawn.join('\u0001');
+  assert(joined0.includes('Encore'), `M2: the encore screen renders its header ("The Encore")`);
+  assert(joined0.includes('Moonlit Pond'), 'M2: the first (owned) painting renders its TITLE on the large placard');
+  assert(joined0.includes('/ 10'), 'M2: the counter reads "1 / 10"');
+  // the Curator's Ledger lore blurb renders for the owned work (LEDGER_LORE
+  // feeds the placard — assert the moonlit-pond's specific ledger line).
+  assert(joined0.includes('Mabel paints it by memory'), 'M2: the Curator\'s Ledger lore blurb shows on the owned painting');
+  // walk forward through all 10 — collect the placard text each stop.
+  for (let step = 0; step < 10; step++) {
+    const pt = L70.PAINTINGS[step];
+    drawn.length = 0; frames(2);
+    const joined = drawn.join('\u0001');
+    const owned = sv.owned.includes(pt.id);
+    if (owned) {
+      assert(joined.includes(pt.name), `M2(${step}): owned "${pt.name}" renders its title`);
+      seenOwned.add(pt.id);
+    } else {
+      // unowned (incl. the sealed portrait) -> shadowed frame with "not yet".
+      assert(joined.includes('not yet'),
+        `M2(${step}): unowned "${pt.name}" renders a shadowed "not yet" placard`);
+      sawNotYet = true;
+    }
+    if (owned && pt.goldTier) { sawGoldTierMarker = joined.includes('gold tier'); }
+    // advance to the next painting (wraps around at the end).
+    g._encoreStep(1);
+    frames(1);
+  }
+  assert(seenOwned.has('moonlit-pond') && seenOwned.has('spring-garden') && seenOwned.has('gilded-meridian'),
+    `M2: all owned paintings were reached and titled while walking (got ${[...seenOwned].join(', ')})`);
+  assert(sawGoldTierMarker === true, 'M2: the owned gold-tier work shows the gilded "★ gold tier" marker');
+  assert(sawNotYet === true, 'M2: unowned paintings render as shadowed "not yet" frames');
+
+  // ---- (b) the arpeggio is scheduled at a LOW level on the melody layer ----
+  const et = g.audio._encoreThemes[0];
+  assert(et.gain.gain.value < 1, `M2: the encore arpeggio rides a LOW gain (${et.gain.gain.value < 0.7 ? 'set' : 'target'}) under the melody master`);
+  const onMelody = (n) => !n ? false : (n === g.audio._melodyMaster) || (n._connections || []).some((c) => onMelody(c));
+  assert(onMelody(et.gain), 'M2: the encore arpeggio gain is connected UNDER the melody layer (inherits the music slider + mute)');
+  g.audio.ctx.currentTime += 3.0;   // advance the fake clock past several steps
+  g.audio.tickMusic();
+  assert(et.step > 0, `M2: tickMusic schedules the encore arpeggio (step advanced to ${et.step})`);
+
+  // ---- (c) navigation: the LEFT arrow works (real keyboard); a click advances ----
+  fireKey('keydown', 'ArrowLeft');
+  frames(1);
+  fireKey('keydown', 'ArrowLeft');
+  frames(1);
+  assert(g._encoreIdx === (0 - 2 + L70.PAINTINGS.length) % L70.PAINTINGS.length, 'M2: the left arrow steps back to the previous painting');
+  // a click on the RIGHT half of the screen advances (mouse routing in _updateEncore).
+  // Drive the real canvas mousedown listener with a press on the right half.
+  const beforeClick = g._encoreIdx;
+  const md = (recCanvas._ev && recCanvas._ev['mousedown']);
+  assert(!!md, 'M2: the canvas mousedown listener is bound (for click navigation)');
+  md({ clientX: g.cw - 40, clientY: g.ch / 2, button: 0, preventDefault() {} });
+  frames(1);
+  assert(g._encoreIdx === (beforeClick + 1) % L70.PAINTINGS.length, 'M2: a click on the right half advances to the next painting');
+
+  // ---- (d) Esc returns to the atelier + stops the arpeggio ----
+  fireKey('keydown', 'Escape');
+  frames(1);
+  assert(g._encoreOpen === false, 'M2: Esc closes the encore overlay');
+  assert(g.state === 'atelier', 'M2: Esc returns to the atelier');
+  assert(g.audio._encoreThemes.length === 0, `M2: the encore arpeggio loop is stopped when leaving (got ${g.audio._encoreThemes.length})`);
+  // no new persistence: the save is byte-identical (still 3 owned, same gold).
+  assert(g.save.owned.length === 3 && g.save.gold === 60, 'M2: the encore is pure presentation — nothing is persisted');
 
   delete window.AudioContext; // restore
 }

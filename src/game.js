@@ -366,6 +366,15 @@ export class Game {
     this._atelierSayIdx = {};   // per-character rotation index (not persisted)
     this.lastResult = null;     // 'victory' | 'defeat' | null — last finished run
 
+    // M2 (v1.4): the "Encore" gallery-viewing screen. An overlay OPENED FROM the
+    // atelier (it stacks on top of state 'atelier' so the between-run sanctuary
+    // keeps breathing underneath). `encoreT` = time in the screen (drives a
+    // gentle crossfade-in); `_encoreIdx` = the painting currently on display
+    // (a pure in-memory pointer — NO new persistence).
+    this._encoreOpen = false;
+    this.encoreT = 0;
+    this._encoreIdx = 0;
+
     // one-time audio unlock on first gesture (browser autoplay rules).
     // P9: also start the ambient bed so the music/SFX sliders have a live
     // preview. startMusic is a no-op until ensure() has created the context.
@@ -607,7 +616,11 @@ export class Game {
       }
     } else if (this.state === 'atelier') {
       this.atelierT += dt;
-      this._updateAtelier(dt);
+      // M2: while the Encore viewing screen is open it owns the atelier's input
+      // + the melodic layer; the atelier's own update (tabs/rows/one-liner) is
+      // skipped so nothing underneath reacts to the arrows/Esc.
+      if (this._encoreOpen) this._updateEncore(dt);
+      else this._updateAtelier(dt);
     }
 
     this._drawAll();
@@ -929,6 +942,9 @@ export class Game {
       cardW: (listW - 24) / 2, cardH: 90, cardGap: 8, cols: 2,  // G2: 10 paintings (2x5) fit above the Depart button
       depart: { x: cx - 150, y: ch - 92, w: 300, h: 54 },
       leave: { x: cx - 370, y: ch - 82, w: 200, h: 34 },
+      // M2: the "Encore" viewing-screen entry (right of the Depart button,
+      // mirrored off the leave button). Opens the gallery-wall walk-through.
+      encore: { x: cx + 170, y: ch - 82, w: 200, h: 34 },
     };
   }
 
@@ -1002,6 +1018,7 @@ export class Game {
     }
     rows.push({ tag: 'depart', x: g.depart.x, y: g.depart.y, w: g.depart.w, h: g.depart.h, act: () => { this.sfx('ui'); this._beginExpedition(); } });
         rows.push({ tag: 'leave', x: g.leave.x, y: g.leave.y, w: g.leave.w, h: g.leave.h, act: () => { this.sfx('ui-back'); this._quitToTitle(); } });
+        rows.push({ tag: 'encore', x: g.encore.x, y: g.encore.y, w: g.encore.w, h: g.encore.h, act: () => this._openEncore() });
     return rows;
   }
 
@@ -1638,7 +1655,167 @@ _drawAtelier(ctx) {
     ctx.fill(); ctx.stroke();
     ctx.restore();
     centerText(ctx, '← back to the pond', l.x + l.w / 2, l.y + l.h / 2 + 1, '14px Georgia, serif', '#fdf6e9', 0.9);
+    // M2: the "Encore" viewing-screen entry (a paper chip, right of Depart).
+    const en = g.encore;
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#fdf6e9';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(en.x, en.y, en.w, en.h, 17);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+    centerText(ctx, 'Encore — the gallery wall', en.x + en.w / 2, en.y + en.h / 2 + 1, '14px Georgia, serif', '#fdf6e9', 0.9);
     centerText(ctx, 'Enter — depart the studio   ·   Esc — return to the pond', cx, d.y + d.h + 16, 'italic 11px Georgia, serif', '#fdf6e9', 0.55);
+  }
+
+  // ==================== M2 (v1.4): the "Encore" viewing screen ====================
+  // A leisurely, presentation-only screen opened from the Atelier that walks the
+  // frog through the GALLERY WALL one large painting at a time — owned works in
+  // full color with their title + the Curator's Ledger lore (gold-tier ones in a
+  // gold frame), unowned works as shadowed frames with a "not yet" placard. A
+  // soft S1-style arpeggio plays at a low level (setEncoreArpeggio). Arrow keys /
+  // click move between paintings; Esc returns to the atelier. NO new persistence
+  // — `_encoreIdx` is an in-memory pointer. Pure draw-time + input checks.
+  // (The screen overlays state 'atelier', so the swamp keeps breathing beneath.)
+
+  _openEncore() {
+    // start on the first owned painting (so a returning frog sees art, not a
+    // shadow) — or painting 0 if the collection is still empty.
+    let startIdx = 0;
+    for (let i = 0; i < PAINTINGS.length; i++) {
+      if (this.save.owned.includes(PAINTINGS[i].id)) { startIdx = i; break; }
+    }
+    this._encoreIdx = startIdx;
+    this.encoreT = 0;
+    this._encoreOpen = true;
+    this.sfx('ui');
+    if (this.audio && this.audio.setEncoreArpeggio) this.audio.setEncoreArpeggio();
+  }
+
+  _closeEncore() {
+    if (!this._encoreOpen) return;
+    this._encoreOpen = false;
+    this.sfx('ui-back');
+    // fade the encore arpeggio out (it lives on the melody layer; clearZoneTheme
+    // is the "stop the melody layer" entry point and covers it). Idempotent.
+    if (this.audio && this.audio.clearZoneTheme) this.audio.clearZoneTheme();
+  }
+
+  _encoreStep(d) {
+    const n = PAINTINGS.length;
+    this._encoreIdx = ((this._encoreIdx + d) % n + n) % n; // wrap
+    this.encoreT = 0; // re-trigger the gentle crossfade on each change
+    this.sfx('ui');
+  }
+
+  _updateEncore(dt) {
+    this.encoreT += dt;
+    if (this.input.pressed('escape') || this.input.pressed('backspace')) { this._closeEncore(); return; }
+    if (this.input.pressed('arrowright') || this.input.pressed('arrowdown')) { this._encoreStep(1); return; }
+    if (this.input.pressed('arrowleft') || this.input.pressed('arrowup')) { this._encoreStep(-1); return; }
+    // click: right half of the screen = next, left half = previous (Esc is the
+    // only click-less exit; there's no close button so a stray click never
+    // accidentally leaves — it just browses).
+    if (this.input.mouse.lPressed && this.input.mouse.x > 0) {
+      if (this.input.mouse.x >= this.cw / 2) this._encoreStep(1);
+      else this._encoreStep(-1);
+    }
+  }
+
+  _drawEncore(ctx) {
+    // a near-opaque gallery dim over the breathing atelier (a hair of the world
+    // shows through so the screen feels hung IN the studio, not a separate page).
+    ctx.save();
+    ctx.fillStyle = 'rgba(24,19,16,0.86)';
+    ctx.fillRect(0, 0, this.cw, this.ch);
+    ctx.restore();
+
+    const cx = this.cw / 2;
+    const pt = PAINTINGS[this._encoreIdx];
+    const owned = this.save.owned.includes(pt.id);
+    const gold = owned && !!pt.goldTier;
+    const sealed = this._ptLocked(pt);
+    const entry = ledgerEntry(pt);
+
+    // gentle crossfade-in on open + on each navigation (encoreT resets to 0).
+    const fade = Math.min(1, this.encoreT / 0.28);
+    ctx.save();
+    ctx.globalAlpha = fade;
+
+    // header
+    outlineText(ctx, 'The Encore', cx, 46, '700 34px Georgia, serif', '#f4ead8', INK, 6);
+    centerText(ctx, 'a quiet walk through the gallery wall', cx, 80, 'italic 15px Georgia, serif', '#fdf6e9', 0.8);
+    // counter (which painting is on display)
+    centerText(ctx, `${this._encoreIdx + 1} / ${PAINTINGS.length}`, cx, 108, '700 15px Georgia, serif', gold ? '#d9a520' : '#fdf6e9', 0.9);
+
+    // the large frame (one at a time). Reuses the P8 gallery-wall frame look:
+    // paperPanel + a double border (GILDED for owned gold-tier) + the generative
+    // motif — or a dim silhouette for the unowned.
+    const S = 380, fx = cx - S / 2, fy = 150;
+    const c = paperPanel(ctx, fx - 18, fy - 18, S + 36, S + 36, { seed: 900 + this._encoreIdx, fill: owned ? '#f9f3e2' : '#e9e0cd' });
+    c.save();
+    c.lineWidth = 6;
+    c.strokeStyle = gold ? '#c9922a' : (owned ? '#b8912e' : '#a99e83');
+    c.beginPath(); c.roundRect(fx - 4, fy - 4, S + 8, S + 8, 4); c.stroke();
+    c.lineWidth = 2;
+    c.strokeStyle = gold ? '#8a6d1f' : (owned ? '#8a6d1f' : '#8f856d');
+    c.beginPath(); c.roundRect(fx + 2, fy + 2, S - 4, S - 4, 2); c.stroke();
+    if (owned) {
+      c.fillStyle = pt.art.bg;
+      c.fillRect(fx + 4, fy + 4, S - 8, S - 8);
+      this._drawPaintingMotif(c, pt, fx + 4, fy + 4, S - 8);
+    } else {
+      // shadowed frame: a darkened silhouette of a future painting.
+      c.fillStyle = sealed ? '#241f18' : '#2e271f';
+      c.fillRect(fx + 4, fy + 4, S - 8, S - 8);
+      c.globalAlpha = 0.5;
+      c.fillStyle = '#c9bfa8';
+      c.font = '700 96px Georgia, serif';
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(sealed ? '?' : '✕', cx, fy + S / 2);
+    }
+    c.restore();
+
+    // placard: title (owned) / "not yet" (unowned) + the Curator's Ledger lore.
+    const py = fy + S + 34;
+    c.save();
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = INK;
+    if (owned) {
+      c.font = '700 20px Georgia, serif';
+      c.globalAlpha = 1;
+      c.fillText(pt.name, cx, py);
+      if (gold) { c.fillStyle = '#c9922a'; c.font = '700 12px Georgia, serif'; c.fillText('★ gold tier', cx + 150, py); }
+    } else {
+      c.font = 'italic 18px Georgia, serif';
+      c.globalAlpha = 0.7;
+      c.fillText(sealed ? 'a sealed portrait — not yet' : 'not yet', cx, py);
+    }
+    // the lore blurb (Curator's Ledger data) — always shown; it's the story the
+    // curator keeps for every painting, earned or not.
+    c.fillStyle = INK;
+    c.font = 'italic 14px Georgia, serif';
+    c.globalAlpha = owned ? 0.9 : 0.6;
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(entry.lore, cx, py + 30, S - 48);
+    c.restore();
+
+    // navigation arrows (left / right of the frame) — purely visual; the real
+    // hit-test is "click left/right half" in _updateEncore.
+    ctx.save();
+    ctx.globalAlpha = fade * 0.9;
+    ctx.fillStyle = '#fdf6e9';
+    ctx.font = '700 40px Georgia, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('‹', cx - S / 2 - 52, fy + S / 2);
+    ctx.fillText('›', cx + S / 2 + 52, fy + S / 2);
+    ctx.restore();
+
+    // footer hint
+    centerText(ctx, '← → / click to browse   ·   Esc — return to the atelier', cx, this.ch - 34, 'italic 12px Georgia, serif', '#fdf6e9', 0.6);
+    ctx.restore();
   }
 
   // tiny generative art per painting (keeps it light, no assets)
@@ -3397,6 +3574,8 @@ _drawAtelier(ctx) {
     if (this.state === 'title' && this.optionsOpen) this._drawOptions(ctx);
     if (this.state === 'title' && this._modPrompt) this._drawModPrompt(ctx);  // N4
     if (this.state === 'atelier') this._drawAtelier(ctx);
+    // M2: the Encore viewing screen overlays the atelier (drawn on top).
+    if (this.state === 'atelier' && this._encoreOpen) this._drawEncore(ctx);
     if (this.paused && this.state === 'expedition') this._drawPause(ctx);
     if (this.help && this.state === 'expedition') this._drawHelp(ctx);   // M8 P6
     if (this.state === 'end') this._drawEnd(ctx);
