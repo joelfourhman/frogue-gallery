@@ -262,6 +262,12 @@ export class Game {
     this._modPrompt = null;   // N4 (v1.3 M14): { sel } — the open expedition-modifier picker
     this._bloom = null;      // V2 (v1.2 M11): { x, y, t, dur } — heron awaken bloom
     this._bloomSurge = 0;    // V2: timed saturation surge (0..~0.14), decays to 0
+    // J5 (v1.4): screen-space floating "+n" HUD numbers (pop up + fade near the
+    // pigment jars) + a short fading trail behind the frog on an orb streak.
+    // Both are presentation only — never touch the measured runT.
+    this._floats = [];       // [{ x, y, text, t, max, color }]
+    this._streakTrail = [];  // [{ x, y, t, max }] — recent positions on a streak
+    this._pauseOpenT = 0;    // J5: pause panel slide+fade clock (real time)
     // J3 (v1.4): the camera's awaken-moment hold. A heron rising (the Great
     // Green Heron reveal) triggers a ~1.2 s zoom-out + hold on the heron, then
     // the camera eases back to normal follow. Real-time presentation — it never
@@ -393,6 +399,14 @@ export class Game {
     }
     // J2: the boss-defeat white flash decays fast (real-time presentation).
     if (this._whiteFlash > 0) this._whiteFlash = Math.max(0, this._whiteFlash - dt * 3.2);
+    // J5 (v1.4): HUD floating numbers + the orb-streak trail decay on real time
+    // (they are UI/presentation, not world sim).
+    for (let fi = this._floats.length - 1; fi >= 0; fi--) {
+      const f = this._floats[fi]; f.t += dt; if (f.t >= f.max) this._floats.splice(fi, 1);
+    }
+    for (let si = this._streakTrail.length - 1; si >= 0; si--) {
+      const s = this._streakTrail[si]; s.t += dt; if (s.t >= s.max) this._streakTrail.splice(si, 1);
+    }
 
     // J2 (v1.4): the WORLD simulation (world, particles, enemies, player, and
     // the runT clock) advances at dt * timeScale. UI (banners, shake, zoom,
@@ -470,6 +484,8 @@ export class Game {
       } else if (!this.dying) {
         // M5: the pause menu owns input while paused — _updateExpedition is
         // skipped in that state, so its own pause block never ran.
+        // J5 (v1.4): advance the pause panel's slide+fade clock (real time).
+        this._pauseOpenT += dt;
         if (this.input.pressed('p')) {
           this.paused = false;
           this.sfx('ui');
@@ -1731,6 +1747,8 @@ _drawAtelier(ctx) {
     this._zoneTint = null; // M8 P12: { color, t, max } — fading zone-accent wash on entry
     this._bloom = null;     // V2 (v1.2 M11): fresh run — no active awaken bloom
     this._bloomSurge = 0;   // V2: fresh run — no lingering saturation surge
+    // J5 (v1.4): fresh run — clear any leftover HUD floats / streak trail.
+    this._floats = []; this._streakTrail = []; this._pauseOpenT = 0;
     // E2 (v1.2 M10): fresh weather per run; the first zone's phase is armed below
     this.weatherPending = null;
     this.weatherActive = null;
@@ -2130,6 +2148,7 @@ _drawAtelier(ctx) {
       if (this.input.pressed('p')) {
         this.paused = !this.paused;
         this.sfx(this.paused ? 'ui-back' : 'ui');
+        if (this.paused) this._pauseOpenT = 0;   // J5: restart the panel slide+fade
         return;
       }
       // M8 P6: "?" field guide — pauses the run so you can read it safely.
@@ -2180,6 +2199,16 @@ _drawAtelier(ctx) {
     }
 
     p.update(dt, this.input, this.tuning, this.world, this._view());
+    // J5 (v1.4): capture the orb-streak trail behind the frog every frame the
+    // streak is ACTIVE (presentation only — reads from the already-simmed
+    // position; never feeds runT). Capped so it can't grow unbounded.
+    if (this.orbStreak > 0) {
+      const _ss = orbStreakState(this.orbStreak);
+      if (_ss.active && (Math.abs(p.vx) > 1 || Math.abs(p.vy) > 1)) {
+        if (this._streakTrail.length > 18) this._streakTrail.shift();
+        this._streakTrail.push({ x: p.x, y: p.y, t: 0.35, max: 0.35 });
+      }
+    }
     // J4 (v1.4): a hop landing — a soft dust/water puff + a single ripple ring
     // on the water + a low "boing" SFX. All presentation (draw/sfx-time only;
     // the physics already ran in p.update). Consumed here so it fires once.
@@ -2625,6 +2654,18 @@ _drawAtelier(ctx) {
             this.addBanner('Pigment collected! Bank it at the Atelier to buy upgrades and paintings', 5.2, this.ch * 0.58);
           }
           if (boosted) this.paint.note(o.x, o.y - 30, `streak ×${mult.toFixed(2)}`, 'red');
+          // J5 (v1.4): a screen-space "+n" number pops up + fades near the
+          // pigment jar for the collected color (HUD feedback, not a hard
+          // swap). Capped so a burst can't unbounded-grow the array.
+          const _jarIdx = ['red', 'blue', 'green'].indexOf(o.color);
+          if (_jarIdx >= 0) {
+            const jx = 14 + _jarIdx * 66 + 30, jy = 52 + 44 + 6;
+            if (this._floats.length > 24) this._floats.shift();
+            this._floats.push({ x: jx, y: jy, text: '+' + v.toFixed(boosted ? 1 : 0), t: 0, max: 0.8, color: PIGMENTS[o.color].color });
+          }
+          // J5: the orb-streak trail is captured per-frame while the streak is
+          // active (see _updateExpedition), so it reads as a fading streak
+          // behind the moving frog — not a cluster of identical pickup points.
         }
         this.orbStreak += 1; // E4: every collected orb extends the clean streak
       }
@@ -3635,6 +3676,40 @@ _drawAtelier(ctx) {
     ctx.restore();
     centerText(ctx, 'swamp color', mx2 + 16 + ctx.measureText('x').width, my2, 'italic 11px Georgia, serif', INK, 0.75);
     ctx.restore();
+
+    // ---- J5 (v1.4): HUD floating "+n" numbers (pop up + fade near the jars) ----
+    // Screen-space, so no world→screen conversion. They rise + fade on real
+    // time (decayed in the frame loop).
+    for (const f of this._floats) {
+      const k = f.t / f.max;            // 0 → 1 over the float's life
+      const rise = k * 26;             // drift upward
+      const pop = 1 + Math.sin(Math.min(1, k * 3) * Math.PI * 0.5) * 0.3; // quick scale-in
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - k);
+      ctx.fillStyle = f.color;
+      ctx.font = `700 ${Math.round(15 * pop)}px Georgia, serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,250,240,0.85)';
+      ctx.strokeText(f.text, f.x, f.y - rise);
+      ctx.fillText(f.text, f.x, f.y - rise);
+      ctx.restore();
+    }
+    // ---- J5: the orb-streak fading trail (behind the frog, world space) ----
+    if (this._streakTrail.length > 1) {
+      const v = this._view();
+      const toScreen = (wx, wy) => [ (wx - v.x) * v.scale, (wy - v.y) * v.scale ];
+      for (const s of this._streakTrail) {
+        const k = s.t / s.max;
+        const [sx, sy] = toScreen(s.x, s.y);
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, (1 - k) * 0.5);
+        ctx.fillStyle = '#f2d16b';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 4 * (1 - k) + 2, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
   }
 
   _drawBanners(ctx) {
@@ -4057,17 +4132,27 @@ _drawAtelier(ctx) {
   }
 
   _drawPause(ctx) {
+    // J5 (v1.4): the pause panel opens with a 0.15 s slide+fade (eased) instead
+    // of a hard cut — a tiny per-widget clock (real time), no library. The
+    // backdrop + card rise + fade in; button hit-rects stay at their final
+    // positions (unchanged).
+    const op = clamp(this._pauseOpenT / 0.15, 0, 1);
+    const slide = (1 - op) * 24;
     ctx.save();
+    ctx.globalAlpha = op;
     ctx.fillStyle = 'rgba(30,25,22,0.55)';
     ctx.fillRect(0, 0, this.cw, this.ch);
     ctx.restore();
     const cx = this.cw / 2, cy = this.ch / 2;
-    const pw = 340, ph = 260, px = cx - pw / 2, py = cy - 130;
+    const pw = 340, ph = 260, px = cx - pw / 2, py = cy - 130 + slide;
     const c = paperPanel(ctx, px, py, pw, ph, { seed: 21 });
     centerText(c, 'Paused', cx, py + 44, '700 30px Georgia, serif');
     centerText(c, 'P to resume - Esc quits to the pond', cx, py + 76, '13px Georgia, serif', INK, 0.7);
-    uiButton(ctx, px, py + 108, pw, 44, 'Resume', this._mouseIn(px, py + 108, pw, 44), false, { seed: 41, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-    uiButton(ctx, px, py + 160, pw, 44, 'Quit to the Pond', this._mouseIn(px, py + 160, pw, 44), false, { seed: 42, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+    ctx.save();
+    ctx.globalAlpha = op;
+    uiButton(ctx, px, py + 108, pw, 44, 'Resume', this._mouseIn(px, cy - 130 + 108, pw, 44), false, { seed: 41, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+    uiButton(ctx, px, py + 160, pw, 44, 'Quit to the Pond', this._mouseIn(px, cy - 130 + 160, pw, 44), false, { seed: 42, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+    ctx.restore();
     centerText(c, 'M to mute', cx, py + 226, 'italic 12px Georgia, serif', INK, 0.6);
     paperEnd(ctx);
   }

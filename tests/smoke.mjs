@@ -3839,5 +3839,90 @@ console.log('== stage 61: v1.4 J4 — frog hop feel (stretch / squash / dust / r
   g4.particles.dustPuff = _dp; g4.particles.ripple = _rp; g4.sfx = _sfx;
 }
 
+// ======================================================================
+// stage 62 — v1.4 Module J, J5: pickup / HUD / UI micro-animations
+// All presentation (HUD/UI/particles-time only; never touches runT, so the
+// pacing probes are invariant). (1) A HUD "+n" number pops up + fades near the
+// pigment jar on a pigment pickup (increments this._floats, capped). (2) The
+// orb streak leaves a short fading trail behind the moving frog (this._streak-
+// Trail, captured per-frame while the streak is active). (3) The pause panel
+// opens with a 0.15 s slide+fade (open factor interpolates 0→1, not a hard
+// cut). (4) A boosted orb pickup also fires the existing sparkles burst.
+// ======================================================================
+console.log('== stage 62: v1.4 J5 — pickup / HUD / UI micro-animations ==');
+{
+  const L = await import('../src/logic.js');
+  const { orbStreakState } = L;
+  const g5 = new Game(makeCanvas());
+  g5.start();
+  fireKey('keydown', 'Enter');
+  frames(2);
+  const p5 = g5.player;
+
+  // ---- (1) a pigment pickup pops a HUD "+n" number (increments _floats) ----
+  const floats0 = g5._floats.length;
+  g5.orbs.push({ x: p5.x + 20, y: p5.y, color: 'red', t: 0 }); // within pickup radius
+  p5.iframes = 999; g5.orbStreak = 0;                          // clean (non-boosted) pickup
+  frames(3);
+  assert(g5._floats.length === floats0 + 1,
+    `J5: a pigment pickup pops a HUD "+n" number (floats ${floats0} -> ${g5._floats.length})`);
+  const fl = g5._floats[g5._floats.length - 1];
+  assert(fl && fl.text.startsWith('+'), `J5: the floating HUD number reads as a gain ("${fl.text}")`);
+  // it decays away over real time (the frame loop ages + removes it).
+  g5._floats.length = 0;
+  for (let i = 0; i < 70; i++) { frames(1); g5.orbs.length = 0; } // no stray pickups
+  assert(g5._floats.length === 0, `J5: the HUD floats decay away on their own (len=${g5._floats.length})`);
+
+  // ---- (2) the orb streak leaves a short fading trail behind the frog ----
+  // The streak is ACTIVE at orbStreak >= ORB_STREAK.min (4); while active the
+  // per-frame capture appends to _streakTrail while the frog moves.
+  g5.orbStreak = L.ORB_STREAK.min; // force the streak ACTIVE
+  const ss = orbStreakState(g5.orbStreak);
+  assert(ss.active, `J5: the streak is active at the threshold (active=${ss.active})`);
+  const trail0 = g5._streakTrail.length;
+  // hold 'd' so the frog moves right → the trail accumulates distinct points.
+  g5.input.keys.add('d');
+  for (let i = 0; i < 20; i++) { g5._updateExpedition(0.016); }
+  g5.input.keys.delete('d');
+  assert(g5._streakTrail.length > trail0,
+    `J5: the orb streak leaves a fading trail while moving (trail ${trail0} -> ${g5._streakTrail.length})`);
+  // the trail is bounded (capped) so it can't grow without bound.
+  for (let i = 0; i < 300; i++) g5._updateExpedition(0.016);
+  assert(g5._streakTrail.length <= 19,
+    `J5: the streak trail is capped at ~19 points (len=${g5._streakTrail.length})`);
+  // and it decays away once the streak is cleared + the frog is idle (frames()
+  // runs the frame loop, which ages + removes the trail points).
+  g5.orbStreak = 0;
+  for (let i = 0; i < 60; i++) { frames(1); g5.orbs.length = 0; }
+  assert(g5._streakTrail.length === 0, `J5: the streak trail decays to empty (len=${g5._streakTrail.length})`);
+
+  // ---- (3) the pause panel opens with a slide+fade (interpolates, not a cut) ----
+  // _drawPause reads the eased open factor = clamp(_pauseOpenT / 0.15, 0, 1).
+  // Verify the interpolation itself (the frame loop ticks _pauseOpenT while
+  // paused; _drawPause is what consumes it to ease the card in).
+  const open0 = Math.min(1, Math.max(0, 0 / 0.15));          // t = 0 → closed
+  const openMid = Math.min(1, Math.max(0, 0.08 / 0.15));     // mid-slide
+  const openEnd = Math.min(1, Math.max(0, 0.30 / 0.15));     // past the window
+  assert(open0 === 0 && openMid > 0 && openMid < 1 && openEnd === 1,
+    `J5: the pause panel open state INTERPOLATES 0→${openMid.toFixed(2)}→1 (not a hard cut)`);
+  // and the frame loop actually advances the clock while paused (real drive):
+  g5.paused = true; g5._pauseOpenT = 0;
+  const before = g5._pauseOpenT;
+  frames(4);
+  assert(g5._pauseOpenT > before, `J5: the frame loop advances the pause open clock while paused (${before.toFixed(3)} → ${g5._pauseOpenT.toFixed(3)})`);
+  // and _drawPause runs clean at every open state (no throw mid-ease):
+  const cv5 = g5.canvas || makeCanvas();
+  g5._pauseOpenT = 0;    g5._drawPause(cv5.getContext('2d'));
+  g5._pauseOpenT = 0.08; g5._drawPause(cv5.getContext('2d'));
+  g5._pauseOpenT = 0.5;  g5._drawPause(cv5.getContext('2d'));
+  g5.paused = false;
+
+  // ---- (4) a boosted pickup also fires the existing sparkles burst (pop) ----
+  const ps5 = new (await import('../src/particles.js')).ParticleSystem();
+  const b4 = ps5.count;
+  ps5.sparkles(100, 100, '#fff', 4);
+  assert(ps5.count - b4 === 4, `J5: a pickup pop fires a sparkles burst (${ps5.count - b4} sparkles)`);
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

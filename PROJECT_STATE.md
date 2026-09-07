@@ -194,7 +194,7 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 bounded batches of ~3 items per session** (local model context ceiling;
 each session MUST end clean: committed + docs + suite green). Read
 `docs/ROADMAP.md` §v1.4 + AGENTS.md. Module J batch order: J1 → J2 → J3.
-**Status: BATCH 1 (J1+J2+J3) ✅ (2026-09-06) → BATCH 2 (J4→J5→L1) IN PROGRESS — J4 ✅ (frog hop feel); J5 next.**
+**Status: BATCH 1 (J1+J2+J3) ✅ → BATCH 2 (J4→J5→L1) IN PROGRESS — J4 ✅ + J5 ✅ (micro-animations); L1 next (last of Batch 2).**
 
 **Theme: juice, presence, and moments.** The game is mechanically complete;
 v1.4 adds no new rules — it makes the same game feel alive in the hand, the
@@ -251,7 +251,7 @@ band on Normal). Full scope + per-item status in `docs/ROADMAP.md` §v1.2.
 6. M13: **T3 ✅ (mini sketch heron)** → **T4 ✅ (tutorial progress + "Watch me" re-entry)** — **Batch 6 (M13 T3+T4) COMPLETE**
 7. M14: **N1 ✅ (NG+ unlock + Next Expedition flow)** → **N2 ✅ (NG+ scaling + `tests/ngpace.mjs` probe)** → **N3 ✅ (second boss — The Great Green Heron)** — **v1.3 Batch 7 (N1→N2→N3) COMPLETE** (suite 48/48, first-time pacing unchanged, NG+ cycle-1 ~19.5 min in band)
 8. v1.4 Module J: **J1 ✅ (wet paint that lingers)** + **J2 ✅ (hit-stop / shake escalation / boss-defeat slow-mo)** + **J3 ✅ (camera polish: look-ahead / lag / boss midpoint / awaken hold)** — **v1.4 Batch 1 (items 1–3) COMPLETE** (suite 60/60, P10 stage 24 still green; all presentation/time-feel only — first-time pacing unaffected, probes re-verified in band)
-9. v1.4 Batch 2, item 1: **J4 ✅ (frog hop feel — squash / stretch / dust / ripple + boing SFX)** (suite 61/61, P10 stage 24 still green; draw-time only — `player.js` physics untouched, pace ~18.6 min unchanged). **J5 next.**
+9. v1.4 Batch 2, items 1–2: **J4 ✅ (frog hop feel — squash / stretch / dust / ripple + boing SFX)** + **J5 ✅ (micro-animations — HUD "+n" floats / orb-streak fading trail / pause panel 0.15 s slide+fade)** (suite 62/62, P10 stage 24 still green; all presentation-only — `player.js` physics + world-sim `runT` untouched, pace ~18.5 min unchanged). **L1 next.**
 
 Each item's Notes column in the roadmap says which existing system to reuse.
 Acceptance (per batch): suite green, pace/humance probes still in the
@@ -342,6 +342,27 @@ a landing SQUASHES (x>1/y<1) + sets the one-shot flag (fires at most once),
 `dustPuff` spawns exactly 5 motes, `ripple` spawns exactly one kind-6 ring, and
 a real hop landing fires exactly one dust puff + one ripple + one 'boing' (via
 spies). P10 (stage 24) still passes.
+
+**v1.4 J5 (pickup / HUD / UI micro-animations) — implemented + tested (Batch 2, item 2).**
+Presentation-only in `game.js` — the world-sim `runT` (and `player.js` physics)
+is untouched, so pace/humance medians are unchanged (re-verified: pace ~18.5
+min, in the 15–20 band). (a) a screen-space `_floats` array pops a "+n" number
+near the collected pigment's HUD jar on each orb pickup (rises + fades on real
+time, decays in the frame loop, capped ~24, drawn at the end of `_drawHud` with
+a quick scale-in pop); the existing world-space `paint.note()` (+streak) and the
+`sparkles` burst already fire on the same pickup, so the "pickup pop + sparkles"
+acceptance is met. (b) a short `_streakTrail` (capped ~19) is captured behind
+the frog every frame the orb streak is ACTIVE (`orbStreakState().active`),
+decays in the frame loop + draws as a fading streak in `_drawHud` (world→screen
+via `_view`). (c) the pause panel opens with a 0.15 s slide+fade (`_pauseOpenT`,
+advanced in the paused frame branch, eased via `clamp(t/0.15,0,1)`): backdrop +
+card rise+fade in, button hit-rects stay at their final positions (unchanged —
+`_drawPause` and the click routing agree on the final rect). No animation
+library, no new dependencies. Smoke stage 62: a pickup pops a HUD "+n" float
+(count 0→1) that decays away, the orb streak leaves a fading trail while moving
+(capped, decays to empty), the pause open state INTERPOLATES 0→0.53→1 (not a
+hard cut) + the frame loop advances the clock, and the pickup pop fires a
+sparkles burst. P10 (stage 24) still passes.
 
 **M13 T1 (guided first expedition) — implemented + tested (v1.2 Batch 5, item 1).**
 A **fresh save only** (no finished run, never skipped — `tutorialEligible(save)`

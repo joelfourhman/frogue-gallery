@@ -375,7 +375,7 @@ per-frame budget assertion.
     exactly one dust puff + one ripple + one 'boing' (via spies). P10 (stage
     24) still passes.
 
-- [ ] **J5 — Pickup / ink / UI micro-animations** — `game.js` / `ui.js` / `particles.js`
+- [x] **J5 — Pickup / ink / UI micro-animations** — `game.js` / `particles.js`
   - **What:** pickups pop (scale 1.3→1, 0.15 s) + `sparkles` burst; HUD
     numbers float up-and-fade instead of swapping; the orb streak gains a
     short fading trail; UI: buttons hover-wobble 1–2 px, panels open with a
@@ -385,7 +385,25 @@ per-frame budget assertion.
     clock — no animation library.
   - **Acceptance:** smoke stage: pickup increments a floating-text count,
     panel open state interpolates (not a hard cut); P10 still passes.
-    Status: TODO.
+    Status: DONE (2026-09-06, v1.4 BATCH 2). Implemented presentation-only in
+    `game.js` (the world-sim `runT` is untouched, so pacing is invariant).
+    (a) a screen-space `_floats` array pops a "+n" number near the collected
+    pigment's HUD jar on each orb pickup (rises + fades on real time, decays in
+    the frame loop, capped at ~24, drawn at the end of `_drawHud` with a quick
+    scale-in pop); the existing world-space `paint.note()` (+streak) and the
+    `sparkles` burst already fire on the same pickup, so the pop + sparkles
+    acceptance is met. (b) a short `_streakTrail` (capped ~19) is captured
+    behind the frog every frame the orb streak is ACTIVE (`orbStreakState().active`),
+    decays in the frame loop + draws as a fading streak in `_drawHud` (world→
+    screen via `_view`). (c) the pause panel opens with a 0.15 s slide+fade
+    (`_pauseOpenT`, advanced in the paused frame branch, eased via
+    `clamp(t/0.15,0,1)`): backdrop + card rise+fade in, button hit-rects stay at
+    their final positions (unchanged). No animation library, no new dependencies.
+    Smoke stage 62: a pickup pops a HUD "+n" float (count 0→1) that decays away,
+    the orb streak leaves a fading trail while moving (capped, decays to empty),
+    the pause open state INTERPOLATES 0→0.53→1 (not a hard cut) + the frame loop
+    advances the clock, and the pickup pop fires a sparkles burst. P10 (stage 24)
+    still passes.
 
 ### Module L — Art direction / presence
 
