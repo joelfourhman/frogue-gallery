@@ -378,6 +378,9 @@ export class Game {
     const frame = (t) => {
       this._raf = requestAnimationFrame(frame);
       this._frame(t);
+      // S1 (v1.4): advance the per-zone melodic theme (a ctx.currentTime
+      // lookahead step-sequencer). No-op in headless / before the audio unlock.
+      this.audio.tickMusic();
     };
     this._raf = requestAnimationFrame(frame);
   }
@@ -677,6 +680,10 @@ export class Game {
     // L3: arm the staggered menu fade-in (starts just before 0 so the menu
     // breathes in again on each return to the title, rather than popping in).
     this._titleShowT = -0.5;
+    // S1 (v1.4): stop the melodic theme if a run is abandoned from the pause
+    // menu (idempotent — also cleared in _endRun; the ambient bed is handled
+    // there, the theme here too so a mid-run quit doesn't leave it looping).
+    if (this.audio && this.audio.clearZoneTheme) this.audio.clearZoneTheme();
     this.sfx('ui-back');
   }
 
@@ -2570,6 +2577,9 @@ _drawAtelier(ctx) {
   _updateZoneAmbient() {
     if (!this.audio || !this.audio.ctx) return;
     this.audio.setZoneAmbient(this._zoneI);
+    // S1 (v1.4): also (cross)fade the melodic theme to the zone just entered.
+    // It lives on melodyMaster (a separate gain) above the ambient bed.
+    if (this.audio.setZoneTheme) this.audio.setZoneTheme(this._zoneI);
   }
 
   // E3: apply the active hazards' effects (thorn reed = brief root, mud pool =
@@ -2808,6 +2818,8 @@ _drawAtelier(ctx) {
         // V3: fade out the per-zone ambient bed — the run's place has ended;
         // the atelier keeps the base music bed (startMusic) but not a zone.
         if (this.audio && this.audio.clearZoneAmbient) this.audio.clearZoneAmbient();
+        // S1 (v1.4): the melodic theme ends with the run's place too.
+        if (this.audio && this.audio.clearZoneTheme) this.audio.clearZoneTheme();
   }
 
   // ================= part 3: boss ========================================
@@ -4246,7 +4258,7 @@ _drawAtelier(ctx) {
       this._wrapHelp(c, r[3], colL + 32, y + 16, colW - 32, 14);
     });
     c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.7)'; c.textAlign = 'left'; c.textBaseline = 'middle';
-    this._wrapHelp(c, 'Hold left mouse to paint, aim with the cursor. Hold right mouse to charge a Splash burst, release to fire. A dry brush (no pigment) still deals half damage and never runs out.', colL, y0 + 34 + 3 * 58 + 6, colW, 14);
+this._wrapHelp(c, 'Hold left mouse to paint, aim with the cursor. Hold right mouse to charge a Splash burst, release to fire. A dry brush (no pigment) still deals half damage and never runs out.', colL, y0 + 34 + 3 * 58 + 6, colW, 14);
 
     // ---- right column: counterplay + the heron ----
     c.save(); c.font = '700 16px Georgia, serif'; c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Know your quarry', colR, y0); c.restore();

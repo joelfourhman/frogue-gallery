@@ -4148,5 +4148,80 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
   assert(warmVignetteAlpha(0.25, 1) < warmVignetteAlpha(0.5, 1) && warmVignetteAlpha(0.5, 1) < warmVignetteAlpha(0.9, 1), 'L3: the vignette darkens monotonically toward the edges');
 }
 
+// ============================================================================
+// STAGE 66: v1.4 S1 — melodic per-zone themes (headless AudioContext)
+// ============================================================================
+{
+  console.log('== stage 66: v1.4 S1 — melodic per-zone themes (headless AudioContext) ==');
+  // A minimal-but-sufficient headless AudioContext: enough for AudioSys.ensure()
+  // + the ambient bed + the S1 melody step-sequencer to build and SCHEDULE nodes
+  // without a real browser. currentTime advances manually so tickMusic schedules.
+  const param = (v) => ({ value: v, setValueAtTime() {}, linearRampToValueAtTime() {},
+    exponentialRampToValueAtTime() {}, setTargetAtTime() {} });
+  const makeNode = () => ({
+    type: 'sine', frequency: param(440), Q: param(1), detune: param(0), gain: param(1),
+    buffer: null, _connections: [],
+    connect(node) { this._connections.push(node); return node; },
+    disconnect() { this._connections.length = 0; },
+    start() {}, stop() {}, getChannelData() { return new Float32Array(0); },
+  });
+  class FakeAudioContext {
+    constructor() { this.currentTime = 0; this._sr = 22050; this._dest = makeNode(); }
+    get sampleRate() { return this._sr; }
+    get destination() { return this._dest; }
+    createGain() { return makeNode(); }
+    createOscillator() { return makeNode(); }
+    createBiquadFilter() { return makeNode(); }
+    createDynamicsCompressor() { return makeNode(); }
+    createBuffer(ch, len) { return { getChannelData: () => new Float32Array(len) }; }
+    createBufferSource() { return makeNode(); }
+  }
+  window.AudioContext = FakeAudioContext;
+
+  const cvA = makeCanvas();
+  const gA = new Game(cvA);
+  gA.start();
+  assert(gA.audio.ensure() === true, 'S1: a headless AudioContext lets AudioSys.ensure() build the graph');
+  assert(gA.audio.musicBus !== null && gA.audio._melodyMaster !== null, 'S1: the melody master gain exists');
+  assert(gA.audio._melodyMaster._connections.includes(gA.audio.musicBus), 'S1: the melody layer is connected UNDER musicBus (inherits the slider + mute)');
+  assert(gA.audio._melodyMaster.gain.value > 0 && gA.audio._melodyMaster.gain.value <= 1, `S1: the melody layer is at a modest level (${gA.audio._melodyMaster.gain.value})`);
+
+  // ---- a melody loop is created per zone, and tickMusic schedules notes ----
+  gA.audio.setZoneTheme(0);
+  gA.audio.ctx.currentTime += 1.0;   // advance the fake clock so the lookahead schedules
+  gA.audio.tickMusic();
+  assert(gA.audio._zoneThemes.length === 1, `S1: a zone 0 melody loop is created (1, got ${gA.audio._zoneThemes.length})`);
+  assert(gA.audio._zoneThemes[0].zone === 0, 'S1: the loop is for zone 0');
+  assert(gA.audio._zoneThemes[0].step > 0, `S1: tickMusic schedules melodic notes (step advanced to ${gA.audio._zoneThemes[0].step})`);
+  assert(gA.audio._zoneThemes[0].gain._connections.includes(gA.audio._melodyMaster), 'S1: the zone theme gain feeds the melody master');
+
+  // ---- zone switch crossfades: old ramps down (muted+fading), new is live ----
+  gA.audio.setZoneTheme(1);
+  const prev = gA.audio._zoneThemes.find((t) => t.zone === 0);
+  const next = gA.audio._zoneThemes.find((t) => t.zone === 1);
+  assert(next && !next.muted && !next.fading, 'S1: switching zones starts a LIVE zone 1 melody');
+  assert(prev && prev.muted && prev.fading, 'S1: switching zones crossfades the old zone 0 melody (muted + fading)');
+  assert(gA.audio._zoneThemes.length >= 2, `S1: the fading old + the new theme coexist during the crossfade (got ${gA.audio._zoneThemes.length})`);
+
+  // ---- the music slider still scales the melody (it rides musicBus) ----
+  gA.audio.setMusicVolume(0.2);
+  assert(gA.audio.musicBus.gain.value === 0.2, 'S1: the music slider scales the music bus');
+  assert(gA.audio._melodyMaster._connections.includes(gA.audio.musicBus) && gA.audio._melodyMaster.gain.value > 0, 'S1: the melody rides the music bus, so the slider + mute scale it');
+
+  // ---- each zone has a distinct melodic loop ----
+  const d0 = gA.audio._zoneThemeData()[0], d1 = gA.audio._zoneThemeData()[1], d3 = gA.audio._zoneThemeData()[3];
+  const sig = (d) => JSON.stringify([d.root, d.scale, d.pattern, d.stepDur, d.detune]);
+  assert(sig(d0) !== sig(d1), 'S1: zone 0 and zone 1 have distinct melodic loops');
+  assert(sig(d0) !== sig(d3), 'S1: the finale (zone 3) theme is distinct from the opening');
+  // the scale is a real pentatonic-ish set (5 notes, ascending from root)
+  assert(d0.scale.length === 5 && d0.scale[0] === 0 && d0.scale.every((s, i) => i === 0 || s > d0.scale[i - 1]), 'S1: each theme uses a 5-note ascending scale');
+
+  // ---- clearing the melody empties the live loops (run end / quit) ----
+  gA.audio.clearZoneTheme();
+  assert(gA.audio._zoneThemes.length === 0, `S1: clearing the zone melody empties the live loops (got ${gA.audio._zoneThemes.length})`);
+
+  delete window.AudioContext; // restore (no later stage depends on it either way)
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

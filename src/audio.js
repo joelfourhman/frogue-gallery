@@ -24,6 +24,17 @@ export class AudioSys {
     this._ambFrac = 0.5;      // ambient bed = a fraction of music volume
     this._crossFade = 1.6;    // seconds to crossfade between zones
     this._amb = null;         // { zone, voices: [{ node, gain }] } — current zone bed
+    // ---- S1 (v1.4): melodic per-zone themes (a step-sequencer layer ABOVE the ambient bed) ----
+    // A short pentatonic loop per zone, scheduled by ctx.currentTime LOOKAHEAD in the
+    // rAF tick (tickMusic) — no setInterval, no audio files, no new deps. It sits on
+    // melodyMaster -> musicBus, so it inherits the music slider + mute for free.
+    // The ambient bed (V3) stays as the low drone; the melody is a quiet layer on top
+    // (~-10 dB relative). Zone switches crossfade the melody (old ramps to 0, new up).
+    this._melodyMaster = null; // persistent gain -> musicBus (the melody layer)
+    this._melodyLevel = 0.32;  // melody loudness (kept modest vs the ambient bed)
+    this._zoneTheme = null;    // { zone, theme, gain, step, nextAt } — the live loop
+    this._zoneThemeI = -1;     // the zone index the live theme is for
+    this._zoneThemes = [];     // all live/fading loop instances (overlaps during crossfade)
   }
 
   ensure() {
@@ -38,6 +49,11 @@ export class AudioSys {
       this.musicBus.gain.value = this.musicVolume;
       this.sfxBus = this.ctx.createGain();
       this.sfxBus.gain.value = this.sfxVolume;
+      // S1 (v1.4): the melodic theme layer sits on its own gain under musicBus,
+      // so it inherits the music slider + mute exactly like the ambient bed.
+      this._melodyMaster = this.ctx.createGain();
+      this._melodyMaster.gain.value = this._melodyLevel;
+      this._melodyMaster.connect(this.musicBus);
       this.musicBus.connect(this.master);
       this.sfxBus.connect(this.master);
       const comp = this.ctx.createDynamicsCompressor();
@@ -241,6 +257,107 @@ export class AudioSys {
     } catch (e) { /* headless */ }
   }
 
+  // ==================== S1 (v1.4): melodic per-zone themes ====================
+  // A short pentatonic loop per zone, played by a LOOKAHEAD step-sequencer
+  // (tickMusic, driven from game.js's rAF tick — no setInterval, no audio
+  // files, no new deps). Each zone theme = { root, scale (intervals in
+  // semitones from root), pattern (16 steps; -1 = rest), stepDur, detune }.
+  // Deterministic per zone; the melody rides melodyMaster -> musicBus so it
+  // inherits the music slider + mute for free, and sits ABOVE the V3 ambient
+  // bed (which stays as the low drone).
+  _zoneThemeData() {
+    // minor-pentatonic-leaning sets, each with a distinct character:
+    // 0 Reed Flats (calm, open), 1 Slick Hollow (uneasy, minor), 2 Bramble
+    // Thicket (folky, brighter), 3 The Gray Shore (tense, chromatic edge).
+    // Index 4 exists as a safe fallback (same as 0) for an out-of-range zone.
+    return [
+      { root: 220.0, scale: [0, 3, 5, 7, 10],  pattern: [ 0, -1, 2, 4, -1, 3, -1, 2,  0, -1, 4, 2, -1, 3, 2, -1], stepDur: 0.34, detune: 6 },
+      { root: 207.65, scale: [0, 3, 5, 7, 10], pattern: [ 0, 2, -1, 0, 3, -1, 4, 3,  2, -1, 0, -1, 5, 4, 3, -1], stepDur: 0.30, detune: -8 },
+      { root: 233.08, scale: [0, 2, 5, 7, 9],  pattern: [ 0, 4, 2, -1, 3, 5, -1, 3,  4, 2, 5, -1, 7, 5, 4, 2 ], stepDur: 0.28, detune: 5 },
+      { root: 196.0, scale: [0, 1, 5, 7, 10], pattern: [ 0, -1, 1, 0, 7, -1, 5, 1,  0, -1, 1, 7, 5, -1, 4, -1], stepDur: 0.26, detune: -6 },
+      { root: 220.0, scale: [0, 3, 5, 7, 10], pattern: [ 0, -1, 2, 4, -1, 3, -1, 2,  0, -1, 4, 2, -1, 3, 2, -1], stepDur: 0.34, detune: 6 },
+    ];
+  }
+
+  // Crossfade the melody to the zone just entered (game.js calls this from
+  // _updateZoneAmbient alongside the ambient bed). The current theme keeps
+  // looping but its notes stop (muted) while its zone gain ramps to ~0 over the
+  // crossfade; the new theme starts at ~0 and ramps up. Both schedule through
+  // melodyMaster -> musicBus, so the music slider + mute scale them all. A list
+  // of active themes supports the ~1 s overlap during the fade.
+  setZoneTheme(zoneI) {
+    if (!this.ctx || !this._melodyMaster) return;
+    if (zoneI === this._zoneThemeI) return; // idempotent (same zone)
+    if (!this._zoneThemes) this._zoneThemes = [];
+    const data = this._zoneThemeData();
+    const theme = data[((zoneI % data.length) + data.length) % data.length];
+    // fade the previous theme(s) out: stop their notes, ramp the zone gain down.
+    for (const th of this._zoneThemes) {
+      th.muted = true;
+      th.fading = true;
+      th._fadeAt = this.ctx.currentTime;
+      try {
+        th.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, this._crossFade / 4);
+        const b = th;
+        setTimeout(() => { try { b.gain.disconnect(); } catch (e) {} }, this._crossFade * 1000 + 200);
+      } catch (e) { /* headless */ }
+    }
+    const zg = this.ctx.createGain();
+    zg.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+    zg.gain.setTargetAtTime(1, this.ctx.currentTime + 0.05, this._crossFade / 4);
+    zg.connect(this._melodyMaster);
+    this._zoneThemes.push({ zone: zoneI, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.35, muted: false, fading: false });
+    this._zoneThemeI = zoneI;
+  }
+
+  // Lookahead scheduler — call from game.js every frame (the rAF tick).
+  // Schedules each ACTIVE (non-muted) theme's notes ~0.25 s ahead of
+  // ctx.currentTime so the audio clock, not the frame rate, keeps the rhythm
+  // (robust to rAF jitter). Muted (fading) themes are skipped, and any that
+  // have faded out are pruned. No-op when the context isn't ready (headless).
+  tickMusic() {
+    if (!this.ctx || !this._melodyMaster || !this._zoneThemes) return;
+    const now = this.ctx.currentTime;
+    const ahead = now + 0.25;
+    for (let i = this._zoneThemes.length - 1; i >= 0; i--) {
+      const th = this._zoneThemes[i];
+      // prune themes whose fade has fully completed (~crossfade + 1.4 s grace)
+      if (th.fading && (now - (th._fadeAt || now) > this._crossFade + 1.4)) { this._zoneThemes.splice(i, 1); continue; }
+      if (th.muted) continue; // fading: stop scheduling new notes
+      let guard = 0;
+      while (th.nextAt < ahead && guard++ < 16) {
+        const step = th.step % th.theme.pattern.length;
+        const note = th.theme.pattern[step];
+        if (note >= 0) {
+          const semi = th.theme.scale[((note % th.theme.scale.length) + th.theme.scale.length) % th.theme.scale.length]
+            + 12 * Math.floor(note / th.theme.scale.length);
+          const freq = th.theme.root * Math.pow(2, semi / 12);
+          try { this._tone(th.nextAt, 'triangle', freq, freq, th.theme.stepDur * 1.9, 0.5, th.theme.detune, th.gain); } catch (e) { /* headless */ }
+        }
+        th.step++;
+        th.nextAt += th.theme.stepDur;
+      }
+    }
+  }
+
+  // Fade the melody out and stop the loop (run end / quit to title). Ramps each
+  // live zone gain down (a brief musical fade, not a cut), schedules a
+  // disconnect for GC, and clears the active list so a new run starts fresh.
+  clearZoneTheme() {
+    if (!this.ctx || !this._zoneThemes) return;
+    const live = this._zoneThemes;
+    for (const th of live) {
+      th.muted = true; th.fading = true; th._fadeAt = this.ctx.currentTime;
+      try {
+        th.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.35);
+        const b = th;
+        setTimeout(() => { try { b.gain.disconnect(); } catch (e) {} }, 1200);
+      } catch (e) { /* headless */ }
+    }
+    this._zoneThemes = []; // no active loops remain — a new run seeds its own
+    this._zoneThemeI = -1;
+  }
+
   _env(gainNode, t0, peak, attack, decay) {
     const g = gainNode.gain;
     g.setValueAtTime(0.0001, t0);
@@ -260,7 +377,7 @@ export class AudioSys {
     src.start(t0); src.stop(t0 + dur + 0.05);
   }
 
-  _tone(t0, type, f0, f1, dur, peak, detune = 0) {
+  _tone(t0, type, f0, f1, dur, peak, detune = 0, target = null) {
     if (!this.ctx) return;
     const o = this.ctx.createOscillator();
     o.type = type;
@@ -269,7 +386,9 @@ export class AudioSys {
     o.detune.value = detune;
     const g = this.ctx.createGain();
     this._env(g, t0, peak, 0.004, dur);
-    o.connect(g); g.connect(this.sfxBus);
+    // S1: the melody notes route through their zone gain (target) instead of the
+    // sfx bus, so a zone switch can crossfade the whole loop. Defaults to sfxBus.
+    o.connect(g); g.connect(target || this.sfxBus);
     o.start(t0); o.stop(t0 + dur + 0.05);
   }
 

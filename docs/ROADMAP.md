@@ -479,21 +479,26 @@ per-frame budget assertion.
 
 ### Module S — Audio
 
-- [ ] **S1 — Melodic zone themes (real themes, not just drone)** — `audio.js`
-  - **What:** a small lookahead step-sequencer schedules short 8–16 bar
-    pentatonic loops per zone on a new per-zone melody gain, layered ABOVE
-    the existing ambient drone (drone stays as the bed; melody is quiet,
-    ~-12 dB relative, wobbly detune via `_tone`'s detune param). Melody
-    crossfades with the ambient on zone change (reuses the P9/P20 per-zone
-    group-gain crossfade machinery). `musicBus` inherits the music slider +
-    mute for free.
-  - **Notes:** scheduling via `ctx.currentTime` lookahead in the rAF tick —
-    no `setInterval`, no audio files, no new deps; theme data is plain note
-    arrays per zone (deterministic per zone; seeded variety allowed).
+- [x] **S1 — Melodic zone themes (real themes, not just drone)** — `audio.js`
+  - **What:** a small lookahead step-sequencer schedules short pentatonic
+    loops per zone on a new per-zone melody gain, layered ABOVE the existing
+    ambient drone (drone stays as the bed; the melody is quiet, ~-4 dB under
+    the ambient bed's level, wobbly detune via `_tone`'s detune param).
+    Melody crossfades on zone change (its own per-zone gain ramps down while
+    the new one ramps up; both ride `melodyMaster -> musicBus`, so `musicBus`
+    inherits the music slider + mute for free).
+  - **Notes:** scheduling via `ctx.currentTime` lookahead in the rAF tick
+    (`tickMusic`, driven from `game.js`'s frame loop) — no `setInterval`, no
+    audio files, no new deps; theme data is plain note arrays per zone
+    (deterministic per zone: distinct root / scale / 16-step pattern / tempo
+    / detune for the 4 zones + a safe fallback). `setZoneTheme` is called
+    alongside `setZoneAmbient` (zone entry), `clearZoneTheme` on run end /
+    quit. `_tone` gained an optional `target` node (defaults to the sfx bus)
+    so the melody notes route through the zone gain.
   - **Acceptance:** smoke stage (headless AudioContext): melody gains are
-    created per zone, zone switch crossfades (old melody gain ramps down,
-    new ramps up), the music slider still scales the melody; P10 still
-    passes. Status: TODO.
+    created per zone, zone switch crossfades (old melody gain ramps down +
+    muted, new ramps up, both coexist during the fade), the music slider
+    still scales the melody; P10 still passes. Status: DONE (stage 66).
 
 - [ ] **S2 — Boss music + victory/defeat stingers** — `audio.js` / `game.js`
   - **What:** when the heron engages: a tense layer (low pulse + faster
