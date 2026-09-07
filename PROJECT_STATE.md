@@ -222,8 +222,15 @@ and **4th boss archetype** (→ R4)):
    biome shell + victory-gated title entry + HUD fuel bar; new smoke
    stage 83, 25 assertions; full suite green; P10
    culling + cached-sprite light invariant green; cycle-0 pace 17.3 /
-   humance 18.5 min — IN the 15–20 band, byte-identical). **Next: R2
-   (flooded lower banks + inverted-gravity pockets), then R5
+   humance 18.5 min — IN the 15–20 band, byte-identical). **R2 ✅ DONE +
+   committed** (flooded lower banks + 3 inverted-gravity pockets —
+   deeper 6000px Reeds layout, pure `inGravityPocket`/`hopLift`/
+   `floodedWaterFactor` in logic.js, hop sign-flips to a downward "clump"
+   inside a pocket and reverts on exit; the light economy now uses a
+   SEPARATE deterministic RNG stream so it no longer perturbs the terrain
+   stream; world build is deterministic per seed; new smoke stage 84,
+   23 assertions; P10 + stable cached layers green; cycle-0 pace 17.4 /
+   humance ~18.4 min — IN band, byte-identical). **Next: R5
    (`reedsUnlocked` save gate + SAVE_VERSION 9→10 + Field Guide Reeds
    entries).** See commit log.
 2. **BATCH 2 — R3, R4, R6** (the bestiary: Wisp/Serpent/Leech light-keyed

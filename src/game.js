@@ -4445,6 +4445,10 @@ _drawAtelier(ctx) {
     // the P10 draw budget). No-op for a base (non-Reeds) world, so a first-time
     // run renders exactly as before.
     this.world.drawReedsLights(ctx, v, this.now);
+    // R2 (v1.6): the Reeds TRAVERSAL layer — the flooded lower banks (open dark
+    // water, slower ground movement) + the inverted-gravity pocket root-ceilings
+    // (world space, VIEW-CULLED; no per-frame state). No-op for a base world.
+    this.world.drawReedsTraversal(ctx, v, this.now);
     // J1 (v1.4): short-lived wet residue marks sit on the surface, under the
     // active stroke and all entities (draw-only; never affects logic).
     this.paint && this.paint.drawWet(ctx);

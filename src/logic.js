@@ -741,6 +741,86 @@ export function lanternRadius(state) {
 }
 
 // ----------------------------------------------------------------
+// R2 (v1.6 Module R): FLOODED LOWER BANKS + INVERTED-GRAVITY POCKETS.
+//
+// The Reeds world's distinct TRAVERSAL layer. The base swamp is 5400px wide;
+// the Reeds variant is a DEEPER ~6000px layout (REEDS_WIDTH) — same painting,
+// longer. Two traversal features:
+//
+//   1. FLOODED LOWER BANKS — the lower half of the world (y >= the band floor)
+//      is open dark water: ground movement is SLOWER there (a documented
+//      speed factor) but the frog has open swim lanes the light does not reach
+//      as far into. Pure: a speed FACTOR for a world point (1.0 on the banks /
+//      a lower value in the flood).
+//   2. INVERTED-GRAVITY POCKETS — 2-3 AABB "root-ceiling" pockets scattered
+//      through the Reeds. Inside one, the frog's hop becomes a downward
+//      "clump": it rides the CEILING for a short beat. Reuses the existing
+//      hopT / hop-lift mechanics with a SIGN FLIP on the hop displacement while
+//      the frog is inside a pocket; reverts the moment it exits. NO new
+//      physics engine — the pockets are just AABBs (world layout data) and the
+//      flip is physics-local.
+//
+// All of this is PURE (testable headless). The pockets are deterministic
+// (fixed data — not RNG) so the build is reproducible per seed and the smoke
+// stage can pin exact inside/outside coordinates.
+// ----------------------------------------------------------------
+
+// R2: the Reeds variant is a DEEPER world than the base 5400px swamp.
+export const REEDS_WIDTH = 6000;
+
+// R2: the three INVERTED-GRAVITY POCKETS (AABBs, world px). Deterministic
+// layout data (not RNG) — fixed so the build is reproducible and the smoke
+// stage can pin inside/outside coordinates. Each is a root-ceiling pocket in
+// the upper band (the frog hops UP and, inverted, clumps down onto the
+// ceiling). Inside one, the hop displacement is sign-flipped.
+export const REEDS_POCKETS = [
+  { x: 1150, y: 120, w: 520, h: 360 },   // pocket 1 — Slick Hollow reach
+  { x: 2900, y: 90,  w: 560, h: 380 },   // pocket 2 — mid-swamp
+  { x: 4550, y: 130, w: 540, h: 350 },   // pocket 3 — the approach to the deep
+];
+
+// R2: is the world point (x, y) INSIDE an inverted-gravity pocket? A pure
+// AABB test over REEDS_POCKETS. Outside all pockets (or a base-world point)
+// it returns false, so the sign flip is a no-op there. Pure + deterministic.
+export function inGravityPocket(x, y) {
+  for (const pk of REEDS_POCKETS) {
+    if (x >= pk.x && x <= pk.x + pk.w && y >= pk.y && y <= pk.y + pk.h) return true;
+  }
+  return false;
+}
+
+// R2: the FLOODED LOWER BANKS. The lower band (y >= FLOOD_FLOOR) is open dark
+// water — a pure speed FACTOR for a world point: 1.0 on the banks, a slower
+// value in the flood (the frog wades / swims). A base (non-Reeds) world never
+// applies it (the caller checks reedsVariant), so a cycle-0 run's movement is
+// byte-identical. The documented factor is FLOOD_FACTOR.
+export const REEDS_FLOOD_FLOOR = 900;   // world-y where the open water begins
+export const REEDS_FLOOD_FACTOR = 0.72; // ground speed multiplier in the flood
+
+// R2: the ground-speed FACTOR at (x, y) for the Reeds flooded lower banks.
+// 1.0 above the flood floor (the banks / swim-lane ceiling), FLOOD_FACTOR in
+// the open water. Pure — no world data needed (the band is a horizontal line),
+// so it is cheap to call every frame and trivially testable.
+export function floodedWaterFactor(x, y) {
+  return (typeof y === 'number' && y >= REEDS_FLOOD_FLOOR) ? REEDS_FLOOD_FACTOR : 1;
+}
+
+// R2: the hop DISPLACEMENT (px) for a frog mid-hop, SIGN-FLIPPED while inside
+// an inverted-gravity pocket. It reuses the EXACT base-hop lift curve the
+// player already uses — Math.sin(PI*(1 - hopT/HOP_DUR)) * HOP_LIFT (a 0->peak
+// ->0 arc over the 0.22 s hopT) — and negates it inside a pocket so the frog
+// "clumps" DOWN onto the ceiling instead of lifting up. hopT <= 0 -> 0 (not
+// hopping). Outside a pocket the sign is + (normal upward hop), so the base
+// swamp behavior is byte-identical. Pure.
+export const REEDS_HOP_DUR = 0.22;
+export const REEDS_HOP_LIFT = 26;
+export function hopLift(hopT, x, y) {
+  if (!(hopT > 0)) return 0;
+  const lift = Math.sin(Math.PI * (1 - hopT / REEDS_HOP_DUR)) * REEDS_HOP_LIFT;
+  return inGravityPocket(x, y) ? -lift : lift;
+}
+
+// ----------------------------------------------------------------
 // K8 (v1.5 M2): the CHALLENGE REWARD — the Masterpiece "The Heron, Waking".
 //
 // First-EVER Curator Challenge completion mints a UNIQUE MASTERPIECE painting:

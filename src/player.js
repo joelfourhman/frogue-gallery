@@ -2,7 +2,7 @@
 'use strict';
 import { TAU, clamp, lerp, dist, traceBlob, wobble } from './math.js';
 import { INK, sat } from './ui.js';
-import { PIGMENTS } from './logic.js';
+import { PIGMENTS, hopLift, inGravityPocket, floodedWaterFactor } from './logic.js';
 
 export class Player {
   constructor(x, y, tuning) {
@@ -75,6 +75,11 @@ export class Player {
     let spd = this.speed;
     if (this.hopT > 0.04) spd *= 2.6;
     spd *= this.speedFactor();
+    // R2 (v1.6): the Reeds FLOODED LOWER BANKS — moving through the open dark
+    // water (low elevation) slows ground movement. A pure factor from
+    // logic.js (1.0 outside a flood band, 0.72 inside). Gated by the world
+    // variant so a cycle-0 swamp run's movement is byte-identical.
+    if (world && world.reedsVariant) spd *= floodedWaterFactor(this.x, this.y);
     if (this.rootT > 0) spd = 0;
     this.vx = lerp(this.vx, mv[0] * spd, 1 - Math.exp(-14 * dt));
     this.vy = lerp(this.vy, mv[1] * spd, 1 - Math.exp(-14 * dt));
@@ -118,8 +123,14 @@ export class Player {
 
   // ---------------------------- rendering
   draw(ctx, view, now) {
-    const hopLift = this.hopT > 0 ? Math.sin(Math.PI * (1 - this.hopT / 0.22)) * 26 : 0;
-    const y = this.y - hopLift;
+    // R2 (v1.6): the hop lift is now a PURE function of (hopT, x, y) — inside an
+    // inverted-gravity pocket the sign flips (the hop becomes a downward "clump"
+    // that rides the ceiling); the pure hopLift reverts to the normal upward
+    // lift outside a pocket, so there is no stuck state on exit. Outside the
+    // Reeds biome (no pockets at a given x,y) this is byte-identical to the
+    // pre-R2 expression.
+    const lift = hopLift(this.hopT, this.x, this.y);
+    const y = this.y - lift;
     const blink = this._blinkT < 0 ? 0.15 : 1;
     const hurt = this.hurtT > 0 ? Math.sin(this.hurtT * 40) * 0.5 + 0.5 : 0;
     const bodyCol = hurt > 0.5 ? '#e08a76' : '#69a24e';
@@ -130,7 +141,7 @@ export class Player {
     // shadow (grows smaller when hopping)
     ctx.fillStyle = 'rgba(30,50,40,0.25)';
     ctx.beginPath();
-    ctx.ellipse(0, this.r * 0.75, this.r * (1 - hopLift * 0.015), this.r * 0.4 * (1 - hopLift * 0.02), 0, 0, TAU);
+    ctx.ellipse(0, this.r * 0.75, this.r * (1 - lift * 0.015), this.r * 0.4 * (1 - lift * 0.02), 0, 0, TAU);
     ctx.fill();
 
     ctx.rotate((this.vx - this.vy) * 0.0006);
