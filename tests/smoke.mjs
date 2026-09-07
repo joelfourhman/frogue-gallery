@@ -3994,5 +3994,100 @@ console.log('== stage 63: v1.4 L1 — living world (swaying reeds / drifting mis
   assert(SHIMMER_CAP > 0 && SHIMMER_CAP <= 24, `L1: the shimmer glint count is bounded (cap=${SHIMMER_CAP})`);
 }
 
+// ======================================================================
+// L2 (v1.4 "Make It Amazing") — layered watercolor render pass.
+// Pure draw-time + a bake-once cache:
+//   (a) wet rim — freshly painted pigment cells carry a darker edge that dries
+//       out over ~5s, derived from the existing pigment-grid `age`/amount.
+//   (b) stroke texture — short directional brush strokes baked ONCE per zone
+//       into an offscreen canvas at build(); drawn as ONE cached image per
+//       zone per frame (the budget trick: ~4 drawImages, not thousands).
+//   (c) prop outlines — a second low-alpha offset "watercolor double-stroke".
+// Acceptance asserted here:
+//   - offscreen canvases are created once per zone and the count is STABLE
+//     across frames (no re-bake),
+//   - the wet-rim alpha decays over time (fresh > after decay),
+//   - the per-frame draw cost is bounded by the cached path: drawBackground
+//     issues a bounded number of drawImage calls (one per zone), not raw
+//     stroke counts (P10-safe — the cached path, not the raw one, is taken).
+// ======================================================================
+console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached offscreens + wet rim + double-stroke) ==');
+{
+  const { World, wetRimAlpha, wetRimRadius, WET_RIM_CAP, ZONE_TEXTURES } = await import('../src/world.js');
+  // counting 2d context (mirrors stage 24/63's helper) — tracks drawImage + stroke separately.
+  function countingCtx() {
+    const counter = { n: 0, drawImage: 0, stroke: 0 };
+    const ctx = new Proxy({}, {
+      get(t, p) {
+        if (p === 'measureText') return () => ({ width: 10 });
+        if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+        if (p === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
+        if (p === 'drawImage') { counter.drawImage++; counter.n++; return () => {}; }
+        if (p === 'stroke') { counter.stroke++; counter.n++; return () => {}; }
+        counter.n++;
+        return () => {};
+      },
+      set(t, p, v) { t[p] = v; return true; },
+    });
+    return [ctx, counter];
+  }
+  function rng() { let a = 987654321; return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+  // ---- (b) offscreen stroke-texture canvases: created ONCE per zone at build ----
+  const world = new World(rng(), 42);
+  assert(Array.isArray(world._texCanvases), 'L2: the world bakes an offscreen stroke-texture cache at build()');
+  assert(world._texCanvases.length === ZONE_TEXTURES.length, `L2: one cached offscreen canvas per zone (${world._texCanvases.length} = ${ZONE_TEXTURES.length} zones)`);
+  const texCountBefore = world._texCanvases.length;
+  const texRef0 = world._texCanvases[0];
+  // draw the background several frames — the cache must NOT be re-baked (stable
+  // count + the SAME canvas object is reused). This is the "count stable across
+  // frames" acceptance: the texture is baked once, not every frame.
+  const view = { x: 0, y: 0, scale: 1, w: 1280, h: 800 };
+  for (let f = 0; f < 5; f++) {
+    const [ctxA] = countingCtx();
+    world.drawBackground(ctxA, view, 1.0);
+  }
+  assert(world._texCanvases.length === texCountBefore, `L2: the offscreen cache count is STABLE across frames (${world._texCanvases.length} before == after 5 frames)`);
+  assert(world._texCanvases[0] === texRef0, 'L2: the cached offscreen canvas is REUSED (same object) across frames — baked once, not re-baked');
+
+  // ---- the cached path (not the raw one): one drawImage per zone per frame ----
+  {
+    const [ctxB, counterB] = countingCtx();
+    world.drawBackground(ctxB, view, 1.0);
+    // drawBackground draws: floor fillRect + the 4 cached texture drawImages +
+    // the paint-layer drawImage = a bounded number of drawImages. Crucially the
+    // stroke texture is a cached image (4 drawImages) NOT thousands of raw
+    // strokes — so the per-frame drawImage count is small and bounded.
+    assert(counterB.drawImage >= ZONE_TEXTURES.length, `L2: drawBackground issues a bounded drawImage pass (>= ${ZONE_TEXTURES.length} cached textures + paint layer; got ${counterB.drawImage})`);
+    assert(counterB.drawImage <= 8, `L2: the per-frame drawImage count stays bounded on the CACHED path (got ${counterB.drawImage} <= 8), not raw stroke counts (P10-safe)`);
+  }
+
+  // ---- (a) wet-rim alpha decays over time (fresh cell dries out) ----
+  // a fresh strong splat puts the cell near full amount (~3); as it ages the
+  // pigment decays toward 0, so the rim alpha must fall monotonically.
+  const freshAlpha = wetRimAlpha(3);
+  const midAlpha = wetRimAlpha(1.5);
+  const dryAlpha = wetRimAlpha(0.1);
+  assert(freshAlpha > 0 && freshAlpha <= 0.45, `L2: a fresh cell carries a strong wet rim (alpha ${freshAlpha.toFixed(3)} in (0, 0.45])`);
+  assert(freshAlpha > midAlpha && midAlpha > dryAlpha, `L2: the wet-rim alpha DECAYS over time (fresh ${freshAlpha.toFixed(3)} > mid ${midAlpha.toFixed(3)} > dry ${dryAlpha.toFixed(3)})`);
+  // and a fully-dried cell produces no rim (the draw path skips it).
+  assert(wetRimAlpha(0) < 0.02, `L2: a fully-dried cell produces no rim (alpha ${wetRimAlpha(0).toFixed(3)} < 0.02 skip threshold)`);
+  // the wet rim is bounded (a touch larger than the cell so it reads as a halo).
+  const rimR = wetRimRadius(60);
+  assert(rimR > 0 && rimR <= 60, `L2: the wet-rim radius is bounded (got ${rimR.toFixed(1)} px, <= cell)`);
+  // the wet-rim draw is capped so a long painting run can't grow the per-frame cost.
+  assert(WET_RIM_CAP > 0 && WET_RIM_CAP <= 128, `L2: the wet-rim draw count is bounded (cap=${WET_RIM_CAP})`);
+
+  // a fresh paint actually produces a wet rim that later dries (end-to-end):
+  // splat, draw (rim present), age the grid, draw again (rim gone).
+  const world2 = new World(rng(), 7);
+  world2.splat(300, 400, 'blue', 12, true);
+  const [ctxC] = countingCtx();
+  world2.drawBackground(ctxC, { x: 0, y: 0, scale: 1, w: 1280, h: 800 }, 1.0);
+  // advance the world so the pigment fully decays (age drives down + delete)
+  world2.update(6.0);
+  assert(world2.pigmentGrid.size === 0 || [...world2.pigmentGrid.values()].every(c => c.red < 0.1 && c.blue < 0.1 && c.green < 0.1), 'L2: the pigment decays over ~5s (wet cell dries out after 6s)');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

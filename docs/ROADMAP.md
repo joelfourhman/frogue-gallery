@@ -440,7 +440,7 @@ per-frame budget assertion.
     the world draw is still culled (localized < full), and the shimmer count
     is bounded. P10 (stage 24) still passes.
 
-- [ ] **L2 — Layered watercolor render pass: wet edges + stroke texture**
+- [x] **L2 — Layered watercolor render pass: wet edges + stroke texture**
   — `world.js` / `math.js`
   - **What:** (a) wet edges: freshly painted cells get a darker wet rim that
     lightens over ~5 s (reuse the paint-cell state — no new persistence);
@@ -455,7 +455,7 @@ per-frame budget assertion.
   - **Acceptance:** smoke stage: offscreen canvases created once per zone
     (count stable across frames), wet-rim alpha decays over time; P10
     still passes (this item is the one most likely to regress 60fps —
-    verify the cached path, not the raw one). Status: TODO.
+    verify the cached path, not the raw one). Status: DONE (stage 64).
 
 - [ ] **L3 — Breathing title screen + vignette/lighting polish** — `game.js` / `ui.js`
   - **What:** the title screen becomes the swamp breathing: a slow

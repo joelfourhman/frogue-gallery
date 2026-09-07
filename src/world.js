@@ -1,6 +1,6 @@
 // world.js — the swamp: terrain, paint layer, vegetation, soil, reeds.
 'use strict';
-import { traceBlob, wobble, clamp, dist2, TAU } from './math.js';
+import { traceBlob, wobble, clamp, dist2, TAU, mulberry32 } from './math.js';
 import { INK, sat, mixColor } from './ui.js';
 
 const WSCALE = 0.5; // paint layer resolution factor
@@ -34,6 +34,49 @@ export const MIST_BANDS = [
 
 // Cap on open-water shimmer glints (bounded so the draw cost never grows).
 export const SHIMMER_CAP = 12;
+
+// L2 (v1.4 "Make It Amazing"): the layered watercolor render pass. Pure
+// draw-time + a bake-once cache — no new per-frame state, so P10 (off-screen
+// culling) and the pacing probes (runT) are untouched.
+//   (a) wet rim  — freshly painted pigment cells grow a darker "wet edge"
+//                  (the watercolor bloom) that lightens and dries over ~5s,
+//                  derived from the EXISTING pigment-cell `age`/amount (no new
+//                  persistence).
+//   (b) stroke texture — short directional brush strokes baked ONCE into a
+//                  per-zone offscreen canvas at world.build() (seeded via
+//                  math.js mulberry32/wobble), drawn as ONE cached image per
+//                  zone per frame (the budget trick: one drawImage, not
+//                  thousands of strokes).
+//   (c) prop outlines — rocks & bushes get a second low-alpha offset "watercolor
+//                  double-stroke" (a soft ink echo) on top of the existing edge.
+// The zone accents mirror game.js ZONES (kept here so world.js has no
+// dependency on game.js — no circular import).
+export const ZONE_TEXTURES = [
+  { x: 0,   accent: '#c9a94e' },  // Reed Flats
+  { x: 0.24, accent: '#5a93c9' },  // Slick Hollow
+  { x: 0.44, accent: '#7fb069' },  // Bramble Thicket
+  { x: 0.64, accent: '#9a9a8f' },  // The Gray Shore
+];
+// Reduced-res offscreen scale for the stroke texture (keeps the cached layers
+// light; they are drawn scaled up over the floor, so the soft wash is
+// resolution-independent).
+const TEXTURE_SCALE = 0.25;
+
+// Wet-rim alpha (0..~0.4): a fresh cell (amount ~3) carries the strongest rim,
+// which lightens as the pigment decays (amount -> 0 over ~5s). Pure +
+// deterministic (the smoke stage asserts the decay).
+export function wetRimAlpha(amount) {
+  const m = clamp(amount || 0, 0, 3);
+  return (m / 3) * 0.4;
+}
+// Wet-rim stroke radius (world px) — a touch larger than the cell so it reads as
+// a soft edge halo, not a hard line.
+export function wetRimRadius(cell) {
+  return cell * 0.66;
+}
+// Cap on the wet rims drawn per frame (the grid can hold many fresh cells after
+// a long painting run; bounding the draw keeps the per-frame cost flat).
+export const WET_RIM_CAP = 96;
 
 export class World {
   constructor(rng, seed) {
@@ -99,6 +142,76 @@ export class World {
       const x = 120 + rng() * (this.w - 240);
       const y = 120 + rng() * (this.h - 240);
       this.soil.push({ x, y, r: 34 + rng() * 22 });
+    }
+    this._bakeTextures();
+  }
+
+  // L2 (b): bake the stroke-texture offscreen layers — ONCE, at build, so the
+  // per-frame cost is a single drawImage per zone (not thousands of strokes).
+  // Seeded independently from `this.seed` (mulberry32) so the same world seed
+  // always produces the same texture, and it rides the existing seed system
+  // without disturbing the main decoration RNG stream.
+  _bakeTextures() {
+    const trng = mulberry32((this.seed * 2654435761) >>> 0);
+    const tw = Math.ceil(this.w * TEXTURE_SCALE);
+    const th = Math.ceil(this.h * TEXTURE_SCALE);
+    this._texCanvases = [];
+    for (const z of ZONE_TEXTURES) {
+      const z0 = z.x * this.w;
+      // each zone's band spans from its start to the next zone's start; the last
+      // (x:1) runs to the end of the world (the Gray Shore fills the rest).
+      const zi = ZONE_TEXTURES.indexOf(z);
+      const z1 = (zi < ZONE_TEXTURES.length - 1)
+        ? ZONE_TEXTURES[zi + 1].x * this.w
+        : this.w;
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(2, Math.round(tw));
+      cv.height = Math.max(2, Math.round(th));
+      const g = cv.getContext('2d');
+      const acc = z.accent;
+      const base = sat(acc, 1);
+      // Base wash: a handful of very-low-alpha accent blobs across the zone band.
+      g.globalAlpha = 0.05;
+      g.fillStyle = base;
+      const washes = 6 + Math.round(trng() * 4);
+      for (let i = 0; i < washes; i++) {
+        const bx = (z0 + trng() * (z1 - z0)) * TEXTURE_SCALE;
+        const by = trng() * th;
+        const br = (90 + trng() * 130) * TEXTURE_SCALE;
+        g.beginPath();
+        g.ellipse(bx, by, br, br * 0.7, trng() * TAU, 0, TAU);
+        g.fill();
+      }
+      // Stroke texture: short directional brush strokes (dark edge + light
+      // highlight), oriented along a zone-consistent angle so each zone's
+      // "hand" reads differently. Capped count so the bake is bounded.
+      const angle = z.x * TAU; // per-zone base angle
+      const N = 70 + Math.round(trng() * 30);
+      g.lineCap = 'round';
+      for (let i = 0; i < N; i++) {
+        const sx = (z0 + trng() * (z1 - z0)) * TEXTURE_SCALE;
+        const sy = trng() * th;
+        const len = (10 + trng() * 26) * TEXTURE_SCALE;
+        const a = angle + (trng() - 0.5) * 0.9;
+        const dx = Math.cos(a) * len, dy = Math.sin(a) * len * 0.5;
+        g.globalAlpha = 0.05 + trng() * 0.06;
+        g.strokeStyle = INK;
+        g.lineWidth = 1.2 * TEXTURE_SCALE + 0.4;
+        g.beginPath();
+        g.moveTo(sx - dx * 0.5, sy - dy * 0.5);
+        g.lineTo(sx + dx * 0.5, sy + dy * 0.5);
+        g.stroke();
+        // light highlight echo offset a hair
+        g.globalAlpha = 0.04 + trng() * 0.04;
+        g.strokeStyle = mixColor(acc, '#ffffff', 0.5);
+        g.lineWidth = 0.9 * TEXTURE_SCALE + 0.3;
+        g.beginPath();
+        g.moveTo(sx - dx * 0.5 + 0.8, sy - dy * 0.5 - 0.8);
+        g.lineTo(sx + dx * 0.5 + 0.8, sy + dy * 0.5 - 0.8);
+        g.stroke();
+      }
+      g.globalAlpha = 1;
+      this._texCanvases.push(cv);
     }
   }
 
@@ -280,6 +393,19 @@ export class World {
     ctx.fillStyle = sat('#6f9e8e', colorSat);
     ctx.fillRect(0, 0, this.w, this.h);
 
+    // L2 (b) — layered watercolor stroke texture: ONE cached image per zone
+    // (the budget trick; ~4 drawImages/frame regardless of world size). The
+    // base wash + directional brush strokes were baked once at build().
+    if (this._texCanvases) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.imageSmoothingEnabled = true;
+      for (let zi = 0; zi < this._texCanvases.length; zi++) {
+        ctx.drawImage(this._texCanvases[zi], 0, 0, this.w, this.h);
+      }
+      ctx.restore();
+    }
+
     // P10: cull per-item decoration to the visible world rect (off-screen items
     // are invisible anyway; skipping them is a zero-visible-change perf win that
     // holds 60fps across the full 5400px world). The floor fillRect above is a
@@ -335,6 +461,39 @@ export class World {
       ctx.ellipse(s.x, s.y, s.r * wm, s.r * 0.6 * wm, 0, 0, TAU);
       ctx.fill();
     }
+    // L2 (a) — wet rim: freshly painted pigment cells carry a darker edge that
+    // dries out (derived from the existing grid `age`/amount; no new state).
+    this.drawWetRims(ctx, inView);
+  }
+
+  // L2 (a): draw the wet-edge rims over the paint layer. Pure draw-time; reuses
+  // the pigment grid's `amount` (which decays with `age` over ~5s) so a fresh
+  // cell reads wet (strong rim) and dries to nothing. View-culled + capped for P10.
+  drawWetRims(ctx, inView) {
+    if (!this.pigmentGrid || this.pigmentGrid.size === 0) return;
+    const rimR = wetRimRadius(this.cell);
+    let drawn = 0;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const [key, c] of this.pigmentGrid) {
+      if (drawn >= WET_RIM_CAP) break;
+      const [cx, cy] = key.split(',');
+      const x = (+cx + 0.5) * this.cell, y = (+cy + 0.5) * this.cell;
+      if (!inView(x, y)) continue;
+      const amount = Math.max(c.red, c.blue, c.green);
+      const a = wetRimAlpha(amount);
+      if (a < 0.02) continue; // fully dried
+      // the freshest pigment color dictates the rim hue
+      const hex = c.red >= c.blue && c.red >= c.green ? '#8a3420' : c.blue >= c.green ? '#2c5a9a' : '#3f6d28';
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = hex;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.ellipse(x, y, rimR, rimR * 0.9, 0, 0, TAU);
+      ctx.stroke();
+      drawn++;
+    }
+    ctx.restore();
   }
 
   drawProps(ctx, view, colorSat, now) {
@@ -517,6 +676,9 @@ export class World {
         traceBlob(ctx, 0, 2, o.r, o.seed, 0.18, 9);
         ctx.stroke();
         ctx.globalAlpha = 1;
+        // L2 (c): watercolor double-stroke — a second, low-alpha offset echo of
+        // the edge so the outline reads as a hand-painted wash, not a hard line.
+        this._doubleStroke(ctx, 0, 2, o.r, o.seed, 0.18, 9);
         ctx.fillStyle = sat('#a5a093', colorSat);
         traceBlob(ctx, -o.r * 0.25, -o.r * 0.3, o.r * 0.4, o.seed + 1, 0.2, 7);
         ctx.fill();
@@ -531,6 +693,8 @@ export class World {
         traceBlob(ctx, 0, 0, o.r, o.seed, 0.22, 11);
         ctx.stroke();
         ctx.globalAlpha = 1;
+        // L2 (c): watercolor double-stroke (soft ink echo) for bushes too.
+        this._doubleStroke(ctx, 0, 0, o.r, o.seed, 0.22, 11);
         ctx.fillStyle = sat('#6d9459', colorSat);
         for (let i = 0; i < 4; i++) {
           const a = i / 4 * TAU + o.seed;
@@ -540,6 +704,19 @@ export class World {
       }
       ctx.restore();
     }
+  }
+
+  // L2 (c): a second, low-alpha offset "watercolor double-stroke" — a soft ink
+  // echo offset a hair from the main edge, at a slightly larger radius. Reads as
+  // a hand-painted wash edge. Pure draw-time (one extra stroke per visible prop).
+  _doubleStroke(ctx, cx, cy, r, seed, amp, points) {
+    const off = 1.8;
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = INK;
+    ctx.globalAlpha = 0.18;
+    traceBlob(ctx, cx + off, cy + off, r * 1.03, seed + 40, amp + 0.02, points);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
   }
 
   // color "health" of the world: 0 gray -> 1 full
