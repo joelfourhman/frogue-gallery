@@ -4,7 +4,7 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-07 (v1.1 + v1.2 + v1.3 COMPLETE; v1.4 "Make It Amazing" COMPLETE — all 14 items (J1–J5 juice, L1–L3 presence, S1–S3 audio, M1–M3 moments) + the Joel color rework (`012ce0b`); **v1.5 "The Living Swamp" — Batch 1 COMPLETE (K1 Mud Turtle, K2 Blind Crag Frog, K3 Storm Surge) + Batch 2 K4 done (The Gilded Heron, NG+ cycle-3+ 3rd boss: gold palette, 42k HP, plume absorbs green heal) + K5 done (3 new modifiers: Night / Still Waters / Master's Palette) + K6 done (NG+ Master tier c4+) + K7 done (Curator Challenge — victory-gated title button, SEEDED daily expedition: UTC-day seed → seeded 2-painting loadout + seeded modifier, scored restored/enemies/orbs/boss-time bonus, filed to a saved top-5 best-score list in a new 5th atelier "Challenge" panel; SAVE_VERSION 8→9 + migration; smoke 78) + K8 done (Challenge Reward — first completion mints the unique Masterpiece "The Heron, Waking" + 15 gold once via the goldEarn latch; subsequent = repeatable rank gold; shown in Gallery Wall + Curator's Ledger; no new save field; smoke 79). **Batch 3 COMPLETE (K7 ✅ + K8 ✅; suite 79/79, first-time pacing unchanged (pace 17.4 / humance 18.0)); K9 done (Field Guide + first-sight callouts, smoke 80) + K10 done (full regression + season audit + docs-only commit). **v1.5 COMPLETE — all 10 items K1–K10 done (2026-09-07).**
+**Last PM audit: 2026-09-07 (v1.1 + v1.2 + v1.3 + v1.4 "Make It Amazing" COMPLETE; **v1.5 "The Living Swamp" COMPLETE — all 10 items K1–K10 done and committed (smoke 80/80; first-time pace 17.4 / humance 18.0 IN the 15–20 band; NG+ cycle-1 19.5; SAVE_VERSION 9). **v1.6 "Beneath the Reeds" APPROVED + EXECUTING (2026-09-07; Joel: "Plan and execute 1.6" — execution pre-approved): 13 items, 4 modules (R1–R6 biome / W1–W3 gamepad / Q1–Q3 QoL / A1 audit) in `docs/ROADMAP.md` §v1.6 — victory-gated new biome + THE LANTERN mechanic, 3 light-keyed creatures, the 4th boss archetype (The Silt Wyrm), raw-Gamepad-API gamepad support, 3 QoL items, final regression audit. Deferred items folded in: gamepad + 4th boss archetype. Batch order in PROJECT_STATE.md → Immediate Next Action.
 
 ## Current state
 
@@ -50,8 +50,15 @@ None. Loopback dev server, Node, and all tests are healthy.
 ## Next priority
 
 **v1.5 COMPLETE** (2026-09-07). All 10 items K1–K10 done and committed.
-No open scope; the next phase is whatever Joel approves after a v1.5 review
-(the deferred list in `docs/ROADMAP.md` §v1.5 is the boundary).
+**v1.6 "Beneath the Reeds" APPROVED + EXECUTING** (2026-09-07; execution
+pre-approved by Joel): 13 items, 4 modules (R1–R6 the Reeds biome —
+victory-gated, THE LANTERN, 3 light-keyed creatures, The Silt Wyrm 4th
+boss archetype, `reedspace.mjs` probe — / W1–W3 gamepad (raw Gamepad API) /
+Q1–Q3 QoL / A1 final regression + season audit). Fixed batch order +
+per-item acceptance in `docs/ROADMAP.md` §v1.6 + PROJECT_STATE.md →
+Immediate Next Action. First-time run stays 15–20 min (victory-gated
+biome; re-verify after every in-run item); SAVE_VERSION 9→10 only for the
+`reedsUnlocked` gate flag.
 
 ## Release readiness
 
@@ -65,9 +72,9 @@ audio · M moments) across 5 batches of ~3; theme + order + acceptance in
 `docs/ROADMAP.md` §v1.4. The release stays playable at every commit.
 ## Release readiness
 
-Release: ready (DoD met, suite green). v1.1 + v1.2 + v1.3 + v1.4: **all
-complete**. v1.5 "The Living Swamp": **COMPLETE** (2026-09-07) — all 10
-items (K1–K10) done and committed; smoke 80/80; pacing 17.4 / 18.0 min
-first-time (in the 15–20 min target), NG+ cycle-1 19.5 min (in band),
-NG+ cycle-3 / cycle-4 27.3 / 38.9 min (documented deliberate escalation).
-The release stays playable at every commit.
+Release: ready (DoD met, suite green). v1.1 + v1.2 + v1.3 + v1.4 + v1.5:
+**all complete**. v1.6 "Beneath the Reeds": **APPROVED + EXECUTING**
+(2026-09-07) — 13 items in 4 modules (R the Reeds biome + THE LANTERN · W
+gamepad · Q QoL · A audit); theme + fixed batch order + per-item
+acceptance in `docs/ROADMAP.md` §v1.6. The release stays playable at
+every commit.

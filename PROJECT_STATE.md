@@ -190,6 +190,45 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 
 ## Immediate Next Action
 
+**v1.6 "Beneath the Reeds" — APPROVED + EXECUTING (Joel 2026-09-07: "Plan
+and execute 1.6" — execution pre-approved; the ROADMAP §v1.6 header is
+marked APPROVED in the same docs-only commit, no separate approval
+round).** 13 items in 4 modules (R1–R6 / W1–W3 / Q1–Q3 / A1) in
+`docs/ROADMAP.md` §v1.6. Theme: **a new place + a new way to play** — a
+**victory-gated** descent into the flooded lower swamp (the same painting,
+deeper), whose signature mechanic is **THE LANTERN** (L toggle: light
+radius + candle fuel, drains + refills at fireflies/rest spots; darkness
+hides enemies AND the player — a real light-state gameplay layer, not a
+skin), 3 new light-keyed creatures (Glow Wisp / Mud Serpent / Silt Leech),
+flooded lower banks + inverted-gravity pockets, the deferred **4th boss
+archetype** (The Silt Wyrm — subterranean, telegraphed surface points,
+3-hue awaken through the existing `paintBoss`/`bossStep` path), the
+deferred **gamepad** milestone (raw Gamepad API feed into `input.js`,
+Auto/Off option, on-screen connection state, mocked-pad smoke stages), 3
+small QoL items, and the final full regression + season audit. SAVE_VERSION
+9→10 only for R5's `reedsUnlocked` gate flag (+migration +normalizer).
+
+**Fixed batch order** (~3 items each; one conventional commit per item;
+smoke stage + P10 re-verify per item; re-run `pace.mjs`/`humance.mjs`
+after every in-run item — the biome is victory-gated so first-time MUST
+stay 15–20 min; the deferred items folded in are **gamepad** (→ Module W)
+and **4th boss archetype** (→ R4)):
+
+1. **BATCH 1 — R1, R2, R5** (the biome shell: THE LANTERN + fuel loop +
+   lantern dial HUD; flooded lower banks + inverted-gravity pockets; the
+   `reedsUnlocked` victory gate + SAVE_VERSION 9→10 + Field Guide entries
+   + first-sight callouts + Reeds one-liners).
+2. **BATCH 2 — R3, R4, R6** (the bestiary: Wisp/Serpent/Leech light-keyed
+   behaviors; The Silt Wyrm boss; `tests/reedspace.mjs` probe +
+   full-season pacing re-verification + cycle-0 tuning byte-identity).
+3. **BATCH 3 — W1, W2, W3** (gamepad: raw-API input feed into `input.js`;
+   connection chip + full-screen UI focus; Reeds-mode parity +
+   byte-identity regression for kb-only play; mocked `navigator.getGamepad`
+   smoke stage + documented real-pad manual note).
+4. **BATCH 4 — Q1, Q2, Q3, A1** (QoL: pause-menu run summary; end-screen
+   recap strip; paste-based save export/import; then the K10-style final
+   full regression + season audit + docs-only close).
+
 **v1.5 "The Living Swamp" is APPROVED (Joel 2026-09-06: "Don't even pitch
 me v1.5. Just make it") — **COMPLETE 2026-09-07: all 10 items K1–K10 done and committed.** 10 items in
 `docs/ROADMAP.md` §v1.5 (final K10 gate verified 2026-09-07: smoke 80/80; first-time pace 17.4 / humance 18.0 min IN the 15–20 band; NG+ cycle-1 19.5 min IN BAND; cycle-3 27.3 / cycle-4 38.9 min the documented deliberate bounded escalation; zero new deps — only src/tests/docs/PROJECT_STATE changed since v1.4-complete `dddbcaf`; tree clean; SAVE_VERSION 9 migration loads a v1-era save). **Batch 1 COMPLETE: K1 ✅ (Mud Turtle, smoke 72) → K2 ✅ (Blind Crag Frog, smoke 73) → K3 ✅ (zone-5 Storm Surge, smoke 74) — suite 74/74, pacing unchanged (first-time 17.3/18.3, NG+ 19.5).** **Batch 2 COMPLETE: K4 ✅ (The Gilded Heron, smoke 75) + K5 ✅ (3 new modifiers, smoke 76) + K6 ✅ (NG+ Master tier c4+, smoke 77) — suite 77/77, first-time byte-identical (pace 17.2/16.7, NG+ cycle-1 19.5), cycle-4 Master tier ~39 min (bounded, deliberate). BATCH 2 COMPLETE.** **Batch 3: K7 ✅ (Curator Challenge, smoke 78 — seeded daily expedition, top-5 scores, SAVE_VERSION 9, suite 78/78, first-time pacing unchanged: own scored mode).** **Batch 4 COMPLETE: K9 ✅ (Field Guide + first-sight callouts, smoke 80) → K10 ✅ (full regression + season audit + docs-only commit ). v1.5 COMPLETE — no open scope; the next phase is whatever Joel approves after v1.5 review (the deferred list in ROADMAP §v1.5 is the boundary).**
