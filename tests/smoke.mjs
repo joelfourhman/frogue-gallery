@@ -3766,5 +3766,78 @@ let awakenCount = 0;
 for (let i = 0; i < 6; i++) if (paintBoss(g3.heron, 'red', 6, g3.tuning) === 'awaken') awakenCount++;
 assert(awakenCount === 1, `J3: the awaken moment fires once per rise (awaken events=${awakenCount})`);
 
+// ======================================================================
+// stage 61 — v1.4 Module J, J4: frog hop feel (stretch / squash / dust puff / ripple / boing)
+// Draw/sfx-time only — `player.js` physics is untouched (hopT/collide/speed unchanged),
+// so the pacing probes (which measure runT) stay invariant. The stretch/squash ride on the
+// existing `this.squash` field the draw pass reads as `ctx.scale(squash, 2 - squash)`:
+//   stretch (hop start) → squash 0.85 → x0.85 / y1.15   (body elongates as it lifts)
+//   squash  (landing)   → squash 1.2  → x1.2 / y0.8     (body flattens on impact)
+// landing fires a one-shot `_hopLanded` flag that game.js consumes → dustPuff + ripple + 'boing'.
+// ======================================================================
+console.log('== stage 61: v1.4 J4 — frog hop feel (stretch / squash / dust / ripple / boing) ==');
+{
+  const g4 = new Game(makeCanvas());
+  g4.start();
+  fireKey('keydown', 'Enter');
+  frames(2);
+  const p4 = g4.player, w4 = g4.world, tun4 = g4.tuning;
+  const mkIn = (space) => ({ pressed: (k) => k === ' ' && space, moveVec: () => [1, 0], mouse: { worldX: 0, worldY: 0 } });
+
+  // reset hop state for a clean deterministic drive
+  p4.hopT = 0; p4.hopCd = 0; p4._hopLanded = false; p4.squash = 1;
+
+  // hop START → STRETCH (x0.85 / y1.15). The relax lerp (squash→1) runs the same
+  // frame, so we assert the *direction* (squash < 1 = compressed-x / extended-y),
+  // not the exact 0.85.
+  p4.update(0.016, mkIn(true), tun4, w4, { x: 0, y: 0 });
+  assert(p4.hopT > 0, `J4: a hop fired (hopT=${p4.hopT.toFixed(3)})`);
+  assert(p4.squash < 0.95, `J4: hop start STRETCHES the body (x<1 / y>1) — squash=${p4.squash.toFixed(3)}`);
+
+  // run the hop to its landing; the one-shot flag must fire exactly on the
+  // landing frame and the body must SQUASH (x>1 / y<1).
+  p4._hopLanded = false;
+  let landed = false, landSquash = 0;
+  for (let i = 0; i < 40 && !landed; i++) {
+    p4.update(0.016, mkIn(false), tun4, w4, { x: 0, y: 0 });
+    if (p4._hopLanded) { landed = true; landSquash = p4.squash; }
+  }
+  assert(landed, 'J4: a hop LANDING sets the one-shot _hopLanded flag');
+  assert(landSquash > 1.05, `J4: landing SQUASHES the body (x>1 / y<1) — squash=${landSquash.toFixed(3)}`);
+
+  // the one-shot flag must NOT re-fire on subsequent frames (no double landing)
+  const fires = { n: 0 };
+  p4._hopLanded = false;
+  for (let i = 0; i < 10; i++) { p4.update(0.016, mkIn(false), tun4, w4, { x: 0, y: 0 }); if (p4._hopLanded) fires.n++; }
+  assert(fires.n === 0, `J4: the landing flag fires at most once (no re-fire on later frames: ${fires.n})`);
+
+  // new particle helpers: dustPuff spawns a bounded soft-mote burst; ripple spawns a single ring
+  const ps = new (await import('../src/particles.js')).ParticleSystem();
+  const before = ps.count;
+  ps.dustPuff(100, 100, 5);
+  const puffN = ps.count - before;
+  assert(puffN === 5, `J4: particles.dustPuff(x,y,5) spawns exactly 5 motes (${puffN})`);
+  const beforeR = ps.count;
+  ps.ripple(100, 100);
+  assert(ps.count - beforeR === 1, 'J4: particles.ripple(x,y) spawns exactly one ripple ring');
+  const ring = ps.pool.find((q) => q.active && q.kind === 6);
+  assert(ring && ring.kind === 6, 'J4: the ripple is a distinct ring kind (kind 6) the draw pass expands + fades');
+
+  // end-to-end: a real hop landing fires dustPuff + ripple + 'boing' exactly once (game.js wiring).
+  let puffs = 0, ripples = 0, boings = 0;
+  const _dp = g4.particles.dustPuff, _rp = g4.particles.ripple, _sfx = g4.sfx;
+  g4.particles.dustPuff = (x, y, n) => { puffs++; return _dp.call(g4.particles, x, y, n); };
+  g4.particles.ripple = (x, y, c) => { ripples++; return _rp.call(g4.particles, x, y, c); };
+  g4.sfx = (n, o) => { if (n === 'boing') boings++; return _sfx.call(g4, n, o); };
+  g4.player.hopT = 0; g4.player.hopCd = 0; g4.player._hopLanded = false;
+  fireKey('keydown', ' ');      // real Space hop through the real frame loop
+  frames(30);                   // hopT=0.22s → lands within this window
+  fireKey('keyup', ' ');
+  assert(puffs === 1, `J4: a real hop landing fires exactly one dust puff (${puffs})`);
+  assert(ripples === 1, `J4: a real hop landing fires exactly one ripple ring (${ripples})`);
+  assert(boings === 1, `J4: a real hop landing fires exactly one 'boing' SFX (${boings})`);
+  g4.particles.dustPuff = _dp; g4.particles.ripple = _rp; g4.sfx = _sfx;
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

@@ -295,6 +295,14 @@ export class AudioSys {
         this._noise(t + 0.09, 0.06, 'lowpass', 800, 0.8, 0.15);
         break;
       }
+      case 'boing': {
+        // J4 (v1.4): a soft, low landing "boing" — a pitch-down sine with a
+        // short overtone. Draw/sfx-time only (no gameplay effect).
+        this._tone(t, 'sine', 240, 90, 0.16, 0.32);
+        this._tone(t, 'triangle', 120, 60, 0.14, 0.18);
+        this._noise(t, 0.06, 'lowpass', 600, 0.7, 0.1);
+        break;
+      }
       case 'paint-hit': {
         const p = opt.pigment || 'dry';
         this._noise(t, 0.08, 'bandpass', p === 'red' ? 700 : p === 'blue' ? 500 : 900, 2, 0.35);

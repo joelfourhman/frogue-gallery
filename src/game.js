@@ -2180,6 +2180,15 @@ _drawAtelier(ctx) {
     }
 
     p.update(dt, this.input, this.tuning, this.world, this._view());
+    // J4 (v1.4): a hop landing — a soft dust/water puff + a single ripple ring
+    // on the water + a low "boing" SFX. All presentation (draw/sfx-time only;
+    // the physics already ran in p.update). Consumed here so it fires once.
+    if (p._hopLanded) {
+      p._hopLanded = false;
+      this.particles.dustPuff(p.x, p.y, 5);
+      this.particles.ripple(p.x, p.y);
+      this.sfx('boing');
+    }
     this.paint.update(dt);
     // E3 (v1.2 M10): Bold-only zone hazards (root/slow) apply after movement so
     // they gate the *next* frame's speed. No-op on Gentle/Normal (no hazards).

@@ -19,7 +19,8 @@ export class Player {
     this.hopDir = [1, 0];
     this.iframes = 0;
     this.hurtT = 0;         // red flash timer
-    this.squash = 1;        // squash-and-stretch scale
+    this.squash = 1;        // squash-and-stretch scale (x; y = 2 - squash)
+    this._hopLanded = false; // J4: one-shot flag — true the frame a hop lands (consumed by game.js to fire dust puff + ripple + boing)
     this.swipeT = 0;         // brush swing animation timer
     this.slowT = 0;          // E3: slowed (mud pool)
     this.rootT = 0;          // E3: rooted (thorn reed) — cannot move
@@ -55,9 +56,19 @@ export class Player {
       this.hopT = 0.22;
       this.hopCd = tuning.hopCooldown || 0.7;
       this.iframes = Math.max(this.iframes, tuning.hopIframes + 0.12);
-      this.squash = 1.35;
+      // J4: stretch on hop START (x0.85 / y1.15) — the body elongates as it
+      // lifts off. Draw-only (the draw pass reads this.squash as the x scale,
+      // y = 2 - squash); physics is untouched.
+      this.squash = 0.85;
     }
-    if (this.hopT > 0) this.hopT -= dt;
+    // J4: landing detection — a hop "lands" the frame hopT crosses from >0 to
+    // <= 0 (checked AFTER the decrement). Set the one-shot flag (game.js fires
+    // the dust puff + ripple + boing) and SQUASH the body (x1.2 / y0.8).
+    // Draw-only.
+    if (this.hopT > 0) {
+      this.hopT -= dt;
+      if (this.hopT <= 0) { this._hopLanded = true; this.squash = 1.2; }
+    }
     if (this.hopCd > 0) this.hopCd -= dt;
 
     // movement: base speed, boosted mid-hop; E3 slow/root modifiers

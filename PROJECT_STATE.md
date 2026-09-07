@@ -194,7 +194,7 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 bounded batches of ~3 items per session** (local model context ceiling;
 each session MUST end clean: committed + docs + suite green). Read
 `docs/ROADMAP.md` §v1.4 + AGENTS.md. Module J batch order: J1 → J2 → J3.
-**Status: J1 ✅ + J2 ✅ + J3 ✅ (2026-09-06) — BATCH 1 COMPLETE.**
+**Status: BATCH 1 (J1+J2+J3) ✅ (2026-09-06) → BATCH 2 (J4→J5→L1) IN PROGRESS — J4 ✅ (frog hop feel); J5 next.**
 
 **Theme: juice, presence, and moments.** The game is mechanically complete;
 v1.4 adds no new rules — it makes the same game feel alive in the hand, the
@@ -251,6 +251,7 @@ band on Normal). Full scope + per-item status in `docs/ROADMAP.md` §v1.2.
 6. M13: **T3 ✅ (mini sketch heron)** → **T4 ✅ (tutorial progress + "Watch me" re-entry)** — **Batch 6 (M13 T3+T4) COMPLETE**
 7. M14: **N1 ✅ (NG+ unlock + Next Expedition flow)** → **N2 ✅ (NG+ scaling + `tests/ngpace.mjs` probe)** → **N3 ✅ (second boss — The Great Green Heron)** — **v1.3 Batch 7 (N1→N2→N3) COMPLETE** (suite 48/48, first-time pacing unchanged, NG+ cycle-1 ~19.5 min in band)
 8. v1.4 Module J: **J1 ✅ (wet paint that lingers)** + **J2 ✅ (hit-stop / shake escalation / boss-defeat slow-mo)** + **J3 ✅ (camera polish: look-ahead / lag / boss midpoint / awaken hold)** — **v1.4 Batch 1 (items 1–3) COMPLETE** (suite 60/60, P10 stage 24 still green; all presentation/time-feel only — first-time pacing unaffected, probes re-verified in band)
+9. v1.4 Batch 2, item 1: **J4 ✅ (frog hop feel — squash / stretch / dust / ripple + boing SFX)** (suite 61/61, P10 stage 24 still green; draw-time only — `player.js` physics untouched, pace ~18.6 min unchanged). **J5 next.**
 
 Each item's Notes column in the roadmap says which existing system to reuse.
 Acceptance (per batch): suite green, pace/humance probes still in the
@@ -322,6 +323,25 @@ system, no new dependencies. Smoke stage 60 drives `_updateCamera` directly:
 look-ahead leads ~40 px then eases back, boss framing centers on the midpoint +
 widens, the awaken hold is active ~1.2 s / zooms out / fires once per rise. P10
 (stage 24) still passes.
+
+**v1.4 J4 (frog hop feel: squash / stretch / dust / ripple + boing SFX) — implemented + tested (Batch 2, item 1).**
+Draw-time only — `player.js` physics (vx/vy/hopLift/hopCd/iframes) is
+**untouched**, so pace/humance medians are unchanged (re-verified: pace ~18.6
+min, in the 15–20 band). The existing `player.squash` field — already mapped
+to `ctx.scale(squash, 2 - squash)` in `Player.draw` (so x=squash, y=2-squash)
+— now stretches to **0.85 on hop START** (x0.85/y1.15) and squashes to **1.2
+on landing** (x1.2/y0.8); it relaxes to 1 in `update` via the existing lerp.
+Landing is detected in `Player.update` the frame `hopT` crosses from >0 to ≤0
+(checked after the decrement) → sets the one-shot `_hopLanded` flag. game.js,
+immediately after `p.update`, consumes the flag and fires `particles.dustPuff`
+(new: a 5-mote low-alpha soft puff, kind 0) + `particles.ripple` (new: a single
+expanding+fading ring, kind 6, drawn in `particles.draw` via `grow = 1 - fade`)
++ the new synth `'boing'` SFX (low pitch-down sine + soft overtone, no asset) —
+all presentation, once per landing. Smoke stage 61: a hop STRETCHES (x<1/y>1),
+a landing SQUASHES (x>1/y<1) + sets the one-shot flag (fires at most once),
+`dustPuff` spawns exactly 5 motes, `ripple` spawns exactly one kind-6 ring, and
+a real hop landing fires exactly one dust puff + one ripple + one 'boing' (via
+spies). P10 (stage 24) still passes.
 
 **M13 T1 (guided first expedition) — implemented + tested (v1.2 Batch 5, item 1).**
 A **fresh save only** (no finished run, never skipped — `tutorialEligible(save)`

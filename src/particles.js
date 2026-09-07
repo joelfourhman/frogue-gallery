@@ -70,6 +70,22 @@ export class ParticleSystem {
       this.spawn(x, y, Math.cos(a) * s, Math.sin(a) * s - 30, 0.5, 1.5 + Math.random() * 1.5, color, 5, -50);
     }
   }
+  // J4 (v1.4): a soft dust/water puff for a frog hop landing — a few low-
+  // alpha, slowly-rising soft motes (drawn as blurred ellipses, kind 0).
+  dustPuff(x, y, n = 5) {
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4;
+      const s = 30 + Math.random() * 50;
+      this.spawn(x + (Math.random() - 0.5) * 10, y + (Math.random() - 0.5) * 4,
+        Math.cos(a) * s, Math.sin(a) * s * 0.5, 0.35 + Math.random() * 0.25,
+        2 + Math.random() * 2.5, 'rgba(220,210,190,0.5)', 0, -40);
+    }
+  }
+  // J4 (v1.4): a single expanding + fading ripple ring (open water). kind 6,
+  // the size grows with (1 - fade) in draw().
+  ripple(x, y, color = 'rgba(255,255,255,0.6)') {
+    this.spawn(x, y, 0, 0, 0.6, 6, color, 6, 0);
+  }
 
   update(dt) {
     let n = 0;
@@ -110,6 +126,17 @@ export class ParticleSystem {
         ctx.beginPath();
         ctx.ellipse(0, 0, p.size * 1.6, p.size * 0.7, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
+      } else if (p.kind === 6) { // J4: expanding + fading ripple ring
+        const grow = 1 - p.fade; // 0 -> 1 over the particle's life
+        const r = p.size * (0.4 + grow * 2.6);
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.fade * 0.7);
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, r, r * 0.5, 0, 0, Math.PI * 2);
+        ctx.stroke();
         ctx.restore();
       } else {
         ctx.beginPath();

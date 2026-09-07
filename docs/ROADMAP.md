@@ -344,7 +344,7 @@ per-frame budget assertion.
     framing centers on the midpoint + widens, the awaken hold is active for
     ~1.2 s / zooms out / fires once per rise. P10 (stage 24) still passes.
 
-- [ ] **J4 — Frog hop feel: squash, stretch, dust, ripple** — `player.js` / `particles.js`
+- [x] **J4 — Frog hop feel: squash, stretch, dust, ripple** — `player.js` / `particles.js` / `audio.js`
   - **What:** hop start → stretch (x0.85/y1.15, 0.1 s); landing (`hopT`→0)
     → squash (x1.2/y0.8, 0.1 s) + a soft dust/water puff (new
     `particles.dustPuff`) + a single ripple ring on open water; a soft low
@@ -354,7 +354,26 @@ per-frame budget assertion.
     `game.js`; amplitude small (painted-world, not bouncy-arcade).
   - **Acceptance:** smoke stage: hop spawns exactly one dust puff and the
     squash/pose flags transition; `pace.mjs` / `humance.mjs` medians
-    unchanged (draw-only check); P10 still passes. Status: TODO.
+    unchanged (draw-only check); P10 still passes.
+    Status: DONE (2026-09-06, v1.4 BATCH 2). Implemented draw-time only: the
+    existing `player.squash` field (already mapped to `ctx.scale(squash,
+    2-squash)` in `Player.draw`) now stretches to 0.85 on hop START
+    (x0.85/y1.15) and squashes to 1.2 on landing (x1.2/y0.8); it relaxes to 1
+    in `update` (existing lerp). Landing is detected in `Player.update` when
+    `hopT` crosses from >0 to ≤0 (checked after the decrement) → sets the
+    one-shot `_hopLanded` flag (consumed by game.js so it fires exactly
+    once). game.js, right after `p.update`, consumes the flag and fires
+    `particles.dustPuff(p.x, p.y, 5)` (a new 5-mote low-alpha soft puff,
+    kind 0) + `particles.ripple(p.x, p.y)` (a new single expanding+fading
+    ring, kind 6, drawn in `particles.draw` via a `grow = 1 - fade` radius) +
+    the new synth `'boing'` SFX (a low pitch-down sine + soft overtone, no
+    asset). `player.js` physics (vx/vy/hopLift/hopCd/iframes) is untouched, so
+    pace/humance medians are unchanged (re-verified: pace ~18.6 min). Smoke
+    stage 61: a hop STRETCHES (x<1/y>1), a landing SQUASHES (x>1/y<1) + sets
+    the one-shot flag (fires at most once), `dustPuff` spawns exactly 5 motes,
+    `ripple` spawns exactly one kind-6 ring, and a real hop landing fires
+    exactly one dust puff + one ripple + one 'boing' (via spies). P10 (stage
+    24) still passes.
 
 - [ ] **J5 — Pickup / ink / UI micro-animations** — `game.js` / `ui.js` / `particles.js`
   - **What:** pickups pop (scale 1.3→1, 0.15 s) + `sparkles` burst; HUD
