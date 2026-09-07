@@ -5619,5 +5619,165 @@ console.log('== stage 79: v1.5 K8 — Challenge Reward (Masterpiece + rank gold)
   console.log('ok — K8: the first-ever challenge completion mints a unique MASTERPIECE painting ("The Heron, Waking", unbuyable collection, shown in the Gallery Wall + Curator\'s Ledger) + 15 gold EXACTLY ONCE (goldEarn latch, no new save field); subsequent completions pay small REPEATABLE rank gold (top-1 pays more); a legacy save (no latch) loads as not-yet-minted; pure logic in logic.js (challengeComplete / isMasterpieceMinted / challengeRank)');
 }
 
+// stage 80 — v1.5 M4 K9: the FIELD GUIDE grows with the v1.5 creatures +
+// ONE-SHOT first-sight callouts for the new residents. Two halves:
+//   (a) "Know your quarry" (P6 field guide) renders the four NEW entries —
+//       Mud Turtle / Blind Crag Frog / Storm Surge (creature rows) + the
+//       GILDED HERON's extra plume line — verified with a fillText-recording
+//       canvas (the guide's text is drawn through the 2d context only).
+//   (b) the first-sight callout (A1/M3-style, one in-memory flag per creature,
+//       NO new save field) fires a banner exactly once per creature per
+//       session: turtle & cragfrog on their first spawn (zone-3 allowed), the
+//       surge on beat activation, the gilded heron on boss engage — and a
+//       repeat never re-fires.
+{
+  const L80 = await import('../src/logic.js');
+
+  // ---- (a) the field guide's "Know your quarry" carries the v1.5 entries ----
+  const recCanvas = makeCanvas();
+  const drawn = [];
+  const baseCtx80 = makeCtx(recCanvas);
+  const recCtx80 = new Proxy(baseCtx80, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas.getContext = () => recCtx80;
+  const g80 = new Game(recCanvas); g80.start(); g80._quitToTitle();
+  g80.save = L80.freshSave(); // pin a clean save: no completed run -> no retrain band (ph 560)
+  g80._beginExpedition();
+  assert(g80.state === 'expedition', 'K9: the recording game started an expedition');
+  const geom80 = g80._helpGeom();
+  // the panel grew to fit the four new quarry rows (470 -> 560 base)
+  assert(geom80.ph === 560, `K9: the field-guide panel grew to fit the v1.5 quarry list (ph ${geom80.ph})`);
+  fireKey('keydown', 'h'); frames(2);
+  assert(g80.help === true, 'K9: pressing H opens the field guide (the v1.5 quarry reference)');
+  frames(3);
+  const joined80 = drawn.join('\u0001');
+  assert(joined80.includes('Know your quarry'), 'K9: the field guide renders the "Know your quarry" heading');
+  assert(joined80.includes('Mud Turtle'), 'K9: the field guide lists the MUD TURTLE (new v1.5 quarry)');
+  assert(joined80.includes('circle behind, or burn it with red'), 'K9: the Mud Turtle entry teaches the front-shell / red-burn counterplay');
+  assert(joined80.includes('Blind Crag Frog'), 'K9: the field guide lists the BLIND CRAG FROG (new v1.5 quarry)');
+  assert(joined80.includes('hunts by sound'), 'K9: the Blind Crag Frog entry teaches the sound/sleep (+50% damage) counterplay');
+  assert(joined80.includes('Storm Surge'), 'K9: the field guide lists the STORM SURGE (new v1.5 set-piece)');
+  assert(joined80.includes('bonus orbs'), 'K9: the Storm Surge entry teaches the clear-the-swarm orb reward');
+  // the cycle-0 boss line is still the gray heron...
+  assert(joined80.includes('The Great Gray Heron'), 'K9: the field guide still lists the gray heron on a first-time run');
+  // ...and on an NG+ cycle-3+ save it swaps to the GILDED HERON + the plume
+  // callout (the fourth K9 creature entry lives in the boss block).
+  g80.save = L80.freshSave(); g80.save.flags.heronDefeated = true; g80.save.ngCycle = 3;
+  g80.help = false;
+  g80._beginExpedition();
+  assert(g80.heron && g80.heron.gilded === true, 'K9: the cycle-3 expedition faces the gilded heron');
+  const geom80b = g80._helpGeom();
+  assert(geom80b.ph === 604, `K9: the field-guide panel grows further on retrain (ph ${geom80b.ph})`);
+  fireKey('keydown', 'h'); frames(2);
+  assert(g80.help === true, 'K9: the gilded-heron guide opened');
+  frames(3);
+  const joined80b = drawn.join('\u0001');
+  assert(joined80b.includes('The Gilded Heron (NG+)'), 'K9: the field guide names the GILDED HERON on an NG+ cycle-3+ save');
+  assert(joined80b.includes('gilded plume EATS your green healing'), 'K9: the Gilded Heron entry teaches the plume / heal-gap counterplay');
+  fireKey('keydown', 'h'); frames(2);
+  assert(g80.help === false, 'K9: H closes the gilded-heron guide again');
+
+  // ---- (b) the one-shot first-sight callouts ----
+  const fCanvas = makeCanvas();
+  const g81 = new Game(fCanvas); g81.start(); g81._quitToTitle(); g81._beginExpedition();
+  // a returning player (a completed run) so the turtle/cragfrog are zone-3
+  // eligible without forcing NG+ (keeps the boss gray — the gilded check is
+  // exercised separately below). The localStorage stub is shared across
+  // stages, so pin a cycle-0 run explicitly (an NG+ save would let the
+  // creatures spawn from zone 0 by design — the K1/K2 rule).
+  g81.save.flags.heronDefeated = true;
+  g81.save.ngCycle = 0; g81.ngCycle = 0;
+  const fs81 = g81._firstSight;
+  assert(fs81 && fs81.turtle === false && fs81.cragfrog === false && fs81.surge === false && fs81.gilded === false, 'K9: the first-sight flags start unset (in-memory, per session)');
+
+  // TURTLE + CRAGFROG: force deterministic spawns of each new creature in
+  // the allowed zone (zone 3, runT 40) by pinning the roll:
+  //   turtle: t>25 && roll>0.9; cragfrog: t>30 && 0.86<roll<=0.9.
+  // The first spawn must banner + set the flag; a repeat must be a no-op.
+  const realRand = Math.random;
+  // ---- turtle: roll 0.95 (only the turtle branch fires) ----
+  Math.random = () => 0.95;
+  g81._firstSight.turtle = false; g81.banners = [];
+  g81._zoneI = 3; g81.runT = 40; g81.spawnT = 0;
+  g81._spawnWave(0.016);
+  assert(g81.enemies.some(e => e.kind === 'turtle'), 'K9: a forced roll >0.9 in zone 3 spawned the turtle');
+  assert(g81._firstSight.turtle === true, 'K9: the turtle first-sight flag latched on its first spawn');
+  const turtleBanners = g81.banners.filter(b => String(b.text).includes('Mud Turtle')).length;
+  assert(turtleBanners === 1, `K9: the turtle first-sight banner fired exactly once (saw ${turtleBanners})`);
+  g81.spawnT = 0; g81._spawnWave(0.016); // repeat spawn, same roll
+  assert(g81.banners.filter(b => String(b.text).includes('Mud Turtle')).length === 1, 'K9: a second turtle spawn did NOT re-fire the callout (one-shot)');
+  // ---- cragfrog: roll 0.88 (only the cragfrog branch fires) ----
+  Math.random = () => 0.88;
+  g81._firstSight.cragfrog = false; g81.banners = [];
+  g81._zoneI = 3; g81.runT = 40; g81.spawnT = 0;
+  g81._spawnWave(0.016);
+  assert(g81.enemies.some(e => e.kind === 'cragfrog'), 'K9: a forced roll in (0.86,0.9] in zone 3 spawned the cragfrog');
+  assert(g81._firstSight.cragfrog === true, 'K9: the cragfrog first-sight flag latched on its first spawn');
+  assert(g81.banners.filter(b => String(b.text).includes('Crag Frog')).length === 1, 'K9: the cragfrog first-sight banner fired exactly once');
+  g81.spawnT = 0; g81._spawnWave(0.016);
+  assert(g81.banners.filter(b => String(b.text).includes('Crag Frog')).length === 1, 'K9: a second cragfrog spawn did NOT re-fire the callout (one-shot)');
+  Math.random = realRand;
+
+  // the callouts must NOT fire in an early zone (zone 2: the K1/K2 gate)
+  g81.enemies = []; // clear the zone-3 test spawns so the gate check reads clean
+  g81._zoneI = 2; g81.runT = 40; g81.banners = [];
+  g81._firstSight.turtle = false; g81._firstSight.cragfrog = false;
+  Math.random = () => 0.95;
+  g81.spawnT = 0; g81._spawnWave(0.016);
+  assert(g81._firstSight.turtle === false, 'K9: no turtle callout before zone 3 (the K1 spawn gate is respected)');
+  assert(g81._firstSight.cragfrog === false, 'K9: no cragfrog callout before zone 3 (the K2 spawn gate is respected)');
+  assert(g81.banners.filter(b => String(b.text).includes('Mud Turtle')).length === 0, 'K9: no turtle banner before zone 3');
+  assert(g81.banners.filter(b => String(b.text).includes('Crag Frog')).length === 0, 'K9: no cragfrog banner before zone 3');
+  Math.random = realRand;
+
+  // ---- surge: the beat activation fires the callout once ----
+  g81.banners = [];
+  g81._firstSight.surge = false;
+  g81.surge = L80.stormSurgeFor(1234); g81.surge.t = g81.surge.leadIn + 0.01; // just past the lead-in
+  g81._updateSurge(0.016);
+  assert(g81.surge.active === true, 'K9: the surge beat activated');
+  assert(g81._firstSight.surge === true, 'K9: the surge first-sight flag latched on activation');
+  assert(g81.banners.filter(b => String(b.text).includes('STORM SURGE') && String(b.text).includes('bonus orbs')).length === 1, 'K9: the surge first-sight callout fired exactly once');
+  // repeat check: a pre-latched flag (as if it had already fired this session)
+  // suppresses the callout on a second surge activation.
+  const calloutsBefore = g81.banners.filter(b => String(b.text).includes('STORM SURGE') && String(b.text).includes('bonus orbs')).length;
+  g81.surge = L80.stormSurgeFor(1234); g81.surge.t = g81.surge.leadIn + 0.01;
+  g81._firstSight.surge = true; // pre-latched
+  g81._updateSurge(0.016);
+  assert(g81.surge.active === true, 'K9: the second surge beat also activated');
+  assert(g81.banners.filter(b => String(b.text).includes('STORM SURGE') && String(b.text).includes('bonus orbs')).length === calloutsBefore, 'K9: a pre-latched surge flag suppresses the second callout (one-shot)');
+
+  // ---- gilded heron: the boss-engage block fires the callout once ----
+  const g82 = new Game(makeCanvas()); g82.start(); g82._quitToTitle();
+  const s82 = L80.freshSave(); s82.flags.heronDefeated = true; s82.ngCycle = 3;
+  g82.save = s82; g82._beginExpedition();
+  assert(g82.heron && g82.heron.gilded === true, 'K9: the cycle-3 expedition\'s heron is gilded');
+  g82.heron._intro = 0.016; g82.banners = [];
+  // the engage block lives in _updateExpedition (boss trigger section)
+  g82.player.alive = true; g82.player.hp = 100; g82.player.x = 100; g82.player.y = 500;
+  g82._prevHp = 100;
+  g82._updateExpedition(0.016);
+  assert(g82._firstSight.gilded === true, 'K9: the gilded-heron first-sight flag latched on boss engage');
+  assert(g82.banners.filter(b => String(b.text).includes('GILDED HERON') && String(b.text).includes('plume')).length === 1, 'K9: the gilded-heron first-sight callout fired exactly once');
+  // a cycle-0 (gray heron) run must NEVER fire the gilded callout
+  const g83 = new Game(makeCanvas()); g83.start(); g83._quitToTitle();
+  g83.save.ngCycle = 0; // pin before _beginExpedition reads it (the shared localStorage stub may carry a later cycle)
+  g83._beginExpedition();
+  assert(g83.heron && g83.heron.gilded === undefined, 'K9: the cycle-0 heron is not gilded');
+  g83.heron._intro = 0.016; g83.banners = [];
+  g83.player.alive = true; g83.player.hp = 100; g83.player.x = 100; g83.player.y = 500; g83._prevHp = 100;
+  g83._updateExpedition(0.016);
+  assert(g83._firstSight.gilded === false, 'K9: a cycle-0 (gray heron) engage never fires the gilded callout');
+  assert(g83.banners.filter(b => String(b.text).includes('GILDED HERON')).length === 0, 'K9: no gilded callout on a first-time run');
+  // and no new save field was introduced (SAVE_VERSION unchanged, the flags
+  // are a plain in-memory object on the Game, absent from the save)
+  assert(L80.SAVE_VERSION === 9, 'K9: SAVE_VERSION stays 9 (no new save field for the first-sight flags)');
+  assert(g81.save._firstSight === undefined, 'K9: the first-sight flags live on the Game (in-memory), not the save');
+
+  console.log('ok — K9: the field guide\'s "Know your quarry" renders the four v1.5 residents (Mud Turtle / Blind Crag Frog / Storm Surge + the Gilded Heron\'s plume line on NG+ c3+ saves), and each new creature fires a ONE-SHOT first-sight banner (one in-memory flag per creature — A1/M3-style, no new save field, SAVE_VERSION 9) that never repeats');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

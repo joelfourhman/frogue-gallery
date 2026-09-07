@@ -369,6 +369,15 @@ export class Game {
     this.dieT = 0;
     this.banners = [];
 
+    // K9 (v1.5 M4): ONE-SHOT FIRST-SIGHT callouts for the v1.5 creatures.
+    // PURE presentation, in-memory only (A1/M3-style one-time flags — the
+    // M3 EGG A one-time flag is the model; deliberately NOT persisted, per
+    // the K9 note "PREFER no new persist"). One boolean per creature; each
+    // fires a single small banner the first time the creature is seen this
+    // session and never repeats (session-lifetime, like the M3 EGG A flag —
+    // NOT cleared per expedition).
+    this._firstSight = { turtle: false, cragfrog: false, surge: false, gilded: false };
+
     // A1: atelier one-liners — reveal state for the typewriter line shown in
     // the atelier. Seeded from the last finished run's outcome on entry.
     this._atelierSay = null;    // { name, text, revealed } or null
@@ -409,6 +418,18 @@ export class Game {
 
   addBanner(text, dur = 2.8, y = 170) {
     this.banners.push({ text, t: dur, max: dur, y });
+  }
+  // K9 (v1.5 M4): a one-shot first-sight callout. Fires a single banner the
+  // first time a v1.5 creature is seen this session; a repeat call is a
+  // no-op. Pure presentation — in-memory flag, never persisted, never feeds
+  // runT or the pacing probes (it is a UI banner, like the M3 EGG A
+  // one-time "didYouKnow" banner).
+  _firstSightNote(key, text) {
+    const f = this._firstSight;
+    if (!f || f[key]) return false;
+    f[key] = true;
+    this.addBanner(text, 4.6, this.ch * 0.62);
+    return true;
   }
   addShake(n) { this.shake = Math.max(this.shake, n); }
 
@@ -3082,6 +3103,11 @@ _drawAtelier(ctx) {
         if (this.audio.setBossTheme) this.audio.setBossTheme(!!this.heron.green);
         this.addBanner('THE GREAT GRAY HERON', 3.2, 150);
         this.addBanner('Paint red, blue, and green to wake it — then paint fast while it shimmers!', 4.4, 195);
+        // K9 (v1.5 M4): one-shot first-sight callout for the GILDED HERON
+        // (NG+ cycle-3+ final boss) — the gray/green herons never fire it.
+        if (this.heron.gilded) {
+          this._firstSightNote('gilded', 'The GILDED HERON — its gilded plume EATS your green healing. Heal in the 30s gaps between plumes.');
+        }
         this.zoomTarget = 0.92;
         // K7 (v1.5 M2): the final heron has engaged — start the challenge's
         // boss clock (the boss-time bonus is the fight duration).
@@ -3227,6 +3253,8 @@ _drawAtelier(ctx) {
       this.addBanner('STORM SURGE!', 2.6, this.ch * 0.22);
       this.addBanner('The swamp storms — fast bugs, wider rain! Clear them for orbs.', 3.6, this.ch * 0.22 + 32);
       if (this.audio.stormSurgeStinger) this.audio.stormSurgeStinger(); else this.sfx('boss-growl');
+      // K9 (v1.5 M4): one-shot first-sight callout for the set-piece.
+      this._firstSightNote('surge', 'The STORM SURGE — clear the swarm before the rain wears off for bonus orbs.');
       const base = {};
       for (const f of STORM_SURGE.rain.fields) base[f] = t[f];
       this._surgeRainBase = base;
@@ -3468,6 +3496,13 @@ _drawAtelier(ctx) {
     const cragAllowed = this._zoneI >= 3 || this.ngCycle >= 1;
     if (cragAllowed && t > 30 && roll > 0.86 && roll <= 0.9) kind = 'cragfrog';
     this.enemies.push(spawnEnemy(kind, x, y, this.tuning));
+    // K9 (v1.5 M4): one-shot first-sight callout for the new creatures (UI
+    // banner only — see _firstSightNote).
+    if (kind === 'turtle') {
+      this._firstSightNote('turtle', 'New in the swamp — the Mud Turtle. Its shell bounces paint from the FRONT; circle behind, or burn it with red.');
+    } else if (kind === 'cragfrog') {
+      this._firstSightNote('cragfrog', 'New in the swamp — the Blind Crag Frog. It hunts by SOUND; stay quiet and it sleeps (and takes +50% damage).');
+    }
   }
 
   _updateOrbs(dt) {
@@ -5230,7 +5265,10 @@ _drawAtelier(ctx) {
     // active. The panel grows a little to make room; a single source of truth
     // for both the draw (_drawHelp) and the click handling (frame router).
     const retrainOn = retrainAllowed(this.save) && !this._tutorialActive();
-    const ph = retrainOn ? 512 : 470;
+    // K9 (v1.5 M4): the "Know your quarry" column grew by the four v1.5
+    // residents (turtle / crag frog / storm surge / gilded heron) — the panel
+    // grows to fit them (single source of truth shared by draw + click).
+    const ph = retrainOn ? 604 : 560;
     const bw = 150, bh = 34, gap = 16, totalW = 4 * bw + 3 * gap;
     const bx0 = cx - totalW / 2, by = py + ph - 92;
     const phases = [3, 4, 5, 6]; // burn / freeze / root drills, then the sketch heron
@@ -5281,7 +5319,10 @@ _drawAtelier(ctx) {
     const foes = [
       ['Mud Beetle', 'armored — burn (red) ignores its shell. Don\u2019t just chip it.'],
       ['Mosquito', 'fast and airborne — blue FREEZES it solid; it ignores root.'],
-      ['Grumpy Toad', 'tanky — paint it dizzy (green) for a 1.5× open shot.'],
+      ['Grumpy Toad', 'tanky — paint it dizzy (green) for a 1.5\u00d7 open shot.'],
+      ['Mud Turtle', 'armored shell — paint from the FRONT bounces off; circle behind, or burn it with red.'],
+      ['Blind Crag Frog', 'hunts by sound — stay quiet and it sleeps (and takes +50% damage).'],
+      ['Storm Surge', 'the 5th zone\u2019s storm — clear the swarm before the rain wears off for bonus orbs.'],
     ];
     foes.forEach((r, i) => {
       const y = y0 + 34 + i * 48;
@@ -5290,11 +5331,16 @@ _drawAtelier(ctx) {
       c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.8)';
       this._wrapHelp(c, r[1], colR, y + 15, colW, 13);
     });
-    const hy = y0 + 34 + 3 * 48 + 12;
-    c.font = '700 15px Georgia, serif'; c.fillStyle = '#8d7bb0'; c.textAlign = 'left'; c.textBaseline = 'middle';
-    c.fillText('The Great Gray Heron', colR, hy);
+    const hy = y0 + 34 + foes.length * 48 + 12;
+    // K9 (v1.5 M4): the boss line adapts to the NG+ heron the player now faces.
+    const bossName = this.heron && this.heron.gilded ? 'The Gilded Heron (NG+)' : 'The Great Gray Heron';
+    c.font = '700 15px Georgia, serif'; c.fillStyle = this.heron && this.heron.gilded ? GILDED_HERON.gildedHue : '#8d7bb0'; c.textAlign = 'left'; c.textBaseline = 'middle';
+    c.fillText(bossName, colR, hy);
     c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.85)';
     this._wrapHelp(c, 'Watch the telegraph (a glow before it strikes). Move off the marked line when it swoops, sweeps, or dives. It gathers reinforcements and grows fiercer the lower its health falls — keep painting to keep it stunned.', colR, hy + 16, colW, 14);
+    if (this.heron && this.heron.gilded) {
+      this._wrapHelp(c, 'NEW: its gilded plume EATS your green healing — heal in the 30s gaps between plumes.', colR, hy + 44, colW, 14);
+    }
 
     // footer
     centerText(c, 'WASD / arrows to move  ·  Space to hop (brief invulnerability)  ·  P to pause  ·  M to mute', g.cx, g.py + g.ph - 22, 'italic 13px Georgia, serif', INK, 0.6);
