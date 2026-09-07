@@ -4916,5 +4916,92 @@ console.log('== stage 71: v1.4 M3 — two title easter eggs (headless) ==');
   delete window.AudioContext; // restore
 }
 
+console.log('== stage 72: v1.5 K1 — MUD TURTLE (armored plodder, front-arc shell deflects paint; red burn is the counter) ==');
+{
+  const L72 = await import('../src/logic.js');
+  const { spawnEnemy } = await import('../src/enemies.js');
+
+  // ---- table + pure deflection rule (source of truth) ----
+  const T72 = L72.ENEMIES.turtle;
+  assert(T72 && T72.name === 'Mud Turtle', 'turtle is declared in the ENEMIES table');
+  assert(T72.frontDeflect === true, 'turtle is flagged as a front-deflecting shell');
+  assert(T72.hp > L72.ENEMIES.toad.hp, `turtle is tanky (hp ${T72.hp} > toad ${L72.ENEMIES.toad.hp})`);
+  assert(T72.speed < L72.ENEMIES.toad.speed, `turtle is slow/plodding (speed ${T72.speed} < toad ${L72.ENEMIES.toad.speed})`);
+  assert(T72.dmg >= L72.ENEMIES.toad.dmg, `turtle has a heavy contact hit (dmg ${T72.dmg} >= toad ${L72.ENEMIES.toad.dmg})`);
+  assert(T72.deflectKeep < 0.4, `front paint is heavily cut (deflectKeep ${T72.deflectKeep} < 0.4)`);
+  // pure: front (within arc) is cut; side + back are full.
+  const shell = { x: 0, y: 0, facing: 0, frontDeflect: true, deflectArc: T72.deflectArc, deflectKeep: T72.deflectKeep };
+  assert(L72.frontDeflectFactor(shell, { x: 100, y: 0 }) < 0.4, 'paint from the FRONT arc is deflected (cut)');
+  assert(L72.frontDeflectFactor(shell, { x: 0, y: 100 }) === 1, 'paint from the SIDE is full');
+  assert(L72.frontDeflectFactor(shell, { x: -100, y: 0 }) === 1, 'paint from the BACK is full');
+
+  // ---- driven integration: a real swipe deflects front, full side/back ----
+  const cv72 = makeCanvas();
+  const g72 = new Game(cv72);
+  g72.start();
+  fireKey('keydown', 'Enter'); frames(3); // title -> expedition
+  const P72 = g72.player;
+  P72.alive = true; P72.hp = 99; P72.iframes = 999;
+
+  const T = spawnEnemy('turtle', 1000, 760, g72.tuning);
+  T.facing = 0; // facing +x (right); the front arc is to the RIGHT
+  g72.enemies.push(T);
+
+  const swipeAt = (px, py, aimA, pig) => {
+    P72.x = px; P72.y = py; P72.aimA = aimA; P72.pigment = pig;
+    P72.swipeT = 0; g72.paint.swipeCd = 0; T.status = null; T.hitFlash = 0;
+    const hp0 = T.hp;
+    g72.paint.trySwipe(g72.enemies);
+    return hp0 - T.hp;
+  };
+  // FRONT: player sits in the front arc (to the right of the shell) aiming at it.
+  const dmgFront = swipeAt(1060, 760, Math.PI, 'blue');
+  // BACK: player sits behind the shell (to the left).
+  const dmgBack = swipeAt(940, 760, 0, 'blue');
+  // SIDE: player sits above the shell.
+  const dmgSide = swipeAt(1000, 700, Math.PI / 2, 'blue');
+  assert(dmgBack >= 1 && dmgSide >= 1, `side/back paint is full (back=${dmgBack}, side=${dmgSide})`);
+  assert(dmgFront < dmgBack, `front paint is DEFLECTED — less damage than side/back (front=${dmgFront} < back=${dmgBack})`);
+  assert(dmgFront <= Math.max(1, Math.round(dmgBack * 0.35)), `front paint is a small fraction of full (front=${dmgFront}, back=${dmgBack})`);
+
+  // ---- RED BURN is the counter: it ignores the front deflection and kills ----
+  // Player stays in the FRONT arc (where paint is deflected), paints RED. The
+  // direct paint hit is cut, but the BURN status it applies ticks full damage
+  // (stepStatus never routes through paintDamage), so the turtle still dies.
+  T.hp = 20; T.status = null;
+  P72.x = 1060; P72.y = 760; P72.aimA = Math.PI; P72.pigment = 'red';
+  P72.swipeT = 0; g72.paint.swipeCd = 0;
+  g72.paint.trySwipe(g72.enemies); // applies the burn status
+  assert(T.status && T.status.type === 'burn', 'a red swipe from the front still APPLIES burn (burn is the counter)');
+  for (let i = 0; i < Math.ceil(3.2 * 60); i++) L72.stepStatus(T, 1 / 60, g72.tuning, i / 60);
+  assert(T.hp <= 0 || T.dead, 'red burn KILLS the turtle even from the front (burn ignores the shell deflection)');
+
+  // ---- zone / NG+ gating: turtle must NOT appear before zone 3 on cycle-0 ----
+  // Force the spawn roll past the turtle threshold (0.9) so _spawnWave's turtle
+  // branch is taken whenever it is allowed, and check what actually spawns.
+  const origRand = Math.random;
+  Math.random = () => 0.95; // roll=0.95: toad (roll>0.82) then turtle (roll>0.9) if allowed
+  try {
+    const spawnKindAt = (zoneI, ngCycle) => {
+      g72._zoneI = zoneI; g72.ngCycle = ngCycle;
+      g72.runT = 60; g72.spawnT = 0; // force a wave this tick
+      g72.enemies.length = 0;        // under cap
+      P72.x = 200; P72.y = 760;       // not in the boss arena
+      g72._spawnWave(1 / 60);
+      return g72.enemies.length ? g72.enemies[0].kind : null;
+    };
+    const kZ0 = spawnKindAt(0, 0);
+    const kZ2 = spawnKindAt(2, 0);
+    const kZ3 = spawnKindAt(3, 0);
+    const kNG = spawnKindAt(0, 1);
+    assert(kZ0 !== 'turtle' && kZ2 !== 'turtle',
+      `cycle-0: turtle is GATED OUT before zone 3 (zone0=${kZ0}, zone2=${kZ2})`);
+    assert(kZ3 === 'turtle', `cycle-0: turtle is ALLOWED from zone 3 (got ${kZ3})`);
+    assert(kNG === 'turtle', `NG+ (cycle 1): turtle is allowed from the first named zone (got ${kNG})`);
+  } finally {
+    Math.random = origRand;
+  }
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

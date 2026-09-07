@@ -39,6 +39,13 @@ export class Enemy {
     this.dizzyPaintChance = base.dizzyPaintChance || 0;
     this.dizzyDuration = base.dizzyDuration || 0;
     this.paintTintDecay = base.paintTintDecay || 0.25;
+    // K1 (v1.5 M1): Mud Turtle — the shell turns paint away from the FRONT.
+    // `facing` (radians) tracks its travel direction; paint.js deflects hits
+    // that land within `deflectArc` of `facing` to `deflectKeep` of normal.
+    this.frontDeflect = !!base.frontDeflect;
+    this.deflectArc = base.deflectArc || 1.5;
+    this.deflectKeep = base.deflectKeep != null ? base.deflectKeep : 0.15;
+    this.facing = 0;
   }
 
   // speed factor from active status
@@ -94,6 +101,13 @@ export class Enemy {
     const [cx, cy] = world.collideCircle(this.x, this.y, this.r);
     this.x = cx; this.y = cy;
 
+    // K1 (v1.5 M1): the Mud Turtle's shell faces where it is MOVING. Track the
+    // travel direction (draw-time-only — paint.js reads it for deflection). A
+    // still shell keeps its last facing so the front arc is stable.
+    if (this.frontDeflect && (this.vx !== 0 || this.vy !== 0)) {
+      this.facing = Math.atan2(this.vy, this.vx);
+    }
+
     // --- contact attack
     if (!stunned && this.attackCd <= 0 && player.alive && player.iframes <= 0) {
       const d = dist(this.x, this.y, player.x, player.y);
@@ -137,6 +151,7 @@ export function drawEnemy(ctx, e, now) {
 
   if (e.kind === 'beetle') drawBeetle(ctx, e, frozen, flash, now);
   else if (e.kind === 'mosquito') drawMosquito(ctx, e, frozen, flash, now);
+  else if (e.kind === 'turtle') drawTurtle(ctx, e, frozen, flash, now);
   else drawToad(ctx, e, frozen, dizzy, flash, now);
   ctx.scale(1 / escale, 1 / escale); // undo body scale for the auras below
 
@@ -279,6 +294,76 @@ function drawMosquito(ctx, e, frozen, flash, now) {
   ctx.beginPath();
   ctx.arc(5.5, -2, 2, 0, TAU);
   ctx.fill();
+}
+
+// K1 (v1.5 M1): the Mud Turtle. It faces `e.facing` (its travel direction), so
+// the whole body is rotated to it and its FRONT (the +x side after rotation)
+// is the shell that deflects paint. A lighter FRONT WEDGE marks the deflecting
+// arc the player must circle around (or burn through). Draw-time-only: it reads
+// e.facing, never writes it.
+function drawTurtle(ctx, e, frozen, flash, now) {
+  const c = flash ? '#f2e9dc' : frozen ? '#bfe3ef' : '#6b5334';   // shell
+  const c2 = flash ? '#fff' : frozen ? '#dff2f8' : '#4a3826';      // shell rim
+  const c3 = flash ? '#fff' : frozen ? '#cdeef5' : '#8a6f45';      // plastron
+  ctx.save();
+  ctx.rotate(e.facing || 0);
+  // legs (four little plods)
+  ctx.strokeStyle = c2;
+  ctx.lineWidth = 4;
+  const plod = Math.sin((now * 6 + e._seed) ) * 1.5;
+  for (const [lx, ly] of [[-9, -13], [10, -13], [-9, 13], [10, 13]]) {
+    ctx.beginPath();
+    ctx.moveTo(lx * 0.7, ly * 0.7);
+    ctx.lineTo(lx, ly + (lx < 0 ? plod : -plod));
+    ctx.stroke();
+  }
+  // shell (a big round dome)
+  ctx.fillStyle = c;
+  ctx.beginPath();
+  ctx.ellipse(-1, 0, 19, 16, 0, 0, TAU);
+  ctx.fill();
+  // FRONT wedge: the deflecting arc. A lighter fan sweeping the front sector
+  // from -deflectArc to +deflectArc about the facing direction (after the
+  // rotate above, the front is +x, i.e. angle 0). This is the visual cue that
+  // "this side turns paint away".
+  const arc = e.deflectArc || 1.5;
+  ctx.fillStyle = c3;
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.arc(0, 0, 19, -arc, arc);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  // shell rim + front seam
+  ctx.strokeStyle = c2;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(-1, 0, 19, 16, 0, 0, TAU);
+  ctx.stroke();
+  // a subtle "hard" highlight line along the front rim
+  ctx.strokeStyle = flash ? '#fff' : '#d9c49a';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, 17, -arc, arc);
+  ctx.stroke();
+  // head poking out the front
+  ctx.fillStyle = c3;
+  ctx.beginPath();
+  ctx.arc(16, 0, 5.5, 0, TAU);
+  ctx.fill();
+  // eye (the one eye it has — blind-ish, unblinking)
+  ctx.fillStyle = '#f4efe6';
+  ctx.beginPath();
+  ctx.arc(18, -2.5, 2.2, 0, TAU);
+  ctx.arc(18, 2.5, 2.2, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = '#2c241e';
+  ctx.beginPath();
+  ctx.arc(19, -2.5, 1, 0, TAU);
+  ctx.arc(19, 2.5, 1, 0, TAU);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawToad(ctx, e, frozen, dizzy, flash, now) {

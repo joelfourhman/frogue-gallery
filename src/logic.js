@@ -2,7 +2,7 @@
 // All tuning lives here so balance passes are one-file edits.
 'use strict';
 
-import { mulberry32 } from './math.js';
+import { mulberry32, TAU } from './math.js';
 
 // ---------------------------------------------------------------- pigments
 export const PIGMENTS = {
@@ -35,7 +35,33 @@ export const ENEMIES = {
     dizzyPaintChance: 0.22,  // chance a paint hit stuns the toad (sits, +50% dmg)
     dizzyDuration: 2.2,
   },
+  // K1 (v1.5 M1): MUD TURTLE — the Living Swamp's armored plodder. High HP,
+  // slow, heavy contact hit. Its SHELL deflects paint from the FRONT arc
+  // (paint damage is cut to `deflectKeep` of normal within `deflectArc` of its
+  // facing) — full damage from the side/back. RED BURN is the counter: burn
+  // damage is applied per status-tick (stepStatus), never through a paint hit,
+  // so it ignores the deflection entirely. Scales into zones 3+ and NG+.
+  turtle: {
+    id: 'turtle', name: 'Mud Turtle', hp: 95, speed: 24, dmg: 12, radius: 24,
+    armor: 0.45, fly: false, score: 45, paintTintDecay: 0.18,
+    frontDeflect: true,       // the shell turns paint away from the front
+    deflectArc: 1.5,          // radians (~±86°) either side of its facing
+    deflectKeep: 0.15,        // front paint deals this FRACTION of normal dmg
+  },
 };
+
+// K1 (v1.5 M1): front-arc deflection. A front-deflecting enemy (the Mud
+// Turtle) turns paint away from the front: if the angle between its facing and
+// the player (the brush) is within `deflectArc`, paint damage is cut to
+// `deflectKeep` of normal. Side/back paint (and RED BURN — which never passes
+// through a paint hit) deals full damage. Pure; called from paint.js.
+export function frontDeflectFactor(e, player) {
+  if (!e || !e.frontDeflect || !player) return 1;
+  const toPlayer = Math.atan2(player.y - e.y, player.x - e.x);
+  let diff = Math.abs(toPlayer - (e.facing || 0));
+  if (diff > Math.PI) diff = TAU - diff;
+  return diff <= (e.deflectArc || 1.5) ? (e.deflectKeep != null ? e.deflectKeep : 0.15) : 1;
+}
 
 // ---------------------------------------------------------------- statuses
 // Status applied when a paint hit lands. Returns { status, note }.
@@ -100,6 +126,11 @@ export function paintDamage(base, pigmentId, tuning, opts = {}) {
   let d = base * p.dmgMult * (tuning.power || 1) * (opts.paintingMult || 1);
   // status amplifiers
   if (opts.statusBonus) d *= opts.statusBonus;
+  // K1 (v1.5 M1): front-arc SHELL deflection (the Mud Turtle). A front hit on a
+  // front-deflecting shell is cut; side/back deals full. RED BURN never reaches
+  // paintDamage (it is applied per status-tick), so it bypasses deflection —
+  // the intended counter.
+  if (opts.deflectFactor) d *= opts.deflectFactor;
   // armor: paint gets 50% through armor; dry brush is physical
   const armor = (pigmentId === 'dry') ? (enemy.armor || 0) : (enemy.armor || 0) * 0.5;
   d *= (1 - armor) * (1 - (opts.dmgReduce || 0));

@@ -3,7 +3,7 @@
 // world paint layer and applies pigment damage + statuses to anything it touches.
 'use strict';
 import { TAU, clamp, dist } from './math.js';
-import { PIGMENTS, paintDamage, paintStatusFor, stepStatus, paintBoss } from './logic.js';
+import { PIGMENTS, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor } from './logic.js';
 
 export class Paint {
   constructor(player, world, tuning, sfx, particles) {
@@ -139,10 +139,21 @@ export class Paint {
     const fired = {};
     const blip = { burn: 'burn-ignite', freeze: 'freeze-tick', root: 'root-thud' };
     for (const e of hits) {
-      const dmg = paintDamage(base, pig, this.tuning, { enemy: e });
+      // K1 (v1.5 M1) front-arc SHELL deflection (the Mud Turtle). The factor is
+      // computed from the player position; side/back paint deals full damage
+      // and RED BURN bypasses it entirely (it never routes through a paint
+      // hit — it is applied per status-tick).
+      const deflect = frontDeflectFactor(e, p);
+      const dmg = paintDamage(base, pig, this.tuning, {
+        enemy: e, deflectFactor: deflect,
+      });
       e.hp -= dmg;
-      // floating damage number (pigment-colored)
-      this.note(e.x, e.y - e.r - 18, '-' + Math.round(dmg), pig);
+      // floating damage number (pigment-colored); a deflected hit says "shell!"
+      if (deflect < 1) {
+        this.note(e.x, e.y - e.r - 18, 'shell', pig);
+      } else {
+        this.note(e.x, e.y - e.r - 18, '-' + Math.round(dmg), pig);
+      }
       // v1.4 color rework (Joel): the dry brush CLEANS — scrubbing off the
       // enemy's active status (burn/slow/freeze/root). Dizzy is a toad quirk,
       // not a stain, so it's left alone.

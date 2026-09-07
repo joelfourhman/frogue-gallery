@@ -16,7 +16,7 @@ consequential decisions in `docs/DECISIONS.md`.
 - **v1.3 "The Second Expedition" COMPLETE** (2026-09-06): NG+ loop M14 (N1–N4), gold meta economy M15 (G1–G4), season wrap M16 (C1–C4).
 - **v1.4 "Make It Amazing" COMPLETE** (2026-09-07): all 14 items (J1–J5 juice, L1–L3 presence, S1–S3 audio, M1–M3 moments) + the Joel color rework (`012ce0b`: red big-dmg+burn / blue freeze / green light-dmg+heal / dry cleanse+world-restorer / mosquito nerf). Smoke 71/71; pacing 17.3/18.3/19.5 min.
 - **Active phase: v1.5 "The Living Swamp" — APPROVED (Joel, 2026-09-06: "Don't even pitch me v1.5. Just make it"), executing** — K1–K10 in `docs/ROADMAP.md` (new enemy archetypes, zone-5 Storm Surge set-piece, 3rd NG+ boss The Gilded Heron, 3 new modifiers + Master tier, seeded daily Curator Challenge + Masterpiece reward, Field Guide updates, full audit). Batch order (one commit per item) in `PROJECT_STATE.md` → Immediate Next Action: 1) K1→K2→K3, 2) K4→K5→K6, 3) K7→K8, 4) K9→K10. First-time Normal run stays 15–20 min — new creatures scale into zones 3+ and NG+ (re-verify on any in-run change).
-- Git: v1.1–v1.4 fully committed (v1.4 complete at `dddbcaf`); v1.5 approved and executing.
+- Git: v1.1–v1.4 fully committed (v1.4 complete at `dddbcaf`); v1.5 approved and executing — **K1 (Mud Turtle) committed (smoke 72/72).**
 
 ## Active work
 

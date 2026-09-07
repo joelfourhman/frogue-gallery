@@ -2967,6 +2967,16 @@ _drawAtelier(ctx) {
     const roll = Math.random();
     if (t > 12 && roll < 0.4) kind = 'mosquito';
     if (t > 25 && roll > 0.82) kind = 'toad';
+    // K1 (v1.5 M1): the MUD TURTLE is a zones-3+ creature — a first-time
+    // (cycle-0) Normal run must NEVER meet it before zone 3 (Bramble Thicket is
+    // _zoneI 2, so the turtle only enters the pool from zone 3 / _zoneI>=3
+    // onward). NG+ cycles (ngCycle>=1) may run turtles from the first named
+    // zone (a returning player is expected to handle the Living Swamp's new
+    // residents). Bounded: it shares the existing spawn cap (no extra list), so
+    // the enemy count can never grow unbounded. Turtle is the rarest pick so it
+    // doesn't crowd the pool.
+    const turtleAllowed = this._zoneI >= 3 || this.ngCycle >= 1;
+    if (turtleAllowed && t > 25 && roll > 0.9) kind = 'turtle';
     this.enemies.push(spawnEnemy(kind, x, y, this.tuning));
   }
 
