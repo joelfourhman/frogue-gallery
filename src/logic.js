@@ -331,14 +331,24 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', g
 // Only applied in run setup when ngCycle >= 1. Because cycle 0 returns
 // all-ones, a first-time player's tuning is byte-identical to pre-NG+ (the
 // smoke suite asserts this), so the first-time 15–20 min run is unchanged.
-export const NG_CAP_CYCLE = 3; // escalation is capped at cycle 3 (and every cycle after)
+// K6 (v1.5 M2): the "Master" tier — cycle 4+ applies a capped Master step on
+// top of the cycle-3 escalation: enemy HP +50% and enemy damage +25% OVER the
+// cycle-3 values (spawn held at cycle 3 — the Master tier is about enemy
+// toughness, not spawn rate). All cycles >= 4 use the SAME Master row (bounded,
+// no unbounded spiral).
+export const NG_CAP_CYCLE = 4; // escalation is capped at cycle 4 (and every cycle after)
 // per-cycle multipliers; index 0 = base game (no NG+). Grows +30/+15/+10 HP/dmg/spawn
-// per step up to NG_CAP_CYCLE, then holds.
+// per step up to cycle 3, then the Master step (cycle 4+) adds HP +50% / dmg +25%
+// over cycle 3 and holds.
 export const NG_STEPS = [
   { hp: 1.00, dmg: 1.00, spawn: 1.00 }, // cycle 0 (base)
   { hp: 1.30, dmg: 1.15, spawn: 1.10 }, // cycle 1  (~ +30% / +15% / +10%)
   { hp: 1.60, dmg: 1.30, spawn: 1.20 }, // cycle 2
-  { hp: 1.90, dmg: 1.45, spawn: 1.30 }, // cycle 3 (CAP — held for all later cycles)
+  { hp: 1.90, dmg: 1.45, spawn: 1.30 }, // cycle 3
+  // K6 Master tier (cycle 4+): HP +50% / dmg +25% over cycle 3 (1.90×1.50=2.85,
+  // 1.45×1.25=1.8125→1.81); spawn held at cycle 3 (1.30). Bounded — held for
+  // all later cycles (cycle 4 == cycle 5 == cycle 99).
+  { hp: 2.85, dmg: 1.81, spawn: 1.30 }, // cycle 4+ (MASTER — the capped peak)
 ];
 export function ngPlusScaling(cycle) {
   let c = Math.floor(Number(cycle));

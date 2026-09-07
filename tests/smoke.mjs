@@ -2644,11 +2644,14 @@ console.log('== stage 47: N2 — NG+ scaling (ngPlusScaling / applyNGPlus) ==');
   assert(s1.hp >= 1.25 && s1.hp <= 1.35, `N2: cycle-1 enemy HP is +25-35% (got ×${s1.hp})`);
   assert(s1.dmg >= 1.10 && s1.dmg <= 1.20, `N2: cycle-1 enemy damage is +10-20% (got ×${s1.dmg})`);
   assert(s1.spawn > 1, `N2: cycle-1 spawn rate is bumped (got ×${s1.spawn})`);
-  // growth is capped from cycle 3 onward: cycle 3 == cycle 4 == cycle 99 (no unbounded spiral)
-  const s3 = L47.ngPlusScaling(3), s4 = L47.ngPlusScaling(4), s99 = L47.ngPlusScaling(99);
-  assert(s3.hp === s4.hp && s3.dmg === s4.dmg && s3.spawn === s4.spawn, 'N2: scaling is capped at cycle 3 (cycle 4 == cycle 3)');
-  assert(s3.hp === s99.hp && s3.dmg === s99.dmg && s3.spawn === s99.spawn, 'N2: the cap holds for arbitrarily large cycles');
-  assert(s3.hp > s1.hp && s3.dmg > s1.dmg && s3.spawn > s1.spawn, 'N2: cycle 3 is strictly harder than cycle 1 (the cap is an upper bound, not a plateau at cycle 1)');
+  // K6 (v1.5 M2): the Master tier — growth now has a MASTER step at cycle 4:
+  // cycle 4 > cycle 3 (HP +50% / dmg +25% over cycle 3), then capped:
+  // cycle 4 == cycle 5 == cycle 99 (no unbounded spiral).
+  const s3 = L47.ngPlusScaling(3), s4 = L47.ngPlusScaling(4), s5 = L47.ngPlusScaling(5), s99 = L47.ngPlusScaling(99);
+  assert(s4.hp > s3.hp && s4.dmg > s3.dmg, 'N2+K6: the Master tier (cycle 4) is strictly harder than cycle 3 (HP +50% / dmg +25% over cycle 3)');
+  assert(s4.hp === s5.hp && s4.dmg === s5.dmg && s4.spawn === s5.spawn, 'N2+K6: the Master tier is capped at cycle 4 (cycle 4 == cycle 5)');
+  assert(s4.hp === s99.hp && s4.dmg === s99.dmg && s4.spawn === s99.spawn, 'N2+K6: the Master cap holds for arbitrarily large cycles');
+  assert(s3.hp > s1.hp && s3.dmg > s1.dmg && s3.spawn > s1.spawn, 'N2: cycle 3 is strictly harder than cycle 1 (the escalation is an upper bound, not a plateau at cycle 1)');
   // non-finite / negative input normalizes to the cycle-0 all-ones row (never a NaN multiplier)
   assert(L47.ngPlusScaling(-5).hp === 1 && L47.ngPlusScaling('garbage').hp === 1, 'N2: non-finite / negative cycle normalizes to cycle 0');
 
@@ -2695,7 +2698,7 @@ console.log('== stage 47: N2 — NG+ scaling (ngPlusScaling / applyNGPlus) ==');
 
   // ---- (4) the heron is NOT scaled (its HP is a fixed tuning value, not NG+-bumped) ----
   assert(base47.bossMaxHp === ng47.bossMaxHp, 'N2: the final heron HP is not NG+-scaled in run setup (fixed 30k; N3 replaces it with a different boss)');
-  console.log('ok — N2: NG+ scaling is pure, cycle-0 is byte-identical, cycle-1 is applied only when ngCycle>=1, and caps at cycle 3');
+  console.log('ok — N2: NG+ scaling is pure, cycle-0 is byte-identical, cycle-1 is applied only when ngCycle>=1, the Master tier (cycle 4+) is strictly harder + bounded, and cycles 0-3 are unchanged');
 }
 
 console.log('== stage 48: N3 — The Great Green Heron (NG+ second boss) ==');
@@ -5335,7 +5338,59 @@ console.log('== stage 76: v1.5 K5 — 3 NEW EXPEDITION MODIFIERS (Night Expediti
   const plainC0 = L76.makeTuning(gC0.save.upgrades, gC0.save.loadout, gC0.options.difficulty, gC0.save.galleryBonus || 0);
   assert(JSON.stringify(gC0.tuning) === JSON.stringify(plainC0), 'K5: cycle-0 tuning deep-equals a plain makeTuning (no modifier delta)');
 
-  console.log('ok — K5: the 3 new modifiers (Night Expedition / Still Waters / Master\'s Palette) each apply their distinct tuning/render effect (darker lighting + mosquito speed + orb value / no weather + enemy HP / pre-locked duo + contact dmg), and cycle-0 is untouched');
+  console.log(`ok — K5: the 3 new modifiers (Night Expedition / Still Waters / Master's Palette) each apply their distinct tuning/render effect (darker lighting + mosquito speed + orb value / no weather + enemy HP / pre-locked duo + contact dmg), and cycle-0 is untouched`);
+}
+
+console.log('== stage 77: v1.5 K6 — NG+ "MASTER" TIER (cycle 4+ capped escalation step: enemy HP +50% / dmg +25% over cycle 3) ==');
+{
+  const L77 = await import('../src/logic.js');
+
+  // ---- (1) the pure scaling table: cycle 0-3 unchanged; cycle 4 is the Master step ----
+  const s0 = L77.ngPlusScaling(0);
+  const s1 = L77.ngPlusScaling(1);
+  const s2 = L77.ngPlusScaling(2);
+  const s3 = L77.ngPlusScaling(3);
+  const s4 = L77.ngPlusScaling(4);
+  const s5 = L77.ngPlusScaling(5);
+  const s99 = L77.ngPlusScaling(99);
+
+  // cycle 0-3 are UNCHANGED by K6 (the exact committed values)
+  assert(s0.hp === 1 && s0.dmg === 1 && s0.spawn === 1, 'K6: cycle 0 is all-ones (first-time byte-identical, unchanged by K6)');
+  assert(s1.hp === 1.30 && s1.dmg === 1.15 && s1.spawn === 1.10, `K6: cycle 1 is unchanged (HP x${s1.hp}, dmg x${s1.dmg}, spawn x${s1.spawn})`);
+  assert(s2.hp === 1.60 && s2.dmg === 1.30 && s2.spawn === 1.20, `K6: cycle 2 is unchanged (HP x${s2.hp}, dmg x${s2.dmg}, spawn x${s2.spawn})`);
+  assert(s3.hp === 1.90 && s3.dmg === 1.45 && s3.spawn === 1.30, `K6: cycle 3 is unchanged (HP x${s3.hp}, dmg x${s3.dmg}, spawn x${s3.spawn})`);
+
+  // ---- (2) the Master step: cycle 4 = HP +50% / dmg +25% OVER cycle 3 ----
+  //   HP: 1.90 x 1.50 = 2.85  (cycle-3 HP +50%)
+  //   dmg: 1.45 x 1.25 = 1.8125 -> 1.81 (cycle-3 dmg +25%)
+  //   spawn: held at cycle 3 (1.30) — the Master tier is about toughness, not spawn rate
+  assert(Math.abs(s4.hp - 2.85) < 0.001, `K6: cycle-4 enemy HP = cycle-3 HP +50% (1.90 x 1.50 = 2.85, got ${s4.hp})`);
+  assert(Math.abs(s4.dmg - 1.81) < 0.001, `K6: cycle-4 enemy dmg = cycle-3 dmg +25% (1.45 x 1.25 = 1.81, got ${s4.dmg})`);
+  assert(Math.abs(s4.spawn - 1.30) < 0.001, `K6: cycle-4 spawn held at cycle 3 (got x${s4.spawn})`);
+  assert(s4.hp > s3.hp && s4.dmg > s3.dmg, 'K6: the Master tier (cycle 4) is strictly harder than cycle 3');
+  assert(s4.hp > s2.hp && s4.dmg > s2.dmg, 'K6: the Master tier is strictly harder than cycle 2');
+
+  // ---- (3) bounded: cycle 4 == cycle 5 == cycle 99 (no unbounded spiral) ----
+  assert(s4.hp === s5.hp && s4.dmg === s5.dmg && s4.spawn === s5.spawn, 'K6: the Master tier is capped at cycle 4 (cycle 4 == cycle 5)');
+  assert(s4.hp === s99.hp && s4.dmg === s99.dmg && s4.spawn === s99.spawn, 'K6: the Master cap holds for arbitrarily large cycles (cycle 4 == cycle 99)');
+  assert(L77.NG_CAP_CYCLE === 4, `K6: the NG+ escalation cap is cycle 4 (got ${L77.NG_CAP_CYCLE})`);
+
+  // ---- (4) applyNGPlus: the Master step applies ONLY at cycle 4+, not cycle 0-3 ----
+  //   cycle 0: all-ones (byte-identical)
+  const a0 = L77.applyNGPlus({ enemyHp: 1, enemyDmg: 1, spawnRate: 1 }, 0);
+  assert(a0.enemyHp === 1 && a0.enemyDmg === 1 && a0.spawnRate === 1, 'K6: applyNGPlus(cycle 0) is a no-op (byte-identical)');
+  //   cycle 3: the cycle-3 values (1.90/1.45/1.30) — NOT the Master step
+  const a3 = L77.applyNGPlus({ enemyHp: 1, enemyDmg: 1, spawnRate: 1 }, 3);
+  assert(Math.abs(a3.enemyHp - 1.90) < 0.001 && Math.abs(a3.enemyDmg - 1.45) < 0.001 && Math.abs(a3.spawnRate - 1.30) < 0.001, `K6: applyNGPlus(cycle 3) = cycle-3 values (HP ${a3.enemyHp}, dmg ${a3.enemyDmg}, spawn ${a3.spawnRate})`);
+  //   cycle 4: the Master step (2.85/1.81/1.30)
+  const a4 = L77.applyNGPlus({ enemyHp: 1, enemyDmg: 1, spawnRate: 1 }, 4);
+  assert(Math.abs(a4.enemyHp - 2.85) < 0.001 && Math.abs(a4.enemyDmg - 1.81) < 0.001 && Math.abs(a4.spawnRate - 1.30) < 0.001, `K6: applyNGPlus(cycle 4) = the Master step (HP ${a4.enemyHp}, dmg ${a4.enemyDmg}, spawn ${a4.spawnRate})`);
+  assert(a4.enemyHp > a3.enemyHp && a4.enemyDmg > a3.enemyDmg, 'K6: cycle-4 applied tuning > cycle-3 applied tuning (the Master step is strictly harder)');
+  //   cycle 5: same Master step (capped)
+  const a5 = L77.applyNGPlus({ enemyHp: 1, enemyDmg: 1, spawnRate: 1 }, 5);
+  assert(a5.enemyHp === a4.enemyHp && a5.enemyDmg === a4.enemyDmg && a5.spawnRate === a4.spawnRate, 'K6: applyNGPlus(cycle 5) == applyNGPlus(cycle 4) (the Master cap)');
+
+  console.log('ok — K6: the NG+ Master tier (cycle 4+) is a capped scaling step (HP +50% / dmg +25% over cycle 3, spawn held), strictly harder than cycle 3, bounded (cycle 4 == cycle 5 == cycle 99), and cycles 0-3 are unchanged (pure logic, no game.js change)');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');
