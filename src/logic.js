@@ -1048,8 +1048,10 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // B6: save schema versioning. `saveVersion` is the authoritative current schema
 // version, written into every save and read back on load. Legacy saves stored
 // it under the field `v`; migrateSave() accepts both and re-stamps to the
-// current version.
-export const SAVE_VERSION = 7;
+// current version. (v1.4 M1: 7 → 8 adds the `firstVictoryCinematic` flag —
+// a one-shot first-victory cinematic beat; old saves get the beat ONCE since
+// they've never seen it, so the flag migrates forward as false.)
+export const SAVE_VERSION = 8;
 
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
@@ -1117,6 +1119,16 @@ const SAVE_MIGRATIONS = [
       out.gildedFrame = normalizeGildedFrame(out.gildedFrame);
     },
   },
+  {
+    from: 7, to: 8,
+    fn: (out) => {
+      // M1 (v1.4): the first-victory cinematic flag. Every save that migrates
+      // forward (v7 or older) has NEVER seen the beat, so it reads back as
+      // false — the player gets the beat exactly once on their next first
+      // victory. A v8 save that already played it stays true.
+      out.firstVictoryCinematic = normalizeFirstVictoryCinematic(out.firstVictoryCinematic);
+    },
+  },
 ];
 
 // N1 (v1.3 M14): normalize the New Game+ cycle index — a non-negative integer
@@ -1154,6 +1166,15 @@ function normalizeGildedFrame(raw) {
   return !!raw;
 }
 
+// M1 (v1.4): normalize the first-victory cinematic flag — a boolean. A
+// missing / falsy value (a fresh save, or ANY save migrating up from v7 or
+// older) reads back as false (the beat has NOT been seen — every old save gets
+// it exactly once). A true value (a v8 save that already played the beat) stays
+// true, so it never plays again. Pure — testable headless.
+function normalizeFirstVictoryCinematic(raw) {
+  return !!raw;
+}
+
 // N1 (v1.3 M14): a save has earned the New Game+ unlock when at least one
 // victory is recorded. Gating NG+ behind a completed victory keeps it out of the
 // first-time run's pace band; a first-time player (ngCycle 0, no victory) sees
@@ -1179,6 +1200,7 @@ export function freshSave() {
     gold: 0,              // G1 (v1.3 M15): meta gold currency (META-ONLY — never touches combat tuning)
     goldEarned: {},       // G1 (v1.3 M15): {[key]: true} — the gold events already paid out (idempotency latch)
     gildedFrame: false,   // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier (bought once, permanent)
+    firstVictoryCinematic: false, // M1 (v1.4): the first-victory cinematic beat has been SEEN (a fresh + every migrating-old save = false → they get it once)
   };
 }
 
@@ -1268,7 +1290,7 @@ export function retrainAllowed(save) {
 //                (string/number/array/null); fresh save, nothing preserved
 // (The unparseable-JSON and missing-key cases are handled one level up in
 // SaveSys.load(), which returns null so the caller starts a fresh game.)
-const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned', 'gildedFrame'];
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned', 'gildedFrame', 'firstVictoryCinematic'];
 
 function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
 
@@ -1325,6 +1347,10 @@ export function migrateSave(raw) {
   // legacy v6 save with no field, the real boolean for a v7 save). The
   // v6->v7 migration step re-normalizes defensively on the way up.
   out.gildedFrame = normalizeGildedFrame(raw.gildedFrame);
+  // M1 (v1.4): carry the first-victory cinematic flag forward (false for a
+  // legacy v7 save with no field, the real boolean for a v8 save). The
+  // v7->v8 migration step re-normalizes defensively on the way up.
+  out.firstVictoryCinematic = normalizeFirstVictoryCinematic(raw.firstVictoryCinematic);
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks

@@ -454,6 +454,31 @@ export class AudioSys {
     this._tone(t, 'sine', 110.0, 55.0, 1.4, 0.14, 0, g);
   }
 
+  // M1 (v1.4): the FIRST-VICTORY cinematic beat's music — a SOFT, SLOW
+  // rising pentatonic arpeggio that swells as the world blooms to full color
+  // (the ~4 s beat, before the victory card reveals). Deliberately gentle and
+  // spaced (long decays, low peak, no shimmer) so it reads as a tender "the
+  // swamp blooms" swell, distinct from the bright triumphant stingerVictory()
+  // that fires when the card itself reveals. On the melody layer (music slider
+  // + mute scale it). No-op when the context isn't ready (headless).
+  cinematicArp() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const g = this._stingerGain();
+    if (!g) return;
+    // C-major pentatonic, slow climb: C4 D4 E4 G4 A4 C5 E5 G5 (rising, ~3.6s).
+    const notes = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 659.25, 783.99];
+    notes.forEach((f, i) => {
+      const at = t + i * 0.45;
+      this._tone(at, 'triangle', f, f, 1.35, 0.26, 0, g);          // soft voice
+      this._tone(at, 'sine', f * 2, f * 2, 1.1, 0.07, 0, g);       // faint sparkle
+    });
+    // a warm sustained pad (root + fifth) that swells the whole beat, settling
+    // on the top note — a gentle "world opening up" bed under the arpeggio.
+    this._tone(t, 'sine', 130.81, 130.81, 3.9, 0.14, 0, g);
+    this._tone(t, 'sine', 196.0, 196.0, 3.9, 0.10, 0, g);
+  }
+
   // Lookahead scheduler — call from game.js every frame (the rAF tick).
   // Schedules each ACTIVE (non-muted) theme's notes ~0.25 s ahead of
   // ctx.currentTime so the audio clock, not the frame rate, keeps the rhythm

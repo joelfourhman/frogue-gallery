@@ -205,12 +205,23 @@ game.input.mouse.lDown = true;
 frames(240); // ~4s
 game.input.mouse.lDown = false;
 assert(h.hp <= 0 || h.flying > 0, `boss defeated or fleeing (hp=${h.hp.toFixed(1)}, flying=${h.flying.toFixed(2)})`);
-frames(240); // let the flight play out
+// Let the heron's victory flight (~3s, then _endRun('victory')) play out. The
+// main flow's save is FRESH, so the first victory opens the M1 cinematic beat.
+frames(240); // let the flight play out to the end state
 assert(game.state === 'end' && game.endKind === 'victory', 'victory end state reached');
 assert(game.save.stats.victories === 1, 'victory recorded in save stats');
 assert(game.save.stats.heronDefeated === true || game.save.flags.heronDefeated === true, 'heronDefeated flag set');
-frames(90); // end screen must render
-assert(game.state === 'end', 'end screen survived 90 frames');
+// M1 (v1.4): the seen-flag is latched + persisted the moment the beat is first
+// shown. The beat lives in state==='end' (runT already frozen), so it never
+// touches a timed run. (It may already be mid-beat or just closed by the 240
+// flight frames; the dedicated stage 69 asserts the open/skip/close states
+// precisely. Here we assert the flag + that the card eventually reveals and
+// the run never jumped to the atelier.)
+assert(game.save.firstVictoryCinematic === true, 'M1: the seen-flag latched on the main flow first victory');
+assert(JSON.parse(store.get('frogue_gallery_save')).firstVictoryCinematic === true, 'M1: the seen-flag persisted to (stub) localStorage');
+frames(260); // ~4.3s more: the beat (if still open) plays out with no input
+assert(game.state === 'end', 'end screen survived the beat (still the victory card, not the atelier)');
+assert(game._cine === null, 'M1: the beat is gone after ~4s — the victory card reveals');
 
 console.log('== stage 5b: awakened boss takes 2x paint damage ==');
 {
@@ -3135,8 +3146,8 @@ console.log('== stage 52: v1.3 M15 G3 — Gilded Frame (NG+ prestige tier) ==');
   const S52 = await import('../src/save.js');
   const KEY = 'frogue_gallery_save';
 
-  // (0) schema: a fresh save is NOT gilded, SAVE_VERSION is now 7.
-  assert(L52.SAVE_VERSION === 7, `G3: SAVE_VERSION is now 7 (gilded era; got ${L52.SAVE_VERSION})`);
+  // (0) schema: a fresh save is NOT gilded, SAVE_VERSION is now 8.
+  assert(L52.SAVE_VERSION === 8, `G3: SAVE_VERSION is now 8 (first-victory cinematic era; got ${L52.SAVE_VERSION})`);
   const fresh = L52.freshSave();
   assert(fresh.gildedFrame === false, 'G3: a fresh save has gildedFrame false');
   assert(L52.isGilded(fresh) === false, 'G3: isGilded is false on a fresh save');
@@ -3204,9 +3215,10 @@ console.log('== stage 52: v1.3 M15 G3 — Gilded Frame (NG+ prestige tier) ==');
   }));
   const oldMigrated = S52.SaveSys.load();
   assert(oldMigrated !== null, 'G3: an OLD v6-format save (no gildedFrame field) still loads');
-  assert(oldMigrated.saveVersion === L52.SAVE_VERSION, 'G3: the old v6 save re-stamps to the current schema version (7)');
+  assert(oldMigrated.saveVersion === L52.SAVE_VERSION, `G3: the old v6 save re-stamps to the current schema version (${L52.SAVE_VERSION})`);
   assert(oldMigrated.gildedFrame === false, 'G3: the old v6 save migrates to gildedFrame false (not-yet-gilded, no error)');
   assert(oldMigrated.gold === 75 && oldMigrated.ngCycle === 1, 'G3: the old v6 save keeps its gold + ngCycle through the migration');
+  assert(oldMigrated.firstVictoryCinematic === false, 'M1: a legacy v6 save migrates through 6->7->8 with firstVictoryCinematic false (they get the beat once)');
   // and a v6 save that WAS gilded keeps that through the migration.
   const v6Gilded = S52.SaveSys.load(); // (reload the same blob — not gilded)
   const v6g2 = { ...v6Gilded, saveVersion: 6, gildedFrame: true };
@@ -4479,6 +4491,129 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
   au.ctx.currentTime += 2;
   au.sfx('paint-swipe', { pig: 'green' });
   assert(created.length > capBefore, 'S3: after the live voices age out, painting makes sound again');
+
+  delete window.AudioContext; // restore
+}
+
+// --------------------------------------------------------------------------
+// STAGE 69: v1.4 M1 — the first-victory cinematic beat (SAVE_VERSION 7 -> 8,
+// the `firstVictoryCinematic` seen-flag, the ~4s skippable beat on a fresh
+// player's FIRST win only, and a returning player skipping straight to the
+// card). Headless: we drive the real Game through a real victory via _endRun
+// (the beat lives in state==='end', so runT — the timed run — is already
+// frozen; we assert it never moved). Audio is a headless AudioContext so we
+// can assert the soft arpeggio is scheduled and rides the melody layer.
+// NOTE: each Game owns its own AudioContext, so melody/sfx-bus refs are read
+// off EACH game's own audio, and each game is driven with frames() right
+// after it is created (only the most recent start()'s rAF is live).
+// --------------------------------------------------------------------------
+{
+  console.log('== stage 69: v1.4 M1 — first-victory cinematic beat (headless) ==');
+  const L = await import('../src/logic.js');
+  assert(L.SAVE_VERSION === 8, 'M1: SAVE_VERSION is 8 (7 -> 8 for the cinematic seen-flag)');
+  // Headless AudioContext that RECORDS every tone scheduled, so we can assert
+  // the arpeggio shape (a soft RISING sequence) + that it rides the melody
+  // layer (musicBus), not the sfx bus. Mirrors the S1/S2 stage pattern.
+  let tones = [];
+  const P = (v) => ({ value: v, _v: v, setValueAtTime(x) { this._v = x; },
+    exponentialRampToValueAtTime(x) { this._v = x; },
+    linearRampToValueAtTime(x) { this._v = x; },
+    setTargetAtTime(x) { this._v = x; } });
+  const mkN = () => ({ type: 'sine', frequency: P(440), Q: P(1), detune: P(0), gain: P(1),
+    buffer: null, _connections: [], connect(n) { this._connections.push(n); return n; },
+    disconnect() {}, start() {}, stop() {}, getChannelData() { return new Float32Array(0); } });
+  class FakeAC69 {
+    constructor() { this.currentTime = 0; this._dest = mkN(); }
+    get sampleRate() { return 22050; }
+    get destination() { return this._dest; }
+    createGain() { const n = mkN(); n.isGain = true; return n; }
+    createOscillator() {
+      const n = mkN();
+      const f = n.frequency;
+      f.exponentialRampToValueAtTime = (x) => { f._f1 = x; };
+      n.start = () => { tones.push({ type: n.type, f0: f._v, target: n._tgt || null }); };
+      const sv = f.setValueAtTime.bind(f);
+      f.setValueAtTime = (x) => { sv(x); };
+      const oc = n.connect.bind(n);
+      n.connect = (t) => { n._tgt = t; return oc(t); };
+      return n;
+    }
+    createBiquadFilter() { return mkN(); }
+    createDynamicsCompressor() { return mkN(); }
+    createBuffer() { return { getChannelData: () => new Float32Array(0) }; }
+    createBufferSource() { return mkN(); }
+  }
+  window.AudioContext = class extends FakeAC69 {};
+  assert(L.freshSave().firstVictoryCinematic === false, 'M1: a fresh save loads with the seen-flag false (they have NOT seen it)');
+  // a v7 save (no field) migrates up to v8 with the seen-flag false (they get the beat ONCE)
+  assert(L.migrateSave({ ...L.freshSave(), saveVersion: 7, firstVictoryCinematic: undefined }).firstVictoryCinematic === false, 'M1: a legacy v7 save migrates to v8 with the seen-flag false');
+
+  // ---- (1) a FRESH save's first victory opens the beat ----
+  store.clear();                       // guarantee a brand-new player (no seen-flag)
+  const g1 = new Game(makeCanvas());
+  g1.start();
+  assert(g1.audio.ensure() === true, 'M1: the headless AudioContext lets the audio graph build');
+  const mel1 = g1.audio._melodyMaster, sfx1 = g1.audio.sfxBus;
+  g1.collected = { red: 10, blue: 8, green: 9 };
+  const runT0 = g1.runT;
+  tones = [];
+  g1._endRun('victory');               // the real victory bookkeeping + beat trigger
+  // NOTE: _endRun also fires a first-time boss-gold pickup (2 SINE tones on the
+  // sfx bus) for a fresh save; the cinematic arpeggio is all on the MELODY
+  // layer, so we assert on the arpeggio's TRIANGLE notes specifically.
+  assert(g1.state === 'end' && g1.endKind === 'victory', 'M1: the victory end-state is reached');
+  assert(g1._cine !== null && g1._cine.t === 0, 'M1: a FRESH player first victory OPENS the cinematic beat');
+  assert(g1.save.firstVictoryCinematic === true, 'M1: the seen-flag latched the moment the beat was first shown');
+  assert(g1.runT === runT0, 'M1: the beat never touches the timed run (runT unchanged)');
+  // the soft arpeggio is scheduled on the MELODY layer (a rising sequence).
+  // _tone connects osc -> per-note gain -> target (the stinger gain), and that
+  // gain connects to _melodyMaster; so "on the melody layer" = the tone's
+  // target REACHES _melodyMaster through its connection chain (not the raw sfx
+  // bus). Walk the chain (per-note gain -> stinger gain -> melodyMaster).
+  const reaches = (n, mel) => !n ? false
+    : (n === mel) || (n._connections || []).some((c) => reaches(c, mel));
+  const onMelody = (x) => x.target && x.target !== sfx1 && reaches(x.target, mel1);
+  const melTones = tones.filter(onMelody);
+  assert(melTones.length >= 10, `M1: the cinematic arpeggio schedules a full sequence on the melody layer (${melTones.length} notes)`);
+  const arpF = tones.filter((x) => onMelody(x) && x.type === 'triangle').map((x) => x.f0);
+  let rising = arpF.length >= 4; for (let i = 1; i < arpF.length; i++) { if (arpF[i] < arpF[i - 1]) { rising = false; break; } }
+  assert(arpF.length >= 8 && rising, `M1: the beat arpeggio is a SOFT RISING sequence of >= 8 notes (got ${arpF.length}: ${arpF.map((f) => Math.round(f)).join(' ')})`);
+  const sfxTriangles = tones.filter((x) => x.type === 'triangle' && x.target === sfx1);
+  assert(sfxTriangles.length === 0, 'M1: the beat arpeggio rides the melody layer, NOT the sfx bus (no triangle notes on the sfx bus)');
+  // ---- (2) SKIP dismisses it immediately, and does NOT open the atelier ----
+  const st0 = g1.state;
+  fireKey('keydown', 'a');             // ANY key skips (a "just-pressed" key)
+  frames(1);
+  assert(g1._cine === null, 'M1: ANY key skips the beat immediately');
+  assert(g1.state === st0 && g1.state === 'end', 'M1: the skip closes the beat WITHOUT opening the atelier (end buttons gated)');
+
+  // ---- (3) a RETURNING player (flag true) skips straight to the card ----
+  store.clear();
+  const seenSave = L.freshSave(); seenSave.firstVictoryCinematic = true;
+  store.set('frogue_gallery_save', JSON.stringify(seenSave));
+  const g2 = new Game(makeCanvas());   // loads the seen-flag save
+  g2.start();
+  assert(g2.save.firstVictoryCinematic === true, 'M1: a returning save loads with the seen-flag true');
+  g2.audio.ensure();
+  const mel2 = g2.audio._melodyMaster;
+  g2.collected = { red: 5, blue: 5, green: 5 };
+  tones = [];
+  g2._endRun('victory');
+  assert(g2._cine === null, 'M1: a RETURNING player skips the beat and goes straight to the card');
+  const onMelody2 = (n) => !n ? false : (n === mel2) || (n._connections || []).some((c) => onMelody2(c));
+  const stingerTones = tones.filter((x) => x.type === 'triangle' && x.target && onMelody2(x.target));
+  assert(stingerTones.length >= 5, `M1: the returning-player victory fires the triumphant stinger at the card reveal (${stingerTones.length} notes, no beat)`);
+  assert(g2.save.firstVictoryCinematic === true, 'M1: the seen-flag stays true across a second victory (it fires exactly once)');
+
+  // ---- (4) a DEFEAT never opens the beat (fresh save) ----
+  store.clear();
+  const g3 = new Game(makeCanvas());
+  g3.start();
+  g3.audio.ensure();
+  g3.collected = { red: 3, blue: 3, green: 3 };
+  g3._endRun('defeat');
+  assert(g3._cine === null, 'M1: a defeat never opens the cinematic beat (victory only)');
+  assert(g3.save.firstVictoryCinematic === false, 'M1: a defeat does NOT latch the seen-flag (a future victory still gets it)');
 
   delete window.AudioContext; // restore
 }

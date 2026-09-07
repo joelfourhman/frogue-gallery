@@ -562,20 +562,29 @@ per-frame budget assertion.
 
 ### Module M — Moments / delight
 
-- [ ] **M1 — First-victory cinematic (letterbox bloom, skippable)** — `game.js`
-  - **What:** on a first Normal victory only (new save flag
-    `firstVictoryShown`, **SAVE_VERSION 7→8** with a migration): letterbox
-    bars slide in, the camera drifts slowly over the fully-colored swamp as
-    `worldColorSat` eases to 1 (reuses `restoreColor`), ~7 s, with the S2
-    victory stinger. Any key/click skips straight to the victory screen.
-    Never plays again; NG+ victories go straight to the victory screen.
-  - **Notes:** purely presentational — reuses the end screen,
-    `restoreColor`, and the L3 vignette; the cinematic is a thin wrapper
-    state, not a new game state with its own rules.
-  - **Acceptance:** smoke stage: first Normal victory plays the cinematic,
-    sets the flag (SAVE_VERSION 8 round-trips), skip aborts to the victory
-    screen, second victory skips straight; pacing probes unchanged.
-    Status: TODO.
+- [x] **M1 — First-victory cinematic (letterbox bloom, skippable)** — `game.js`
+  - **What:** on a first Normal victory only (new save field
+    `firstVictoryCinematic`, **SAVE_VERSION 7→8** with a migration): the
+    victory screen opens with a ~4 s skippable beat — letterbox bars slide
+    in, the world behind blooms to full color (a render-only saturation ramp
+    to 1.0 reusing the L3 `worldColorSat` read), a soft S1-style pentatonic
+    arpeggio swells (`AudioSys.cinematicArp()`, melody layer), then the
+    normal victory card (V4 exhibition + C2 season) reveals and the S2
+    triumphant stinger plays at that reveal. Any key/click skips the beat
+    immediately (and never also triggers a button). A returning player
+    (flag set) goes straight to the card.
+  - **What landed:** the beat lives entirely in `state === 'end'` (after
+    `runT` freezes), so it NEVER runs inside a timed expedition; the flag is
+    set + persisted before the save, so every old save (which migrates to
+    `false`) gets the beat exactly once and a second victory never replays
+    it. Pure presentation — no new game state, no new save data beyond the
+    boolean flag.
+  - **Acceptance:** smoke stage 69 — a fresh save's first victory OPENS the
+    beat, the flag latches + persists, skip (any key) dismisses without
+    opening the atelier, a returning save skips straight to the card +
+    stinger, a defeat never opens it; main-flow stage 5 exercises the real
+    first-victory beat. Pacing probes unchanged (17.3 / 18.3 / 19.5 min).
+    Status: DONE.
 
 - [ ] **M2 — "Encore" gallery viewing screen** — `game.js` / `ui.js`
   - **What:** an "Encore" button on the victory screen opens a leisurely

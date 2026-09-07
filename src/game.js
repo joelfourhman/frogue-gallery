@@ -304,6 +304,10 @@ export class Game {
     this._modPrompt = null;   // N4 (v1.3 M14): { sel } — the open expedition-modifier picker
     this._bloom = null;      // V2 (v1.2 M11): { x, y, t, dur } — heron awaken bloom
     this._bloomSurge = 0;    // V2: timed saturation surge (0..~0.14), decays to 0
+    // M1 (v1.4): the first-victory cinematic beat — { t, dur, arpeggiated }.
+    // Present only on a FRESH player's very first victory (a returning player
+    // with the seen flag goes straight to the card); skippable by any input.
+    this._cine = null;
     // J5 (v1.4): screen-space floating "+n" HUD numbers (pop up + fade near the
     // pigment jars) + a short fading trail behind the frog on an orb streak.
     // Both are presentation only — never touch the measured runT.
@@ -560,7 +564,29 @@ export class Game {
       // N4 (v1.3 M14): the expedition-modifier picker, when open, owns this
       // frame's input (it is an overlay on the end screen). Otherwise the
       // normal end-screen buttons route.
-      if (this._modPrompt) {
+      // M1 (v1.4): the first-victory cinematic beat (a FRESH player's first
+      // win) takes precedence — it plays for ~4s and ANY key/click skips it
+      // immediately. While it runs the end-screen buttons do NOT route (a skip
+      // tap must not immediately open the atelier) and endT keeps advancing so
+      // the victory card reveals right after the beat closes. A returning
+      // player (beat-seen flag) never has _cine, so they hit the buttons as
+      // before.
+      if (this._cine) {
+        this._cine.t += dt;
+        // "any key or click": kb.size > 0 is any just-pressed key; mouse.lPressed
+        // is a just-clicked frame.
+        const skip = this.input.mouse.lPressed
+          || (this.input.kb && this.input.kb.size > 0);
+        if (this._cine.t >= this._cine.dur || skip) {
+          // M1 (v1.4): the beat just closed — the normal victory card reveals
+          // NOW, so this is when the triumphant stinger (deferred from _endRun)
+          // plays, marking the "card reveal" moment.
+          if (this._cine.firstBeat) {
+            if (this.audio.stingerVictory) this.audio.stingerVictory(); else this.sfx('victory');
+          }
+          this._cine = null;
+        }
+      } else if (this._modPrompt) {
         this._updateModPrompt();
       } else {
         // buttons: "Rest at the Atelier" (primary) + "Next Expedition" (NG+)
@@ -1805,6 +1831,7 @@ _drawAtelier(ctx) {
     this._zoneTint = null; // M8 P12: { color, t, max } — fading zone-accent wash on entry
     this._bloom = null;     // V2 (v1.2 M11): fresh run — no active awaken bloom
     this._bloomSurge = 0;   // V2: fresh run — no lingering saturation surge
+    this._cine = null;      // M1 (v1.4): fresh run — no lingering cinematic beat
     // J5 (v1.4): fresh run — clear any leftover HUD floats / streak trail.
     this._floats = []; this._streakTrail = []; this._pauseOpenT = 0;
     // E2 (v1.2 M10): fresh weather per run; the first zone's phase is armed below
@@ -2819,14 +2846,35 @@ _drawAtelier(ctx) {
              (victory ? total > prev.pigments : cand.time > prev.time))) {
           this.save.bestRun = cand;
         }
+        // M1 (v1.4): a FRESH player's very first victory opens a ~4s SKIPPABLE
+        // cinematic beat (letterbox bars, world blooms to full color, a soft
+        // arpeggio swell). The seen-flag is latched HERE, BEFORE the save below,
+        // so it persists the instant the beat is first shown and every returning
+        // player (flag already true) skips straight to the stinger + card. The
+        // stinger is deferred to beat-close (the card reveal) via firstBeat.
+        // Defeat (and every non-first victory) uses the immediate stinger path.
+        let playStingerNow = !victory;
+        if (victory) {
+          if (!this.save.firstVictoryCinematic) {
+            this.save.firstVictoryCinematic = true;
+            this._cine = { t: 0, dur: 4, arpeggiated: false };
+            this._cine.firstBeat = true;
+            if (this.audio && this.audio.cinematicArp) this.audio.cinematicArp();
+          } else {
+            playStingerNow = true;
+          }
+        }
         SaveSys.save(this.save);
         this.endGains = gains;
-        // S2 (v1.4): the end-screen stinger replaces the plain end SFX — a
-        // rising major arpeggio on a victory, a slow descending minor phrase on
-        // a defeat. Both ride the melody layer (music slider + mute), fired
-        // from the end-screen transition here.
-        if (victory) { if (this.audio.stingerVictory) this.audio.stingerVictory(); else this.sfx('victory'); }
-        else { if (this.audio.stingerDefeat) this.audio.stingerDefeat(); else this.sfx('defeat'); }
+        // S2 (v1.4) + M1 (v1.4): the end-screen stinger (rising major arpeggio
+        // on a victory, slow descending minor phrase on a defeat) rides the
+        // melody layer (music slider + mute). It plays now on a defeat or a
+        // returning player's victory, and is deferred to beat-close on a first
+        // victory (the cinematicArp already opened the beat).
+        if (playStingerNow) {
+          if (victory) { if (this.audio.stingerVictory) this.audio.stingerVictory(); else this.sfx('victory'); }
+          else { if (this.audio.stingerDefeat) this.audio.stingerDefeat(); else this.sfx('defeat'); }
+        }
         // V3: fade out the per-zone ambient bed — the run's place has ended;
         // the atelier keeps the base music bed (startMusic) but not a zone.
         if (this.audio && this.audio.clearZoneAmbient) this.audio.clearZoneAmbient();
@@ -3295,6 +3343,21 @@ _drawAtelier(ctx) {
     const drawSatFinal = (this.state === 'title')
       ? clamp(titleColorSat(this.titleT), 0, 1)
       : drawSat;
+    // M1 (v1.4): the first-victory cinematic beat BLOOMS the world to full
+    // color — a render-only saturation ramp up to 1.0 across ~2.2 s (the beat
+    // is 4 s, so the last ~1.8 s hold at full color under the skip hint).
+    // DRAW-ONLY: it never writes world state, so the color-reveal single-source
+    // of truth is preserved and the effect only shows on the end screen during
+    // the beat (no other screen reads _cine).
+    if (this._cine) {
+      const c = clamp(this._cine.t / 2.2, 0, 1);
+      const ease = 0.5 - 0.5 * Math.cos(Math.PI * c);   // ease-in-out 0 -> 1
+      const cineSat = 0.18 + 0.82 * ease;
+      if (cineSat > drawSatFinal) {
+        const f = clamp((this._cine.t / 0.5), 0, 1);    // fade the boost in
+        drawSatFinal = Math.max(drawSatFinal, drawSatFinal + (cineSat - drawSatFinal) * f);
+      }
+    }
 
     // ---- world space ----
     ctx.save();
@@ -4410,7 +4473,57 @@ _drawAtelier(ctx) {
     };
   }
 
+  // M1 (v1.4): the first-victory cinematic beat's screen — letterbox bars
+  // slide in from top/bottom, a soft vignette, the caption "The Swamp Blooms…"
+  // fades up, and a "press any key / click to skip" hint pulses. The world
+  // behind (already blooming to full color in _drawAll) shows through the open
+  // center, so it reads as a cinematic "reveal" rather than a card. Pure draw.
+  _drawCineBeat(ctx) {
+    const { t, dur } = this._cine;
+    const in01 = clamp(t / 0.5, 0, 1);            // bars slide in over 0.5s
+    const ease = 0.5 - 0.5 * Math.cos(Math.PI * in01);
+    const barH = (0.16 * this.ch) * ease;
+    // letterbox bars
+    ctx.fillStyle = '#0a0d08';
+    ctx.fillRect(0, 0, this.cw, barH);
+    ctx.fillRect(0, this.ch - barH, this.cw, barH);
+    // soft vignette over the whole frame (deeper at the edges)
+    const vg = ctx.createRadialGradient(this.cw / 2, this.ch / 2, this.ch * 0.28,
+      this.cw / 2, this.ch / 2, this.ch * 0.72);
+    vg.addColorStop(0, 'rgba(10,13,8,0)');
+    vg.addColorStop(1, `rgba(10,13,8,${0.45 * in01})`);
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, this.cw, this.ch);
+    // caption + sub, fading up just after the bars settle
+    const capA = clamp((t - 0.35) / 0.7, 0, 1);
+    if (capA > 0) {
+      outlineText(ctx, 'The Swamp Blooms!', this.cw / 2, this.ch * 0.42,
+        '700 46px Georgia, serif', '#eaf3e0', 'rgba(10,13,8,0.9)', 6);
+      centerText(ctx, 'The Great Gray Heron takes flight, dripping in your colors. The swamp remembers.',
+        this.cw / 2, this.ch * 0.42 + 44, 'italic 17px Georgia, serif', '#eaf3e0', 0.85 * capA);
+    }
+    // "press any key to skip" hint — pulses, fades in late, never before 1.2s
+    const hintA = clamp((t - 1.2) / 0.6, 0, 1);
+    if (hintA > 0) {
+      const pulse = 0.55 + 0.45 * Math.sin((t - 1.2) * 4);
+      centerText(ctx, 'press any key or click to continue', this.cw / 2,
+        this.ch - barH - 26, '13px Georgia, serif', '#cfe6c4', hintA * pulse);
+    }
+    // a thin gold rule between the caption and the skip hint on full reveal
+    if (in01 > 0.6) {
+      const rw = 220 * ease;
+      ctx.fillStyle = `rgba(201,146,42,${0.5 * in01})`;
+      ctx.fillRect(this.cw / 2 - rw / 2, this.ch * 0.42 + 70, rw, 1.5);
+    }
+  }
+
   _drawEnd(ctx) {
+    // M1 (v1.4): the first-victory cinematic beat owns the whole screen —
+    // letterbox bars slide in, the world (already blooming to full color in
+    // _drawAll) shows through, a caption + "press any key" hint read, and the
+    // normal card is HELD (no dim, no card) until the beat closes / is skipped.
+    // _drawAll routes the beat's own input (skip), so we only draw here.
+    if (this._cine) { this._drawCineBeat(ctx); return; }
     const victory = this.endKind === 'victory';
     const a = Math.min(1, this.endT / 0.5);
     ctx.save();
