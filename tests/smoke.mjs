@@ -5511,5 +5511,113 @@ console.log('== stage 78: v1.5 M2 K7 — Curator Challenge (seeded daily expedit
   console.log('ok — K7: a victory-gated "Challenge" button runs a SEEDED daily expedition (day seed -> seeded 2-painting loadout + seeded modifier), a victory files a deterministic score (restored + enemies + orbs + boss-time bonus) to a saved top-5 best-score list (ordered desc, max 5), shown in a new atelier panel; pure logic in logic.js (deterministic + testable), migration v8->v9 safe');
 }
 
+// stage 79 — v1.5 K8: the CHALLENGE REWARD. First-EVER challenge completion
+// mints a special MASTERPIECE painting ("The Heron, Waking") — a unique
+// unbuyable collection piece shown in the Gallery Wall + Curator's Ledger — +
+// 15 gold; SUBSEQUENT completions give small repeatable gold bonuses by rank
+// (top-1 pays more). Reuses the goldEarn idempotency-latch pattern (no new
+// save field / SAVE_VERSION bump — the mint is latched by
+// save.goldEarned.masterpiece). Pure logic in logic.js.
+console.log('== stage 79: v1.5 K8 — Challenge Reward (Masterpiece + rank gold) ==');
+{
+  const L79 = await import('../src/logic.js');
+  const MP = L79.MASTERPIECE;
+
+  // (0) The Masterpiece config + it is NOT a PAINTINGS id (so it is invisible
+  // to the shop / loadout / retirement threshold / makeTuning; the catalog
+  // stays at 10).
+  assert(typeof MP.id === 'string' && MP.name === 'The Heron, Waking', 'K8: the Masterpiece is "The Heron, Waking"');
+  assert(MP.firstGold === 15, 'K8: the first-completion gold is 15');
+  assert(MP.rankGold['1'] > MP.rankGold['5'] && MP.rankGold['1'] > 0, `K8: top-1 pays more rank gold than top-5 (${MP.rankGold['1']} > ${MP.rankGold['5']})`);
+  assert(L79.PAINTINGS.length === 10, 'K8: the PAINTINGS catalog stays at 10 (the Masterpiece is not a shop painting)');
+  assert(!L79.PAINTINGS.some(p => p.id === MP.id), 'K8: the Masterpiece is NOT a PAINTINGS id (unbuyable / never hung / never in tuning)');
+
+  // (1) Gate: a fresh save has not minted the Masterpiece yet.
+  const fresh79 = L79.freshSave();
+  assert(L79.isMasterpieceMinted(fresh79) === false, 'K8: a fresh save has not minted the Masterpiece yet');
+
+  // (2) FIRST completion mints the Masterpiece + 15 gold EXACTLY ONCE.
+  let s = L79.freshSave();
+  const seedA = 1000;
+  L79.challengeFileScore(s, seedA, 900);
+  const r1 = L79.challengeComplete(s, seedA, 900);
+  assert(r1.minted === true, 'K8: the first completion mints the Masterpiece');
+  assert(r1.gold === 15, `K8: the first completion pays 15 gold (got ${r1.gold})`);
+  assert(s.gold === 15, 'K8: the 15 gold is banked on the save');
+  assert(L79.isMasterpieceMinted(s) === true, 'K8: after the first completion the Masterpiece is minted (latched)');
+  assert(s.goldEarned.masterpiece === true, 'K8: the mint is latched via the goldEarned map (no new save field)');
+
+  // (3) A SECOND completion does NOT re-mint — only a rank-based gold bonus,
+  // and it does not add the 15 again.
+  const seedB = 2000; // a different day (so the rank key is fresh)
+  L79.challengeFileScore(s, seedB, 120); // a lower score -> rank 2
+  const r2 = L79.challengeComplete(s, seedB, 120);
+  assert(r2.minted === false, 'K8: the second completion does NOT re-mint the Masterpiece');
+  assert(r2.rank === 2, `K8: the second completion ranks 2nd (got ${r2.rank})`);
+  assert(r2.gold === MP.rankGold['2'], `K8: the second completion pays the rank-2 gold (got ${r2.gold})`);
+  assert(s.gold === 15 + MP.rankGold['2'], 'K8: total gold = 15 (first) + rank-2 (second)');
+  // a repeat of the SAME (day, rank) pays again nothing (latched per key)
+  const seedC = 3000;
+  L79.challengeFileScore(s, seedC, 120); // same score -> rank 2 again, but a new day
+  const r3 = L79.challengeComplete(s, seedC, 120);
+  assert(r3.minted === false && r3.gold === MP.rankGold['2'], 'K8: a later day at the same rank pays the same rank gold again (repeatable per day)');
+
+  // (4) The rank gold is rank-based (top-1 pays the most).
+  const s4 = L79.freshSave();
+  L79.challengeFileScore(s4, 4000, 5000);
+  const rTop = L79.challengeComplete(s4, 4000, 5000); // first (mints 15) + rank 1
+  const s5 = L79.freshSave(); s5.goldEarned.masterpiece = true; // simulate already minted
+  L79.challengeFileScore(s5, 5000, 4000);
+  L79.challengeFileScore(s5, 5001, 9999); // a higher score already filed -> this ranks 2
+  const rLow = L79.challengeComplete(s5, 5000, 4000);
+  assert(rTop.gold === 15 && rLow.gold === MP.rankGold['2'], 'K8: a fresh (unminted) save mints 15; an already-minted save pays only rank gold');
+  assert(MP.rankGold['1'] > MP.rankGold['2'], 'K8: rank-1 gold exceeds rank-2 gold');
+
+  // (5) An OLD save (pre-K8, no goldEarned.masterpiece) loads fine and reads
+  // as not-yet-minted (the latch is absent -> minted false; migrateSave keeps
+  // goldEarned as a map).
+  const legacy79 = L79.freshSave(); legacy79.saveVersion = 9; delete legacy79.goldEarned; // a pre-K8 blob
+  const mig79 = L79.migrateSave(legacy79);
+  assert(Array.isArray(mig79.goldEarned) === false && typeof mig79.goldEarned === 'object', 'K8: a legacy save migrates with a goldEarned map (no error)');
+  assert(L79.isMasterpieceMinted(mig79) === false, 'K8: a legacy save (no masterpiece latch) reads as not-yet-minted');
+
+  // (6) END-TO-END: a challenge victory files the score AND pays the reward via
+  // _endRun (the first completion mints + 15; the banner/reward state is set).
+  const won79 = L79.freshSave(); won79.stats.victories = 1;
+  const cv79 = makeCanvas(); const g79 = new Game(cv79); g79.start();
+  g79.save = won79;
+  let t79 = 1000;
+  const fr79 = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t79 += step; g79._frame(t79); } };
+  const goldBefore = g79.save.gold;
+  g79._beginChallengeExpedition();
+  assert(g79.state === 'expedition' && g79.challenge.mode === 'challenge', 'K8: the challenge run is active');
+  const h79 = g79.heron;
+  h79._intro = 0; h79.awakened = true; h79.awakenedT = 99; h79.hp = 12; h79.state = 'idle'; h79.stateT = 999;
+  g79.player.x = h79.x - 55; g79.player.y = h79.y - 60; g79.player.iframes = 999;
+  const v79 = g79._view();
+  g79.input.mouse.x = (h79.x - v79.x) * v79.scale; g79.input.mouse.y = (h79.y - 100 - v79.y) * v79.scale;
+  g79.input.mouse.lDown = true; fr79(240); g79.input.mouse.lDown = false;
+  fr79(260);
+  assert(g79.state === 'end' && g79.endKind === 'victory', 'K8: the challenge run reached the victory end state');
+  assert(L79.isMasterpieceMinted(g79.save) === true, 'K8: the first challenge victory minted the Masterpiece (end-to-end)');
+  // the 15 masterpiece gold is banked on top of the heron-defeat boss gold
+  // (this fresh save also earns its first gray-heron gold in the same run), so
+  // the save total is >= baseline + 15. The MASTERPIECE contribution itself is
+  // exactly 15 (_challengeResult.gold) — asserted precisely below.
+  assert(g79.save.gold >= goldBefore + 15, `K8: the first victory banked the 15 masterpiece gold (on top of any boss gold; pre ${goldBefore} -> now ${g79.save.gold})`);
+  assert(g79._challengeResult && g79._challengeResult.minted === true && g79._challengeResult.gold === 15, 'K8: the end card carries the completion reward (minted + 15)');
+  // the Gallery Wall (tab 2) + the Ledger (tab 3) render with the masterpiece
+  // present without throwing.
+  g79._quitToTitle();
+  g79._beginAtelier();
+  g79._atelierIntro = false;
+  g79.atelierTab = 2; fr79(2);
+  assert(g79.state === 'atelier', 'K8: the Gallery Wall tab rendered with the masterpiece present (no error)');
+  g79.atelierTab = 3; fr79(2);
+  assert(g79.state === 'atelier', "K8: the Curator's Ledger tab rendered with the masterpiece entry (no error)");
+
+  console.log('ok — K8: the first-ever challenge completion mints a unique MASTERPIECE painting ("The Heron, Waking", unbuyable collection, shown in the Gallery Wall + Curator\'s Ledger) + 15 gold EXACTLY ONCE (goldEarn latch, no new save field); subsequent completions pay small REPEATABLE rank gold (top-1 pays more); a legacy save (no latch) loads as not-yet-minted; pure logic in logic.js (challengeComplete / isMasterpieceMinted / challengeRank)');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

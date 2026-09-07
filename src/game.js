@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -1543,7 +1543,48 @@ _drawAtelier(ctx) {
         paperEnd(ctx);
       });
       const ownedCount = PAINTINGS.filter(pt => this.save.owned.includes(pt.id)).length;
-      centerText(ctx, `${ownedCount} of ${PAINTINGS.length} paintings in your collection`, cx, gy0 + gridH + 16, '700 14px Georgia, serif', '#fdf6e9', 0.85);
+      // K8 (v1.5 M2): the MASTERPIECE — "The Heron, Waking" — a unique,
+      // unbuyable collection piece minted by the first challenge clearing.
+      // Shown as a compact GILDED PLAQUE in the band below the 10-painting grid
+      // (fits between the collection counter and the Depart button), with the
+      // heron motif on the left + a plaque on the right. Pure display (gated
+      // by the goldEarned latch); it is NOT a PAINTINGS id, so it never enters
+      // the shop/loadout/tuning.
+      const mpMinted = isMasterpieceMinted(this.save);
+      if (mpMinted) {
+        const pw = 460, ph = 92, px = cx - pw / 2, py = gy0 + gridH + 20; // 550..642, fits above the depart button (708)
+        const pc = paperPanel(ctx, px, py, pw, ph, { seed: 900, fill: '#fbf3dd' });
+        // the gilded plaque frame (double border)
+        const fpx = px + 10, fpy = py + 10, fpw = pw - 20, fph = ph - 20;
+        pc.save();
+        pc.lineWidth = 4; pc.strokeStyle = '#b8912e';
+        pc.beginPath(); pc.roundRect(fpx - 3, fpy - 3, fpw + 6, fph + 6, 6); pc.stroke();
+        pc.lineWidth = 1.5; pc.strokeStyle = '#8a6d1f';
+        pc.beginPath(); pc.roundRect(fpx, fpy, fpw, fph, 4); pc.stroke();
+        // the motif (a square on the left, sized to the plaque inner height) + text (right)
+        const ms = fph; // square = plaque inner height
+        const mtx = fpx + 6, mty = fpy + 6;
+        pc.save();
+        pc.beginPath(); pc.rect(mtx, mty, ms, ms); pc.clip();
+        this._drawMasterpieceMotif(pc, mtx, mty, ms);
+        pc.restore();
+        pc.lineWidth = 2; pc.strokeStyle = '#8a6d1f';
+        pc.strokeRect(mtx, mty, ms, ms);
+        // the text
+        const tx0 = mtx + ms + 16, txMid = tx0 + (fpw - 12 - ms - 16) / 2;
+        pc.fillStyle = '#a3762a'; pc.textAlign = 'center'; pc.textBaseline = 'middle';
+        pc.font = '700 15px Georgia, serif';
+        pc.fillText(MASTERPIECE.name, txMid, py + ph * 0.32);
+        pc.font = 'italic 10.5px Georgia, serif'; pc.globalAlpha = 0.9; pc.fillStyle = INK;
+        pc.fillText('MASTERPIECE — framed by the Curator', txMid, py + ph * 0.58);
+        pc.globalAlpha = 0.6; pc.font = '10px Georgia, serif';
+        pc.fillText('first challenge clearing · unbuyable collection piece', txMid, py + ph * 0.82);
+        pc.restore();
+        paperEnd(ctx);
+        centerText(ctx, `${ownedCount} of ${PAINTINGS.length} paintings + 1 masterpiece in your collection`, cx, py + ph + 14, '700 13px Georgia, serif', '#fdf6e9', 0.85);
+      } else {
+        centerText(ctx, `${ownedCount} of ${PAINTINGS.length} paintings in your collection`, cx, gy0 + gridH + 16, '700 14px Georgia, serif', '#fdf6e9', 0.85);
+      }
     } else if (this.atelierTab === 3) {
       // A3 — the Curator's Ledger: a display-only collection book. Every
       // painting is listed with a short lore blurb and its collected /
@@ -1681,6 +1722,33 @@ _drawAtelier(ctx) {
         // the retire button on the right
         const bbw = 150, bbh = 56, bbx = bx + bw - bbw - 14, bby = by + (bh - bbh) / 2;
         uiButton(c, bbx, bby, bbw, bbh, eligible ? 'Retire' : 'Incomplete', false, false, { seed: 501 });
+        paperEnd(ctx);
+      }
+      // K8 (v1.5 M2): the MASTERPIECE — a ledger entry for "The Heron, Waking",
+      // the unique unbuyable collection piece minted by the first challenge
+      // clearing. Shown in the bottom free band (below the Gilded/Rehung Frame
+      // bars + the atelier buttons) as a thin gilded strip with a small framed
+      // motif. Display-only; it is NOT a PAINTINGS id (so the 10-painting grid
+      // + retirement threshold are untouched). Gated by the goldEarned latch.
+      if (isMasterpieceMinted(this.save)) {
+        const mpw = 560, mph = 30, mpX = cx - mpw / 2, mpY = g.ch - 34; // 766..796, below the Rehung bar (ends 750) + the buttons (618..652)
+        const mc = paperPanel(ctx, mpX, mpY, mpw, mph, { seed: 940, fill: '#fbf3dd' });
+        mc.save();
+        // a small gilded motif square on the left
+        const ms = mph - 10, mtx = mpX + 8, mty = mpY + 5;
+        mc.lineWidth = 2; mc.strokeStyle = '#8a6d1f';
+        mc.beginPath(); mc.rect(mtx, mty, ms, ms); mc.clip();
+        this._drawMasterpieceMotif(mc, mtx, mty, ms);
+        mc.restore();
+        mc.lineWidth = 1.5; mc.strokeStyle = '#b8912e';
+        mc.strokeRect(mtx, mty, ms, ms);
+        mc.save();
+        mc.textAlign = 'left'; mc.textBaseline = 'middle';
+        mc.fillStyle = '#a3762a'; mc.font = '700 13px Georgia, serif'; mc.globalAlpha = 1;
+        mc.fillText(MASTERPIECE.name, mtx + ms + 14, mpY + 11);
+        mc.fillStyle = INK; mc.font = '10.5px Georgia, serif'; mc.globalAlpha = 0.72;
+        mc.fillText('◆ MASTERPIECE — framed by the Curator (first challenge clearing; unbuyable collection piece)', mtx + ms + 14, mpY + 23);
+        mc.restore();
         paperEnd(ctx);
       }
     } else if (this.atelierTab === 4) {
@@ -2040,6 +2108,54 @@ _drawAtelier(ctx) {
     } else {
       c.beginPath(); c.arc(x + s * 0.5, y + s * 0.5, s * 0.3, 0, TAU); c.stroke();
     }
+    c.restore();
+  }
+
+  // K8 (v1.5 M2): the MASTERPIECE motif — "The Heron, Waking": a stylized heron
+  // lifting off the gray shore into a pale gold dawn. Distinct from the 10
+  // shop paintings (which have an `art.shape`) — this is a collection-only
+  // piece the Curator frames after the first challenge clearing. Drawn into a
+  // rect (x, y, s×s), clipped, and read at the gallery's 162px frame + the
+  // ledger's entry. Procedural only (no assets).
+  _drawMasterpieceMotif(c, x, y, s) {
+    c.save();
+    c.beginPath(); c.rect(x, y, s, s); c.clip();
+    // the dawn sky (pale gold) over the gray shore
+    const sky = c.createLinearGradient(x, y, x, y + s);
+    sky.addColorStop(0, '#f7e7b8'); sky.addColorStop(0.62, '#ecd79c'); sky.addColorStop(1, '#8f9a90');
+    c.fillStyle = sky; c.fillRect(x, y, s, s);
+    // the low sun
+    c.beginPath(); c.arc(x + s * 0.5, y + s * 0.42, s * 0.2, 0, TAU);
+    c.fillStyle = 'rgba(255, 224, 150, 0.9)'; c.fill();
+    // the gray shore / water
+    c.fillStyle = '#6f7d74'; c.fillRect(x, y + s * 0.66, s, s * 0.34);
+    // ripples
+    c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = Math.max(1, s * 0.012);
+    for (let i = 0; i < 3; i++) {
+      const ry = y + s * (0.72 + i * 0.08);
+      c.beginPath(); c.moveTo(x + s * 0.12, ry); c.lineTo(x + s * 0.88, ry); c.stroke();
+    }
+    // the heron (a dark silhouette) rising on long legs — the "waking" figure
+    c.strokeStyle = '#2c3a33'; c.fillStyle = '#2c3a33';
+    c.lineWidth = Math.max(2, s * 0.035); c.lineCap = 'round';
+    const hx = x + s * 0.5, hy = y + s * 0.4;
+    // neck + body
+    c.beginPath();
+    c.moveTo(hx - s * 0.12, hy + s * 0.02);
+    c.bezierCurveTo(hx + s * 0.02, hy - s * 0.08, hx + s * 0.14, hy - s * 0.06, hx + s * 0.16, hy - s * 0.16);
+    c.stroke();
+    c.beginPath(); c.ellipse(hx - s * 0.04, hy + s * 0.06, s * 0.14, s * 0.07, -0.3, 0, TAU); c.fill();
+    // head + beak
+    c.beginPath(); c.arc(hx + s * 0.17, hy - s * 0.17, s * 0.045, 0, TAU); c.fill();
+    c.beginPath(); c.moveTo(hx + s * 0.21, hy - s * 0.17); c.lineTo(hx + s * 0.34, hy - s * 0.15); c.stroke();
+    // the lifted wings (two arcs above the body)
+    c.lineWidth = Math.max(2, s * 0.03);
+    c.beginPath(); c.moveTo(hx - s * 0.16, hy + s * 0.04); c.quadraticCurveTo(hx - s * 0.06, hy - s * 0.16, hx + s * 0.10, hy - s * 0.02); c.stroke();
+    c.beginPath(); c.moveTo(hx + s * 0.02, hy + s * 0.04); c.quadraticCurveTo(hx + s * 0.14, hy - s * 0.14, hx + s * 0.22, hy - s * 0.04); c.stroke();
+    // the long legs trailing down to the water
+    c.lineWidth = Math.max(1.5, s * 0.02);
+    c.beginPath(); c.moveTo(hx - s * 0.02, hy + s * 0.12); c.lineTo(hx - s * 0.06, hy + s * 0.5); c.stroke();
+    c.beginPath(); c.moveTo(hx + s * 0.02, hy + s * 0.12); c.lineTo(hx + s * 0.04, hy + s * 0.48); c.stroke();
     c.restore();
   }
 
@@ -3510,13 +3626,31 @@ _drawAtelier(ctx) {
         bossTimeSec: _ch.bossTime || 0,
       });
       challengeFileScore(this.save, _ch.seed, _score);
+      // K8: the challenge REWARD — first-ever completion mints the Masterpiece
+      // ("The Heron, Waking") + 15 gold (latched ONCE via the goldEarn map);
+      // subsequent completions pay a small repeatable bonus by rank (top-1 pays
+      // more). challengeComplete is the pure source (logic.js): it reads the
+      // filed list for the rank, latches the masterpiece, and banks the gold.
+      const _reward = challengeComplete(this.save, _ch.seed, _score);
       SaveSys.save(this.save);
       // rank = 1 + how many FILED scores are strictly better (deterministic;
       // ties for the score count as the same rank). Shown on the end card so
       // the player sees where today's run landed in the daily best list.
       const _cs = this.save.challengeScores || [];
       const _rank = 1 + _cs.reduce((n, s) => (s.score > _score ? n + 1 : n), 0);
-      this._challengeResult = { score: _score, seed: _ch.seed, rank: _rank };
+      this._challengeResult = {
+        score: _score, seed: _ch.seed, rank: _rank,
+        minted: _reward.minted, gold: _reward.gold,   // K8: the completion reward
+      };
+      // K8: the completion banner(s) — the masterpiece mint (once) + the rank
+      // gold. Shown as banners so the reward is felt the moment the run ends.
+      if (_reward.minted) {
+        this.addBanner(`The Curator frames a new Masterpiece — "${MASTERPIECE.name}".`, 5.4, this.ch * 0.30);
+        this.addBanner('A golden gift for the first clearing: +15 gold.', 4.6, this.ch * 0.30 + 34);
+        this.sfx('awaken');
+      } else if (_reward.gold > 0) {
+        this.addBanner(`A fine day's work — rank ${_rank} gold: +${_reward.gold}.`, 4.2, this.ch * 0.30);
+      }
       this.challenge = null; // consumed — the run is over
     }
     this.save.stats.treasures += 0; // reserved for future content
@@ -5427,29 +5561,38 @@ _drawAtelier(ctx) {
       centerText(c, `best run — ${what}`, cx, py + (victory ? 396 : 296), '700 13px Georgia, serif', INK, 0.8);
     }
 
-    // spend hint (replaced on a challenge victory by the filed score + rank,
-    // which is the more meaningful line for that run — the spend hint is
-    // redundant there and the slot is otherwise empty on a victory card).
+    // spend hint / challenge reward block. On a challenge victory the spend
+    // hint is replaced by the filed score + rank + the K8 reward (the more
+    // meaningful lines for that run), and the NG+ "Season" summary below is
+    // skipped (a challenge is its own scored mode, not an NG+ season).
     if (victory && this._challengeResult) {
-      // K7 (v1.5 M2): the filed challenge score + where it ranked in the
-      // daily best list — the player's reward for today's seeded swamp.
+      // K7 (v1.5 M2): the filed challenge score + where it ranked in the daily
+      // best list; K8: the completion reward (the minted Masterpiece / rank gold).
       const cr = this._challengeResult;
       const rankTxt = cr.rank <= 5 ? `#${cr.rank} of 5` : 'below the top 5';
-      centerText(c, `The Curator's Challenge — score ${cr.score} · filed ${rankTxt} on today's best list`, cx, py + 420, '700 13px Georgia, serif', '#a3762a', 0.95);
-      centerText(c, `the whole world shares today's swamp (${challengeDate(cr.seed)}) — see the best list at the Atelier's Challenge panel`, cx, py + 440, 'italic 12px Georgia, serif', INK, 0.6);
+      centerText(c, `The Curator's Challenge — score ${cr.score} · filed ${rankTxt} on today's best list`, cx, py + 418, '700 13px Georgia, serif', '#a3762a', 0.95);
+      centerText(c, `the whole world shares today's swamp (${challengeDate(cr.seed)})`, cx, py + 436, 'italic 12px Georgia, serif', INK, 0.6);
+      if (cr.minted) {
+        centerText(c, `masterpiece minted: "${MASTERPIECE.name}"  ·  +${cr.gold} gold`, cx, py + 456, '700 13px Georgia, serif', '#c9922a', 0.95);
+      } else if (cr.gold > 0) {
+        centerText(c, `rank ${cr.rank} reward: +${cr.gold} gold`, cx, py + 456, '700 13px Georgia, serif', '#c9922a', 0.9);
+      } else {
+        centerText(c, 'the best list is already at its top-5 — beat your best to file again', cx, py + 456, 'italic 12px Georgia, serif', INK, 0.6);
+      }
     } else {
         centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + (victory ? 420 : 320), 'italic 12px Georgia, serif', INK, 0.55);
     }
 
-    // C2 (v1.3 M16): the "Season" summary (VICTORY ONLY) — a compact read of the
-    // NG+ season this victory belongs to: the cycle, the modifier chosen for it,
-    // the gold earned this expedition + the career total, the Gilded Frame
-    // state, and the paintings carried. Reuses the V4 card's existing empty
-    // bottom band (the card is 540 tall and the spend hint ends at py+420), so
-    // NOTHING below it moves — the end-screen buttons (driven by _endButtons)
-    // keep their exact rects on a first-time save. Pure display: no new
-    // persistence, every value read live from the run/save at draw time.
-    if (victory) {
+    // C2 (v1.3 M16): the "Season" summary (VICTORY ONLY, NOT a challenge) — a
+    // compact read of the NG+ season this victory belongs to: the cycle, the
+    // modifier chosen for it, the gold earned this expedition + the career
+    // total, the Gilded Frame state, and the paintings carried. Reuses the V4
+    // card's existing empty bottom band (the card is 540 tall and the spend
+    // hint ends at py+420), so NOTHING below it moves — the end-screen buttons
+    // (driven by _endButtons) keep their exact rects on a first-time save.
+    // Pure display: no new persistence, every value read live from the
+    // run/save at draw time.
+    if (victory && !this._challengeResult) {
       const ss = this._seasonSummary();
       const sy = py + 450;
       c.save();

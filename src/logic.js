@@ -633,6 +633,91 @@ export function challengeUnlocked(save) {
 }
 
 // ----------------------------------------------------------------
+// K8 (v1.5 M2): the CHALLENGE REWARD — the Masterpiece "The Heron, Waking".
+//
+// First-EVER Curator Challenge completion mints a UNIQUE MASTERPIECE painting:
+// "The Heron, Waking" — a special framed work shown in the Gallery Wall + the
+// Curator's Ledger. It is a PURE COLLECTION piece: unbuyable, not a loadout
+// painting, not a purchase (it is minted by completing the daily challenge,
+// not bought in the shop). SUBSEQUENT completions give a small repeatable gold
+// bonus by rank (a top-1 finish pays more than a low rank). Reuses the
+// existing gold/latch machinery: the FIRST-completion mint is idempotent (the
+// masterpiece flag latches so it is awarded EXACTLY once, ever); the
+// repeatable rank bonus is a fresh gold-earn event keyed by (seed, rank) so a
+// given (day, rank) pays once but each new day/retry pays again.
+//
+// The masterpiece is gated by the save.goldEarned.masterpiece latch (set when
+// the first completion's gold fires), NOT a PAINTINGS id — so it never appears
+// in the shop, loadout, the retirement threshold (canRetireCollection),
+// makeTuning, or the PAINTINGS catalog (which stays at 10). It is pure
+// collection + display. No new save field is introduced, so SAVE_VERSION
+// stays at 9.
+export const MASTERPIECE = {
+  id: 'the-heron-waking',          // a display id (NOT in PAINTINGS / owned)
+  name: 'The Heron, Waking',
+  desc: 'The Gilded Heron lifts from the gray shore at first light — a masterpiece the Curator hung in gold.',
+  // a distinct gilded art palette (read by the gallery/ledger frame + motif):
+  art: { bg: '#f3e6c4' },
+  // first-ever challenge completion: mint the masterpiece + pay this much gold
+  firstGold: 15,
+  // subsequent completions: a small REPEATABLE bonus by rank (1 = best).
+  rankGold: { 1: 5, 2: 3, 3: 3, 4: 2, 5: 2 },  // lower ranks fall back to the 5-rank value
+};
+// The rank a filed challenge score sits at in the top-5 list (1 = the top
+// entry). Deterministic from the list (descending by score).
+export function challengeRank(score, list) {
+  const arr = Array.isArray(list) ? list : [];
+  const sc = Number(score);
+  let n = 0;
+  for (const e of arr) if (Number(e && e.score) > sc) n += 1;
+  return n + 1;
+}
+// The repeatable rank bonus for a rank (the rankGold table, clamped to 1..5).
+export function challengeRankBonus(rank) {
+  const r = Math.max(1, Math.min(5, Math.floor(Number(rank) || 5)));
+  return MASTERPIECE.rankGold[r] || MASTERPIECE.rankGold[5];
+}
+// The repeatable gold-earn EVENT for a (seed, rank) — a fresh, per-day key so
+// each new day / retry can pay again (the latch is per-key, not global). The
+// amount is the rank bonus. Pure (builds the event; goldEarn applies it).
+export function challengeRankEvent(seed, rank) {
+  const r = Math.max(1, Math.min(5, Math.floor(Number(rank) || 5)));
+  return { key: `chal-rank-${Math.floor(Number(seed))}-${r}`, amount: challengeRankBonus(r) };
+}
+// K8: has a save minted the Masterpiece yet? The mint is latched by the
+// EXISTING gold-earn map (save.goldEarned.masterpiece) set when the first
+// completion's +15 gold fires — the same idempotency mechanism the rest of the
+// gold economy uses, so NO new save field (and no SAVE_VERSION bump) is needed.
+// A legacy save (no goldEarned map, or no such key) reads false (not yet
+// minted). Pure.
+export function isMasterpieceMinted(save) {
+  return !!(save && save.goldEarned && save.goldEarned.masterpiece);
+}
+// K8: the pure completion reward. Called by game.js on a challenge VICTORY,
+// AFTER the score has been filed (challengeFileScore) so the rank is known.
+// First-EVER completion: mint the Masterpiece (latch goldEarned.masterpiece) +
+// pay MASTERPIECE.firstGold (15) — EXACTLY once, ever. Subsequent completions:
+// a small REPEATABLE bonus by rank (top-1 pays more), keyed by (seed, rank) so
+// each new day / retry can pay again. Returns { minted, gold, rank } (gold is
+// the amount actually banked this call — 0 if the latch already held). Mutates
+// save in place (the caller persists it). Pure with respect to world state.
+export function challengeComplete(save, seed, score) {
+  const res = { minted: false, gold: 0, rank: 1 };
+  if (!save) return res;
+  const list = normalizeChallengeScores(save && save.challengeScores);
+  res.rank = challengeRank(score, list);
+  if (!isMasterpieceMinted(save)) {
+    // first-ever: mint the masterpiece + first gold (latched via goldEarn).
+    res.minted = goldEarn(save, { key: 'masterpiece', amount: MASTERPIECE.firstGold }) > 0;
+    res.gold += res.minted ? MASTERPIECE.firstGold : 0;
+  } else {
+    // subsequent: the repeatable rank bonus (fresh per (seed, rank) key).
+    res.gold += goldEarn(save, challengeRankEvent(seed, res.rank));
+  }
+  return res;
+}
+
+// ----------------------------------------------------------------
 // G1 (v1.3 M15): Gold — a NEW META-ONLY currency.
 //
 // Gold is earned ONLY from first-time meta achievements (the "milestones" of a
@@ -1706,7 +1791,7 @@ export function retrainAllowed(save) {
 //                (string/number/array/null); fresh save, nothing preserved
 // (The unparseable-JSON and missing-key cases are handled one level up in
 // SaveSys.load(), which returns null so the caller starts a fresh game.)
-const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned', 'gildedFrame', 'firstVictoryCinematic'];
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned', 'gildedFrame', 'firstVictoryCinematic', 'challengeScores'];
 
 function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
 
@@ -1767,6 +1852,13 @@ export function migrateSave(raw) {
   // legacy v7 save with no field, the real boolean for a v8 save). The
   // v7->v8 migration step re-normalizes defensively on the way up.
   out.firstVictoryCinematic = normalizeFirstVictoryCinematic(raw.firstVictoryCinematic);
+  // K7 (v1.5 M2): carry the Curator Challenge best-score list forward. A
+  // legacy v8 save (no field) normalizes to []; a v9 save reloads its OWN
+  // list (defensively normalized so a corrupt blob can't leak through). This
+  // must be a per-field carry (like gold/galleryBonus) — the version-migration
+  // chain below is a no-op on a same-version reload, so without this a v9 save
+  // with filed scores would lose them on the next load.
+  out.challengeScores = normalizeChallengeScores(raw.challengeScores);
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks
