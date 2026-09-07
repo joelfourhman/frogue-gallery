@@ -45,6 +45,31 @@ export class AudioSys {
     // one-shot phrases scheduled on the same melody layer.
     this._bossMusic = false;   // true while the boss loop is the live melody
     this._bossThemes = [];     // live/fading boss loop instances (crossfade overlap)
+    // ---- S3 (v1.4): a hard cap on simultaneously-LIVE sfx-bus voices ----
+    // Painting is fast (several swipes/splashes + status blips per second, and a
+    // charge is a burst). Without a cap a flurry could spawn hundreds of short
+    // oscillators at once — a per-frame allocation burst that hurts 60fps. We
+    // track the stop-time of each live sfx-bus voice and drop new ones once N
+    // are alive. Cheap: a short number[] purged on each schedule. Only the sfx
+    // bus is capped; the melodic layers (S1/S2) schedule a bounded 16-step
+    // pattern and are exempt.
+    this._sfxLive = [];        // [stopTime, ...] of live sfx-bus voices
+    this._sfxMaxVoices = 24;   // concurrent-voice cap
+  }
+
+  // S3 (v1.4): may a new sfx-bus voice of the given duration start right now?
+  // Purges finished voices, then reserves a slot at (now + dur) — if the live
+  // set is already at the cap, returns false and the voice is skipped.
+  _sfxCanStart(dur = 0.25) {
+    if (!this.ctx) return true;
+    const now = this.ctx.currentTime;
+    const L = this._sfxLive;
+    let n = 0;
+    for (let i = 0; i < L.length; i++) if (L[i] > now) L[n++] = L[i];
+    L.length = n;
+    if (L.length >= this._sfxMaxVoices) return false;
+    L.push(now + Math.max(dur, 0.04));
+    return true;
   }
 
   ensure() {
@@ -512,6 +537,8 @@ export class AudioSys {
 
   _noise(t0, dur, filterType, freq, q, peak) {
     if (!this.ctx) return;
+    // S3: _noise is always on the sfx bus — enforce the concurrent-voice cap.
+    if (!this._sfxCanStart(dur)) return;
     const src = this.ctx.createBufferSource();
     src.buffer = this._noiseBuf;
     const f = this.ctx.createBiquadFilter();
@@ -524,6 +551,10 @@ export class AudioSys {
 
   _tone(t0, type, f0, f1, dur, peak, detune = 0, target = null) {
     if (!this.ctx) return;
+    // S3: sfx-bus voices (target === null) are subject to the concurrent-voice
+    // cap; melodic layers pass an explicit target (a zone/boss/stinger gain)
+    // and are exempt.
+    if (target == null && !this._sfxCanStart(dur)) return;
     const o = this.ctx.createOscillator();
     o.type = type;
     o.frequency.setValueAtTime(f0, t0);
@@ -542,17 +573,85 @@ export class AudioSys {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
     switch (name) {
-      case 'swish': {
-        // brush arc: bandpass noise sweep
-        this._noise(t, 0.14, 'bandpass', 900 + Math.random() * 300, 1.2, 0.25);
+      // S3 (v1.4): the wet-brush swipe. A soft "shh" (a bandpass-noise swish
+      // with a slight upward pitch sweep) is the base; the PIGMENT colors it —
+      // red a warm low "pew", green a deep "glorp", blue a crystalline "ping",
+      // dry a clean high "whoosh". Each pigment adds a DISTINCT signature tone
+      // (different type + freq) on the sfx bus so the strokes read differently.
+      case 'paint-swipe': {
+        const pig = opt.pig || null;
+        const sweep = 900 + Math.random() * 200;        // the "shh" center
+        this._noise(t, 0.13, 'bandpass', sweep, 1.1, 0.22);
+        this._noise(t + 0.02, 0.10, 'bandpass', sweep * 1.4, 1.3, 0.12); // airy top
+        if (pig === 'dry') {
+          // a CLEAN high whoosh — bright, no low body (it's scrubbing, not staining)
+          this._noise(t, 0.16, 'bandpass', 2000 + Math.random() * 300, 1.6, 0.2);
+        } else if (pig === 'red') {
+          // a warm "pew" — a low-mid saw with a soft body
+          this._tone(t, 'sawtooth', 300, 250, 0.13, 0.16);
+          this._tone(t, 'sine', 150, 120, 0.14, 0.1);
+        } else if (pig === 'green') {
+          // a deep "glorp" — a blubby low sine
+          this._tone(t, 'sine', 150, 88, 0.15, 0.18);
+          this._tone(t + 0.03, 'triangle', 110, 90, 0.12, 0.08);
+        } else if (pig === 'blue') {
+          // a crystalline "ping" — a bright high sine with a sparkle
+          this._tone(t, 'sine', 1500, 1650, 0.1, 0.14);
+          this._tone(t + 0.02, 'sine', 2400, 2600, 0.06, 0.05);
+        }
         break;
       }
-      case 'splat': {
+      // S3 (v1.4): the charged splash. A wet "splat" with a low body; the
+      // pigment adds a distinct signature (mirrors paint-swipe) so the AoE
+      // burst reads in the same color language as the swipe.
+      case 'paint-splat': {
         const big = opt.big || 0;
-        this._noise(t, 0.12 + big * 0.08, 'lowpass', 500 + big * 300, 0.7, 0.4 + big * 0.15);
-        this._tone(t, 'sine', 160, 60, 0.16 + big * 0.08, 0.5);
+        const pig = opt.pig || null;
+        this._noise(t, 0.12 + big * 0.08, 'lowpass', 500 + big * 300, 0.7, 0.4 + big * 0.12);
+        this._tone(t, 'sine', 160, 60, 0.16 + big * 0.08, 0.4);
+        if (pig === 'red') {
+          this._tone(t, 'sawtooth', 300, 220, 0.18, 0.16);
+          this._tone(t, 'sine', 140, 100, 0.2, 0.12);
+        } else if (pig === 'green') {
+          this._tone(t, 'sine', 140, 70, 0.2, 0.2);
+          this._tone(t + 0.04, 'triangle', 100, 80, 0.16, 0.1);
+        } else if (pig === 'blue') {
+          this._tone(t, 'sine', 1500, 1700, 0.14, 0.14);
+          this._tone(t + 0.03, 'sine', 2500, 2800, 0.08, 0.06);
+        } else if (pig === 'dry') {
+          this._noise(t, 0.2, 'bandpass', 2100 + Math.random() * 300, 1.6, 0.22);
+        }
         break;
       }
+      // S3 (v1.4): tiny status-moment blips — fired the instant a paint status
+      // lands, so each color has a distinct "it just happened" sting. Kept
+      // short + quiet (they sit under the paint swish, not over it).
+      case 'burn-ignite': {
+        // a crackling flick: a bright noise tick + a quick rising hiss
+        this._noise(t, 0.06, 'highpass', 2400, 2, 0.16);
+        this._tone(t, 'triangle', 300, 480, 0.07, 0.09);
+        break;
+      }
+      case 'freeze-tick': {
+        // a tiny crystalline click (a single bright, short ping)
+        this._tone(t, 'sine', 2000, 2350, 0.05, 0.1);
+        break;
+      }
+      case 'root-thud': {
+        // a low, dull thud (the roots biting the ground)
+        this._tone(t, 'sine', 120, 70, 0.09, 0.2);
+        this._noise(t, 0.05, 'lowpass', 320, 0.8, 0.14);
+        break;
+      }
+      case 'cleanse': {
+        // a soft, gentle whoosh (the dry brush scrubbing the stain away)
+        this._noise(t, 0.12, 'bandpass', 1200, 1.2, 0.12);
+        this._noise(t + 0.03, 0.09, 'bandpass', 1600, 1.3, 0.08);
+        break;
+      }
+      // legacy aliases (kept so any older call site still resolves)
+      case 'swish': this.sfx('paint-swipe', { pig: 'wet' }); break;
+      case 'splat': this.sfx('paint-splat', opt); break;
       case 'splat-big': this.sfx('splat', { big: 1 }); break;
       case 'faint': {
         // S2 (v1.4): the moment of death — a short, soft, deflating breath +

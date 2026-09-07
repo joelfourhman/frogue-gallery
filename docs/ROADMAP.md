@@ -533,18 +533,32 @@ per-frame budget assertion.
     bus. Pure audio — no gameplay logic touched, so P10 + pacing are
     unaffected.
 
-- [ ] **S3 — Painting sound-design pass: thicker brush, pigment timbres**
-  — `audio.js`
-  - **What:** the swipe becomes a thicker wet-brush swish (filtered noise
-    with a lowpass sweep + a droplet pluck); each pigment gets a distinct
-    pluck timbre — red warm/bright, blue cool/low, green mid with a shimmer;
-    the splash gains a watery "blub". All through the existing `sfx()` name
-    map, so the SFX slider + mute apply unchanged.
-  - **Notes:** all `_noise` / `_tone` recipes — no assets; pigments pass an
-    `opt` to `sfx()` (`game.js:289`) to select the timbre variant.
-  - **Acceptance:** smoke stage: swipe/splash per pigment dispatches a
-    distinct sfx variant (assert the variant key, not the waveform); P10
-    still passes. Status: TODO.
+- [x] **S3 — Painting sound-design pass: thicker brush, pigment timbres**
+  — `audio.js` / `paint.js`
+  - **What:** make painting sound **satisfying**. The swipe becomes a
+    pigment-colored wet-brush voice (`paint-swipe`, `{ pig }`): a soft "shh"
+    (bandpass-noise sweep ~900–1300 Hz, slight upward sweep) under a
+    **distinct per-pigment signature** — red a warm low "pew" (low
+    sawtooth), green a deep "glorp" (low triangle + sub), blue a
+    crystalline "ping" (bright high sine + shimmer), and the **dry brush** a
+    clean high "whoosh" (high airy bandpass sweep, no low body). The splash
+    gets the same per-pigment treatment (`paint-splat`, a wet "blub" +
+    pigment signature). Status moments get **tiny blips** — `burn-ignite`
+    (crackling highpass tick), `freeze-tick` (bright crystalline ping),
+    `root-thud` (low body + lowpass), plus a `cleanse` scrub — fired from
+    `_applyHits` at most **once per action** (a big splash is not a blip
+    machine-gun). A **concurrent-voice cap** (`_sfxMaxVoices = 24`) on the
+    sfx bus drops new sfx voices once N are live (a flurry can't spawn
+    hundreds of oscillators) — the melodic layers (S1/S2) pass an explicit
+    target and are exempt. All on the **sfx bus** (slider + mute), all
+    `_tone`/`_noise` — no assets, no new deps. `paint.js` routes
+    `paint-swipe`/`paint-splat` (with the pigment) + the status blips.
+  - **Accept:** smoke stage 68 (headless `AudioContext`): each pigment
+    maps to a **distinct** voice signature (red pew / green glorp / blue
+    ping / dry whoosh — all different), the wet pigments keep the "shh"
+    base, the three status blips exist + are distinct, the **concurrent
+    voice cap holds** (at the cap a new voice is dropped; it frees up once
+    the live set ages out). Suite 68/68, P10 (stage 24) green. Status: DONE.
 
 ### Module M — Moments / delight
 

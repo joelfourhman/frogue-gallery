@@ -4378,5 +4378,110 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
   delete window.AudioContext; // restore
 }
 
+// ============================================================================
+// STAGE 68: v1.4 S3 — painting sound-design (headless AudioContext)
+// ============================================================================
+{
+  console.log('== stage 68: v1.4 S3 — satisfying painting SFX + concurrent-voice cap (headless AudioContext) ==');
+  // Headless AudioContext that tags every created node by its kind (osc /
+  // filter / gain / buffer-source) so a stage can read each pigment's voice
+  // signature (oscillator type + start freq, or filter type + freq) and assert
+  // the per-pigment voices are distinct and the concurrent-voice cap holds.
+  const param = (v) => ({ value: v, _start: v,
+    setValueAtTime(x) { this.value = x; this._start = x; },
+    linearRampToValueAtTime(x) { this.value = x; },
+    exponentialRampToValueAtTime(x) { this.value = x; },
+    setTargetAtTime(x) { this.value = x; } });
+  const created = [];
+  const makeNode = (kind) => {
+    const n = { _kind: kind, type: 'sine', frequency: param(440), Q: param(1),
+      detune: param(0), gain: param(1), buffer: null, _connections: [],
+      connect(node) { this._connections.push(node); return node; },
+      disconnect() { this._connections.length = 0; },
+      start() {}, stop() {}, getChannelData() { return new Float32Array(0); } };
+    created.push(n);
+    return n;
+  };
+  class FakeAudioContext {
+    constructor() { this.currentTime = 0; this._sr = 22050; this._dest = makeNode('gain'); }
+    get sampleRate() { return this._sr; }
+    get destination() { return this._dest; }
+    createGain() { return makeNode('gain'); }
+    createOscillator() { return makeNode('osc'); }
+    createBiquadFilter() { return makeNode('filter'); }
+    createDynamicsCompressor() { return makeNode('gain'); }
+    createBuffer(ch, len) { return { getChannelData: () => new Float32Array(len) }; }
+    createBufferSource() { return makeNode('bufsrc'); }
+  }
+  window.AudioContext = FakeAudioContext;
+
+  const cvS = makeCanvas();
+  const gS = new Game(cvS);
+  gS.start();
+  assert(gS.audio.ensure() === true, 'S3: a headless AudioContext lets AudioSys.ensure() build the graph');
+  const au = gS.audio;
+  // The voice cap is asserted separately (below); keep it out of the way while
+  // we inspect per-pigment signatures by resetting the live set first.
+  au._sfxLive = [];
+
+  // helpers: the nodes a single sfx() call creates, split into voices
+  const snapshot = () => created.length;
+  const toneFreqs = (from) => created.slice(from).filter((n) => n._kind === 'osc').map((n) => ({ type: n.type, f0: Math.round(n.frequency._start ?? n.frequency.value) }));
+  const noiseF = (from) => created.slice(from).filter((n) => n._kind === 'filter').map((n) => ({ type: n.type, freq: Math.round(n.frequency.value) }));
+  const keyFor = (pig) => {
+    au._sfxLive = [];   // keep the (separately-asserted) cap from dropping voices mid-capture
+    const f = snapshot();
+    au.sfx('paint-swipe', { pig });
+    const tones = toneFreqs(f).map((x) => x.f0).sort((a, b) => a - b);
+    const hasHighNoise = noiseF(f).some((x) => x.type === 'bandpass' && x.freq > 1800);
+    const hasShh = noiseF(f).some((x) => x.type === 'bandpass' && x.freq >= 800 && x.freq <= 1300);
+    return { key: tones.join(',') + (hasHighNoise ? '|H' : ''), hasShh, tones, hasHighNoise };
+  };
+
+  const kRed = keyFor('red'), kGreen = keyFor('green'), kBlue = keyFor('blue'), kDry = keyFor('dry');
+
+  // (1) each pigment maps to a DISTINCT voice signature
+  const keys = [kRed.key, kGreen.key, kBlue.key, kDry.key];
+  assert(new Set(keys).size === 4, `S3: each pigment has a distinct swipe voice signature (${JSON.stringify([kRed.key, kGreen.key, kBlue.key, kDry.key])})`);
+  // the wet pigments keep the soft "shh" base sweep
+  assert(kRed.hasShh && kGreen.hasShh && kBlue.hasShh, 'S3: the wet pigments keep a soft "shh" base (bandpass ~900-1300)');
+  // red = a warm low "pew" (a sawtooth), green = a deep "glorp" (a triangle),
+  // blue = a crystalline "ping" (a bright high sine), dry = a clean high whoosh
+  // (a high bandpass, and NO low-body tone)
+  const redOscs = (() => { au._sfxLive = []; const f = snapshot(); au.sfx('paint-swipe', { pig: 'red' }); return toneFreqs(f); })();
+  const greenOscs = (() => { au._sfxLive = []; const f = snapshot(); au.sfx('paint-swipe', { pig: 'green' }); return toneFreqs(f); })();
+  const blueOscs = (() => { au._sfxLive = []; const f = snapshot(); au.sfx('paint-swipe', { pig: 'blue' }); return toneFreqs(f); })();
+  assert(redOscs.some((o) => o.type === 'sawtooth' && o.f0 < 400), 'S3: red is a warm low "pew" (a sawtooth < 400 Hz)');
+  assert(greenOscs.some((o) => o.type === 'triangle' && o.f0 < 200), 'S3: green is a deep "glorp" (a low triangle)');
+  assert(blueOscs.some((o) => o.type === 'sine' && o.f0 > 1000), 'S3: blue is a crystalline "ping" (a bright high sine)');
+  const dryF = (() => { au._sfxLive = []; const f = snapshot(); au.sfx('paint-swipe', { pig: 'dry' }); return f; })();
+  const dryOscs = toneFreqs(dryF), dryNoises = noiseF(dryF);
+  assert(!dryOscs.some((o) => o.f0 < 1000) && dryNoises.some((x) => x.type === 'bandpass' && x.freq > 1800), 'S3: the dry brush is a clean high "whoosh" (high bandpass, no low body)');
+
+  // the status-moment blips also exist + are distinct from the paint voices
+  au._sfxLive = [];
+  const stF = snapshot();
+  au.sfx('burn-ignite'); au.sfx('freeze-tick'); au.sfx('root-thud');
+  const stTones = toneFreqs(stF), stNoises = noiseF(stF);
+  assert(stNoises.some((x) => x.type === 'highpass'), 'S3: burn-ignite is a crackling highpass tick');
+  assert(stTones.some((o) => o.type === 'sine' && o.f0 > 1800), 'S3: freeze-tick is a bright crystalline ping (>1800 Hz)');
+  assert(stTones.some((o) => o.type === 'sine' && o.f0 < 200) && stNoises.some((x) => x.type === 'lowpass'), 'S3: root-thud is a low body + lowpass');
+
+  // (2) the concurrent-voice cap holds
+  const max = au._sfxMaxVoices;
+  assert(max > 0 && max <= 32, `S3: a concurrent-voice cap is configured (${max})`);
+  const t0 = au.ctx.currentTime;
+  au._sfxLive = Array.from({ length: max }, () => t0 + 1); // all still "live" (future)
+  const capBefore = created.length;
+  au.sfx('paint-swipe', { pig: 'red' });
+  assert(created.length === capBefore, `S3: at the voice cap, a new sfx voice is DROPPED (no new nodes; ${created.length - capBefore} made)`);
+  // once the live set ages out, the cap frees up again
+  au.ctx.currentTime += 2;
+  au.sfx('paint-swipe', { pig: 'green' });
+  assert(created.length > capBefore, 'S3: after the live voices age out, painting makes sound again');
+
+  delete window.AudioContext; // restore
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

@@ -83,7 +83,9 @@ export class Paint {
     const mx = p.x + Math.cos(a) * R * 0.6, my = p.y + Math.sin(a) * R * 0.6;
     this._addWet(mx, my, 9 + Math.random() * 6, pig, 0.9 + Math.random() * 0.5);
     this._addWet(p.x + Math.cos(a) * R * 0.9, p.y + Math.sin(a) * R * 0.9, 6 + Math.random() * 4, pig, 0.7 + Math.random() * 0.4);
-    this.sfx('swish');
+    // S3 (v1.4): a pigment-colored swipe voice (wet "shh" + a per-pigment
+    // signature) replaces the plain generic swish.
+    this.sfx('paint-swipe', { pig });
 
     // fan-shaped hit test
     const arc = this.tuning.swipeArc;
@@ -112,7 +114,9 @@ export class Paint {
     // v1.4: dry splash is the strongest single world-restore action.
     this._restoreAcc = (this._restoreAcc || 0) + (pig === 'dry' ? 0.04 : 0.025);
     this.world.paintSplash(p.x, p.y, R, pig);
-    this.sfx('splat', { big: 1 });
+    // S3 (v1.4): a pigment-colored splash voice (wet "splat" + a per-pigment
+    // signature) replaces the plain generic splat.
+    this.sfx('paint-splat', { pig, big: 1 });
     const hits = enemies.filter(e => !e.dead && dist(p.x, p.y, e.x, e.y) <= R + e.r);
     this._applyHits(hits, pig, 'splash');
     // cosmetic ring
@@ -129,6 +133,11 @@ export class Paint {
   _applyHits(hits, pig, kind) {
     const base = kind === 'swipe' ? this.tuning.swipeDamage : this.tuning.splashDamage;
     const p = this.player;
+    // S3 (v1.4): fire each status blip at most ONCE per action (a big splash
+    // hitting many enemies should not be a blip machine-gun). Maps a status
+    // type to its tiny sting.
+    const fired = {};
+    const blip = { burn: 'burn-ignite', freeze: 'freeze-tick', root: 'root-thud' };
     for (const e of hits) {
       const dmg = paintDamage(base, pig, this.tuning, { enemy: e });
       e.hp -= dmg;
@@ -141,6 +150,8 @@ export class Paint {
         if (e.status && e.status.type !== 'dizzy') {
           e.status = null; e.burnAccum = 0;
           this.note(e.x, e.y - e.r - 6, 'cleanse', 'dry');
+          // S3: the scrub-whoosh, once per action.
+          if (!fired.cleanse) { fired.cleanse = true; this.sfx('cleanse'); }
         }
       // toad special: any non-dry paint can dizzy instead of the normal status
       } else if (e.dizzyPaintChance && Math.random() < e.dizzyPaintChance) {
@@ -151,6 +162,12 @@ export class Paint {
         if (res.status) {
           e.status = res.status;
           if (res.note && res.note !== 'immune-root') this.note(e.x, e.y - e.r - 6, res.note, pig);
+          // S3: a tiny "it just happened" blip for the status that landed,
+          // once per action (slow is folded into the freeze blip; only
+          // burn/freeze/root get their own sting).
+          const st = res.status.type;
+          const stKey = st === 'slow' ? 'freeze' : st;
+          if (blip[stKey] && !fired[stKey]) { fired[stKey] = true; this.sfx(blip[stKey]); }
         }
       }
       // enemy gets coated with the pigment color (visual reaction)
