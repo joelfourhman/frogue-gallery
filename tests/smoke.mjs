@@ -3714,5 +3714,57 @@ console.log('== stage 59: v1.4 J2 — hit-stop + shake escalation + boss-defeat 
   assert(g2._freezeFrames === 0, `J2: the pre-hit freeze self-clears after one frame (freeze=${g2._freezeFrames})`);
 }
 
+// ======================================================================
+// stage 60 — v1.4 Module J, J3: camera polish (look-ahead / lag / boss midpoint / awaken moment)
+// `_updateCamera` (game.js) is PRESENTATION: it follows the already-simmed
+// frog position, so it runs on real dt and never feeds the measured runT.
+// We drive it directly with a fixed dt for deterministic assertions.
+// ======================================================================
+console.log('== stage 60: v1.4 J3 — camera polish (look-ahead / boss midpoint / awaken hold) ==');
+const { paintBoss } = await import('../src/logic.js');
+const g3 = new Game(makeCanvas());
+g3.start(); fireKey('keydown', 'Enter'); frames(2);
+const p3 = g3.player;
+p3.iframes = 999;
+const DT = 0.016;
+const setP = (x, y) => { p3.x = x; p3.y = y; p3.vx = 0; p3.vy = 0; };
+const runCam = (n) => { for (let i = 0; i < n; i++) g3._updateCamera(DT); };
+
+// (a) look-ahead: with right held, the camera leads the frog by ~40px (in front, +x)
+g3.heron = null;                    // isolate the plain-follow branch
+g3._awakenHoldT = 0;
+setP(1000, 750); g3.cam.x = 1000; g3.cam.y = 750; g3.zoomTarget = 1;
+g3.input.keys.add('d');
+runCam(250);
+assert(g3.cam.x > 1000 + 30, `J3: look-ahead leads the frog toward the input dir (cam.x=${g3.cam.x.toFixed(1)} > 1030, ~40px lead)`);
+g3.input.keys.delete('d');
+runCam(250);
+assert(Math.abs(g3.cam.x - 1000) < 4, `J3: with no input the camera eases back onto the frog (cam.x=${g3.cam.x.toFixed(1)} ~ 1000)`);
+
+// (c) boss midpoint: center on the frog–heron midpoint and widen (zoomTarget < 1)
+g3.heron = { x: 1500, y: 800, hp: 5000, _intro: 0, flying: 0, diveH: 0 };
+setP(1000, 800); g3.cam.x = 1000; g3.cam.y = 800;
+runCam(250);
+const mid = (1000 + 1500) / 2;
+assert(Math.abs(g3.cam.x - mid) < 6, `J3: boss framing centers on the frog–heron midpoint (cam.x=${g3.cam.x.toFixed(1)} ~ ${mid})`);
+assert(g3.zoomTarget < 1, `J3: boss framing widens the view (zoomTarget=${g3.zoomTarget})`);
+
+// (d) awaken moment: hold on the rising heron with a zoom-out for ~1.2s, then release
+g3._awakenHoldT = 1.2;
+g3.cam.x = 1000; g3.cam.y = 800;      // start at the frog, well away from the heron
+runCam(60);
+assert(g3._awakenHoldT > 0, `J3: the awaken hold is active during its window (holdT=${g3._awakenHoldT.toFixed(2)}s)`);
+assert(g3.cam.x > mid, `J3: during the hold the camera is drawn to the rising heron (cam.x=${g3.cam.x.toFixed(1)} past the midpoint)`);
+assert(g3.zoomTarget < 0.92, `J3: the hold zooms OUT on the reveal (zoomTarget=${g3.zoomTarget})`);
+runCam(Math.ceil(1.2 / DT) + 40);
+assert(g3._awakenHoldT <= 0, `J3: the awaken hold expires after ~1.2s (holdT=${g3._awakenHoldT.toFixed(2)}s)`);
+
+// (d) fires once per rise: the handler is gated on `res === 'awaken'`, and
+// paintBoss returns 'awaken' exactly once per awaken (gated by h.awakened).
+g3.heron = { x: 1500, y: 800, hp: 5000, hue: { red: 40, blue: 45, green: 45 }, awakened: false };
+let awakenCount = 0;
+for (let i = 0; i < 6; i++) if (paintBoss(g3.heron, 'red', 6, g3.tuning) === 'awaken') awakenCount++;
+assert(awakenCount === 1, `J3: the awaken moment fires once per rise (awaken events=${awakenCount})`);
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

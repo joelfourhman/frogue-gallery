@@ -194,7 +194,7 @@ Normal-difficulty balance is the baseline; every number that moved is logged.
 bounded batches of ~3 items per session** (local model context ceiling;
 each session MUST end clean: committed + docs + suite green). Read
 `docs/ROADMAP.md` §v1.4 + AGENTS.md. Module J batch order: J1 → J2 → J3.
-**Status: J1 ✅ + J2 ✅ (2026-09-06); J3 next.**
+**Status: J1 ✅ + J2 ✅ + J3 ✅ (2026-09-06) — BATCH 1 COMPLETE.**
 
 **Theme: juice, presence, and moments.** The game is mechanically complete;
 v1.4 adds no new rules — it makes the same game feel alive in the hand, the
@@ -250,7 +250,7 @@ band on Normal). Full scope + per-item status in `docs/ROADMAP.md` §v1.2.
 5. M13: **T1 ✅ (guided first expedition)** → **T2 ✅ (interactive pigment drills)** — **Batch 5 (M13 T1+T2) COMPLETE — suite 43/43, pacing 18.7/18.9 min (the frozen tutorial pre-run layer adds no timed-run time)**
 6. M13: **T3 ✅ (mini sketch heron)** → **T4 ✅ (tutorial progress + "Watch me" re-entry)** — **Batch 6 (M13 T3+T4) COMPLETE**
 7. M14: **N1 ✅ (NG+ unlock + Next Expedition flow)** → **N2 ✅ (NG+ scaling + `tests/ngpace.mjs` probe)** → **N3 ✅ (second boss — The Great Green Heron)** — **v1.3 Batch 7 (N1→N2→N3) COMPLETE** (suite 48/48, first-time pacing unchanged, NG+ cycle-1 ~19.5 min in band)
-8. v1.4 Module J: **J1 ✅ (wet paint that lingers)** + **J2 ✅ (hit-stop / shake escalation / boss-defeat slow-mo)** — **v1.4 Batch 1, items 1–2** (suite 59/59, P10 stage 24 still green; J2 is presentation/time-feel only — first-time pacing unaffected, probes re-verified in band)
+8. v1.4 Module J: **J1 ✅ (wet paint that lingers)** + **J2 ✅ (hit-stop / shake escalation / boss-defeat slow-mo)** + **J3 ✅ (camera polish: look-ahead / lag / boss midpoint / awaken hold)** — **v1.4 Batch 1 (items 1–3) COMPLETE** (suite 60/60, P10 stage 24 still green; all presentation/time-feel only — first-time pacing unaffected, probes re-verified in band)
 
 Each item's Notes column in the roadmap says which existing system to reuse.
 Acceptance (per batch): suite green, pace/humance probes still in the
@@ -300,6 +300,28 @@ dependencies. Smoke stage 59 asserts: timeScale defaults to 1, a kill pops a
 hit-stop (dip <0.5) that recovers to 1 within 1 s, defeat triggers the
 slow-mo window @ ~0.35× + white flash + shake spike, the slow-mo recovers,
 and with shake OFF every helper is a no-op. P10 (stage 24) still passes.
+
+**v1.4 J3 (camera polish: lead / lag / boss midpoint / awaken moment) — implemented + tested (Batch 1, item 3).**
+`_updateCamera` (game.js) replaces the plain `approach` follow with four
+PRESENTATION branches on the existing `cam` object (shake still rides on top
+in `_view`). Everything is presentation: the camera follows the frog's
+already-simmed position and runs on **real `dt`** (never `simDt`), so it stays
+smooth during J2's slow-mo and **never feeds the measured runT**. (a)
+input-direction look-ahead up to ~40 px toward the held movement dir (eases in
+on input, eases back onto the frog when idle); (b) mild lag at speed — the
+follow ease rate drops (4 vs 7) while a movement key is held (weighted feel),
+snapping back when at rest; (c) boss framing — while the heron is live (hp>0,
+not fleeing, intro done) the camera centers on the **frog–heron midpoint** and
+widens (`zoomTarget = 0.92`), and while it is fleeing (victory flight) it chases
+the heron (the pre-existing beat, preserved); (d) the awaken moment — the final
+heron's `res === 'awaken'` handler sets `_awakenHoldT = 1.2`, during which the
+camera **holds on the rising heron with a zoom-out** (`zoomTarget = 0.88`) then
+eases back to follow; `paintBoss` (logic.js) returns `'awaken'` exactly once per
+rise (gated by `h.awakened`), so the hold fires once per rise. No new camera
+system, no new dependencies. Smoke stage 60 drives `_updateCamera` directly:
+look-ahead leads ~40 px then eases back, boss framing centers on the midpoint +
+widens, the awaken hold is active ~1.2 s / zooms out / fires once per rise. P10
+(stage 24) still passes.
 
 **M13 T1 (guided first expedition) — implemented + tested (v1.2 Batch 5, item 1).**
 A **fresh save only** (no finished run, never skipped — `tutorialEligible(save)`

@@ -309,7 +309,7 @@ per-frame budget assertion.
     bloom (runT is frozen during flight, so this never affects the measured run
     length). All three effects are no-ops when `options.shake` is OFF.
 
-- [ ] **J3 — Camera polish: lead, lag, boss framing, awaken moment** — `game.js`
+- [x] **J3 — Camera polish: lead, lag, boss framing, awaken moment** — `game.js`
   - **What:** replace the plain `approach` follow (`game.js:2245`) with:
     (a) input-direction look-ahead (up to ~40 px, eases in/out); (b) mild
     lag when the frog moves fast, so the world feels weighted; (c) boss
@@ -320,7 +320,29 @@ per-frame budget assertion.
     `addShake` still applies on top. No new camera system.
   - **Acceptance:** smoke stage: cam converges to the look-ahead target,
     boss midpoint centering holds within tolerance, awaken hold fires once
-    per rise; P10 still passes. Status: TODO.
+    per rise; P10 still passes.
+    Status: DONE (2026-09-06, v1.4 BATCH 1). Implemented in `game.js`
+    `_updateCamera` (no pure-logic change): the plain `approach` follow is
+    replaced by four presentation branches, all on the existing `cam` object
+    (shake still rides on top in `_view`). Everything is PRESENTATION — the
+    camera follows the frog's already-simmed position and runs on real `dt`
+    (never `simDt`), so it stays smooth during J2's slow-mo and never feeds
+    the measured runT: (a) input-direction look-ahead up to ~40 px toward the
+    held movement dir (eases in on input, eases back onto the frog when idle);
+    (b) mild lag at speed — the follow ease rate drops (4 vs 7) while a
+    movement key is held, so the world feels weighted, and snaps back when
+    at rest; (c) boss framing — while the heron is live (hp>0, not fleeing,
+    intro done) the camera centers on the frog–heron midpoint and widens
+    (`zoomTarget = 0.92`), and while it is fleeing (victory flight) it chases
+    the heron (the existing beat); (d) the awaken moment — the final heron's
+    `res === 'awaken'` handler sets `_awakenHoldT = 1.2`, during which the
+    camera holds on the rising heron with a zoom-out (`zoomTarget = 0.88`)
+    then eases back to follow. `paintBoss` (logic.js) returns `'awaken'`
+    exactly once per rise (gated by `h.awakened`), so the hold fires once per
+    rise. No new camera system, no new dependencies. Smoke stage 60 drives
+    `_updateCamera` directly: look-ahead leads ~40 px then eases back, boss
+    framing centers on the midpoint + widens, the awaken hold is active for
+    ~1.2 s / zooms out / fires once per rise. P10 (stage 24) still passes.
 
 - [ ] **J4 — Frog hop feel: squash, stretch, dust, ripple** — `player.js` / `particles.js`
   - **What:** hop start → stretch (x0.85/y1.15, 0.1 s); landing (`hopT`→0)

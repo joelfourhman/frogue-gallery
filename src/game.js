@@ -262,6 +262,11 @@ export class Game {
     this._modPrompt = null;   // N4 (v1.3 M14): { sel } — the open expedition-modifier picker
     this._bloom = null;      // V2 (v1.2 M11): { x, y, t, dur } — heron awaken bloom
     this._bloomSurge = 0;    // V2: timed saturation surge (0..~0.14), decays to 0
+    // J3 (v1.4): the camera's awaken-moment hold. A heron rising (the Great
+    // Green Heron reveal) triggers a ~1.2 s zoom-out + hold on the heron, then
+    // the camera eases back to normal follow. Real-time presentation — it never
+    // affects the measured runT.
+    this._awakenHoldT = 0;
     // T1 (v1.2 M13): guided first expedition (tutorial) runtime state. A fresh
     // save (tutorialEligible) may enter it; it is fully skippable and is NOT
     // part of the timed expedition (the clock freezes while it runs).
@@ -533,10 +538,66 @@ export class Game {
   _updateCamera(dt) {
     const p = this.player;
     if (!p) return;
-    let tx = p.x, ty = p.y;
-    if (this.heron && this.heron.flying > 0) { tx = this.heron.x; ty = this.heron.y; }
-    this.cam.x = approach(this.cam.x, tx, 6, dt);
-    this.cam.y = approach(this.cam.y, ty, 6, dt);
+    // J3 (v1.4) replaces the plain `approach` follow. Everything here is
+    // PRESENTATION: the camera follows the frog's (already-simmed) position,
+    // so it runs on real `dt` — never `simDt`. During J2's hit-stop / boss
+    // slow-mo the world sim is slowed, but the camera stays smooth and
+    // responsive rather than stalling with it (it naturally eases onto the
+    // slowed frog because the follow target moves less).
+
+    // (d) awaken moment — the strongest beat. A heron rising (the Great Green
+    // Heron reveal) holds the camera on the heron with a brief zoom-out for
+    // _awakenHoldT seconds, then eases back to normal follow. Set in the
+    // 'awaken' handler on the final heron only.
+    if (this._awakenHoldT > 0) {
+      this._awakenHoldT -= dt;
+      const h = this.heron;
+      if (h) {
+        const hy = h.y - (h.diveH || 0) * 0.4;
+        this.cam.x = approach(this.cam.x, h.x, 5, dt);
+        this.cam.y = approach(this.cam.y, hy, 5, dt);
+        this.zoomTarget = 0.88;   // zoom OUT so the whole rising heron reads
+        return;
+      }
+      this._awakenHoldT = 0;
+    }
+
+    // (c) boss framing — while the heron is fleeing (post-defeat victory
+    // flight) chase the heron across the swamp (the existing beat). While it
+    // is live and on screen (not fleeing, intro done), center on the
+    // frog–heron midpoint and widen slightly so the whole fight reads.
+    const h = this.heron;
+    if (h && h.flying > 0) {
+      this.zoomTarget = 1;
+      this.cam.x = approach(this.cam.x, h.x, 6, dt);
+      this.cam.y = approach(this.cam.y, h.y, 6, dt);
+      return;
+    }
+    if (h && h.hp > 0 && !h.flying && h._intro <= 0) {
+      const hy = h.y - (h.diveH || 0) * 0.5;
+      const mx = (p.x + h.x) / 2;
+      const my = (p.y + hy) / 2;
+      this.zoomTarget = 0.92;
+      this.cam.x = approach(this.cam.x, mx, 4, dt);
+      this.cam.y = approach(this.cam.y, my, 4, dt);
+      return;
+    }
+    this.zoomTarget = 1;
+
+    // (a) input-direction look-ahead (up to ~40 px, eases in/out): the camera
+    // leads the frog toward wherever it is heading so the frog reads in front
+    // of center. (b) mild lag when moving fast: a slightly lower ease rate so
+    // the world feels weighted at speed, snapping back to a snappier follow at
+    // rest. Both ride on the frog's own (simmed) velocity, so they never feed
+    // back into the measured runT.
+    const mv = this.input.moveVec();
+    const LA = 40;
+    const ease = (mv[0] || mv[1]) ? 4 : 7;   // lag when moving, snappy at rest
+    let tx = p.x + mv[0] * LA;
+    let ty = p.y + mv[1] * LA;
+    // gentle weight: when sprinting, ease a touch slower (already via `ease`).
+    this.cam.x = approach(this.cam.x, tx, ease, dt);
+    this.cam.y = approach(this.cam.y, ty, ease, dt);
   }
 
   _quitToTitle() {
@@ -2151,6 +2212,11 @@ _drawAtelier(ctx) {
           // distinctive 'awaken-bloom' SFX. Pure presentation (see _triggerBloom).
           this._triggerBloom(this.heron.x, this.heron.y - 150);
           this.addShake(14);
+          // J3 (v1.4): the awaken moment — the camera holds on the rising heron
+          // with a brief zoom-out for ~1.2 s (presentation; real-time, never
+          // feeds runT). Fires once per rise (paintBoss returns 'awaken' once
+          // per awaken, gated by h.awakened in logic.js).
+          this._awakenHoldT = 1.2;
           this.addBanner('The Heron AWAKENS — paint it while it shimmers!', 3.4);
         }
         // N3 (v1.3 M14): the Great Green Heron's swapped mechanic — painting it
