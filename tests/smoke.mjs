@@ -5003,5 +5003,91 @@ console.log('== stage 72: v1.5 K1 — MUD TURTLE (armored plodder, front-arc she
   }
 }
 
+console.log('== stage 73: v1.5 K2 — BLIND CRAG FROG (hunts by sound; sleeps when quiet, vulnerable +50%; wakes on nearby noise) ==');
+{
+  const L73 = await import('../src/logic.js');
+  const E73 = await import('../src/enemies.js');
+  const { spawnEnemy } = E73;
+  const { paintDamage, cragSleepBonus, makeTuning } = L73;
+  const tun73 = makeTuning({}, [], 'normal');
+  const f = spawnEnemy('cragfrog', 0, 0, tun73);
+  assert(f.kind === 'cragfrog', 'K2: cragfrog spawns (kind cragfrog)');
+  assert(f.noiseRadius > 0 && f.alertDuration > 0, 'K2: cragfrog has noiseRadius + alertDuration');
+  assert(f.asleep === true, 'K2: cragfrog SLEEPS at spawn (lies in wait)');
+  const worldStub = { collideCircle: (x, y, r) => [x, y] };
+  const playerStub = { alive: true, x: 0, y: 60, r: 15, iframes: 0, _hurt: false,
+    hurt: () => { playerStub._hurt = true; return true; } };
+  f.x = 0; f.y = 0; f.vx = 0; f.vy = 0;
+  f.update(0.25, playerStub, tun73, worldStub, 0);
+  assert(f.asleep === true, 'K2: quiet => still asleep');
+  assert(f.x === 0 && f.y === 0, 'K2: asleep => does not move');
+  assert(!playerStub._hurt, 'K2: asleep => does not attack');
+
+  // --- a nearby noise (a paint swipe / hop / charge) WAKES it
+  f.wakeNoise(f.x + 100, f.y);   // within noiseRadius (280)
+  assert(f.asleep === false, 'K2: a NEARBY noise event wakes the cragfrog');
+  assert(f.alertT > 0, 'K2: waking arms the alert timer');
+  // awake => it charges at the player (moves + can attack)
+  playerStub._hurt = false;
+  const x0 = f.x, y0 = f.y;
+  f.update(0.25, playerStub, tun73, worldStub, 0.01);
+  const moved = (f.x - x0) ** 2 + (f.y - y0) ** 2;
+  assert(moved > 1, `K2: awake => CHARGES toward the player (moved ${moved.toFixed(1)})`);
+  // far noise does NOT wake it
+  f.wakeNoise(f.x + 9999, f.y);
+  assert(f.asleep === false && f.alertT > 0, 'K2: a FAR noise does not change its state');
+
+  // --- when the player goes still (alert decays) it SLEEPS again
+  let slept = false;
+  for (let i = 0; i < 400; i++) {  // 400 * 0.25s = 100s >> alertDuration(5s)
+    f.update(0.25, playerStub, tun73, worldStub, i * 0.01);
+    if (f.asleep) { slept = true; break; }
+  }
+  assert(slept, 'K2: when the player is still (alert decays) it SLEEPS again');
+
+  // --- while ASLEEP it is vulnerable: +50% paint damage (cragSleepBonus x1.5)
+  assert(cragSleepBonus(f) === 1.5, 'K2: asleep cragfrog => cragSleepBonus 1.5');
+  const dAsleep = paintDamage(tun73.swipeDamage, 'red', tun73, { enemy: f, sleepBonus: cragSleepBonus(f) });
+  f.asleep = false;
+  const dAwake = paintDamage(tun73.swipeDamage, 'red', tun73, { enemy: f, sleepBonus: cragSleepBonus(f) });
+  assert(cragSleepBonus(f) === 1, 'K2: awake cragfrog => cragSleepBonus 1.0');
+  const ratio = dAsleep / dAwake;
+  assert(ratio > 1.4 && ratio < 1.6, `K2: asleep takes +50% paint dmg (ratio ${ratio.toFixed(2)}, want 1.5)`);
+  assert(dAsleep > dAwake, 'K2: asleep paint dmg > awake paint dmg');
+
+  // --- zone gating: NOT before zone 3 on a first-time (cycle-0) run; NG+ allowed
+  // Fresh Game + a real _spawnWave call (mirrors the K1 gate test). Force the
+  // spawn roll into the cragfrog window (0.86 < roll <= 0.9) so the cragfrog
+  // branch is taken whenever cragAllowed, and check what actually spawns.
+  const cv73 = makeCanvas();
+  const g73 = new Game(cv73);
+  g73.start();
+  fireKey('keydown', 'Enter'); frames(3); // title -> expedition
+  const P73 = g73.player;
+  P73.alive = true; P73.hp = 99; P73.iframes = 999;
+  const origRand = Math.random;
+  Math.random = () => 0.88; // toad(>0.82) then cragfrog(>0.86, <=0.9) if allowed
+  try {
+    const spawnKindAt = (zoneI, ngCycle) => {
+      g73._zoneI = zoneI; g73.ngCycle = ngCycle;
+      g73.runT = 90; g73.spawnT = 0; // force a wave this tick (t>30)
+      g73.enemies.length = 0;        // under cap
+      P73.x = 200; P73.y = 760;      // not in the boss arena
+      g73._spawnWave(1 / 60);
+      return g73.enemies.length ? g73.enemies[0].kind : null;
+    };
+    const k2Z0 = spawnKindAt(0, 0);
+    const k2Z2 = spawnKindAt(2, 0);
+    const k2Z3 = spawnKindAt(3, 0);
+    const k2NG = spawnKindAt(0, 1);
+    assert(k2Z0 !== 'cragfrog' && k2Z2 !== 'cragfrog',
+      `K2: cycle-0: cragfrog is GATED OUT before zone 3 (zone0=${k2Z0}, zone2=${k2Z2})`);
+    assert(k2Z3 === 'cragfrog', `K2: cycle-0: cragfrog is ALLOWED from zone 3 (got ${k2Z3})`);
+    assert(k2NG === 'cragfrog', `K2: NG+ (cycle 1): cragfrog allowed from the first named zone (got ${k2NG})`);
+  } finally {
+    Math.random = origRand;
+  }
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

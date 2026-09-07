@@ -46,6 +46,24 @@ export class Enemy {
     this.deflectArc = base.deflectArc || 1.5;
     this.deflectKeep = base.deflectKeep != null ? base.deflectKeep : 0.15;
     this.facing = 0;
+    // K2 (v1.5 M2): Blind Crag Frog — hunts by sound. `asleep` starts true (it
+    // lies in wait); a nearby noise event (paint/hop/charge) sets alertT and
+    // wakes it; alertT decays each frame and it sleeps again when it lapses.
+    // While asleep it cannot move or attack and takes +50% paint damage
+    // (cragSleepBonus in paint.js). While awake it is fast (high base speed)
+    // with high contact damage.
+    this.noiseRadius = base.noiseRadius || 0;
+    this.alertDuration = base.alertDuration || 0;
+    this.alertT = 0;
+    this.asleep = this.noiseRadius > 0;   // only cragfrogs sleep
+    this.wakeNoise = function (x, y) {
+      if (!this.noiseRadius) return;
+      const d = Math.hypot(x - this.x, y - this.y);
+      if (d <= this.noiseRadius) {
+        this.alertT = this.alertDuration;
+        if (this.asleep) this.asleep = false;
+      }
+    };
   }
 
   // speed factor from active status
@@ -67,12 +85,22 @@ export class Enemy {
     if (this.hitFlash > 0) this.hitFlash -= dt;
     if (this.attackCd > 0) this.attackCd -= dt;
 
+    // K2 (v1.5 M2): Blind Crag Frog sleep/awake. The alert timer decays; when
+    // it lapses the frog loses interest and SLEEPS again (still => no home, no
+    // attack). wakeNoise (called by game.js on a nearby paint/hop/charge)
+    // wakes it and re-arms the timer.
+    if (this.noiseRadius && this.asleep === false) {
+      this.alertT -= dt;
+      if (this.alertT <= 0) { this.asleep = true; this.alertT = 0; }
+    }
+    const asleep = this.asleep;
+
     const stunned = this.status && (this.status.type === 'dizzy' || this.status.type === 'freeze' || this.status.type === 'root');
     const spd = this.speed * this.statusSpeed();
 
     // --- AI: seek the player, with a little wandering
     let ax = 0, ay = 0;
-    if (!stunned && player.alive) {
+    if (!stunned && !asleep && player.alive) {
       const d = dist(this.x, this.y, player.x, player.y);
       const want = this.fly ? 40 : (d < 260 ? 1 : 0.55);
       if (d > 1) { ax = (player.x - this.x) / d * want; ay = (player.y - this.y) / d * want; }
@@ -95,7 +123,7 @@ export class Enemy {
     const k = this.fly ? 5 : 8;
     this.vx = lerp(this.vx, ax * spd, 1 - Math.exp(-k * dt));
     this.vy = lerp(this.vy, ay * spd, 1 - Math.exp(-k * dt));
-    if (stunned) { this.vx = 0; this.vy = 0; }
+    if (stunned || asleep) { this.vx = 0; this.vy = 0; }
     this.x += this.vx * dt;
     this.y += this.vy * dt;
     const [cx, cy] = world.collideCircle(this.x, this.y, this.r);
@@ -109,7 +137,7 @@ export class Enemy {
     }
 
     // --- contact attack
-    if (!stunned && this.attackCd <= 0 && player.alive && player.iframes <= 0) {
+    if (!stunned && !asleep && this.attackCd <= 0 && player.alive && player.iframes <= 0) {
       const d = dist(this.x, this.y, player.x, player.y);
       if (d < this.r + player.r + 2) {
         this.attackCd = 0.9;
@@ -152,6 +180,7 @@ export function drawEnemy(ctx, e, now) {
   if (e.kind === 'beetle') drawBeetle(ctx, e, frozen, flash, now);
   else if (e.kind === 'mosquito') drawMosquito(ctx, e, frozen, flash, now);
   else if (e.kind === 'turtle') drawTurtle(ctx, e, frozen, flash, now);
+  else if (e.kind === 'cragfrog') drawCragFrog(ctx, e, frozen, flash, now);
   else drawToad(ctx, e, frozen, dizzy, flash, now);
   ctx.scale(1 / escale, 1 / escale); // undo body scale for the auras below
 
@@ -363,6 +392,84 @@ function drawTurtle(ctx, e, frozen, flash, now) {
   ctx.arc(19, -2.5, 1, 0, TAU);
   ctx.arc(19, 2.5, 1, 0, TAU);
   ctx.fill();
+  ctx.restore();
+}
+
+// K2 (v1.5 M2): the Blind Crag Frog. It hunts by sound — it has a big ear/side
+// of the head and a closed eye when ASLEEP (hunched, with a drifting "z" puff
+// + a faint vulnerability glow), and an open wide eye + raised head when AWAKE
+// (alert). Draw-time-only pose from e.asleep; no allocations.
+function drawCragFrog(ctx, e, frozen, flash, now) {
+  const asleep = e.asleep;
+  const body = flash ? '#f2e9dc' : frozen ? '#bfe3ef' : (asleep ? '#4f6b43' : '#6f9a52');
+  const belly = flash ? '#fff' : frozen ? '#dff2f8' : (asleep ? '#6f8a5c' : '#a9c98a');
+  const bob = asleep ? Math.sin(now * 1.4 + e._seed) * 1.2   // slow breathing while asleep
+    : Math.sin(now * 7 + e._seed) * 1.8;                    // restless tremor when awake
+  ctx.save();
+  // vulnerability glow while asleep (the +50% tell)
+  if (asleep) {
+    ctx.globalAlpha = 0.28 + 0.12 * Math.sin(now * 3);
+    ctx.fillStyle = '#cfe8ff';
+    ctx.beginPath();
+    ctx.arc(0, 0, e.r + 7, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.translate(0, bob);
+  // back legs (crouched)
+  ctx.strokeStyle = body;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(-11, 8); ctx.lineTo(-15, 14); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(11, 8); ctx.lineTo(15, 14); ctx.stroke();
+  // body
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 16, 13, 0, 0, TAU);
+  ctx.fill();
+  // belly
+  ctx.fillStyle = belly;
+  ctx.beginPath();
+  ctx.ellipse(0, 3, 11, 8, 0, 0, TAU);
+  ctx.fill();
+  // big side ear (it "listens" for the player)
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(-6, -9, 7, 5, -0.5, 0, TAU);
+  ctx.fill();
+  // head
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.arc(9, -5, 8, 0, TAU);
+  ctx.fill();
+  // eye: closed line when asleep, open wide when awake
+  if (asleep) {
+    ctx.strokeStyle = flash ? '#fff' : '#24301f';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(9, -6); ctx.lineTo(15, -6);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = flash ? '#fff' : '#f4efe6';
+    ctx.beginPath();
+    ctx.arc(12, -6, 3.2, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#241b16';
+    ctx.beginPath();
+    ctx.arc(13, -6, 1.5, 0, TAU);
+    ctx.fill();
+  }
+  // a drifting "z" while asleep
+  if (asleep) {
+    ctx.fillStyle = '#dfeaf5';
+    ctx.globalAlpha = 0.75;
+    ctx.font = 'bold 9px serif';
+    const zy = -16 - (Math.sin(now * 1.4 + e._seed) * 2);
+    ctx.fillText('z', 2, zy);
+    ctx.fillText('z', 8, zy - 6);
+    ctx.globalAlpha = 1;
+  }
   ctx.restore();
 }
 

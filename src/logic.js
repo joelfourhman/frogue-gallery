@@ -48,7 +48,27 @@ export const ENEMIES = {
     deflectArc: 1.5,          // radians (~±86°) either side of its facing
     deflectKeep: 0.15,        // front paint deals this FRACTION of normal dmg
   },
+  // K2 (v1.5 M2): BLIND CRAG FROG — hunts by SOUND. It cannot see; it wakes to
+  // noise (a paint swipe/splash, a hop landing, a charge) inside `noiseRadius`
+  // and homes in at full speed. When the player is still the alert timer decays
+  // and it SLEEPS again — and while asleep it is vulnerable (+50% paint damage).
+  // While awake it is fast with high contact damage. Scales into zones 3+ and
+  // NG+; bounded spawn. Sleep/wake is modelled in enemies.js (per-enemy state);
+  // the asleep damage bonus is the pure `cragSleepBonus` applied in paint.js.
+  cragfrog: {
+    id: 'cragfrog', name: 'Blind Crag Frog', hp: 34, speed: 150, dmg: 9,
+    radius: 17, armor: 0.05, fly: false, score: 40, paintTintDecay: 0.3,
+    noiseRadius: 280,         // a noise event within this wakes the frog
+    alertDuration: 5.0,       // seconds awake after the most recent noise
+  },
 };
+
+// K2 (v1.5 M2): an ASLEEP Blind Crag Frog is vulnerable — it takes this much
+// paint damage (×1.5). Applied in paint.js when the target is asleep.
+export const CRAG_SLEEP_BONUS = 1.5;
+export function cragSleepBonus(e) {
+  return (e && e.kind === 'cragfrog' && e.asleep) ? CRAG_SLEEP_BONUS : 1;
+}
 
 // K1 (v1.5 M1): front-arc deflection. A front-deflecting enemy (the Mud
 // Turtle) turns paint away from the front: if the angle between its facing and
@@ -131,6 +151,8 @@ export function paintDamage(base, pigmentId, tuning, opts = {}) {
   // paintDamage (it is applied per status-tick), so it bypasses deflection —
   // the intended counter.
   if (opts.deflectFactor) d *= opts.deflectFactor;
+  // K2 (v1.5 M2): an ASLEEP Blind Crag Frog is vulnerable (×1.5 paint).
+  if (opts.sleepBonus) d *= opts.sleepBonus;
   // armor: paint gets 50% through armor; dry brush is physical
   const armor = (pigmentId === 'dry') ? (enemy.armor || 0) : (enemy.armor || 0) * 0.5;
   d *= (1 - armor) * (1 - (opts.dmgReduce || 0));

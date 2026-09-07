@@ -3,7 +3,7 @@
 // world paint layer and applies pigment damage + statuses to anything it touches.
 'use strict';
 import { TAU, clamp, dist } from './math.js';
-import { PIGMENTS, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor } from './logic.js';
+import { PIGMENTS, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus } from './logic.js';
 
 export class Paint {
   constructor(player, world, tuning, sfx, particles) {
@@ -144,8 +144,10 @@ export class Paint {
       // and RED BURN bypasses it entirely (it never routes through a paint
       // hit — it is applied per status-tick).
       const deflect = frontDeflectFactor(e, p);
+      // K2 (v1.5 M2): an ASLEEP cragfrog is vulnerable — ×1.5 paint damage.
+      const sleepBonus = cragSleepBonus(e);
       const dmg = paintDamage(base, pig, this.tuning, {
-        enemy: e, deflectFactor: deflect,
+        enemy: e, deflectFactor: deflect, sleepBonus,
       });
       e.hp -= dmg;
       // floating damage number (pigment-colored); a deflected hit says "shell!"

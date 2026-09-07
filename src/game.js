@@ -2506,7 +2506,7 @@ _drawAtelier(ctx) {
     const p = this.player;
     if (this.input.mouse.rDown && p.splashCharge < 1) {
       p.splashCharge = Math.min(1, p.splashCharge + dt / this.tuning.splashCharge);
-      if (p.splashCharge >= 1) this.sfx('charge-ready');
+      if (p.splashCharge >= 1) { this.sfx('charge-ready'); this._noiseEvent(p.x, p.y); } // K2: a full charge is a noise
     }
 
     // ----- named expedition zones (P5): banner + staged spawn + rest checkpoint -----
@@ -2555,6 +2555,7 @@ _drawAtelier(ctx) {
       this.particles.dustPuff(p.x, p.y, 5);
       this.particles.ripple(p.x, p.y);
       this.sfx('boing');
+      this._noiseEvent(p.x, p.y); // K2: a hop is a noise (wakes nearby cragfrogs)
     }
     this.paint.update(dt);
     // E3 (v1.2 M10): Bold-only zone hazards (root/slow) apply after movement so
@@ -2590,6 +2591,7 @@ _drawAtelier(ctx) {
     const targetList = this.enemies;
     if (this.input.mouse.lDown) {
       this.paint.trySwipe(targetList);
+      this._noiseEvent(p.x, p.y); // K2: a paint swipe is a noise
       // paint the heron too (only while boss is "live" and player not dying)
       if (this.heron && this.heron.hp > 0 && !this.heron.flying && this.heron._intro <= 0) {
         const res = this.paint.paintBossHit(this.heron, p.pigment, this.tuning.bossPaintHit);
@@ -2646,6 +2648,7 @@ _drawAtelier(ctx) {
     if (this.input.mouse.rPressed && p.splashCharge >= 1) {
       this.paint.trySplash(targetList);
       this.addShake(8);
+      this._noiseEvent(p.x, p.y); // K2: a splash is a loud noise
       // splash the heron if it's in the burst
       if (this.heron && this.heron.hp > 0 && !this.heron.flying) {
         const d = dist(p.x, p.y, this.heron.x, this.heron.y - 140);
@@ -2942,6 +2945,16 @@ _drawAtelier(ctx) {
     }
   }
 
+  // K2 (v1.5 M2): a noise event (a paint swipe/splash, a hop landing, a charge
+  // completing) at (x, y) wakes any nearby Blind Crag Frog. Only cragfrogs have
+  // a wakeNoise (others are no-ops), so this is safe to call unconditionally on
+  // any sound the frog makes. Pure per-enemy state (enemies.js) — the sound
+  // source is the player, so no world noise accumulator is needed.
+  _noiseEvent(x, y) {
+    if (!this.enemies) return;
+    for (const e of this.enemies) { if (e.wakeNoise) e.wakeNoise(x, y); }
+  }
+
   _spawnWave(dt) {
     this.spawnT -= dt;
     if (this.spawnT > 0) return;
@@ -2977,6 +2990,12 @@ _drawAtelier(ctx) {
     // doesn't crowd the pool.
     const turtleAllowed = this._zoneI >= 3 || this.ngCycle >= 1;
     if (turtleAllowed && t > 25 && roll > 0.9) kind = 'turtle';
+    // K2 (v1.5 M2): the BLIND CRAG FROG is also a zones-3+ creature (same cycle-0
+    // rule as the turtle — never before zone 3 on a first-time run; NG+ may run
+    // it from the first named zone). Bounded: it shares the same spawn cap. It
+    // is the rarest pick, just below the turtle, so it never crowds the pool.
+    const cragAllowed = this._zoneI >= 3 || this.ngCycle >= 1;
+    if (cragAllowed && t > 30 && roll > 0.86 && roll <= 0.9) kind = 'cragfrog';
     this.enemies.push(spawnEnemy(kind, x, y, this.tuning));
   }
 
