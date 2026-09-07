@@ -149,6 +149,48 @@ export const ZONES = [
 // handles it — they add character, not a wall.
 export const ELITE = { hp: 1.9, dmg: 1.3, radius: 1.35, score: 3 };
 
+// L3 (v1.4 "Make It Amazing"): breathing title + vignette/lighting. Pure,
+// testable helpers (a headless smoke stage asserts their bounds/shape). All of
+// L3's draw work uses only these + the existing living backdrop — the title
+// camera drift (`titleT`) stays untouched, and the saturation swell is a
+// DRAW-ONLY modulation of the worldColorSat read (it never writes world state,
+// so the color-reveal single-source-of-truth invariant is preserved: the swell
+// only affects the title backdrop).
+// The title's saturation "breath": a slow 8 s sine swells 0.35 <-> 0.55.
+export const TITLE_SAT_MIN = 0.35, TITLE_SAT_MAX = 0.55, TITLE_BREATH_PERIOD = 8;
+export function titleColorSat(t) {
+  const s = 0.5 - 0.5 * Math.cos((t / TITLE_BREATH_PERIOD) * TAU); // 0..1 eased
+  return TITLE_SAT_MIN + (TITLE_SAT_MAX - TITLE_SAT_MIN) * s;
+}
+// The title TEXT "breath": a small scale/opacity oscillation (a few percent,
+// a couple breaths per minute) so the title gently swells in and out — the
+// spec's "scale/opacity oscillation". Pure: returns a delta in [0, TITLE_SWELL_MAX]
+// (the caller folds it into a scale factor + a tiny alpha dip). 0.4 rad/s
+// => ~15.7 s per breath (gentle). A sine that starts at rest (t=0 -> 0).
+export const TITLE_SWELL_MAX = 0.04, TITLE_BREATH_FREQ = 0.4;
+export function titleBreatheSwell(t) {
+  return TITLE_SWELL_MAX * Math.sin(TITLE_BREATH_FREQ * t);
+}
+// Menu-item stagger: the i-th item fades in 0->1, starting at i*DELAY (a FADE s
+// ease-in). Returns an alpha in [0,1] — items appear STAGGERED, not
+// simultaneous. A slow 0.8 s fade with a 0.15 s stagger reads as a gentle,
+// breathing menu reveal (all four items settle by ~1.25 s).
+export const TITLE_ITEM_DELAY = 0.15, TITLE_ITEM_FADE = 0.8;
+export function titleItemAlpha(t, i) {
+  const a = (t - i * TITLE_ITEM_DELAY) / TITLE_ITEM_FADE;
+  return clamp(a, 0, 1);
+}
+// Subtle always-on warm vignette (lighting polish): a soft edge darkening that
+// is stronger at the corners (d01 in [0,1] = normalized distance from center)
+// and faint near the middle. `damp` lets the low-HP red pulse coexist (it is
+// composited on top). Pure; gated at the call site by options.vignette.
+export function warmVignetteAlpha(d01, damp = 1) {
+  const edge = clamp(d01, 0, 1);
+  // ease toward the corners: quadratic so the middle stays nearly clear.
+  const k = edge * edge;
+  return clamp(0.16 * k * damp, 0, 1);
+}
+
 const HERON_Y = 800; // heron x is set per-run at world.w - 350 (P5)
 const PLAYER_START_X = 260, PLAYER_START_Y = 750;
 const ORB_COLORS = ['red', 'blue', 'green'];
@@ -286,6 +328,9 @@ export class Game {
     this.now = 0;
     this.last = 0;
     this.titleT = 0;
+    // L3: title-entry clock for the staggered menu fade-in (resets on each
+    // return to the title so the menu breathes in again). Presentation only.
+    this._titleShowT = 0;
 
     // ---------- expedition ----------
     this.player = null;
@@ -445,6 +490,9 @@ export class Game {
 
     if (this.state === 'title') {
       this.titleT += dt;
+      // L3: advance the staggered menu fade-in clock (titleT keeps running for
+      // the existing camera drift — _titleShowT is a separate presentation clock).
+      this._titleShowT += dt;
       this.cam.x = 1200 + Math.sin(this.titleT * 0.12) * 500;
       this.cam.y = 750 + Math.cos(this.titleT * 0.09) * 260;
       if (this.optionsOpen) this._updateOptions(dt);
@@ -626,6 +674,9 @@ export class Game {
     this.orbs = [];
     this.hazards = [];
     this.orbStreak = 0;
+    // L3: arm the staggered menu fade-in (starts just before 0 so the menu
+    // breathes in again on each return to the title, rather than popping in).
+    this._titleShowT = -0.5;
     this.sfx('ui-back');
   }
 
@@ -3212,14 +3263,22 @@ _drawAtelier(ctx) {
     const drawSat = (this.state === 'expedition' && this.tuning && this.tuning.satFloor != null)
       ? Math.min(drawSatRaw, this.tuning.satFloor)
       : drawSatRaw;
+    // L3: on the title the living backdrop "breathes" — the world is drawn at a
+    // saturation that swells 0.35 <-> 0.55 on an 8 s sine (titleColorSat).
+    // DRAW-ONLY modulation of the worldColorSat read (never writes world state),
+    // so the color-reveal single-source-of-truth invariant is preserved and the
+    // swell only affects the title backdrop (every other screen is untouched).
+    const drawSatFinal = (this.state === 'title')
+      ? clamp(titleColorSat(this.titleT), 0, 1)
+      : drawSat;
 
     // ---- world space ----
     ctx.save();
     ctx.translate(-v.x * v.scale, -v.y * v.scale);
     ctx.scale(v.scale, v.scale);
-    this.world.drawBackground(ctx, v, drawSat);
-    this.world.drawProps(ctx, v, drawSat, this.now);
-    this.world.drawObstacles(ctx, v, drawSat);
+    this.world.drawBackground(ctx, v, drawSatFinal);
+    this.world.drawProps(ctx, v, drawSatFinal, this.now);
+    this.world.drawObstacles(ctx, v, drawSatFinal);
     // J1 (v1.4): short-lived wet residue marks sit on the surface, under the
     // active stroke and all entities (draw-only; never affects logic).
     this.paint && this.paint.drawWet(ctx);
@@ -3228,7 +3287,7 @@ _drawAtelier(ctx) {
       if (this.heron) this._drawHeron(ctx, this.heron, this.now);
       if (this.midHeron) this._drawHeron(ctx, this.midHeron, this.now); // E1: Painted Heron
       for (const e of this.enemies) drawEnemy(ctx, e, this.now);
-      this._drawHazards(ctx, drawSat); // E3: Bold-only zone hazards
+      this._drawHazards(ctx, drawSatFinal); // E3: Bold-only zone hazards
       if (this.player && this.player.alive) this.player.draw(ctx, v, this.now);
       this._drawOrbs(ctx);
       this._drawBloom(ctx); // V2: radial awaken-bloom wash (world space)
@@ -3258,6 +3317,41 @@ _drawAtelier(ctx) {
     // where the erase-save confirm banner appears)
     this._drawZoneTint(ctx);
     this._drawBanners(ctx);
+
+    // ---- L3 (v1.4): lighting polish — a soft warm radial glow around the frog
+    // (in-expedition) + a subtle always-on warm vignette. The warm vignette is
+    // drawn UNDER the existing low-HP red pulse (which composites on top). Both
+    // are gated by the SAME options.vignette toggle as the low-HP pass. ----
+    if (this.options.vignette) {
+      // (a) soft warm glow around the frog — screen space (world→screen via v).
+      if ((this.state === 'expedition' || this.state === 'end') && this.player && this.player.alive) {
+        const sx = (this.player.x - v.x) * v.scale;
+        const sy = (this.player.y - v.y) * v.scale;
+        const R = 150 * v.scale;
+        const g = ctx.createRadialGradient(sx, sy, 6, sx, sy, R);
+        g.addColorStop(0, 'rgba(255,222,150,0.16)');
+        g.addColorStop(0.5, 'rgba(255,205,130,0.06)');
+        g.addColorStop(1, 'rgba(255,205,130,0)');
+        ctx.save();
+        ctx.fillStyle = g;
+        ctx.fillRect(sx - R, sy - R, R * 2, R * 2);
+        ctx.restore();
+      }
+      // (b) subtle always-on warm vignette — a soft edge darkening (corners
+      // stronger, middle near-clear) that reads as gentle lighting. warmVignetteAlpha
+      // is pure; the radial gradient approximates its distance falloff (the
+      // corner sits at normalized distance 1, so its alpha is warmVignetteAlpha(1)).
+      const half = Math.hypot(this.cw, this.ch) / 2;
+      const cR = Math.max(1, this.ch * 0.42);
+      const edgeA = warmVignetteAlpha(1, 1);
+      const vg = ctx.createRadialGradient(this.cw / 2, this.ch / 2, cR, this.cw / 2, this.ch / 2, half);
+      vg.addColorStop(0, 'rgba(40,28,18,0)');
+      vg.addColorStop(1, 'rgba(40,28,18,' + edgeA.toFixed(3) + ')');
+      ctx.save();
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, this.cw, this.ch);
+      ctx.restore();
+    }
 
     // ---- M5: low-HP vignette (soft red pulse when at <= 2 hp) — P9: user-toggleable ----
     if (this.state === 'expedition' && !this.paused && this.options.vignette && this.player && this.player.alive
@@ -3923,16 +4017,87 @@ _drawAtelier(ctx) {
     paperEnd(ctx);
   }
 
+  // L3: a frog idling on a lily pad in the lower-left corner of the title —
+  // the swamp "breathes" at rest. Reuses J4's watercolor blob pose (a wobbly
+  // body via traceBlob + squash scale) with a slow breathing bob. Pure
+  // draw-time (a function of this.now); no world/player state.
+  _drawIdleFrog(ctx) {
+    const t = this.now;
+    const px = 150, py = this.ch - 150;           // lower-left, clear of the panel
+    const bob = Math.sin(t * 1.1) * 3;             // breathing bob
+    const breathe = 1 + 0.03 * Math.sin(t * 1.1); // gentle squash-and-stretch
+    // lily pad
+    ctx.save();
+    ctx.translate(px, py + 14);
+    ctx.fillStyle = '#4f8a55';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.9;
+    traceBlob(ctx, 0, 0, 42, 21, 0.06, 16);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(244,234,216,0.4)';
+    ctx.beginPath(); ctx.ellipse(6, 4, 20, 12, 0.3, 0, TAU); ctx.fill();
+    ctx.restore();
+    // frog (J4 pose: wobbly blob + squash)
+    ctx.save();
+    ctx.translate(px, py - 6 + bob);
+    ctx.scale(breathe, 2 - breathe);
+    const r = 20;
+    // legs
+    ctx.fillStyle = '#69a24e'; ctx.strokeStyle = INK; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.85, r * 0.45, 6, 4.5, -0.5, 0, TAU);
+    ctx.ellipse(r * 0.85, r * 0.45, 6, 4.5, 0.5, 0, TAU);
+    ctx.fill(); ctx.stroke();
+    // body — the traceBlob seed varies slowly with time for a living wobble
+    const seed = Math.floor(t * 3);
+    ctx.fillStyle = '#69a24e';
+    traceBlob(ctx, 0, 0, r, seed, 0.09, 12);
+    ctx.fill();
+    ctx.lineWidth = 2.2; ctx.strokeStyle = INK;
+    traceBlob(ctx, 0, 0, r, seed, 0.09, 12);
+    ctx.stroke();
+    // belly
+    ctx.fillStyle = 'rgba(244,234,216,0.55)';
+    ctx.beginPath(); ctx.ellipse(0, r * 0.35, r * 0.6, r * 0.4, 0, 0, TAU); ctx.fill();
+    // eyes (looking up at the title)
+    const blink = (Math.sin(t * 0.8) > 0.96) ? 0.2 : 1; // occasional slow blink
+    for (const side of [-1, 1]) {
+      const bx = side * r * 0.45, by = -r * 0.55;
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.ellipse(bx, by, 5, 5 * blink, 0, 0, TAU); ctx.fill(); ctx.stroke();
+      if (blink > 0.5) { ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(bx, by - 1.5, 2.2, 0, TAU); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+
   _drawTitle(ctx) {
     ctx.save();
     ctx.fillStyle = 'rgba(30,25,22,0.45)';
     ctx.fillRect(0, 0, this.cw, this.ch);
     ctx.restore();
 
+    // L3: a frog sits idle on a lily pad in the corner — the swamp "breathes"
+    // even at rest. Reuses J4's watercolor blob pose (wobbly body + squash) and
+    // a slow breathing bob (draw-only; no world/player state). Sits in the
+    // lower-left, clear of the centered title panel.
+    this._drawIdleFrog(ctx);
+
     const cx = this.cw / 2;
     const bob = Math.sin(this.now * 1.4) * 4;
+    // L3: the title + tagline breathe in first (stagger step 0/1), AND gently
+    // "breathe" while shown — a small scale/opacity oscillation (titleBreatheSwell,
+    // ~4% over a slow sine) folded into a transform around the title point.
+    // Draw-only; the menu rects (hit-testing) are untouched, so input is stable.
+    ctx.save();
+    ctx.globalAlpha = titleItemAlpha(this._titleShowT, 0);
+    const swell = titleBreatheSwell(this.now); // a few % scale oscillation
+    ctx.translate(cx, 200);                    // pivot near the title text
+    ctx.scale(1 + swell, 1 + swell);
+    ctx.translate(-cx, -200);
     outlineText(ctx, 'Frogue Gallery', cx, 190 + bob, '700 72px Georgia, serif', '#f4ead8', INK, 10);
     centerText(ctx, 'a cozy action roguelite about a tiny frog painter', cx, 248 + bob, 'italic 20px Georgia, serif', '#fdf6e9', 0.92);
+    ctx.restore();
 
     // M8 P7: single source of truth for every title-screen rect (shared with the
     // click handling in _updateTitle).
@@ -3965,6 +4130,9 @@ _drawAtelier(ctx) {
     const hasProgress = this.save.stats.expeditions > 0 || this.save.owned.length > 0 ||
       b.red > 0 || b.blue > 0 || b.green > 0 || this.save.loadout.length > 0 ||
       (this.save.upgrades && (this.save.upgrades.power > 0 || this.save.upgrades.vitality > 0 || this.save.upgrades.capacity > 0));
+        // L3: the primary actions breathe in as a staggered step (step 1) after the title.
+        ctx.save();
+        ctx.globalAlpha = titleItemAlpha(this._titleShowT, 1);
         uiButton(ctx, g.bx, g.by, g.bw, g.bh, hasProgress ? 'Continue Expedition' : 'Begin Expedition', this._mouseIn(g.bx, g.by, g.bw, g.bh), false, { seed: 5, size: 20, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
         // T1 (v1.2 M13): the guided first expedition — shown only to a fresh
         // save (no finished run, never skipped). Clicking it begins a low-stakes
@@ -3978,13 +4146,18 @@ _drawAtelier(ctx) {
         if (g.ng) {
           uiButton(ctx, g.ng.x, g.ng.y, g.ng.w, g.ng.h, 'Next Expedition  (New Game+)', this._mouseIn(g.ng.x, g.ng.y, g.ng.w, g.ng.h), false, { seed: 56, size: 14, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
         }
+        ctx.restore();
         // M8 P7: difficulty pills (Gentle / Normal / Bold) between the two buttons.
+        // L3: staggered step 2.
+        ctx.save();
+        ctx.globalAlpha = titleItemAlpha(this._titleShowT, 2);
         centerText(ctx, 'difficulty', cx - g.diff[0].x + 34, g.diff[0].y + 20, '11px Georgia, serif', INK, 0.55);
         for (const p of g.diff) {
           const sel = this.options.difficulty === p.id;
           const hov = this._mouseIn(p.x, p.y, p.w, p.h);
           ctx.save();
-          ctx.globalAlpha = sel ? 1 : (hov ? 0.92 : 0.78);
+          // multiply the per-pill emphasis by the group fade-in (step 2).
+          ctx.globalAlpha = ctx.globalAlpha * (sel ? 1 : (hov ? 0.92 : 0.78));
           roundRectPath(ctx, p.x, p.y, p.w, p.h, 8);
           ctx.fillStyle = sel ? '#3a5a3f' : (hov ? '#e8dcc4' : '#f2e8d4');
           ctx.fill();
@@ -3994,10 +4167,14 @@ _drawAtelier(ctx) {
           centerText(ctx, p.label, p.x + p.w / 2, p.y + p.h / 2 + 4, sel ? '700 13px Georgia, serif' : '12px Georgia, serif', sel ? '#fdf6e9' : INK, sel ? 1 : 0.85);
           ctx.restore();
         }
-        // atelier button (visual; A / click handled in _updateTitle)
+        ctx.restore();
+        // atelier button (visual; A / click handled in _updateTitle) + options
+        // (O / click handled in _updateTitle). L3: staggered step 3.
+        ctx.save();
+        ctx.globalAlpha = titleItemAlpha(this._titleShowT, 3);
         uiButton(ctx, g.abx, g.aby, g.abw, g.abh, 'Visit the Atelier', this._mouseIn(g.abx, g.aby, g.abw, g.abh), false, { seed: 6, size: 15 });
-        // P9: options button (visual; O / click handled in _updateTitle)
         uiButton(ctx, g.ox, g.oy, g.ow, g.oh, 'Options', this._mouseIn(g.ox, g.oy, g.ow, g.oh), false, { seed: 7, size: 15 });
+        ctx.restore();
 
         // little footer stats
         const s = this.save.stats;

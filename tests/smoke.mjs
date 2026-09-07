@@ -4089,5 +4089,64 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
   assert(world2.pigmentGrid.size === 0 || [...world2.pigmentGrid.values()].every(c => c.red < 0.1 && c.blue < 0.1 && c.green < 0.1), 'L2: the pigment decays over ~5s (wet cell dries out after 6s)');
 }
 
+// ============================================================
+// Stage 65: v1.4 L3 — breathing title screen + vignette/lighting
+// (pure draw-time + a draw-only saturation swell; no world state;
+//  respects the existing options.vignette toggle; P10-safe.)
+// ============================================================
+{
+  console.log('== stage 65: v1.4 L3 — breathing title screen + vignette/lighting ==');
+  const G = await import('../src/game.js');
+  const { titleBreatheSwell, titleItemAlpha, warmVignetteAlpha } = G;
+
+  // ---- the title "breathes": a small scale/opacity oscillation, bounded ----
+  // the swell is a slow sine in [0, swellMax] (a few percent) so the title
+  // swells in and out gently (a couple breaths per minute, not frantic).
+  const s0 = titleBreatheSwell(0);
+  const s1 = titleBreatheSwell(2);
+  const s2 = titleBreatheSwell(4);
+  const sPeak = titleBreatheSwell(Math.PI / 2); // sine peak
+  assert(s0 === 0, `L3: the breath swell starts at rest (t=0 -> 0, got ${s0})`);
+  assert(sPeak > 0 && sPeak <= 0.04, `L3: the breath swell is a small, bounded oscillation (peak ${sPeak.toFixed(4)} in (0, 0.04])`);
+  assert(s0 < s1 && s1 < s2, `L3: the swell rises over a quarter period (0 < t=2 < t=4: ${s0.toFixed(3)} < ${s1.toFixed(3)} < ${s2.toFixed(3)})`);
+  // the oscillation is periodic (breathing), not a one-shot: two full periods apart it returns to the same value.
+  const period = 2 * Math.PI / 0.4; // freq 0.4 rad/s
+  assert(Math.abs(titleBreatheSwell(1.0) - titleBreatheSwell(1.0 + period)) < 1e-3, 'L3: the breath swell is periodic (returns to the same value one period later)');
+  // it reads as "a couple breaths per minute": period in seconds is ~15s (0.4 rad/s).
+  assert(period > 10 && period < 25, `L3: the breathing rate is gentle (~${period.toFixed(1)}s per breath, in (10,25)s)`);
+
+  // ---- the menu items stagger in (each fades in after the last) ----
+  // at t=0 everything is hidden; each later item starts later; all reach 1.
+  const steps = 4;
+  for (let i = 0; i < steps; i++) {
+    assert(titleItemAlpha(0, i) === 0, `L3: menu item ${i} is hidden at t=0 (alpha 0)`);
+    assert(titleItemAlpha(3, i) === 1, `L3: menu item ${i} is fully shown by t=3 (alpha 1, got ${titleItemAlpha(3, i)})`);
+  }
+  // the stagger is real: at a time when the first is showing but the last is not,
+  // the item alphas are strictly increasing in the item index (later = less far in).
+  const tMid = 0.6;
+  const alphas = [];
+  for (let i = 0; i < steps; i++) alphas.push(titleItemAlpha(tMid, i));
+  assert(alphas[0] > alphas[1] && alphas[1] > alphas[2] && alphas[2] > alphas[3],
+    `L3: the menu items stagger in (at t=${tMid}: ${alphas.map(a => a.toFixed(2)).join(' > ')})`);
+  // every alpha stays in [0,1].
+  for (let i = 0; i < steps; i++) {
+    for (const t of [0, 0.2, 0.4, 0.6, 1.0, 2.0]) {
+      const a = titleItemAlpha(t, i);
+      assert(a >= 0 && a <= 1, `L3: title item alpha is in [0,1] (t=${t}, item ${i} -> ${a})`);
+    }
+  }
+
+  // ---- the warm vignette is a subtle, bounded edge darkening ----
+  // near the center (d01=0) it is near-clear; at the corners (d01=1) it is a
+  // soft (low) alpha, never opaque — a gentle lighting wash, not a black box.
+  const centerA = warmVignetteAlpha(0, 1);
+  const edgeA = warmVignetteAlpha(1, 1);
+  assert(centerA >= 0 && centerA < 0.03, `L3: the warm vignette is near-clear at the center (alpha ${centerA.toFixed(3)} < 0.03)`);
+  assert(edgeA > 0 && edgeA <= 0.22, `L3: the warm vignette is a subtle edge darkening at the corners (alpha ${edgeA.toFixed(3)} in (0, 0.22])`);
+  // the falloff is monotonic (clearer toward the center).
+  assert(warmVignetteAlpha(0.25, 1) < warmVignetteAlpha(0.5, 1) && warmVignetteAlpha(0.5, 1) < warmVignetteAlpha(0.9, 1), 'L3: the vignette darkens monotonically toward the edges');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

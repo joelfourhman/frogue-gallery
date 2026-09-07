@@ -457,21 +457,25 @@ per-frame budget assertion.
     still passes (this item is the one most likely to regress 60fps —
     verify the cached path, not the raw one). Status: DONE (stage 64).
 
-- [ ] **L3 — Breathing title screen + vignette/lighting polish** — `game.js` / `ui.js`
+- [x] **L3 — Breathing title screen + vignette/lighting polish** — `game.js` / `ui.js`
   - **What:** the title screen becomes the swamp breathing: a slow
-    `worldColorSat` swell (e.g. 0.35↔0.55, 8 s sine) on the existing living
-    backdrop; a frog sits idle on a lily pad (reuses J4's poses); menu items
-    fade in staggered (200 ms steps). Lighting: a soft warm radial glow
-    around the frog in-expedition, plus a subtle always-on warm vignette
-    layer under the existing low-HP vignette pass (`game.js:3062`, gated by
-    the same `options.vignette` toggle).
-  - **Notes:** the title camera drift (`game.js:374`) stays; the saturation
-    swell is a draw-only modulation of the `worldColorSat` read — not a
-    change to world state (the color-reveal single-source-of-truth
-    invariant is preserved: the swell only affects the title backdrop).
+    `worldColorSat` swell (0.35↔0.55, 8 s sine) on the existing living
+    backdrop; a **scale/opacity oscillation** on the title text (a few %,
+    slow sine — `titleBreatheSwell`); a frog sits idle on a lily pad (reuses
+    J4's poses); menu items fade in staggered. Lighting: a soft warm radial
+    glow around the frog in-expedition, plus a subtle always-on warm vignette
+    layer under the existing low-HP vignette pass (gated by the same
+    `options.vignette` toggle).
+  - **Notes:** the title camera drift stays; the saturation swell is a
+    draw-only modulation of the `worldColorSat` read — not a change to world
+    state (the color-reveal single-source-of-truth invariant is preserved:
+    the swell only affects the title backdrop). Pure, testable helpers
+    (`titleColorSat`, `titleBreatheSwell`, `titleItemAlpha`,
+    `warmVignetteAlpha`) live at the top of `game.js`.
   - **Acceptance:** smoke stage: title colorSat oscillates between the two
-    bounds, menu items appear staggered not simultaneous; P10 still
-    passes. Status: TODO.
+    bounds, the breath swell is a small bounded oscillation, menu items
+    appear staggered not simultaneous, warm vignette is a bounded edge
+    darkening; P10 still passes. Status: DONE (stage 65).
 
 ### Module S — Audio
 
