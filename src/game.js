@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, inGravityPocket, hopLift, floodedWaterFactor } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -3729,7 +3729,16 @@ _drawAtelier(ctx) {
       const synEv = syn ? goldEventSynergy(syn) : null;
       if (synEv) this._awardGold(synEv, 'A new pairing — the Curator adds GOLD to your ledger.');
     }
-    if (victory) { this.save.stats.victories += 1; this.save.flags.heronDefeated = true; }
+    if (victory) {
+      this.save.stats.victories += 1;
+      this.save.flags.heronDefeated = true;
+      // R5 (v1.6 Module R): the BENEATH-THE-REEDS gate. Set on the FIRST swamp
+      // victory — the SAME place ngUnlocked's victory is recorded (a victory is
+      // a victory). A victory-carrying save (victories >= 1) always has this set
+      // after the run that earned it; a first-time save that never won stays
+      // false (the entry is hidden, so the first-time run is byte-identical).
+      this.save.flags.reedsUnlocked = true;
+    }
     else this.save.stats.deaths += 1;
     // K7 (v1.5 M2): file the CURATOR CHALLENGE score. Only a victory files a
     // score (a defeat clears it silently), and only when this run WAS a
@@ -5523,7 +5532,11 @@ _drawAtelier(ctx) {
     // K9 (v1.5 M4): the "Know your quarry" column grew by the four v1.5
     // residents (turtle / crag frog / storm surge / gilded heron) — the panel
     // grows to fit them (single source of truth shared by draw + click).
-    const ph = retrainOn ? 604 : 560;
+    // R5 (v1.6 Module R): a Reeds-unlocked save grows the panel further to fit
+    // the four BENEATH-THE-REEDS placeholder Field Guide entries (a base save
+    // keeps its exact height — no overlap, no growth when locked).
+    const reedsGuide = reedsUnlocked(this.save);
+    const ph = (retrainOn ? 604 : 560) + (reedsGuide ? 200 : 0);
     const bw = 150, bh = 34, gap = 16, totalW = 4 * bw + 3 * gap;
     const bx0 = cx - totalW / 2, by = py + ph - 92;
     const phases = [3, 4, 5, 6]; // burn / freeze / root drills, then the sketch heron
@@ -5595,6 +5608,30 @@ _drawAtelier(ctx) {
     this._wrapHelp(c, 'Watch the telegraph (a glow before it strikes). Move off the marked line when it swoops, sweeps, or dives. It gathers reinforcements and grows fiercer the lower its health falls — keep painting to keep it stunned.', colR, hy + 16, colW, 14);
     if (this.heron && this.heron.gilded) {
       this._wrapHelp(c, 'NEW: its gilded plume EATS your green healing — heal in the 30s gaps between plumes.', colR, hy + 44, colW, 14);
+    }
+
+    // R5 (v1.6 Module R): the BENEATH-THE-REEDS placeholder Field Guide cards.
+    // Shown only when the biome is unlocked (reedsUnlocked — a first-time save
+    // never sees them, so the cycle-0 guide is byte-identical). The creatures
+    // land in R3/R4; these placeholder entries may reference them by name and
+    // MUST render even before the creatures exist (pure display data from
+    // REEDS_CREATURES in logic.js). A new column heading + one card per
+    // creature, drawn with the same wrap helpers as the v1.5 entries.
+    const reedsGuide = reedsUnlocked(this.save);
+    if (reedsGuide) {
+      const rgY = y0 + 34 + foes.length * 48 + 12 + 60 + 40;
+      c.save(); c.font = '700 16px Georgia, serif'; c.fillStyle = '#b08a4a'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillText('Beneath the Reeds', colR, rgY);
+      c.font = 'italic 11px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.7)';
+      this._wrapHelp(c, 'the deeper swamp — carry your lantern (L). Its light draws these creatures.', colR, rgY + 15, colW, 12);
+      c.restore();
+      REEDS_CREATURES.forEach((r, i) => {
+        const y = rgY + 40 + i * 30;
+        c.font = '700 13px Georgia, serif'; c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle';
+        c.fillText(r.name, colR, y);
+        c.font = '12px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.8)';
+        this._wrapHelp(c, r.note, colR, y + 13, colW, 12);
+      });
     }
 
     // footer

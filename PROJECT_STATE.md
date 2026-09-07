@@ -230,9 +230,21 @@ and **4th boss archetype** (→ R4)):
    SEPARATE deterministic RNG stream so it no longer perturbs the terrain
    stream; world build is deterministic per seed; new smoke stage 84,
    23 assertions; P10 + stable cached layers green; cycle-0 pace 17.4 /
-   humance ~18.4 min — IN band, byte-identical). **Next: R5
-   (`reedsUnlocked` save gate + SAVE_VERSION 9→10 + Field Guide Reeds
-   entries).** See commit log.
+   humance ~18.4 min — IN band, byte-identical). **R5 ✅ DONE + committed**
+   (the Reeds save gate + Field Guide entries: `save.flags.reedsUnlocked` set
+   on the FIRST swamp victory — the same place ngUnlocked is set, a defeat
+   never sets it — and the title/atelier entry reads it; SAVE_VERSION 9 → 10
+   with a `SAVE_MIGRATIONS` v9→v10 step + `normalizeReedsUnlocked` (every
+   pre-v1.6 save loads `false` — nobody backfills access; a legacy
+   victory-carrying save keeps access via the victory fallback); the P6 Field
+   Guide renders the four BENEATH-THE-REEDS placeholder cards — Wisp / Serpent
+   / Leech / The Silt Wyrm, with their counterplay notes — ONLY when unlocked
+   (a first-time guide is byte-identical; pure `REEDS_CREATURES` display data
+   in logic.js; new smoke stage 85, 28 assertions). **BATCH 1 (R1 + R2 + R5)
+   COMPLETE** — the Reeds biome shell is in. Next: BATCH 2 (R3, R4, R6 — the
+   bestiary + the Silt Wyrm boss + reedspace probe + full-season pacing
+   re-verification). First-sight callouts + the Reeds atelier one-liners ship
+   with R3/R4. See commit log.
 2. **BATCH 2 — R3, R4, R6** (the bestiary: Wisp/Serpent/Leech light-keyed
    behaviors; The Silt Wyrm boss; `tests/reedspace.mjs` probe +
    full-season pacing re-verification + cycle-0 tuning byte-identity).

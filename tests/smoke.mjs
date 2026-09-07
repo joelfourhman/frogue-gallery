@@ -3149,9 +3149,9 @@ console.log('== stage 52: v1.3 M15 G3 — Gilded Frame (NG+ prestige tier) ==');
   const S52 = await import('../src/save.js');
   const KEY = 'frogue_gallery_save';
 
-  // (0) schema: a fresh save is NOT gilded, SAVE_VERSION is now 9 (K7: 8 -> 9
-  // adds the challengeScores best-score list; the v9 era supersedes the v8 one).
-  assert(L52.SAVE_VERSION === 9, `G3: SAVE_VERSION is now 9 (K7 challenge era; got ${L52.SAVE_VERSION})`);
+  // (0) schema: a fresh save is NOT gilded, SAVE_VERSION is now 10 (R5: 9 -> 10
+  // adds the reedsUnlocked gate flag; the v10 era supersedes the v9 one).
+  assert(L52.SAVE_VERSION === 10, `G3: SAVE_VERSION is now 10 (R5 reeds era; got ${L52.SAVE_VERSION})`);
   const fresh = L52.freshSave();
   assert(fresh.gildedFrame === false, 'G3: a fresh save has gildedFrame false');
   assert(L52.isGilded(fresh) === false, 'G3: isGilded is false on a fresh save');
@@ -4514,7 +4514,7 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
 {
   console.log('== stage 69: v1.4 M1 — first-victory cinematic beat (headless) ==');
   const L = await import('../src/logic.js');
-  assert(L.SAVE_VERSION === 9, 'M1: SAVE_VERSION is 9 (K7 bumped 8 -> 9 for the challengeScores list; the cinematic seen-flag from 7 -> 8 is unchanged)');
+  assert(L.SAVE_VERSION === 10, 'M1: SAVE_VERSION is 10 (R5 bumped 9 -> 10 for the reedsUnlocked flag; the cinematic seen-flag from 7 -> 8 is unchanged)');
   // Headless AudioContext that RECORDS every tone scheduled, so we can assert
   // the arpeggio shape (a soft RISING sequence) + that it rides the melody
   // layer (musicBus), not the sfx bus. Mirrors the S1/S2 stage pattern.
@@ -5771,9 +5771,10 @@ console.log('== stage 79: v1.5 K8 — Challenge Reward (Masterpiece + rank gold)
   g83._updateExpedition(0.016);
   assert(g83._firstSight.gilded === false, 'K9: a cycle-0 (gray heron) engage never fires the gilded callout');
   assert(g83.banners.filter(b => String(b.text).includes('GILDED HERON')).length === 0, 'K9: no gilded callout on a first-time run');
-  // and no new save field was introduced (SAVE_VERSION unchanged, the flags
-  // are a plain in-memory object on the Game, absent from the save)
-  assert(L80.SAVE_VERSION === 9, 'K9: SAVE_VERSION stays 9 (no new save field for the first-sight flags)');
+  // K9 itself introduced no save field (the first-sight flags are a plain
+  // in-memory object on the Game, absent from the save). R5 (later) bumped the
+  // schema 9 -> 10 for the reedsUnlocked gate flag — the current version is 10.
+  assert(L80.SAVE_VERSION === 10, 'K9: SAVE_VERSION is 10 (R5 bumped 9 -> 10 for the reedsUnlocked flag; K9 first-sight flags remain in-memory, not persisted)');
   assert(g81.save._firstSight === undefined, 'K9: the first-sight flags live on the Game (in-memory), not the save');
 
   console.log('ok — K9: the field guide\'s "Know your quarry" renders the four v1.5 residents (Mud Turtle / Blind Crag Frog / Storm Surge + the Gilded Heron\'s plume line on NG+ c3+ saves), and each new creature fires a ONE-SHOT first-sight banner (one in-memory flag per creature — A1/M3-style, no new save field, SAVE_VERSION 9) that never repeats');
@@ -6052,6 +6053,100 @@ console.log('== stage 84: v1.6 R2 — FLOODED LOWER BANKS + INVERTED-GRAVITY POC
   console.log('ok — R2: the Reeds traversal layer works — the pure inGravityPocket predicate is true inside / false outside a pocket AABB (2-3 pockets), the hop sign FLIPS to a downward "clump" inside and REVERTS on exit (no stuck state, hopLift pure in logic.js), the flooded lower banks slow ground movement by the documented 0.72x (a pure predicate applied only in the Reeds variant, cycle-0 byte-identical), and the ~6000px world build is DETERMINISTIC per seed; P10 off-screen culling + the stable cached texture layer hold.');
 }
 function makeCanvasCtx(w) { const cv = makeCanvas(); return cv.getContext ? cv.getContext('2d') : cv; }
+
+console.log('== stage 85: v1.6 R5 — REEDS SAVE GATE (save.flags.reedsUnlocked, SAVE_VERSION 9 -> 10) + Field Guide Reeds entries ==');
+{
+  const L85 = await import('../src/logic.js');
+
+  // ---- (a) SAVE_VERSION 9 -> 10 + the v9 -> v10 migration + normalizer ----
+  assert(L85.SAVE_VERSION === 10, `R5: SAVE_VERSION is 10 (bumped 9 -> 10 for the reedsUnlocked flag; got ${L85.SAVE_VERSION})`);
+  const fresh85 = L85.freshSave();
+  assert(fresh85.flags.reedsUnlocked === false, 'R5: a fresh save has flags.reedsUnlocked false (the new biome is locked by default)');
+  assert(fresh85.saveVersion === 10, 'R5: a fresh save is stamped saveVersion 10');
+  // the normalizer: a missing / garbled field loads false (nobody backfills access).
+  assert(L85.normalizeReedsUnlocked(undefined) === false, 'R5: normalizeReedsUnlocked(undefined) is false (no field = locked)');
+  assert(L85.normalizeReedsUnlocked(true) === true, 'R5: normalizeReedsUnlocked(true) is true');
+  // v9 -> v10 migration: a legacy v9 save (no field) loads reedsUnlocked FALSE.
+  const mig9 = L85.migrateSave({ saveVersion: 9, stats: { victories: 0 }, flags: { heronDefeated: false } });
+  assert(mig9.saveVersion === 10, `R5: a v9 save migrates to the current version (got ${mig9.saveVersion})`);
+  assert(mig9.flags.reedsUnlocked === false, 'R5: a v9 -> v10 migration loads reedsUnlocked FALSE (nobody backfills access)');
+  // a v10 save that already has the flag keeps it (idempotent round-trip).
+  const mig10 = L85.migrateSave({ saveVersion: 10, flags: { reedsUnlocked: true } });
+  assert(mig10.flags.reedsUnlocked === true && mig10.saveVersion === 10, 'R5: a v10 save with the flag set round-trips reedsUnlocked true');
+
+  // ---- (b) the GATE reads the flag (with a victory fallback for legacy saves) ----
+  assert(L85.reedsUnlocked(fresh85) === false, 'R5: a fresh (no-victory, no-flag) save does NOT unlock the Reeds');
+  const flagSave = L85.freshSave(); flagSave.flags.reedsUnlocked = true;
+  assert(L85.reedsUnlocked(flagSave) === true, 'R5: a save with flags.reedsUnlocked true UNLOCKS the Reeds (the entry reads the field)');
+  // a legacy save that has victories but never set the flag still gets access
+  // (the victory fallback), so existing players keep what they earned.
+  const legacySave = L85.freshSave(); legacySave.stats.victories = 2; legacySave.flags.heronDefeated = true;
+  assert(L85.reedsUnlocked(legacySave) === true, 'R5: a legacy victory-carrying save (no flag) still unlocks the Reeds via the victory fallback');
+
+  // ---- (c) a VICTORY flips reedsUnlocked (the same place ngUnlocked's victory is recorded) ----
+  const vCanvas = makeCanvas();
+  const gV = new Game(vCanvas); gV.start(); gV._quitToTitle();
+  gV.save = L85.freshSave(); gV._beginExpedition();
+  assert(gV.save.flags.reedsUnlocked === false, 'R5: before a victory, a fresh save has reedsUnlocked false');
+  gV._endRun('victory');
+  assert(gV.save.flags.reedsUnlocked === true, 'R5: a swamp VICTORY sets flags.reedsUnlocked true (same place ngUnlocked is set)');
+  assert(gV.save.stats.victories === 1 && gV.save.flags.heronDefeated === true, 'R5: the victory bookkeeping (victories + heronDefeated) is intact alongside the flag');
+  // a defeat does NOT unlock the biome.
+  const gD = new Game(makeCanvas()); gD.start(); gD._quitToTitle();
+  gD.save = L85.freshSave(); gD._beginExpedition();
+  gD._endRun('defeat');
+  assert(gD.save.flags.reedsUnlocked === false, 'R5: a DEFEAT does not set reedsUnlocked (the biome stays locked for a first-timer)');
+
+  // ---- (d) the P6 Field Guide renders the four Reeds entries (fillText recording) ----
+  const recCanvas = makeCanvas();
+  const drawn = [];
+  const baseCtx85 = makeCtx(recCanvas);
+  const recCtx85 = new Proxy(baseCtx85, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas.getContext = () => recCtx85;
+  const gG = new Game(recCanvas); gG.start(); gG._quitToTitle();
+  // a Reeds-unlocked save: the four placeholder entries must render even before
+  // the R3/R4 creatures exist (they may reference them by name).
+  gG.save = L85.freshSave(); gG.save.flags.reedsUnlocked = true;
+  gG._beginExpedition();
+  assert(gG.state === 'expedition', 'R5: the recording game started a Reeds-unlocked expedition');
+  const geom85 = gG._helpGeom();
+  assert(geom85.ph >= 760, `R5: the field-guide panel grew to fit the Reeds entries (ph ${geom85.ph} >= 760)`);
+  fireKey('keydown', 'h'); frames(3);
+  const joined85 = drawn.join('\u0001');
+  assert(joined85.includes('Beneath the Reeds'), 'R5: the field guide renders the "Beneath the Reeds" section heading');
+  assert(joined85.includes('Wisp'), 'R5: the field guide lists the WISP (light-homing + blue-blind placeholder card)');
+  assert(joined85.includes('Serpent'), 'R5: the field guide lists the SERPENT (burrow/telegraph + paint-the-ring interrupt card)');
+  assert(joined85.includes('Leech'), 'R5: the field guide lists the LEECH (cling/strangle + paint-or-hop off card)');
+  assert(joined85.includes('The Silt Wyrm'), 'R5: the field guide lists THE SILT WYRM (surface-point counterplay card)');
+  // the four cards carry their counterplay notes (the R3/R4 placeholders render).
+  assert(joined85.includes('BLUE-BLIND') || joined85.includes('blue'), 'R5: the Wisp entry mentions its blue-blind / light-homing trait');
+  assert(joined85.includes('PAINT THE RING') || joined85.includes('telegraph'), 'R5: the SERPENT entry mentions the telegraph / paint-the-ring interrupt');
+  assert(joined85.includes('SURFACE POINT') || joined85.includes('breaches'), 'R5: the SILT WYRM entry mentions the surface-point counterplay');
+
+  // ---- (e) a LOCKED (first-time) save renders NO Reeds section (byte-identical guide) ----
+  const rec2 = makeCanvas();
+  const drawn2 = [];
+  const baseCtx86 = makeCtx(rec2);
+  const recCtx86 = new Proxy(baseCtx86, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn2.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  rec2.getContext = () => recCtx86;
+  const gL = new Game(rec2); gL.start(); gL._quitToTitle();
+  gL.save = L85.freshSave(); // no victory, no flag -> locked
+  gL._beginExpedition();
+  const geomL = gL._helpGeom();
+  assert(geomL.ph < 700, `R5: a locked (first-time) field-guide panel does NOT grow for the Reeds (ph ${geomL.ph} < 700)`);
+  fireKey('keydown', 'h'); frames(3);
+  const joinedL = drawn2.join('\u0001');
+  assert(!joinedL.includes('Beneath the Reeds'), 'R5: a first-time (locked) field guide renders NO "Beneath the Reeds" section (cycle-0 guide byte-identical)');
+  assert(!joinedL.includes('The Silt Wyrm'), 'R5: a first-time field guide lists NO Reeds creatures');
+
+  console.log('ok — R5: the Reeds save gate works — save.flags.reedsUnlocked (set on the first swamp victory, same place ngUnlocked is set; a defeat never sets it) opens the title/atelier entry, SAVE_VERSION bumped 9 -> 10 with a v9->v10 migration + normalizeReedsUnlocked (every pre-v1.6 save loads false — nobody backfills access; a legacy victory save keeps access via the victory fallback), and the P6 Field Guide renders the four BENEATH-THE-REEDS placeholder cards (Wisp / Serpent / Leech / The Silt Wyrm, with their counterplay notes) only when unlocked (a first-time guide is byte-identical).');
+}
 
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

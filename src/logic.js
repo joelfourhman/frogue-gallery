@@ -643,9 +643,30 @@ export function challengeUnlocked(save) {
 // SAVE_VERSION 9→10 migration + normalizer so every pre-v1.6 save loads false —
 // nobody backfills access) and makes the title/atelier entry read that field.
 // For R1 the gate is the pure victory predicate below.
+// R5: the gate is the PERSISTENT save.flags.reedsUnlocked latch (set on the
+// FIRST swamp victory — the same place ngUnlocked is set). The victory
+// fallback keeps a legacy save (already has victories, flag never set
+// because it predates v1.6) able to enter; a fresh no-victory save is locked.
 export function reedsUnlocked(save) {
+  if (save && save.flags && !!save.flags.reedsUnlocked) return true;
   return !!(save && save.stats && Number(save.stats.victories) > 0);
 }
+
+// R5 (v1.6 Module R): normalize the reedsUnlocked gate flag to a boolean.
+// Every pre-v1.6 save (no field) loads FALSE — nobody backfills access.
+export function normalizeReedsUnlocked(raw) {
+  return !!raw;
+}
+
+// R5 (v1.6 Module R): the four BENEATH-THE-REEDS creatures as placeholder
+// Field Guide cards (the creatures land in R3/R4 — these entries may reference
+// them by name and must render even before they exist). Pure display data.
+export const REEDS_CREATURES = [
+  { id: 'wisp',     name: 'Wisp',          note: 'homes to your lantern light; BLUE-BLIND — it ignores blue, so keep the glow low or stand it off with red.' },
+  { id: 'serpent',  name: 'Serpent',       note: 'burrows and telegraphs its lunge; PAINT THE RING to interrupt the strike before it breaks the surface.' },
+  { id: 'leech',    name: 'Leech',         note: 'clings and STRANGLES your color; PAINT it off or HOP clear before the strangle drains you.' },
+  { id: 'siltwyrm', name: 'The Silt Wyrm', note: 'the deep boss — strike the SURFACE POINT as it breaches the water; the lantern marks the target.' },
+];
 
 // ----------------------------------------------------------------
 // R1 (v1.6 Module R): THE LANTERN — the Reeds biome's signature mechanic.
@@ -1709,7 +1730,8 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // v1.5 K7: 8 → 9 adds the `challengeScores` list — the CURATOR CHALLENGE's
 // saved best-score file (top 5, each {seed,date,score}); old saves (no such
 // field) migrate forward with an empty list.)
-export const SAVE_VERSION = 9;
+// R5 (v1.6 Module R): bumped 9 -> 10 for the BENEATH-THE-REEDS gate flag (save.flags.reedsUnlocked) + the four Reeds Field Guide entries. A pre-v1.6 save loads reedsUnlocked FALSE (nobody backfills access) via the v9->v10 migration + normalizeReedsUnlocked.
+export const SAVE_VERSION = 10;
 
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
@@ -1797,6 +1819,15 @@ const SAVE_MIGRATIONS = [
       out.challengeScores = normalizeChallengeScores(out.challengeScores);
     },
   },
+  {
+    from: 9, to: 10,
+    fn: (out) => {
+      // R5 (v1.6 Module R): the BENEATH-THE-REEDS gate flag. Every
+      // pre-v1.6 save (no field) migrates forward with reedsUnlocked
+      // DEFAULTED TO FALSE — nobody backfills access to the new biome.
+      out.flags.reedsUnlocked = normalizeReedsUnlocked(out.flags.reedsUnlocked);
+    },
+  },
 ];
 
 // N1 (v1.3 M14): normalize the New Game+ cycle index — a non-negative integer
@@ -1878,7 +1909,7 @@ export function freshSave() {
     owned: [],            // painting ids
     loadout: [],          // up to 2 painting ids
     upgrades: { capacity: 0, power: 0, vitality: 0 },
-    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false, tutorialSkipped: false },
+    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false, tutorialSkipped: false, reedsUnlocked: false },
     stats: { expeditions: 0, victories: 0, deaths: 0, heronsPainted: 0, treasures: 0 },
     bestRun: null,        // {pigments, time, cleared}
     galleryBonus: 0,      // A4 (v1.2 M9): 'Rehung Frame' prestige-lite level
@@ -2047,6 +2078,10 @@ export function migrateSave(raw) {
   // chain below is a no-op on a same-version reload, so without this a v9 save
   // with filed scores would lose them on the next load.
   out.challengeScores = normalizeChallengeScores(raw.challengeScores);
+  // R5 (v1.6 Module R): carry the reedsUnlocked gate flag forward
+  // (false for a legacy v9 save with no field, the real boolean for a
+  // v10 save). The v9->v10 migration step re-normalizes defensively.
+  out.flags.reedsUnlocked = normalizeReedsUnlocked(raw.flags && raw.flags.reedsUnlocked);
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks
