@@ -500,7 +500,7 @@ per-frame budget assertion.
     muted, new ramps up, both coexist during the fade), the music slider
     still scales the melody; P10 still passes. Status: DONE (stage 66).
 
-- [ ] **S2 — Boss music + victory/defeat stingers** — `audio.js` / `game.js`
+- [x] **S2 — Boss music + victory/defeat stingers** — `audio.js` / `game.js`
   - **What:** when the heron engages: a tense layer (low pulse + faster
     tempo) on top of the zone theme, cut on defeat. Victory stinger (major
     arpeggio swell) on boss defeat / victory screen; soft minor-descent
@@ -512,7 +512,26 @@ per-frame budget assertion.
   - **Acceptance:** smoke stage: engage schedules the boss layer, defeat
     fires the victory stinger + cuts the boss layer, death fires the defeat
     stinger; audio scheduling does not affect frame timing (P10 passes).
-    Status: TODO.
+    Status: DONE (2026-09-06, v1.4 BATCH 4). Landed slightly richer than the
+    original brief: on engage the zone theme **crossfades INTO a distinct
+    boss loop** (a faster, darker minor step-sequencer with a low
+    off-beat **pulse layer** — not just a layer *on top*), so the boss is
+    unmistakably a new place sonically; the **Great Green Heron gets its own
+    darker variant** (lower root, phrygian-colored scale). All of it rides
+    `melodyMaster -> musicBus` (slider + mute) and reuses the S1
+    step-sequencer (`tickMusic` now drives the zone + boss themes through one
+    shared `_tickThemes`; `clearZoneTheme` fades both, so run end / quit is
+    unchanged). End-screen stingers are one-shot phrases scheduled on the
+    same melody layer: **victory** = a rising major arpeggio (C4 E4 G4 C5 E5
+    G5 C6) resolving on the top C; **defeat** = a slow descending minor
+    phrase (A4 G4 F4 E4). The moment-of-death now plays a short, soft
+    `'faint'` blip so it stays distinct from the later defeat stinger.
+    Stage 67 (headless AudioContext) asserts: the boss loop is distinct from
+    every zone theme + faster step rate, engages on boss (flag set, zone
+    crossfaded out), the green variant is distinct + darker, and both
+    stingers schedule their rising/descending note sequences on the music
+    bus. Pure audio — no gameplay logic touched, so P10 + pacing are
+    unaffected.
 
 - [ ] **S3 — Painting sound-design pass: thicker brush, pigment timbres**
   — `audio.js`

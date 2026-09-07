@@ -2410,6 +2410,10 @@ _drawAtelier(ctx) {
       this.heron._intro -= dt;
       if (this.heron._intro <= 0) {
         this.sfx('boss-growl');
+        // S2 (v1.4): crossfade the zone theme into the boss battle loop the
+        // moment the FINAL heron engages. The Great Green Heron (NG+) gets its
+        // own darker variant (this.heron.green). Presentation/audio only.
+        if (this.audio.setBossTheme) this.audio.setBossTheme(!!this.heron.green);
         this.addBanner('THE GREAT GRAY HERON', 3.2, 150);
         this.addBanner('Paint red, blue, and green to wake it — then paint fast while it shimmers!', 4.4, 195);
         this.zoomTarget = 0.92;
@@ -2753,7 +2757,10 @@ _drawAtelier(ctx) {
   _onPlayerDead() {
     this.dying = true;
     this.dieT = 0;
-    this.sfx('defeat');
+    // S2 (v1.4): the moment of death is a short, soft "faint" blip; the
+    // full descending-minor DEFEAT STINGER fires later, from _endRun('defeat'),
+    // as the end screen opens — so the two moments stay distinct.
+    this.sfx('faint');
     this.particles.splatter(this.player.x, this.player.y, '#69a24e', 18, 220);
     this.addShake(10);
     if (!this.save.flags.firstDefeat) {
@@ -2814,7 +2821,12 @@ _drawAtelier(ctx) {
         }
         SaveSys.save(this.save);
         this.endGains = gains;
-        this.sfx(victory ? 'victory' : 'defeat');
+        // S2 (v1.4): the end-screen stinger replaces the plain end SFX — a
+        // rising major arpeggio on a victory, a slow descending minor phrase on
+        // a defeat. Both ride the melody layer (music slider + mute), fired
+        // from the end-screen transition here.
+        if (victory) { if (this.audio.stingerVictory) this.audio.stingerVictory(); else this.sfx('victory'); }
+        else { if (this.audio.stingerDefeat) this.audio.stingerDefeat(); else this.sfx('defeat'); }
         // V3: fade out the per-zone ambient bed — the run's place has ended;
         // the atelier keeps the base music bed (startMusic) but not a zone.
         if (this.audio && this.audio.clearZoneAmbient) this.audio.clearZoneAmbient();

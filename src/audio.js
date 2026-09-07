@@ -35,6 +35,16 @@ export class AudioSys {
     this._zoneTheme = null;    // { zone, theme, gain, step, nextAt } — the live loop
     this._zoneThemeI = -1;     // the zone index the live theme is for
     this._zoneThemes = [];     // all live/fading loop instances (overlaps during crossfade)
+    // ---- S2 (v1.4): the boss battle loop + the end-screen stingers ----
+    // A distinct INTENSE-but-beautiful loop that crossfades in when the final
+    // heron engages. It reuses the S1 step-sequencer (melodyMaster -> musicBus)
+    // so it inherits the music slider + mute for free; the Great Green Heron
+    // gets its own darker variant. `setBossTheme` starts it; `clearZoneTheme`
+    // (the "stop the melody layer" entry point, called at run end / quit) fades
+    // it too. The end-screen stingers (stingerVictory/stingerDefeat) are
+    // one-shot phrases scheduled on the same melody layer.
+    this._bossMusic = false;   // true while the boss loop is the live melody
+    this._bossThemes = [];     // live/fading boss loop instances (crossfade overlap)
   }
 
   ensure() {
@@ -287,6 +297,7 @@ export class AudioSys {
   // of active themes supports the ~1 s overlap during the fade.
   setZoneTheme(zoneI) {
     if (!this.ctx || !this._melodyMaster) return;
+    if (this._bossMusic) return; // S2: the boss loop owns the melody while engaged
     if (zoneI === this._zoneThemeI) return; // idempotent (same zone)
     if (!this._zoneThemes) this._zoneThemes = [];
     const data = this._zoneThemeData();
@@ -310,19 +321,138 @@ export class AudioSys {
     this._zoneThemeI = zoneI;
   }
 
+  // ==================== S2 (v1.4): boss battle loop ====================
+  // A distinct, INTENSE-but-beautiful loop that crossfades in when the final
+  // heron engages. It reuses the S1 step-sequencer (tickMusic/_tickThemes) so
+  // it rides melodyMaster -> musicBus (music slider + mute for free) and needs
+  // no setInterval / audio files / new deps. The Great Green Heron (NG+) gets
+  // its own darker, slightly faster variant. `green` picks the variant.
+  _bossThemeData() {
+    // Each boss theme: { root, scale (semis from root), pattern (16 steps; -1
+    // rest), stepDur (faster than any zone theme = the "faster step rate"),
+    // detune, pulse (bool — the low off-beat thump layer), mode ('minor'|'major')
+    // for the stinger flavor. The scale leans toward a darker, more chromatic
+    // minor set than the zone themes, and stepDur is shorter -> the intensity.
+    return {
+      // Great GRAY Heron (first-time run): a tense minor drive on A, faster
+      // than any zone loop, with a pulse layer underneath the melody.
+      gray:   { root: 110.0,  scale: [0, 3, 6, 7, 10], pattern: [0, -1, 3, 0,  6, -1, 7, 6,  3, -1, 0, 7,  12, 10, 7, 6], stepDur: 0.18, detune: -6, pulse: true,  mode: 'minor' },
+      // Great GREEN Heron (NG+): a darker, brooding variant — lower root, a
+      // tritone-ish color (the 1-3-6 scale is a phrygian-flavored minor), the
+      // same fast step rate so it reads as "the same fight, one shade darker".
+      green:  { root: 98.0,   scale: [0, 1, 3, 6, 10], pattern: [0, 1, -1, 3,  6, -1, 10, 7,  3, 1, 0, -1,  11, 10, 6, -1], stepDur: 0.17, detune: -10, pulse: true,  mode: 'minor' },
+    };
+  }
+
+  // Engage the boss: crossfade the zone theme out and start the boss loop.
+  // game.js calls this the moment the final heron's intro ends (boss-growl).
+  // `green` selects the Great Green Heron variant (NG+). Idempotent while the
+  // boss is already engaged (re-engaging the same heron is a no-op).
+  setBossTheme(green) {
+    if (!this.ctx || !this._melodyMaster) return;
+    if (!this._bossThemes) this._bossThemes = [];
+    if (this._bossMusic) return; // already engaged — don't double-start
+    this._bossMusic = true;
+    // Fade the zone theme(s) out: stop their notes, ramp the gain down (the
+    // same crossfade machinery setZoneTheme uses).
+    for (const th of (this._zoneThemes || [])) {
+      th.muted = true; th.fading = true; th._fadeAt = this.ctx.currentTime;
+      try {
+        th.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, this._crossFade / 4);
+        const b = th;
+        setTimeout(() => { try { b.gain.disconnect(); } catch (e) {} }, this._crossFade * 1000 + 200);
+      } catch (e) { /* headless */ }
+    }
+    // fade any prior boss loops (a re-engage after a clear)
+    for (const th of this._bossThemes) {
+      th.muted = true; th.fading = true; th._fadeAt = this.ctx.currentTime;
+      try {
+        th.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, this._crossFade / 4);
+        const b = th;
+        setTimeout(() => { try { b.gain.disconnect(); } catch (e) {} }, this._crossFade * 1000 + 200);
+      } catch (e) { /* headless */ }
+    }
+    const data = this._bossThemeData();
+    const theme = data[green ? 'green' : 'gray'];
+    const zg = this.ctx.createGain();
+    zg.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+    zg.gain.setTargetAtTime(1, this.ctx.currentTime + 0.05, this._crossFade / 4);
+    zg.connect(this._melodyMaster);
+    this._bossThemes.push({ zone: -1, green: !!green, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.35, muted: false, fading: false });
+  }
+
+  // Stinger: a short one-shot melodic phrase, scheduled on the melody layer
+  // (melodyMaster -> musicBus) so it inherits the music slider + mute. Used
+  // for the victory / defeat end-screen beats (S2).
+  _stingerGain() {
+    if (!this.ctx || !this._melodyMaster) return null;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+    g.gain.setTargetAtTime(1, this.ctx.currentTime + 0.03, 0.08);
+    g.connect(this._melodyMaster);
+    return g;
+  }
+
+  // Victory stinger: a RISING MAJOR arpeggio that resolves — a bright,
+  // triumphant cadence (I -> V -> I, with the top note landing on the root's
+  // octave). Sits on the melody layer so the music slider + mute scale it.
+  stingerVictory() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const g = this._stingerGain();
+    if (!g) return;
+    // A major triad arpeggio up an octave, then a resolving top note.
+    // C major: C4 E4 G4 C5 E5 G5 C6 (rising), landing on the bright top C.
+    const notes = [261.63, 329.63, 392.0, 523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((f, i) => {
+      this._tone(t + i * 0.11, 'triangle', f, f, 0.34, 0.5, 0, g);
+      this._tone(t + i * 0.11, 'sine', f * 2, f * 2, 0.22, 0.12, 0, g); // sparkle octave
+    });
+    // a warm bass swell under the arpeggio + a soft shimmer on the resolution
+    this._tone(t, 'sine', 130.81, 196.0, 1.1, 0.16, 0, g);
+    this._noise(t + 0.5, 0.7, 'bandpass', 5000, 2, 0.06);
+  }
+
+  // Defeat stinger: a SLOW DESCENDING MINOR phrase — mournful, spaced out.
+  // A minor: A4 G4 F4 E4 (descending), with a soft low pedal underneath.
+  stingerDefeat() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const g = this._stingerGain();
+    if (!g) return;
+    const notes = [440.0, 392.0, 349.23, 329.63]; // A4 G4 F4 E4 (descending)
+    notes.forEach((f, i) => {
+      this._tone(t + i * 0.28, 'triangle', f, f * 0.995, 0.5, 0.4, 0, g); // slight pitch dip
+      this._tone(t + i * 0.28, 'sine', f / 2, f / 2, 0.6, 0.14, 0, g);     // low octave
+    });
+    // a slow, sinking bass note to settle the phrase
+    this._tone(t, 'sine', 110.0, 55.0, 1.4, 0.14, 0, g);
+  }
+
   // Lookahead scheduler — call from game.js every frame (the rAF tick).
   // Schedules each ACTIVE (non-muted) theme's notes ~0.25 s ahead of
   // ctx.currentTime so the audio clock, not the frame rate, keeps the rhythm
   // (robust to rAF jitter). Muted (fading) themes are skipped, and any that
-  // have faded out are pruned. No-op when the context isn't ready (headless).
+  // have faded out are pruned. Drives the zone themes (S1) and the boss loop
+  // (S2) through one shared helper. No-op when the context isn't ready
+  // (headless).
   tickMusic() {
-    if (!this.ctx || !this._melodyMaster || !this._zoneThemes) return;
+    if (!this.ctx || !this._melodyMaster) return;
+    this._tickThemes(this._zoneThemes || []);
+    this._tickThemes(this._bossThemes || []);
+  }
+
+  // Shared lookahead step-scheduler for a list of { theme, gain, step, nextAt,
+  // muted, fading } loops (zone themes + the boss loop). `theme.pulse` adds a
+  // low off-beat thump (the S2 boss "pulse layer") underneath the melody.
+  _tickThemes(list) {
+    if (list.length === 0) return;
     const now = this.ctx.currentTime;
     const ahead = now + 0.25;
-    for (let i = this._zoneThemes.length - 1; i >= 0; i--) {
-      const th = this._zoneThemes[i];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const th = list[i];
       // prune themes whose fade has fully completed (~crossfade + 1.4 s grace)
-      if (th.fading && (now - (th._fadeAt || now) > this._crossFade + 1.4)) { this._zoneThemes.splice(i, 1); continue; }
+      if (th.fading && (now - (th._fadeAt || now) > this._crossFade + 1.4)) { list.splice(i, 1); continue; }
       if (th.muted) continue; // fading: stop scheduling new notes
       let guard = 0;
       while (th.nextAt < ahead && guard++ < 16) {
@@ -333,6 +463,11 @@ export class AudioSys {
             + 12 * Math.floor(note / th.theme.scale.length);
           const freq = th.theme.root * Math.pow(2, semi / 12);
           try { this._tone(th.nextAt, 'triangle', freq, freq, th.theme.stepDur * 1.9, 0.5, th.theme.detune, th.gain); } catch (e) { /* headless */ }
+          // S2 pulse layer: a soft low thump on every OTHER step under the boss
+          // melody (drives the "intense" feel). Only when the theme opts in.
+          if (th.theme.pulse && (th.step % 2 === 0)) {
+            try { this._tone(th.nextAt, 'sine', th.theme.root / 2, th.theme.root / 4, th.theme.stepDur * 0.9, 0.4, 0, th.gain); } catch (e) { /* headless */ }
+          }
         }
         th.step++;
         th.nextAt += th.theme.stepDur;
@@ -343,10 +478,22 @@ export class AudioSys {
   // Fade the melody out and stop the loop (run end / quit to title). Ramps each
   // live zone gain down (a brief musical fade, not a cut), schedules a
   // disconnect for GC, and clears the active list so a new run starts fresh.
+  // S2: the boss loop is stopped here too (it lives on the same melody layer),
+  // so the "stop the melody layer" entry point covers both.
   clearZoneTheme() {
-    if (!this.ctx || !this._zoneThemes) return;
-    const live = this._zoneThemes;
-    for (const th of live) {
+    if (!this.ctx) return;
+    this._fadeMelodyLayer(this._zoneThemes || []);
+    this._fadeMelodyLayer(this._bossThemes || []);
+    this._zoneThemes = []; // no active loops remain — a new run seeds its own
+    this._zoneThemeI = -1;
+    this._bossThemes = [];
+    this._bossMusic = false;
+  }
+
+  // S2: ramp a list of melody loops to silence + schedule their disconnect.
+  _fadeMelodyLayer(list) {
+    if (!this.ctx) return;
+    for (const th of list) {
       th.muted = true; th.fading = true; th._fadeAt = this.ctx.currentTime;
       try {
         th.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.35);
@@ -354,8 +501,6 @@ export class AudioSys {
         setTimeout(() => { try { b.gain.disconnect(); } catch (e) {} }, 1200);
       } catch (e) { /* headless */ }
     }
-    this._zoneThemes = []; // no active loops remain — a new run seeds its own
-    this._zoneThemeI = -1;
   }
 
   _env(gainNode, t0, peak, attack, decay) {
@@ -409,6 +554,17 @@ export class AudioSys {
         break;
       }
       case 'splat-big': this.sfx('splat', { big: 1 }); break;
+      case 'faint': {
+        // S2 (v1.4): the moment of death — a short, soft, deflating breath +
+        // a low wobble. Kept brief so it reads as the instant the frog goes
+        // under; the end-screen defeat STINGER (a slow descending minor phrase)
+        // carries the "mournful" moment a moment later. Distinct voice from
+        // the full 'defeat' phrase (which is now the stinger).
+        this._noise(t, 0.22, 'lowpass', 500, 0.7, 0.28);
+        this._tone(t, 'sine', 300, 70, 0.3, 0.3);
+        this._tone(t + 0.05, 'triangle', 200, 90, 0.26, 0.16);
+        break;
+      }
       case 'hop': {
         this._tone(t, 'triangle', 300, 520, 0.12, 0.25);
         this._noise(t + 0.09, 0.06, 'lowpass', 800, 0.8, 0.15);

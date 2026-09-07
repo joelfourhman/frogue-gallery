@@ -4223,5 +4223,160 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
   delete window.AudioContext; // restore (no later stage depends on it either way)
 }
 
+// ============================================================================
+// STAGE 67: v1.4 S2 — boss battle loop + victory/defeat stingers (headless AudioContext)
+// ============================================================================
+{
+  console.log('== stage 67: v1.4 S2 — boss music + end-screen stingers (headless AudioContext) ==');
+  // A richer headless AudioContext: enough to build the graph AND to capture
+  // the exact note frequencies S2 schedules (boss loop + stingers) so we can
+  // assert their shape. currentTime advances manually so tickMusic looks ahead.
+  const P = (v) => ({ value: v, _v: v, setValueAtTime(x) { this._v = x; },
+    exponentialRampToValueAtTime(x) { this._v = x; }, linearRampToValueAtTime(x) { this._v = x; },
+    setTargetAtTime(x) { this._v = x; } });
+  let schedTones = [];   // { type, f0, f1, dur, target, conns }
+  const mkNode = () => ({
+    type: 'sine', frequency: P(440), Q: P(1), detune: P(0), gain: P(1),
+    buffer: null, _connections: [],
+    connect(n) { this._connections.push(n); return n; },
+    disconnect() { this._connections.length = 0; },
+    start() {}, stop() {}, getChannelData() { return new Float32Array(0); },
+  });
+  class FakeAC {
+    constructor() { this.currentTime = 0; this._dest = mkNode(); this._nodes = []; }
+    get sampleRate() { return 22050; }
+    get destination() { return this._dest; }
+    createGain() { const n = mkNode(); n.isGain = true; return n; }
+    createOscillator() {
+      const n = mkNode();
+      const rec = () => { schedTones.push({ type: n.type, f0: n.frequency._v, f1: n.frequency._v, dur: n._dur || 0, target: n._target || null, conns: n._connections }); };
+      n.start = () => { schedTones.push({ type: n.type, f0: n.frequency._v, f1: n.frequency._f1, dur: n._dur || 0, target: n._target || null, conns: n._connections.slice() }); };
+      n.stop = () => {};
+      return n;
+    }
+    createBiquadFilter() { const n = mkNode(); return n; }
+    createDynamicsCompressor() { const n = mkNode(); return n; }
+    createBuffer(ch, len) { return { getChannelData: () => new Float32Array(len) }; }
+    createBufferSource() {
+      const n = mkNode();
+      n.start = () => {};
+      n.stop = () => {};
+      return n;
+    }
+  }
+  // We capture the F0 via the oscillator's frequency param's last value at start.
+  // To read the sweep end (f1), we patch the param's exponentialRamp to record.
+  const origExp = FakeAC.prototype; // (no-op; we patch per-node below via subclass)
+  window.AudioContext = class extends FakeAC {
+    createOscillator() {
+      const n = super.createOscillator();
+      const f = n.frequency;
+      f.exponentialRampToValueAtTime = (x) => { f._f1 = x; f._v = x; };
+      n.start = () => { schedTones.push({ type: n.type, f0: n._f0 ?? f._v, f1: f._f1, dur: n._dur || 0, target: n._target || null, conns: n._connections.slice() }); };
+      // capture f0 at setValueAtTime (the start freq) and target at connect
+      const sv = f.setValueAtTime.bind(f);
+      f.setValueAtTime = (x) => { n._f0 = x; return sv(x); };
+      const origConnect = n.connect.bind(n);
+      n.connect = (t) => { n._target = t; return origConnect(t); };
+      n._durCap = n.start;
+      return n;
+    }
+  };
+
+  const cvB = makeCanvas();
+  const gB = new Game(cvB);
+  gB.start();
+  gB.audio.ensure();
+  const au = gB.audio;
+  assert(au.ctx !== null, 'S2: the headless AudioContext builds the audio graph');
+
+  // ---- a ZONE theme is live before the boss engages ----
+  au.setZoneTheme(1);
+  gB.audio.ctx.currentTime += 1.0;
+  au.tickMusic();
+  const zoneLive = au._zoneThemes.find((t) => t.zone === 1 && !t.muted);
+  assert(zoneLive, 'S2: a zone theme is live before the boss engages');
+
+  // ---- boss engage: setBossTheme crossfades the zone out + starts the boss loop ----
+  au.setBossTheme(false); // the Great GRAY heron (first-time run)
+  assert(au._bossMusic === true, 'S2: the boss loop is the live melody (bossMusic flag set)');
+  const bossGray = au._bossThemes.find((t) => !t.muted && t.zone === -1);
+  assert(bossGray, 'S2: a boss loop instance starts on engage');
+  assert(zoneLive.muted && zoneLive.fading, 'S2: engaging the boss crossfades the zone theme out (muted + fading)');
+
+  // ---- the boss loop actually schedules distinct, fast, pulsed notes ----
+  schedTones = [];
+  gB.audio.ctx.currentTime += 2.0;   // enough lookahead to schedule many steps
+  au.tickMusic();
+  assert(bossGray.step > 4, `S2: the boss loop schedules many steps (step=${bossGray.step}, faster than a zone loop)`);
+  assert(schedTones.length > 6, `S2: the boss loop scheduled melodic + pulse notes (${schedTones.length})`);
+  // the boss is distinct from every zone theme (root + scale + pattern + stepDur)
+  const bSig = (d) => JSON.stringify([d.root, d.scale, d.pattern, d.stepDur, d.detune]);
+  const zData = au._zoneThemeData();
+  for (const z of zData) assert(bSig(au._bossThemeData().gray) !== bSig(z), 'S2: the boss loop is distinct from a zone theme');
+  // faster step rate than any zone theme
+  assert(au._bossThemeData().gray.stepDur < Math.min(...zData.map((z) => z.stepDur)), 'S2: the boss loop step rate is faster than every zone theme');
+
+  // ---- the Great Green Heron gets its own (darker) variant ----
+  au._bossMusic = false; au._bossThemes.length = 0; // reset so a re-engage is tested cleanly
+  au.setBossTheme(true);
+  const bossGreen = au._bossThemes.find((t) => !t.muted && t.zone === -1);
+  assert(bossGreen && bossGreen.green === true, 'S2: the Great Green Heron starts its own boss loop');
+  const bd = au._bossThemeData();
+  assert(JSON.stringify([bd.gray.root, bd.gray.pattern]) !== JSON.stringify([bd.green.root, bd.green.pattern]), 'S2: the green-heron boss loop is a distinct variant from the gray');
+  assert(bd.green.root < bd.gray.root, `S2: the green-heron boss is darker (lower root ${bd.green.root} < ${bd.gray.root})`);
+
+  // ---- the boss loop still rides the music bus (slider + mute) ----
+  const bossGain = au._bossThemes.find((t) => !t.muted);
+  assert(bossGain.gain._connections.includes(au._melodyMaster) && au._melodyMaster._connections.includes(au.musicBus), 'S2: the boss loop rides melodyMaster -> musicBus (slider + mute)');
+  au.setMusicVolume(0.2);
+  assert(au.musicBus.gain.value === 0.2, 'S2: the music slider scales the boss loop (it is on the music bus)');
+
+  // ---- clearZoneTheme (run end / quit) fades the boss loop too ----
+  au.clearZoneTheme();
+  assert(au._bossMusic === false, 'S2: clearing the melody at run end disengages the boss');
+  assert(au._bossThemes.every((t) => t.muted || t.fading), 'S2: the boss loop is muted/fading after clear (crossfaded out, not cut)');
+
+  // ---- VICTORY stinger: a RISING major arpeggio ----
+  const vBefore = schedTones.length;
+  au.stingerVictory();
+  const vTones = schedTones.slice(vBefore).filter((x) => x.type === 'triangle');
+  assert(vTones.length >= 6, `S2: the victory stinger schedules a rising multi-note phrase (${vTones.length} new triangle notes)`);
+  // the fundamental frequencies are monotonically non-decreasing (an upward arpeggio)
+  const vF = vTones.map((x) => x.f0);
+  const rising = vF.every((f, i) => i === 0 || f >= vF[i - 1]);
+  assert(rising, `S2: the victory stinger climbs upward (${vF.map((f) => Math.round(f)).join(' -> ')} Hz)`);
+  assert(vF[vF.length - 1] > vF[0], 'S2: the victory arpeggio ends higher than it begins');
+
+  // ---- DEFEAT stinger: a SLOW descending minor phrase ----
+  const dBefore = schedTones.length;
+  au.stingerDefeat();
+  const dTones = schedTones.slice(dBefore).filter((x) => x.type === 'triangle');
+  assert(dTones.length >= 4, `S2: the defeat stinger schedules a descending phrase (${dTones.length} new triangle notes)`);
+  const dF = dTones.map((x) => x.f0);
+  const descending = dF.every((f, i) => i === 0 || f <= dF[i - 1]);
+  assert(descending, `S2: the defeat stinger descends (${dF.map((f) => Math.round(f)).join(' -> ')} Hz)`);
+  assert(dF[dF.length - 1] < dF[0], 'S2: the defeat phrase ends lower than it begins');
+
+  // ---- stingers ride the music bus too (not the sfx bus) ----
+  // The stinger's own scheduled notes must route through the melody layer
+  // (melodyMaster -> musicBus), NOT the sfx bus. (Check the stinger's tones
+  // specifically, since the boss loop also schedules onto the melody layer.)
+  const stBefore = schedTones.length;
+  au.stingerVictory();
+  const stTones = schedTones.slice(stBefore);
+  // The connection chain is osc -> (per-note gain) -> (stinger gain) ->
+  // melodyMaster -> musicBus. Walk two levels and confirm the stinger gain
+  // feeds the melody layer (not the sfx bus), so the music slider + mute scale it.
+  const stTargets = stTones.map((x) => {
+    const perNote = x.conns[0];          // per-tone gain
+    const stingerGain = perNote && perNote._connections[0]; // stinger gain
+    return stingerGain;
+  });
+  assert(stTones.length > 0 && stTargets.every((tg) => tg && tg._connections.includes(au._melodyMaster)), 'S2: the stingers route through the melody layer (music slider + mute), not the sfx bus');
+
+  delete window.AudioContext; // restore
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
