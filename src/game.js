@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, inGravityPocket, hopLift, floodedWaterFactor } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -576,7 +576,7 @@ export class Game {
         this.dieT += dt;
         this._stepHeronFlight(dt);
         if (this.dieT > 1.6) this._endRun('defeat');
-      } else if (this.heron && this.heron.flying > 0) {
+      } else if (this.heron && (this.heron.flying > 0 || this.heron.sinking > 0)) {
         // post-victory: the run is over — let the flight play out
         // (world/particles already ticked by the ambient block above).
         // J2: routed through simDt so the ~0.8s defeat slow-mo visibly stretches
@@ -687,7 +687,20 @@ export class Game {
 
   _stepHeronFlight(dt) {
     const h = this.heron;
-    if (!h || !h.flying) return;
+    if (!h) return;
+    // R4 (v1.6): the Wyrm's victory beat — it SINKS back under the water line
+    // (y increases, like the heron flies up) instead of taking flight. Both
+    // hand off to _endRun('victory') after ~3s (the Reeds run ends in victory
+    // like a heron defeat).
+    if (h.sinking) {
+      h.sinking += dt;
+      h.y += 130 * dt;             // sink DOWN into the mud
+      this.world.restoreColor(dt * 0.22);
+      if (Math.random() < 0.5) this.particles.ripple(h.x, h.y);
+      if (h.sinking > 3) this._endRun('victory');
+      return;
+    }
+    if (!h.flying) return;
     h.flying += dt;
     h.x += 70 * dt;
     h.y -= 230 * dt;
@@ -2407,25 +2420,50 @@ _drawAtelier(ctx) {
     // bossStep/3-hue machinery; distinct gold palette + a heal-absorbing plume.
     const isGildedHeron = this.ngCycle >= GILDED_HERON.minCycle;
     const isGreen = this.ngCycle >= 1 && !isGildedHeron;
-    this.heron = {
-      x: this.world.w - 350, y: HERON_Y,
-      hp: isGildedHeron ? GILDED_HERON.hp : (isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp),
-      maxHp: isGildedHeron ? GILDED_HERON.hp : (isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp),
-      kind: isGildedHeron ? GILDED_HERON.kind : (isGreen ? GREEN_HERON.kind : 'gray'), // boss selection (smoke asserts this)
-      phase: 1, state: 'idle', stateT: 2.2, hue: { red: 0, blue: 0, green: 0 },
-      awakened: false, awakenedT: 0, summonT: 9, lungeDir: -1,
-      targetX: this.world.w - 650, diveH: 0, facing: -1,
-      flying: 0, _intro: 3.2,
-      // N3 green-heron-only fields (the gray heron carries undefined for these,
-      // so a first-time run's heron behaves byte-identically to pre-N3):
-      green: isGreen ? true : undefined,              // distinct green palette in _drawHeron
-      awakenNeed: (isGreen || isGildedHeron) ? { ...GILDED_HERON.awakenNeed } : undefined, // same 3-hue rhythm
-      pinned: isGreen ? 0 : undefined,                // the Moss reed-pin timer (green only)
-      // K4 gilded-heron-only fields (the gray + green herons carry undefined):
-      gilded: isGildedHeron ? true : undefined,       // distinct gold palette in _drawHeron
-      plumeT: isGildedHeron ? 0 : undefined,          // the heal-absorbing plume timer (active while >0)
-      plumeCd: isGildedHeron ? 0 : undefined,        // the plume cooldown (the heal gap)
-    };
+    // R4 (v1.6 Module R): in a BENEATH-THE-REEDS expedition the end-of-run boss
+    // is THE SILT WYRM (the 4th boss archetype) — a subterranean creature that
+    // reuses the EXISTING paintBoss/bossStep awaken latch + the heron defeat/victory
+    // path, but with a NEW underground-transit movement pattern (wyrmStep). It
+    // occupies the same `this.heron` slot (so the paint routing, the awaken
+    // handler, the camera, and _endRun('victory') all reuse the heron machinery).
+    // A cycle-0 (swamp) run never enters this branch — its heron is byte-identical.
+    if (_isReeds) {
+      const s0 = wyrmSurfacePoint({ surfIdx: 0 }, 0, this.world.w);
+      this.heron = {
+        kind: SILT_WYRM.kind, wyrm: true,
+        x: s0[0], y: s0[1],
+        hp: SILT_WYRM.hp, maxHp: SILT_WYRM.hp,
+        phase: 'transit', state: 'idle', stateT: 2.2, hue: { red: 0, blue: 0, green: 0 },
+        awakened: false, awakenedT: 0, summonT: 9, lungeDir: -1,
+        targetX: this.world.w - 650, diveH: 0, facing: -1,
+        flying: 0, _intro: 3.4,
+        // the wyrm's state machine fields (wyrmStep): it begins UNDERGROUND in
+        // transit toward surface point 0, with its transit timer + index set.
+        phaseT: SILT_WYRM.transit, surfIdx: 0, strikeArmed: false,
+        // the pure 3-hue awaken (the SAME latch as the herons — paintBoss reads this):
+        awakenNeed: { ...SILT_WYRM.awakenNeed },
+      };
+    } else {
+      this.heron = {
+        x: this.world.w - 350, y: HERON_Y,
+        hp: isGildedHeron ? GILDED_HERON.hp : (isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp),
+        maxHp: isGildedHeron ? GILDED_HERON.hp : (isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp),
+        kind: isGildedHeron ? GILDED_HERON.kind : (isGreen ? GREEN_HERON.kind : 'gray'), // boss selection (smoke asserts this)
+        phase: 1, state: 'idle', stateT: 2.2, hue: { red: 0, blue: 0, green: 0 },
+        awakened: false, awakenedT: 0, summonT: 9, lungeDir: -1,
+        targetX: this.world.w - 650, diveH: 0, facing: -1,
+        flying: 0, _intro: 3.2,
+        // N3 green-heron-only fields (the gray heron carries undefined for these,
+        // so a first-time run's heron behaves byte-identical to pre-N3):
+        green: isGreen ? true : undefined,              // distinct green palette in _drawHeron
+        awakenNeed: (isGreen || isGildedHeron) ? { ...GILDED_HERON.awakenNeed } : undefined, // same 3-hue rhythm
+        pinned: isGreen ? 0 : undefined,                // the Moss reed-pin timer (green only)
+        // K4 gilded-heron-only fields (the gray + green herons carry undefined):
+        gilded: isGildedHeron ? true : undefined,       // distinct gold palette in _drawHeron
+        plumeT: isGildedHeron ? 0 : undefined,          // the heal-absorbing plume timer (active while >0)
+        plumeCd: isGildedHeron ? 0 : undefined,        // the plume cooldown (the heal gap)
+      };
+    }
     // E1 (v1.2 M10): the Painted Heron — a mid-run "half-heron" set-piece on a
     // zone boundary (end of zone 3) for Normal+. A small re-use of the real
     // heron's bossStep machinery at reduced scale (much lower HP, ~1 hue to
@@ -3050,7 +3088,11 @@ _drawAtelier(ctx) {
       this._noiseEvent(p.x, p.y); // K2: a paint swipe is a noise
       this._bestiarySwipe(p); // R3 (v1.6): leech paint-off + serpent ring-interrupt
       // paint the heron too (only while boss is "live" and player not dying)
-      if (this.heron && this.heron.hp > 0 && !this.heron.flying && this.heron._intro <= 0) {
+      // R4 (v1.6): the Wyrm is PAINTABLE only while surfaced (the breach-strike
+      // window) — between surfaces it is underground + INVULNERABLE + untargetable.
+      const hPaintable = this.heron && this.heron.hp > 0 && !this.heron.flying && this.heron._intro <= 0
+        && !(this.heron.wyrm && this.heron.phase !== 'surfaced');
+      if (hPaintable) {
         const res = this.paint.paintBossHit(this.heron, p.pigment, this.tuning.bossPaintHit);
         if (res === 'awaken') {
           this.sfx('awaken');
@@ -3108,7 +3150,10 @@ _drawAtelier(ctx) {
       this._noiseEvent(p.x, p.y); // K2: a splash is a loud noise
       this._bestiarySplash(p); // R3 (v1.6): a BLUE splash BLINDS a nearby wisp
       // splash the heron if it's in the burst
-      if (this.heron && this.heron.hp > 0 && !this.heron.flying) {
+      // R4 (v1.6): the wyrm is splashed only while surfaced (untargetable
+      // underground — same rule as the swipe path).
+      if (this.heron && this.heron.hp > 0 && !this.heron.flying
+        && !(this.heron.wyrm && this.heron.phase !== 'surfaced')) {
         const d = dist(p.x, p.y, this.heron.x, this.heron.y - 140);
         if (d <= this.tuning.splashRadius + 60) {
           this.paint.paintBossHit(this.heron, p.pigment, this.tuning.bossPaintHit);
@@ -3163,7 +3208,23 @@ _drawAtelier(ctx) {
     if (!inBossArena) this._spawnWave(dt);
 
     // ----- boss trigger -----
-    if (this.heron._intro > 0) {
+    // R4 (v1.6): in the Reeds the end boss is THE SILT WYRM — it engages (its
+    // intro lapses) only when the frog REACHES THE ARENA at the end of the run
+    // (a proper end-of-Reeds boss, not a far-away attacker). The swamp heron
+    // engages on its short 3.2 s reveal as before (byte-identical).
+    if (this.heron.wyrm) {
+      const wyrmArena = p.x > this.world.w - 900;
+      if (this.heron._intro > 0) this.heron._intro -= dt;
+      if (wyrmArena && this.heron._intro > 0) this.heron._intro = 0;   // lapse on arena entry
+      if (this.heron._intro <= 0 && !this._wyrmEngaged) {
+        this._wyrmEngaged = true;
+        this.sfx('wyrm-rumble');
+        if (this.audio.setBossTheme) this.audio.setBossTheme(true);   // the darker boss loop
+        this.addBanner('THE SILT WYRM', 3.2, 150);
+        this.addBanner('It moves through the mud — strike it at its SURFACE POINTS. Paint red / blue / green to wake it!', 4.6, 195);
+        this.zoomTarget = 0.92;
+      }
+    } else if (this.heron._intro > 0) {
       this.heron._intro -= dt;
       if (this.heron._intro <= 0) {
         this.sfx('boss-growl');
@@ -3184,7 +3245,7 @@ _drawAtelier(ctx) {
         this._challengeAdd('bossEngage');
       }
     }
-    if (this.heron._intro <= 0) this._updateBoss(dt);
+    if (this.heron._intro <= 0) (this.heron.wyrm ? this._updateWyrm(dt) : this._updateBoss(dt));
 
     // ----- E1: the Painted Heron (mid-run set-piece) -----
     // Non-blocking: dormant until the frog draws near, then it announces
@@ -4158,7 +4219,61 @@ _drawAtelier(ctx) {
     // the mid-heron is gone for the rest of the run (no victory state — it's a
     // set-piece, not the final boss)
     this.midHeron = null;
-  }
+    }
+
+    // R4 (v1.6 Module R): drive THE SILT WYRM — the 4th boss archetype, the
+    // end-of-Reeds boss. It reuses the EXISTING 3-hue awaken machinery (paintBoss
+    // fires the identical 'awaken' latch via the shared paint path; h.awakened
+    // doubles paint damage in paintBossHit) but runs a NEW movement pattern
+    // (underground transit between surface points, via the pure wyrmStep) instead
+    // of the heron's flight/lunge. Between surfaces the wyrm is underground +
+    // INVULNERABLE + untargetable (paint is gated to the surfaced phase in the
+    // attack path) and its body line slithers beneath. Defeat hands off to the
+    // SAME _onHeronDefeated -> victory-flight -> _endRun('victory') path, so a
+    // Reeds victory is byte-for-byte the heron-defeat bookkeeping (it sets
+    // stats.victories + reedsUnlocked, as it should — a victory is a victory).
+    _updateWyrm(dt) {
+      const h = this.heron; const p = this.player;
+      if (!h || h.flying > 0 || this.dying) return;
+      // Advance the pure movement state machine (it reads h.awakened to speed the
+      // surfacing cadence — the 3-hue awaken's "faster rhythm" from the paint path).
+      const v = this._view();
+      const ev = wyrmStep(h, dt, { left: v.x, right: v.x + v.w / v.scale, playerX: p.x }, this.tuning, this.now);
+      // Position the wyrm's head along its transit (it slithers from the point it
+      // just left toward the next surface point; it sits at the point while the
+      // tell + surfaced window play). No per-frame allocation — one lerp.
+      const [spX, spY] = wyrmSurfacePoint(h, h.surfIdx, this.world.w);
+      h.y = spY;
+      if (h.phase === 'transit') {
+        // interpolate from the point it left (_transitFromX) toward the next point
+        const fromX = (h._transitFromX != null) ? h._transitFromX : spX;
+        const prog = 1 - Math.max(0, h.phaseT) / (SILT_WYRM.transit * (h.awakened ? 0.62 : 1.0));
+        h.x = fromX + (spX - fromX) * Math.min(1, prog);
+      } else {
+        h.x = spX;
+      }
+      if (ev === 'breach') {
+        // it surfaced — the lantern/ripple marks the target (the paint window opens).
+        h._transitFromX = spX;   // remember where it surfaced (the transit's start)
+        this.sfx('wyrm-breach');
+        this.addShake(8);
+        this.particles.splatter(spX, spY, SILT_WYRM.mudHueLight, 10, 180);
+        this.particles.ripple(spX, spY, 'rgba(120,110,95,0.6)');
+        // the breach-strike hits the lane at the surface point (the frog dodges by
+        // standing clear of the marked point — the tell told it where to be).
+        if (p.alive && p.iframes <= 0) {
+          const d = dist(p.x, p.y, spX, spY);
+          if (d <= SILT_WYRM.strikeReach) {
+            p.hurt(SILT_WYRM.strikeDmg * (this.tuning.dmgTakenMult || 1), this.tuning);
+            this.addShake(10);
+          }
+        }
+      } else if (ev === 'defeated') {
+        this._onHeronDefeated();
+      }
+      // the underground body-line slither + the ripple-ring tell are drawn by
+      // _drawWyrm (P10: capped segment count, no per-frame allocation).
+    }
 
   // T3 (v1.2 M13): drive the low-HP "sketch" heron with the shared bossStep
   // machinery — the SAME 3-hue awaken cadence as the real heron, at a low-HP
@@ -4204,9 +4319,15 @@ _drawAtelier(ctx) {
         this.addShake(22);
         // N3 (v1.3 M14): the defeat line names whichever heron was painted — the
         // Great Gray Heron on a first-time run, the Great Green Heron on NG+.
-        this.addBanner(h.green ? 'The Great Green Heron blooms and takes flight!' : 'The Great Gray Heron blooms and takes flight!', 4, 200);
+        // R4 (v1.6): the Silt Wyrm has its own defeat beat (it is painted into
+        // the mud and sinks back under the water line — not a flight).
+        if (h.wyrm) {
+          this.addBanner('The Silt Wyrm is painted — it sinks back beneath the reeds!', 4, 200);
+        } else {
+          this.addBanner(h.green ? 'The Great Green Heron blooms and takes flight!' : 'The Great Gray Heron blooms and takes flight!', 4, 200);
+        }
         for (const c of ORB_COLORS) this.particles.sparkles(h.x, h.y - 160, PIGMENTS[c].light, 10);
-        h.flying = 0.001; // hand off to the victory flight
+        if (h.wyrm) { h.sinking = 0.001; } else { h.flying = 0.001; }   // hand off to the victory beat
         // story beat: the first heron ever painted summons the swamp's critic
         if (!this.save.flags.croaksworthAsked) {
           this.save.flags.croaksworthAsked = true;
@@ -4470,6 +4591,126 @@ _drawAtelier(ctx) {
     ctx.restore();
   }
 
+  // R4 (v1.6 Module R): draw THE SILT WYRM. The signature is the SUBTERRANEAN
+  // body line — a capped, traveling-sine serpent that slithers BENEATH the mud
+  // (visible + dim while underground, bright when it breaches). The 3 surface
+  // points are the telegraphed breach spots; the ripple-ring tell (dark-mud
+  // variant of the heron-telegraph language) grows at the next point before it
+  // breaches. P10: a FIXED segment count (no per-frame allocation) + a couple
+  // of arcs — 60fps-safe.
+  _drawWyrm(ctx, h, now) {
+    const W = this.world.w;
+    const surfY = SILT_WYRM.surfaceY;
+    const N = SILT_WYRM.surfacePoints;
+    // the 3 telegraphed surface points on the arena line.
+    const pts = [];
+    for (let i = 0; i < N; i++) pts.push(wyrmSurfacePoint(h, i, W));
+    const idx = ((h.surfIdx || 0) % N + N) % N;
+    const cur = pts[idx], prev = pts[((idx - 1) + N) % N];
+    // the HEAD x: at the active point while telegraph/surfaced; while in transit
+    // it slithers from the previous point toward the next (phaseT fraction).
+    let headX;
+    if (h.phase === 'transit') {
+      const frac = 1 - Math.max(0, Math.min(1, (h.phaseT || 0) / (SILT_WYRM.transit * (h.awakened ? 0.62 : 1.0))));
+      headX = prev.x + (cur.x - prev.x) * frac;
+    } else {
+      headX = cur.x;
+    }
+    const surfacing = h.phase === 'surfaced';
+    const sinking = !!h.sinking;
+    // -------- the slithering body line (beneath the mud, capped segments) ----
+    const bodyY = surfY + 46;                       // a little under the water line
+    const SEG = SILT_WYRM.bodySegments;             // fixed count (P10)
+    const span = Math.max(240, headX - (W - 900));  // the body trails back from the head
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = h.awakened ? SILT_WYRM.mudHueLight : SILT_WYRM.mudHue;
+    ctx.globalAlpha = surfacing ? 0.95 : 0.55;      // dim underground, solid surfaced
+    ctx.lineWidth = 26;
+    ctx.beginPath();
+    ctx.moveTo(headX, surfY + (surfacing ? -8 : 10));
+    for (let i = 1; i <= SEG; i++) {
+      const t = i / SEG;
+      const bx = headX - t * span;
+      const by = bodyY + Math.sin(now * 4 - t * 6) * 10;   // the traveling slither
+      ctx.lineTo(bx, by);
+    }
+    ctx.stroke();
+    ctx.restore();
+    // -------- the surfaced HEAD (a mud serpent's head breaking the water) ----
+    if (surfacing || sinking) {
+      ctx.save();
+      ctx.translate(headX, surfY);
+      const c = h.hitFlash > 0 ? '#f2e9dc' : SILT_WYRM.mudHue;
+      const c2 = h.hitFlash > 0 ? '#fff' : SILT_WYRM.mudHueLight;
+      ctx.globalAlpha = sinking ? Math.max(0, 1 - (h.sinking || 0) / 3) : 1;
+      // the head (a broad mud wedge) + fangs
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.moveTo(0, -52);
+      ctx.quadraticCurveTo(34, -20, 20, 26);
+      ctx.quadraticCurveTo(0, 40, -20, 26);
+      ctx.quadraticCurveTo(-34, -20, 0, -52);
+      ctx.fill();
+      // eyes (glowing while awakened — it is awake to the paint)
+      ctx.fillStyle = h.awakened ? '#ffd75e' : c2;
+      ctx.beginPath();
+      ctx.arc(-9, -22, 5, 0, TAU);
+      ctx.arc(9, -22, 5, 0, TAU);
+      ctx.fill();
+      // a 3-hue coat wash while it carries paint (the awaken progress reads)
+      if (h.hue && (h.hue.red > 0 || h.hue.blue > 0 || h.hue.green > 0)) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = h.hue.red > 0 ? PIGMENTS.red.color : (h.hue.blue > 0 ? PIGMENTS.blue.color : PIGMENTS.green.color);
+        ctx.beginPath();
+        ctx.arc(0, -8, 18, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    // -------- the ripple-ring TELEGRAPH at the next surface point ----------
+    if (h.phase === 'telegraph' && !sinking) {
+      const prog = 1 - Math.max(0, Math.min(1, (h.phaseT || 0) / (SILT_WYRM.telegraph * (h.awakened ? 0.62 : 1.0))));
+      const r = 24 + prog * 150;                     // grows toward the breach
+      const pulse = 0.7 + Math.sin(now * 10) * 0.3;
+      ctx.save();
+      ctx.translate(headX, surfY);
+      ctx.globalAlpha = (0.4 + prog * 0.5) * pulse;
+      ctx.strokeStyle = h.awakened ? '#e0632e' : '#7a9a8a';  // dark-mud teal tell
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 8]);
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // a soft fill ring reads as a ripple on the water
+      ctx.globalAlpha = 0.16 * pulse;
+      ctx.fillStyle = h.awakened ? '#e0632e' : '#7a9a8a';
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    // -------- the boss HP bar (world space, above the arena) --------------
+    if (h.hp < h.maxHp && !sinking) {
+      const bw = 260, bx = headX - bw / 2, by = surfY - 96;
+      const frac = Math.max(0, h.hp / h.maxHp);
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = 'rgba(16,20,16,0.6)';
+      ctx.fillRect(bx, by, bw, 7);
+      ctx.fillStyle = frac > 0.4 ? SILT_WYRM.mudHueLight : '#c8452c';
+      ctx.fillRect(bx, by, bw * frac, 7);
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#f4efe6';
+      ctx.font = '600 15px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('THE SILT WYRM', headX, by - 10);
+      ctx.restore();
+    }
+  }
+
   // ================= part 4: rendering =====================================
   _screenSpace() {
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -4597,7 +4838,7 @@ _drawAtelier(ctx) {
     this.paint && this.paint.drawWet(ctx);
     this.paint && this.paint.drawTrails(ctx);
     if (this.state === 'expedition' || this.state === 'end') {
-      if (this.heron) this._drawHeron(ctx, this.heron, this.now);
+      if (this.heron) (this.heron.wyrm ? this._drawWyrm(ctx, this.heron, this.now) : this._drawHeron(ctx, this.heron, this.now)); // R4: the Silt Wyrm
       if (this.midHeron) this._drawHeron(ctx, this.midHeron, this.now); // E1: Painted Heron
       for (const e of this.enemies) drawEnemy(ctx, e, this.now);
       this._drawHazards(ctx, drawSatFinal); // E3: Bold-only zone hazards

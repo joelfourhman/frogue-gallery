@@ -278,8 +278,40 @@ and **4th boss archetype** (→ R4)):
    pace/humance re-verified IN band (Reeds-gated — cycle-0 structurally
    untouched); P10 culling stays green (the serpent's ripple ring is 1 arc + 3
    concentric rings, capped; the wisp/leech are cheap ellipses; no per-frame
-   allocation). Next: R4 (The Silt Wyrm boss) → R6 (reedspace probe + season
+   allocation). **R4 ✅ (2026-09-07, v1.6 BATCH 2)** — see the R4 entry below
+   (the Silt Wyrm 4th boss archetype). Next: R6 (reedspace probe + season
    audit).
+   **Progress (2026-09-07): R4 ✅ DONE + committed** (THE SILT WYRM — the 4th
+   boss ARCHETYPE, the deferred item). The end-of-Reeds boss: a SUBTERRANEAN
+   creature that moves THROUGH the terrain, surfacing only at 3 TELEGRAPHED
+   fixed points on its arena line (a ~1.5s ripple-ring tell before each breach;
+   between surfaces it is underground + INVULNERABLE + untargetable and its
+   body line slithers beneath — the capped-body-segment slither is the P10
+   allocation risk, kept to 14 segments + a single ripple ring). The 3-hue
+   awaken STILL applies through the SAME paintBoss/bossStep path (red burns /
+   blue freezes / green roots the next strike; a single hue repeated does NOT
+   awaken — all three do, the identical awaken latch the herons emit; the
+   full-damage shimmer phase speeds the surfacing rhythm, 0.62× transit +
+   telegraph). HP in the 48k class (above the gilded 42k — the biome's apex);
+   a distinct dark-mud palette + a low rumble SFX layer (S2: the wyrm-rumble
+   engage loop + wyrm-breach stinger). Reeds-mode only — the wyrm occupies the
+   same `this.heron` slot (so paint routing, the awaken handler, the camera,
+   and _endRun('victory') all reuse the heron machinery); a cycle-0 swamp run
+   still spawns the gray heron (byte-identical). A NEW pure `wyrmStep`
+   underground-transit state machine (logic.js) is the movement pattern
+   (transit → telegraph → surfaced → transit, cycling the 3 surface points);
+   game.js is thin (`_updateWyrm` driver + `_drawWyrm` + the wyrm branch in
+   _beginExpedition; defeat sinks it under the water line instead of a
+   flight). The fight lands in the 2–4 min class: surfaced (paintable) is the
+   dominant phase (7s of a ~10s cycle) so 48k HP is a real fight, not a grind —
+   bosspace-style bot measurement ≈ 97s (1.6 min) → ~2.3 min human (IN the
+   2–4 min class). New smoke **stage 87, 19 assertions** (spawns only at the
+   end of a Reeds expedition — a cycle-0 swamp run still spawns the gray
+   heron; underground = invulnerable + untargetable; each surface telegraphs
+   before breach; the 3 hues + awaken work through the EXISTING paintBoss
+   latch — the same event the herons emit, and one hue alone does NOT awaken;
+   the awakened rhythm is faster; defeat ends the Reeds run in victory; the
+   dark-mud draw path renders headless without throwing — P10-safe).
 3. **BATCH 3 — W1, W2, W3** (gamepad: raw-API input feed into `input.js`;
    connection chip + full-screen UI focus; Reeds-mode parity +
    byte-identity regression for kb-only play; mocked `navigator.getGamepad`

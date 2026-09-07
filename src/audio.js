@@ -797,6 +797,23 @@ export class AudioSys {
         this._noise(t + 0.03, 'bandpass', 1800, 1.8, 0.1);
         break;
       }
+      // R4 (v1.6): THE SILT WYRM — its distinct low RUMBLE layer (S2 pattern: a
+      // darker loop the boss engages + a surface-hit stinger). The rumble is a
+      // deep, slow, muddy swell (felt more than heard); the breach is a heavy
+      // mud "thwomp" with a low boom.
+      case 'wyrm-rumble': {
+        this._tone(t, 'sawtooth', 55, 40, 0.9, 0.16);
+        this._tone(t + 0.15, 'sine', 70, 48, 0.7, 0.14);
+        this._noise(t, 0.6, 'lowpass', 160, 0.8, 0.1);
+        break;
+      }
+      case 'wyrm-breach': {
+        // the surfaced breach-strike: a heavy mud thwomp + a low boom
+        this._tone(t, 'sine', 120, 45, 0.3, 0.3);
+        this._noise(t, 0.22, 'lowpass', 400, 1.4, 0.22);
+        this._tone(t + 0.05, 'triangle', 90, 50, 0.2, 0.16);
+        break;
+      }
       case 'paint-hit': {
         const p = opt.pigment || 'dry';
         this._noise(t, 0.08, 'bandpass', p === 'red' ? 700 : p === 'blue' ? 500 : 900, 2, 0.35);

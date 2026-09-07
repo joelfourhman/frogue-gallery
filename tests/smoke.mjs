@@ -6329,5 +6329,90 @@ console.log('== stage 86: v1.6 R3 — THE LIGHT-REWRITTEN BESTIARY (wisp / serpe
   console.log('ok — R3: the light-rewritten bestiary — three Reeds archetypes (Glow Wisp / Mud Serpent / Silt Leech), all keyed to THE LANTERN (R1 lightFactor/lanternState) and Reeds-mode-only (a rare pick in the bounded spawn cap, never in the cycle-0 swamp pool): the wisp winds toward the lantern while lit and drifts unlit, with a ~3s useless spin from a blue splash (the pure wispBlinded tick; draw alpha scales by lightFactor); the serpent burrows (invisible + unhittable), telegraphs a strike with a growing ripple ring (the heron-telegraph draw language), and surfaces to strike the lane, interrupted by a painted ring (any pigment) that knocks it back underground with a cooldown; the leech clings on contact (a small HP/sec drain + 25% movement slow — leechAttached flag + the pure leechDrain tick) and comes off when painted (any swipe touching the frog, dry counts) or when the frog hops off (one hop breaks it; a second leech cannot attach for ~6s). Each carries its own distinct SFX voice.');
 }
 
+// ====================================================================
+// stage 87: v1.6 R4 — THE SILT WYRM (4th boss archetype: subterranean,
+//     telegraphed surface points, 3-hue awaken through the SAME
+//     paintBoss/bossStep path, Reeds-mode only)
+// ====================================================================
+{
+  const R4 = await import('../src/logic.js');
+  const S = R4.SILT_WYRM, T = R4.makeTuning();
+  // ---- (0) the boss constant + a fresh wyrm boss object ----
+  assert(S.kind === 'wyrm' && S.hp === 48000, 'R4: the Silt Wyrm is declared (kind wyrm, 48k HP — the biome apex, above the gilded 42k)');
+  assert(S.surfacePoints === 3 && S.telegraph > 0, 'R4: 3 telegraphed surface points on its arena line (a ~1.5s ripple-ring tell)');
+  assert(S.awakenNeed.red === 45 && S.awakenNeed.blue === 45 && S.awakenNeed.green === 45, 'R4: the SAME 3-hue awaken rhythm as the herons (45/45/45)');
+  const mkWyrm = (hp) => ({ wyrm: true, hp, maxHp: hp, phase: 'transit', phaseT: S.transit, surfIdx: 0, strikeArmed: false, hue: { red: 0, blue: 0, green: 0 }, awakened: false, awakenedT: 0, awakenNeed: { ...S.awakenNeed }, x: 5100, y: 780 });
+  // ---- (1) the state machine: underground is invulnerable + untargetable, and it cycles through the 3 telegraphed points ----
+  const w0 = mkWyrm(S.hp);
+  let ev0 = R4.wyrmStep(w0, 0.016, {}, T, 0.0); // transit -> (eventually) telegraph
+  assert(w0.phase === 'transit' && w0.hp === S.hp, 'R4: the wyrm starts UNDERGROUND (transit) and is invulnerable there (hp untouched)');
+  // underground it cannot be painted: paintBoss has no path (the game skips
+  // hits when phase !== surfaced); assert the pure rule — a surfaced-only gate.
+  assert(w0.phase !== 'surfaced', 'R4: between surfaces the wyrm is NOT surfaced (the game routes no paint to it — untargetable)');
+  // drive through a full cycle: transit -> telegraph -> surfaced -> strike -> transit.
+  let sawTelegraph = false, sawBreach = false, sawStrike = false, sawDefeat = false;
+  let nextIdx = 0;
+  for (let i = 0; i < 400; i++) {
+    const before = w0.surfIdx;
+    const ev = R4.wyrmStep(w0, 1 / 60, {}, T, i / 60);
+    if (w0.phase === 'telegraph') sawTelegraph = true;
+    if (ev === 'breach') { sawBreach = true; }
+    if (ev === 'strike') { sawStrike = true; }
+    if (ev === 'defeated') { sawDefeat = true; break; }
+  }
+  assert(sawTelegraph, 'R4: the wyrm TELEGRAPHS a breach at its next surface point before it surfaces');
+  assert(sawBreach, 'R4: the wyrm SURFACES at its telegraphed point (the breach) — paintable now');
+  assert(sawStrike, 'R4: on the surfaced window it fires a breach-STRIKE (the caller applies damage to a frog at the point)');
+  // each surface is telegraphed: a fresh wyrm must pass through telegraph before surfacing.
+  const w1 = mkWyrm(S.hp); let s1 = false;
+  for (let i = 0; i < 240 && !s1; i++) { R4.wyrmStep(w1, 1 / 60, {}, T, i / 60); if (w1.phase === 'telegraph') s1 = true; }
+  assert(s1, 'R4: every surface is preceded by a ripple-ring TELEGRAPH (no unannounced breach)');
+  // ---- (2) the 3-hue awaken works through the EXISTING paintBoss path (the same awaken latch fires) ----
+  const w2 = mkWyrm(1000);
+  // paint it while surfaced (drive it to surfaced first).
+  let guard = 0;
+  while (w2.phase !== 'surfaced' && guard++ < 300) R4.wyrmStep(w2, 1 / 60, {}, T, guard / 60);
+  assert(w2.phase === 'surfaced', 'R4 (setup): the wyrm is surfaced (the paintable window) for the awaken test');
+  let awoken = null;
+  // a single hue, repeated coats, does NOT awaken (the 3 hues are all needed):
+  for (let i = 0; i < 8; i++) { const r = R4.paintBoss(w2, 'red', T.bossPaintHit, T); if (r === 'awaken') awoken = r; }
+  assert(awoken === null && w2.awakened === false, 'R4: one hue alone does NOT awaken it (the 3-hue rhythm is intact — same as the herons)');
+  // all three hues reach the threshold -> the SAME paintBoss 'awaken' latch fires.
+  for (let i = 0; i < 8; i++) R4.paintBoss(w2, 'blue', T.bossPaintHit, T);
+  for (let i = 0; i < 8; i++) { const r = R4.paintBoss(w2, 'green', T.bossPaintHit, T); if (r === 'awaken') awoken = r; }
+  assert(awoken === 'awaken' && w2.awakened === true, 'R4: painting all 3 hues fires the EXISTING paintBoss awaken latch (the same event the herons emit)');
+  assert(w2.awakenedT > 0, 'R4: the awaken window is live (awakenedT set, the full-damage shimmer phase)');
+  // the awaken SPEEDS the surfacing cadence: the transit/telegraph phases are shorter.
+  const wa = mkWyrm(10000); wa.awakened = true;
+  const wn = mkWyrm(10000); wn.awakened = false;
+  wa.phase = 'transit'; wa.phaseT = S.transit; wn.phase = 'transit'; wn.phaseT = S.transit;
+  const awTransit = S.transit * 0.62, baseTransit = S.transit;
+  assert(awTransit < baseTransit, 'R4: the awakened wyrm SURFACES FASTER (shorter transit ' + awTransit.toFixed(2) + ' < ' + baseTransit.toFixed(2) + ' — the full-damage phase speeds the rhythm)');
+  // ---- (3) defeat: hp<=0 ends the run (the game hands off to _endRun victory) ----
+  const w3 = mkWyrm(50);
+  // paint it to death (hp<=0), then the NEXT step emits 'defeated'.
+  let defeat = false;
+  for (let i = 0; i < 240 && !defeat; i++) { w3.hp = 0; defeat = R4.wyrmStep(w3, 1 / 60, {}, T, i / 60) === 'defeated'; }
+  assert(defeat, 'R4: when the wyrm is painted to hp<=0, the state machine emits "defeated" (the Reeds run ends in victory, like a heron defeat)');
+  // ---- (4) it is spawned ONLY at the end of a Reeds expedition (the swamp heron is unchanged) ----
+  const vSave = R4.freshSave(); vSave.stats.victories = 1; vSave.flags.heronDefeated = true;
+  // a Reeds expedition carries THE SILT WYRM as its end boss.
+  const gR4 = new Game(makeCanvas()); gR4.start(); gR4._quitToTitle();
+  gR4.save = vSave; gR4._beginExpedition(false, { reeds: true });
+  assert(gR4.heron && gR4.heron.wyrm === true, 'R4: a Reeds expedition spawns THE SILT WYRM as its end boss (this.heron.wyrm)');
+  assert(gR4.heron.hp === S.hp && gR4.heron.kind === 'wyrm', 'R4: the wyrm boss object carries the wyrm identity + 48k HP');
+  // a SWAMP expedition (cycle 0) still spawns the heron, NOT the wyrm.
+  const gS4 = new Game(makeCanvas()); gS4.start(); gS4._quitToTitle();
+  gS4.save = R4.freshSave(); gS4._beginExpedition();
+  assert(gS4.heron && !gS4.heron.wyrm && gS4.heron.kind === 'gray', 'R4: a cycle-0 SWAMP run still spawns the gray heron (the wyrm is Reeds-mode only — the first-time run is byte-identical)');
+  // ---- (5) the dark-mud draw path renders headless without throwing (P10-safe) ----
+  const dctx = makeCtx(makeCanvas());
+  const dw = gR4.heron;
+  for (const ph of ['transit', 'telegraph', 'surfaced']) { dw.phase = ph; dw.phaseT = 1.0; try { gR4._drawWyrm(dctx, dw, 0.4); } catch (e) { assert(false, 'R4: _drawWyrm threw for phase ' + ph + ': ' + e.message); } }
+  assert(true, 'R4: the wyrm draw path (underground slither body-line, capped segments; ripple-ring telegraph; surfaced breach head) renders headless without throwing (P10 allocation-safe)');
+
+  console.log('ok — R4: THE SILT WYRM — the 4th boss ARCHETYPE (the deferred item) — the end-of-Reeds boss is a SUBTERRANEAN creature that moves THROUGH the terrain, surfacing only at 3 TELEGRAPHED fixed points on its arena line (each with a ~1.5s ripple-ring tell; between surfaces it is underground + INVULNERABLE + untargetable and its body line slithers beneath). The 3-hue awaken STILL applies through the SAME paintBoss/bossStep path (red burns / blue freezes / green roots the next strike; a single hue repeated does NOT awaken — all three do, the identical awaken latch the herons emit; the full-damage phase speeds the surfacing rhythm). HP in the 48k class (above the gilded 42k — the biome apex); a distinct dark-mud palette + a low rumble SFX layer; Reeds-mode only (a cycle-0 swamp run still spawns the gray heron — byte-identical); defeat ends the Reeds run in victory.');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

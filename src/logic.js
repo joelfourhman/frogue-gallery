@@ -1214,6 +1214,105 @@ export function gildedPlumeTick(h, dt) {
 }
 
 // ----------------------------------------------------------------
+// R4 (v1.6): THE SILT WYRM — the 4th boss ARCHETYPE (the deferred item). The
+// end-of-Reeds boss: a SUBTERRANEAN creature that moves THROUGH the terrain,
+// surfacing only at 3 TELEGRAPHED fixed points (a ripple-ring tell ~1.5 s
+// before it breaches; between surfaces it is underground + INVULNERABLE and
+// its body line slithers beneath). The 3-hue awaken STILL applies through the
+// SAME `paintBoss` latch (this object carries `hue`/`awakened`/`awakenNeed`,
+// so `paintBossHit`→`paintBoss` fires the identical awaken event + the 2x
+// awakened paint window) — this state machine is the NEW MOVEMENT pattern
+// (underground transit between surface points instead of flight/lunge). HP in
+// the 48k class (above the gilded 42k — the biome's apex). Reeds-mode only.
+export const SILT_WYRM = {
+  kind: 'wyrm',                 // the 4th boss archetype (vs gray/green/gilded)
+  hp: 48000,                    // 48k — above the gilded 42k (the biome's apex)
+  awakenNeed: { red: 45, blue: 45, green: 45 }, // the SAME 3-hue rhythm as the herons
+  strikeDmg: 12,                // the surfaced strike's damage (a big hit, dodgeable)
+  strikeReach: 220,             // a frog within this of the surface point is hit
+  surfacePoints: 3,             // the telegraphed breach points on the arena line
+  telegraph: 1.5,               // the ripple-ring tell before a breach (~1.5 s)
+  surfaced: 7.0,                // the surfaced window (PAINT IT — the dominant phase)
+  transit: 1.8,                 // underground transit between surface points (invulnerable)
+  surfaceY: 780,                // the arena water line the body slithers along
+  mudHue: '#2c2420',            // the distinct dark-mud palette
+  mudHueLight: '#5a4a3e',
+  // P10: the body line is drawn as a CAPPED segment count (no per-frame
+  // allocation) so 60fps holds (the underground slither is the risk).
+  bodySegments: 14,
+};
+
+// R4: THE WYRM STATE MACHINE (a pure movement pattern; testable headless).
+// h = the boss object (carries wyrm, phase, phaseT, surfIdx, strikeArmed,
+// awakened). Advances dt; returns an event: 'breach' (just surfaced at its
+// point — paintable now) | 'strike' (the breach-strike fires — the caller
+// applies strikeDmg if the frog is at the surface point) | 'defeated' (hp<=0)
+// | 0 (steady).
+//
+// The RHYTHM (per the ROADMAP spec): the wyrm is SUBTERRANEAN — it moves
+// THROUGH the terrain (phase 'transit', underground + INVULNERABLE +
+// untargetable; the body slithers beneath), then TELEGRAPHS a breach with a
+// growing ripple ring at its next surface point (phase 'telegraph'). When the
+// tell lapses it SURFACES at that point (phase 'surfaced' — PAINTABLE through
+// the existing paintBoss path) and its breach-strike hits the lane AT the
+// surface point (the frog dodges by standing clear of the marked point during
+// the tell; the lantern / ripple ring marks the target). The 3-hue awaken
+// (h.awakened) speeds the RHYTHM: shorter transit + telegraph (the full-damage
+// phase + faster surfacing cadence), exactly like the herons. Between surfaces
+// the caller skips paint hits (unpaintable underground).
+export function wyrmStep(h, dt, view, tuning, now) {
+  h.phaseT -= dt;
+  if (h.hp <= 0) return 'defeated';
+  // The awaken WINDOW lapses exactly like the herons (bossStep): after the
+  // bossAwakenDuration the wyrm de-awakens and its hue resets, so the 3-hue
+  // rhythm is a recurring CYCLE (repaint all three to re-awaken), not a
+  // permanent state. Same state-machine behavior as the herons.
+  if (h.awakened) {
+    h.awakenedT = (h.awakenedT || 0) - dt;
+    if (h.awakenedT <= 0) { h.awakened = false; h.hue.red = 0; h.hue.blue = 0; h.hue.green = 0; }
+  }
+  const faster = h.awakened ? 0.62 : 1.0;   // the awaken speeds the surfacing cadence
+  if (h.phase === 'transit') {
+    // underground: the body slithers toward the next surface point.
+    if (h.phaseT <= 0) {
+      h.phase = 'telegraph';
+      h.phaseT = SILT_WYRM.telegraph * faster;
+      // the breach locks to THIS surface point — the ripple ring marks the
+      // target so the frog stands clear of it during the tell.
+      h.strikeArmed = true;
+    }
+  } else if (h.phase === 'telegraph') {
+    // the growing ripple-ring tell at the NEXT surface point.
+    if (h.phaseT <= 0) {
+      h.phase = 'surfaced';
+      h.phaseT = SILT_WYRM.surfaced;
+      return 'breach';   // it surfaces at its point (paintable now)
+    }
+  } else if (h.phase === 'surfaced') {
+    if (h.strikeArmed && h.hp > 0) {
+      h.strikeArmed = false;
+      return 'strike';   // the breach-strike hits the lane at the surface point
+    }
+    if (h.phaseT <= 0) {
+      // withdraw underground and begin the transit toward the NEXT point.
+      h.phase = 'transit';
+      h.phaseT = SILT_WYRM.transit * faster;
+      h.surfIdx = (((h.surfIdx || 0) + 1) % SILT_WYRM.surfacePoints);   // next surface point
+    }
+  }
+  return 0;
+}
+// R4: the wyrm's surface point (index 0..n-1), cycling on its arena line. The
+// 3 points span the boss ARENA (the last ~750px of the world, where the frog
+// can reach them during the end-of-Reeds fight). Pure; returns [x, y].
+export function wyrmSurfacePoint(h, surfIdx, worldW) {
+  const n = SILT_WYRM.surfacePoints;
+  const i = ((surfIdx % n) + n) % n;
+  const x = (worldW - 900) + (i / (n - 1)) * 750;   // arenaStart .. +750
+  return [x, SILT_WYRM.surfaceY];
+}
+
+// ----------------------------------------------------------------
 // A4 (v1.2 M9): 'Rehung Frame' — a prestige-lite, NOT save-wipe. Retiring a
 // fully-completed collection (all 8 paintings owned + at least one ★-hung)
 // mints a permanent, saved `galleryBonus` level. Each level is a small
