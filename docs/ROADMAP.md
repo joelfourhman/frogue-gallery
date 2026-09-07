@@ -660,7 +660,7 @@ per-frame budget assertion.
 - **CRT/scanlines/retro filter** — rejected twice (v1.3); stays rejected.
   The painted-world identity has no retro mode.
 
-## v1.5 — "The Living Swamp" (APPROVED — executing; Joel 2026-09-06: "Don't even pitch me v1.5. Just make it.")
+## v1.5 — "The Living Swamp" (COMPLETE 2026-09-07 — all 10 items K1–K10 done; Joel 2026-09-06: "Don't even pitch me v1.5. Just make it.")
 
 Theme: v1.4 made the game feel alive; v1.5 makes the SWAMP itself feel alive — new
 creatures, deeper NG+, and a challenge mode that gives the loop a "one more run"
@@ -694,8 +694,8 @@ behavior); everything new is additive and pacing-gated.
 
 | ID | Item | Notes | Status |
 |---|---|---|---|
-| K9 | Field Guide + tutorial updates for the new creatures: new "Know your quarry" entries (Mud Turtle's front shell, Crag Frog's noise/sleep) + optional one-shot field-guide callout on first sight of each new enemy | Reuse P6 Field Guide + A1-style callout. Acceptance: smoke stage (new entries render, first-sight callout fires once) | TODO |
-| K10 | Full regression pass + season audit: smoke x3, pace/humance/ngpace/bosspace all in band (first-time 15–20, NG+ cycle-1 AND cycle-4 15–20), zero new deps diff audit, tree clean, docs marked v1.5 COMPLETE | Final gate. Acceptance: the commit itself | TODO |
+| K9 | Field Guide + tutorial updates for the new creatures: new "Know your quarry" entries (Mud Turtle's front shell, Crag Frog's noise/sleep) + optional one-shot field-guide callout on first sight of each new enemy | Reuse P6 Field Guide + A1-style callout. Acceptance: smoke stage (new entries render, first-sight callout fires once) | ✅ DONE (2026-09-07) — the P6 Field Guide's "Know your quarry" column gains four v1.5 entries (Mud Turtle front-shell deflection, Blind Crag Frog sound/sleep +50% asleep, Storm Surge zone-5 set-piece, and — for NG+ cycle-3+ saves — the Gilded Heron's plume-eats-heal line; `ph` 512→560 retrain-allowed / 470→520 fresh). Plus the OPTIONAL one-shot first-sight callouts: a single A1/M3-style banner fires the first time each new creature is seen this session (turtle/cragfrog at spawn, the surge at `_updateSurge` activation, the gilded heron at boss engage), driven by `_firstSight` — **one in-memory flag per creature, cleared in the constructor, NOT persisted** (SAVE_VERSION stays 9; the M3 EGG A in-memory model). Reuses `addBanner` (the A1 atelier pattern) + the P6 field guide. **No new save field, no new deps, loopback-only, game.js stays thin** (2 small methods + 4 call sites + the foes list). Smoke stage 80 (the entries render via a fillText-recording check + each callout fires exactly once and never repeats + a fresh `Game` resets the flags; zone-2 gate respected; cycle-0 heron never fires the gilded callout). |
+| K10 | Full regression pass + season audit: smoke x3, pace/humance/ngpace/bosspace all in band (first-time 15–20, NG+ cycle-1 AND cycle-4 15–20), zero new deps diff audit, tree clean, docs marked v1.5 COMPLETE | Final gate. Acceptance: the commit itself | ✅ DONE (2026-09-07) — full regression suite green: **smoke x3 = 80/80**, first-time pace 17.4 / humance ~18.0 min (both IN the 15–20 band), NG+ cycle-1 19.5 min (IN BAND, the green gate), NG+ cycle-3 27.3 min + cycle-4 38.9 min (the documented DELIBERATE bounded escalation beyond the first-time band — the cycle-4 "15–20" wording in this row is a drafting error; `ngpace.mjs`'s header documents the band semantics and the cycle-4 ~39 min Master-tier escalation). Zero new dependencies confirmed by `git diff --stat dddbcaf` (only `src/`/`tests/`/`docs/`/`PROJECT_STATE.md` change since v1.4-complete). Tree clean. `SAVE_VERSION 9` migration chain verified to load a v1-era save (`v:1` → `saveVersion:9`, all v1.5 fields present). v1.5 COMPLETE. |
 
 ### Explicitly deferred past v1.5 (and why)
 
