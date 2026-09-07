@@ -490,6 +490,149 @@ export function applyModifier(t, id) {
 }
 
 // ----------------------------------------------------------------
+// K7 (v1.5 M2): The CURATOR CHALLENGE — a SEEDED, SCORED expedition.
+//
+// A title-screen "Challenge" button, GATED behind a completed victory (the same
+// ngUnlocked gate as NG+), so a first-time player never sees it. A challenge run
+// is ONE shared world per day: the seed is the current UTC day (Date.now() /
+// 86400000), so everyone who presses it that day draws the SAME loadout, the
+// SAME modifier, and runs the SAME seeded world. The loadout is a RANDOM 2-
+// painting draw from the player's OWNED paintings (not chosen by the player);
+// the modifier is a RANDOM one from the MODIFIERS table. On a completed run the
+// frog banks a SCORE (restored swamp + enemies + orbs + boss-time bonus) into a
+// SAVED best-score file (top 5, each {seed, date, score}) shown in a new atelier
+// panel.
+//
+// The whole RULE is pure + headless-testable (this block): the day seed, the
+// seeded loadout/modifier draws, the score formula, and the top-5 file. game.js
+// stays thin — it wires the button, drives the seeded expedition, and calls
+// these functions. All draws use mulberry32 (src/math.js) so the same seed is
+// deterministic forever.
+//
+// A challenge run is its OWN mode: it is NOT counted in the first-time Normal
+// 15-20 min pace band (it is seeded from a player's post-victory save, and the
+// first-time pace.mjs / humance.mjs probes never enter it).
+//
+// CHALLENGE_TOP_N — the size of the saved best-score file.
+export const CHALLENGE_TOP_N = 5;
+
+// K7: the shared "day seed" for a given instant. The whole world shares one
+// challenge per UTC day: Math.floor(ms / 86400000). A non-finite `ms` falls
+// back to the real clock. Pure.
+export function challengeDaySeed(ms = Date.now()) {
+  const t = Number(ms);
+  if (!Number.isFinite(t)) return Math.floor(Date.now() / 86400000);
+  return Math.floor(t / 86400000);
+}
+
+// K7: a short, human label for a day seed — the UTC calendar date (YYYY-MM-DD).
+// Deterministic per seed; used in the atelier best-score file + the run banner.
+export function challengeDate(seed) {
+  const s = Math.floor(Number(seed));
+  const d = new Date(s * 86400000);
+  return d.toISOString().slice(0, 10);
+}
+
+// K7: the SEEDED 2-painting loadout draw from a player's OWNED paintings.
+// `owned` is the list of owned painting ids. Uses mulberry32(seed) so the same
+// (seed, owned) pair always draws the same two. A Fisher–Yates shuffle on the
+// owned list, then take the first 2 (so the draw is a fair uniform 2-subset).
+// If fewer than 2 are owned it returns whatever is available (a new challenger
+// with 0–1 paintings still gets a valid — possibly empty — loadout). Returns a
+// fresh array (never mutates `owned`). Pure.
+export function challengeDrawLoadout(seed, owned) {
+  const pool = Array.isArray(owned) ? owned.filter(id => typeof id === 'string' && id) : [];
+  const out = [];
+  if (pool.length <= 2) return pool.slice();
+  const rnd = mulberry32((Math.floor(Number(seed)) | 0) ^ 0x9e3779b9);
+  const a = pool.slice();
+  // Fisher–Yates (partial) — only the first 2 picks are needed.
+  for (let i = a.length - 1; i > a.length - 3; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return [a[a.length - 1], a[a.length - 2]];
+}
+
+// K7: the SEEDED modifier draw — one random id from the MODIFIERS table. Uses
+// mulberry32(seed) with a distinct stream offset from the loadout draw (so the
+// same seed yields a STABLE (loadout, modifier) pair, not two independent
+// draws). Returns a valid MODIFIERS id, or null if the table is empty. Pure.
+export function challengeDrawModifier(seed) {
+  const ids = MODIFIER_ORDER.filter(id => MODIFIERS[id]);
+  if (ids.length === 0) return null;
+  const rnd = mulberry32((Math.floor(Number(seed)) | 0) ^ 0x51ed270b);
+  const k = Math.floor(rnd() * ids.length) % ids.length;
+  return ids[k];
+}
+
+// K7: the challenge SCORE constants. Chosen so a competent run lands in a
+// satisfying, bounded range (roughly a few hundred to a couple thousand):
+//   restored — the swamp's color restored this run (revealProgress 0..1) scaled
+//              up: a fully-painted world is worth REVEAL_MAX.
+//   enemies  — a flat bonus per enemy defeated in time.
+//   orbs     — a small bonus per pigment orb collected in time.
+//   bossTime — a bonus for finishing the heron FASTER: the faster the boss
+//              fight (bossTimeSec), the larger the bonus, capped at BOSS_MAX.
+export const CHALLENGE_SCORE = {
+  revealMax: 600,        // fully restoring the swamp
+  perEnemy: 12,
+  perOrb: 3,
+  bossMax: 400,
+  bossTimeRef: 150,      // a 150s boss fight earns the FULL boss bonus
+};
+
+// K7: compute the challenge SCORE from a run's outcome. Pure + testable —
+// game.js gathers the four real numbers (restored swamp fraction, enemies
+// defeated, orbs collected, boss-fight time in seconds) and calls this.
+// `restored` is the revealProgress fraction (0..1; the gray swamp at rest is 0,
+// a fully colored swamp is 1). A negative boss time / negative counts are clamped
+// to 0. The boss bonus is full at bossTimeRef seconds and linearly fades to 0 as
+// the fight takes twice as long (so a very long boss fight earns no bonus).
+export function challengeScore({ restored = 0, enemies = 0, orbs = 0, bossTimeSec = 0 } = {}) {
+  const c = CHALLENGE_SCORE;
+  const r = Math.max(0, Math.min(1, Number(restored) || 0));
+  const e = Math.max(0, Math.floor(Number(enemies) || 0));
+  const o = Math.max(0, Math.floor(Number(orbs) || 0));
+  const bt = Math.max(0, Number(bossTimeSec) || 0);
+  const reveal = Math.round(r * c.revealMax);
+  const enemyPts = e * c.perEnemy;
+  const orbPts = o * c.perOrb;
+  // boss bonus: full at bt <= bossTimeRef, linear fade to 0 at bt >= 2*ref.
+  let bossPts = 0;
+  if (bt > 0) {
+    const t = (bt - c.bossTimeRef) / c.bossTimeRef;   // 0 at ref, 1 at 2*ref
+    bossPts = Math.round(c.bossMax * Math.max(0, Math.min(1, 1 - t)));
+  }
+  return reveal + enemyPts + orbPts + bossPts;
+}
+
+// K7: file a completed challenge's score into a save's best-score list (mutates
+// save in place, returns the NEW list). Each entry is {seed, date, score}. The
+// list is kept at most CHALLENGE_TOP_N, ordered DESCENDING by score (ties broken
+// by the later date). A completed run ALWAYS files its score (it is the
+// challenge's whole point — no rank gating at this layer; K8's rank-based gold
+// reads the rank off this list). Old / corrupt lists are normalized first. Pure.
+export function challengeFileScore(save, seed, score) {
+  const s = Math.floor(Number(seed));
+  const sc = Math.round(Number(score) || 0);
+  const date = challengeDate(s);
+  const list = normalizeChallengeScores(save && save.challengeScores);
+  list.push({ seed: s, date, score: sc });
+  list.sort((a, b) => (b.score - a.score) || b.date.localeCompare(a.date));
+  const out = list.slice(0, CHALLENGE_TOP_N);
+  if (save) save.challengeScores = out;
+  return out;
+}
+
+// K7: a save has unlocked the Curator Challenge once at least one VICTORY is
+// recorded (the same gate as NG+ — ngUnlocked). A first-time save (no victory)
+// sees NO challenge button. Pure.
+export function challengeUnlocked(save) {
+  return !!(save && save.stats && Number(save.stats.victories) > 0);
+}
+
+// ----------------------------------------------------------------
 // G1 (v1.3 M15): Gold — a NEW META-ONLY currency.
 //
 // Gold is earned ONLY from first-time meta achievements (the "milestones" of a
@@ -1287,10 +1430,13 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // B6: save schema versioning. `saveVersion` is the authoritative current schema
 // version, written into every save and read back on load. Legacy saves stored
 // it under the field `v`; migrateSave() accepts both and re-stamps to the
-// current version. (v1.4 M1: 7 → 8 adds the `firstVictoryCinematic` flag —
+// (v1.4 M1: 7 → 8 adds the `firstVictoryCinematic` flag —
 // a one-shot first-victory cinematic beat; old saves get the beat ONCE since
-// they've never seen it, so the flag migrates forward as false.)
-export const SAVE_VERSION = 8;
+// they've never seen it, so the flag migrates forward as false.
+// v1.5 K7: 8 → 9 adds the `challengeScores` list — the CURATOR CHALLENGE's
+// saved best-score file (top 5, each {seed,date,score}); old saves (no such
+// field) migrate forward with an empty list.)
+export const SAVE_VERSION = 9;
 
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
@@ -1368,6 +1514,16 @@ const SAVE_MIGRATIONS = [
       out.firstVictoryCinematic = normalizeFirstVictoryCinematic(out.firstVictoryCinematic);
     },
   },
+  {
+    from: 8, to: 9,
+    fn: (out) => {
+      // K7 (v1.5 M2): the Curator Challenge best-score file. A legacy v8 save
+      // (no such field) migrates forward with an empty list — an old player
+      // who has never run the challenge simply has no scores yet. A v9 save
+      // with existing scores is normalized (shape-cleaned) in place.
+      out.challengeScores = normalizeChallengeScores(out.challengeScores);
+    },
+  },
 ];
 
 // N1 (v1.3 M14): normalize the New Game+ cycle index — a non-negative integer
@@ -1414,6 +1570,26 @@ function normalizeFirstVictoryCinematic(raw) {
   return !!raw;
 }
 
+// K7 (v1.5 M2): normalize the Curator Challenge best-score file to a clean
+// array of at most 5 entries, each {seed: int, date: string, score: number},
+// ordered DESCENDING by score (ties broken by later date winning). A missing /
+// non-array field normalizes to []; each entry is shape-cleaned (garbled or
+// non-finite scores are dropped) so a corrupt list never breaks a load. Pure.
+function normalizeChallengeScores(raw) {
+  if (!Array.isArray(raw)) return [];
+  const keep = [];
+  for (const e of raw) {
+    if (!isPlainObj(e)) continue;
+    const score = Number(e.score);
+    const seed = Math.floor(Number(e.seed));
+    const date = typeof e.date === 'string' ? e.date : '';
+    if (!Number.isFinite(score) || !Number.isFinite(seed)) continue;
+    keep.push({ seed, date, score });
+  }
+  keep.sort((a, b) => (b.score - a.score) || b.date.localeCompare(a.date));
+  return keep.slice(0, CHALLENGE_TOP_N);
+}
+
 // N1 (v1.3 M14): a save has earned the New Game+ unlock when at least one
 // victory is recorded. Gating NG+ behind a completed victory keeps it out of the
 // first-time run's pace band; a first-time player (ngCycle 0, no victory) sees
@@ -1440,6 +1616,7 @@ export function freshSave() {
     goldEarned: {},       // G1 (v1.3 M15): {[key]: true} — the gold events already paid out (idempotency latch)
     gildedFrame: false,   // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier (bought once, permanent)
     firstVictoryCinematic: false, // M1 (v1.4): the first-victory cinematic beat has been SEEN (a fresh + every migrating-old save = false → they get it once)
+    challengeScores: [],  // K7 (v1.5 M2): the CURATOR CHALLENGE best-score file — top 5, each {seed,date,score}, ordered desc by score
   };
 }
 

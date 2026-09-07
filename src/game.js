@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -763,6 +763,57 @@ export class Game {
     this._openModPrompt();
   }
 
+  // K7 (v1.5 M2): the CURATOR CHALLENGE — a SEEDED daily expedition. Gated
+  // behind a completed victory (challengeUnlocked — the same gate NG+ uses via
+  // ngUnlocked), so a first-time player never sees the button. The whole world
+  // shares ONE challenge per UTC day: the seed is the current UTC day (see
+  // challengeDaySeed), and everything else is derived deterministically FROM
+  // that seed (never from Math.random):
+  //   · seed     = challengeDaySeed()            (Math.floor(Date.now()/86400000))
+  //   · loadout  = a SEEDED 2-painting draw from the player's OWNED paintings
+  //   · modifier = a SEEDED pick from the MODIFIERS table
+  // The expedition runs the SAME world / makeTuning / scoring fields as a normal
+  // run (see _beginExpedition's challenge override), but is EXCLUDED from the
+  // first-time pacing band (it is its own scored mode). On a victory, _endRun
+  // computes the challenge SCORE and files it to the saved top-5 best-score list
+  // (challengeFileScore), shown in the atelier's Challenge panel.
+  // Sets this.challenge BEFORE calling _beginExpedition, which reads it.
+  _beginChallengeExpedition() {
+    if (!challengeUnlocked(this.save)) return; // defensive: nothing unlocked yet
+    const seed = challengeDaySeed();
+    const owned = Array.isArray(this.save.owned) ? this.save.owned : [];
+    this.challenge = {
+      mode: 'challenge',
+      seed,                                  // the shared UTC-day seed
+      loadout: challengeDrawLoadout(seed, owned),   // the seeded 2-painting draw
+      modifier: challengeDrawModifier(seed),        // the seeded modifier
+    };
+    this.sfx('ui');
+    this._beginExpedition();
+  }
+
+  // K7 (v1.5 M2): the single entry point for the challenge's per-run scoring
+  // hooks. Guarded to a no-op for a normal run (this.challenge null), so the
+  // call sites below are cheap one-liners that never touch a normal run. The
+  // `kind` dispatches the counter:
+  //   'enemy'  — one regular/mid/surge enemy defeated in time
+  //   'orb'    — one pigment orb collected
+  //   'bossEngage' — the final heron left its intro (boss clock starts)
+  //   'bossDefeat' — the final heron was defeated (boss clock stops; records
+  //                  the fight duration as bossTime, clamped to >= 0)
+  // 'restored' is derived in _endRun from the revealProgress delta (no per-frame
+  // hook needed — it's a single end-of-run read).
+  _challengeAdd(kind) {
+    const c = this.challenge;
+    if (!c || c.mode !== 'challenge') return;
+    if (kind === 'enemy') c.enemies += 1;
+    else if (kind === 'orb') c.orbs += 1;
+    else if (kind === 'bossEngage') { if (c._bossEngage == null) c._bossEngage = this.runT; }
+    else if (kind === 'bossDefeat') {
+      if (c._bossEngage != null) c.bossTime = Math.max(0, this.runT - c._bossEngage);
+    }
+  }
+
   // N4 (v1.3 M14): open the expedition-modifier picker (an overlay on the end
   // screen). The current saved modifier (if any) is pre-selected so a returning
   // player can re-confirm it with a single Enter. The cycle is NOT advanced
@@ -960,9 +1011,9 @@ export class Game {
     const listX = cx - 560, listW = 1120;
     return {
       cx, ch, listX, listW,
-      // M8 P8 + A3: four tabs (Upgrades / Paintings / Gallery / Ledger);
-      // narrow + tight so all four sit on one symmetric row about cx.
-      tabY: 148, tabW: 180, tabH: 44, tabGap: 8,
+      // M8 P8 + A3 + K7: five tabs (Upgrades / Paintings / Gallery / Ledger /
+      // Challenge); narrow + tight so all five sit on one symmetric row about cx.
+      tabY: 148, tabW: 150, tabH: 44, tabGap: 8,
       rowY0: 204, rowH: 104, rowGap: 12,
       cardW: (listW - 24) / 2, cardH: 90, cardGap: 8, cols: 2,  // G2: 10 paintings (2x5) fit above the Depart button
       depart: { x: cx - 150, y: ch - 92, w: 300, h: 54 },
@@ -978,10 +1029,10 @@ export class Game {
     const g = this._atelierGeom();
     const rows = [];
     {
-      // M8 P8 + A3: four tabs (Upgrades / Paintings / Gallery / Ledger),
-      // centered on cx. Total span = 4*tabW + 3*tabGap; each tab's left edge
-      // steps by (tabW + tabGap). Symmetric about cx by construction.
-      const N = 4, span = N * g.tabW + (N - 1) * g.tabGap, x0 = g.cx - span / 2;
+      // M8 P8 + A3 + K7: five tabs (Upgrades / Paintings / Gallery / Ledger /
+      // Challenge), centered on cx. Total span = 5*tabW + 4*tabGap; each tab's
+      // left edge steps by (tabW + tabGap). Symmetric about cx by construction.
+      const N = 5, span = N * g.tabW + (N - 1) * g.tabGap, x0 = g.cx - span / 2;
       for (let i = 0; i < N; i++) {
         rows.push({ tag: `tab${i}`, x: x0 + i * (g.tabW + g.tabGap), y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== i) this.sfx('ui'); this.atelierTab = i; } });
       }
@@ -1059,6 +1110,7 @@ export class Game {
     if (this.input.pressed('2')) { if (this.atelierTab !== 1) this.sfx('ui'); this.atelierTab = 1; dismissIntro(); }
     if (this.input.pressed('3')) { if (this.atelierTab !== 2) this.sfx('ui'); this.atelierTab = 2; dismissIntro(); }
     if (this.input.pressed('4')) { if (this.atelierTab !== 3) this.sfx('ui'); this.atelierTab = 3; dismissIntro(); }
+    if (this.input.pressed('5')) { if (this.atelierTab !== 4) this.sfx('ui'); this.atelierTab = 4; dismissIntro(); }  // K7 (v1.5 M2): the Challenge panel
     if (this.atelierTab === 0) {
       if (this.input.pressed('a')) { this._buyUpgrade('capacity'); dismissIntro(); }
       if (this.input.pressed('s')) { this._buyUpgrade('power'); dismissIntro(); }
@@ -1321,13 +1373,13 @@ _drawAtelier(ctx) {
       else centerText(ctx, '·', fx + fs / 2, fy + fs / 2 + 1, '700 14px Georgia, serif', INK, 0.35);
     }
 
-    // tabs (M8 P8 + A3: four) — same centered layout as the click map in
-    // _atelierRows (span = 4*tabW + 3*tabGap, left edge stepping by tabW+tabGap).
-    const tN = 4, tSpan = tN * g.tabW + (tN - 1) * g.tabGap, tX0 = cx - tSpan / 2;
-    [['Studio Upgrades', 0], ['Paintings', 1], ['The Gallery', 2], ["Curator's Ledger", 3]].forEach(([label, idx]) => {
+    // tabs (M8 P8 + A3 + K7: five) — same centered layout as the click map in
+    // _atelierRows (span = 5*tabW + 4*tabGap, left edge stepping by tabW+tabGap).
+    const tN = 5, tSpan = tN * g.tabW + (tN - 1) * g.tabGap, tX0 = cx - tSpan / 2;
+    [['Studio Upgrades', 0], ['Paintings', 1], ['The Gallery', 2], ["Curator's Ledger", 3], ['Challenge', 4]].forEach(([label, idx]) => {
       const active = this.atelierTab === idx;
       const bx = tX0 + idx * (g.tabW + g.tabGap);
-      uiButton(ctx, bx, g.tabY, g.tabW, g.tabH, label, this._mouseIn(bx, g.tabY, g.tabW, g.tabH) && !active, active, { seed: 30 + idx, size: 14 });
+      uiButton(ctx, bx, g.tabY, g.tabW, g.tabH, label, this._mouseIn(bx, g.tabY, g.tabW, g.tabH) && !active, active, { seed: 30 + idx, size: 12.5 });
     });
     // persistent one-line legends, so returning players never have to guess
     if (this.atelierTab === 0) {
@@ -1343,6 +1395,10 @@ _drawAtelier(ctx) {
       // comes from" note, so the meta currency is explained right where it is
       // spent (the Curator's Ledger holds the gold-tier works + the Gilded Frame).
       centerText(ctx, `◆ gold is a meta pigment — earned from boss defeats, first synergies & the 100-orb run, spent here on gold-tier works & the Gilded Frame (NG+ only)`, cx, g.tabY + g.tabH + 18, '700 12.5px Georgia, serif', '#c9922a', 0.95);
+    } else if (this.atelierTab === 4) {
+      // K7 (v1.5 M2): the Curator Challenge legend — one shared daily challenge,
+      // a seeded loadout + modifier, scored and filed to the best-score list.
+      centerText(ctx, 'the Curator’s daily challenge — one swamp, one brush, seeded for the whole world. paint it, clear the heron; your score is filed below', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.78);
     } else {
       centerText(ctx, 'your collection — every painting you own, hung on the wall (owned frames are lit)', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
     }
@@ -1626,6 +1682,94 @@ _drawAtelier(ctx) {
         const bbw = 150, bbh = 56, bbx = bx + bw - bbw - 14, bby = by + (bh - bbh) / 2;
         uiButton(c, bbx, bby, bbw, bbh, eligible ? 'Retire' : 'Incomplete', false, false, { seed: 501 });
         paperEnd(ctx);
+      }
+    } else if (this.atelierTab === 4) {
+      // K7 (v1.5 M2): the Curator Challenge panel — the NEW atelier tab. It has
+      // two parts: (1) a "today's challenge" card showing the SEEDED loadout +
+      // modifier + date (what a run this day would draw), and (2) the SAVED
+      // best-score file — the top-5 challenges filed by score (each entry is
+      // {seed, date, score}), shown in descending order. It is a display-only
+      // panel: the challenge itself is started from the title-screen button
+      // (K7); this panel just shows today's draw and the filed best scores.
+      const seed = challengeDaySeed();
+      const owned = Array.isArray(this.save.owned) ? this.save.owned : [];
+      const loadout = challengeDrawLoadout(seed, owned);
+      const modId = challengeDrawModifier(seed);
+      const mod = modId ? MODIFIERS[modId] : null;
+      const bw = 760, bh = 150, bx = cx - bw / 2, by = g.rowY0 + 4;
+      const c = paperPanel(ctx, bx, by, bw, bh, { seed: 640, fill: '#f7f0df' });
+      c.save();
+      c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+      c.fillStyle = '#8a6d1f';
+      c.font = '700 18px Georgia, serif';
+      c.globalAlpha = 1;
+      c.fillText(`The Curator's Challenge — ${challengeDate(seed)}`, bx + 22, by + 30);
+      c.fillStyle = INK;
+      c.font = '13px Georgia, serif';
+      c.globalAlpha = 0.85;
+      c.fillText('One shared challenge per day — the same loadout and modifier for the whole world.', bx + 22, by + 52);
+      // the seeded loadout + modifier, drawn deterministically from the day seed
+      const loTxt = loadout.length
+        ? loadout.map(id => { const pt = PAINTINGS.find(p => p.id === id); return pt ? pt.name : id; }).join('  +  ')
+        : 'no paintings owned yet — a bare-brush day';
+      c.font = '700 14px Georgia, serif';
+      c.globalAlpha = 1;
+      c.fillStyle = '#4c8a34';
+      c.fillText('Brush (loadout):', bx + 22, by + 80);
+      c.fillStyle = INK;
+      c.fillText(loTxt, bx + 170, by + 80);
+      c.font = '700 14px Georgia, serif';
+      c.fillStyle = '#4c8a34';
+      c.fillText('Condition (modifier):', bx + 22, by + 104);
+      c.fillStyle = INK;
+      c.globalAlpha = 1;
+      c.fillText(mod ? `${mod.name} — ${mod.desc}` : 'clear conditions', bx + 190, by + 104);
+      c.font = 'italic 12px Georgia, serif';
+      c.fillStyle = INK;
+      c.globalAlpha = 0.6;
+      c.fillText('score = color restored + enemies cleared in time + orbs gathered + a boss-time bonus. file it to the best list below.', bx + 22, by + 130);
+      c.restore();
+      paperEnd(ctx);
+      // the SAVED best-score file (top 5, descending by score) — already
+      // normalized by challengeFileScore at file time + the v9 migration.
+      const scores = Array.isArray(this.save.challengeScores) ? this.save.challengeScores : [];
+      const fw = 640, fh = 46, fgap = 8;
+      const fy0 = by + bh + 18;
+      c.save();
+      centerText(ctx, `filed challenges — the ${CHALLENGE_TOP_N} best scores (best first)`, cx, fy0 - 12, '700 13px Georgia, serif', '#c9922a', 1);
+      c.restore();
+      if (scores.length === 0) {
+        centerText(ctx, 'no challenges filed yet — clear one from the title screen.', cx, fy0 + 20, 'italic 13px Georgia, serif', '#fdf6e9', 0.6);
+      } else {
+        scores.forEach((s, i) => {
+          const y = fy0 + i * (fh + fgap);
+          const rank = i + 1;
+          const cc = paperPanel(ctx, cx - fw / 2, y, fw, fh, { seed: 660 + i, fill: rank === 1 ? '#f4ecd0' : '#f6f1e2' });
+          cc.save();
+          cc.textAlign = 'left'; cc.textBaseline = 'middle';
+          const my = y + fh / 2;
+          cc.fillStyle = '#8a6d1f';
+          cc.font = '700 17px Georgia, serif';
+          cc.globalAlpha = 1;
+          cc.fillText(rank === 1 ? '①' : rank === 2 ? '②' : rank === 3 ? '③' : String(rank), cx - fw / 2 + 20, my);
+          cc.fillStyle = INK;
+          cc.font = '700 13px Georgia, serif';
+          cc.fillText(s.date, cx - fw / 2 + 60, my);
+          cc.font = '12px Georgia, serif';
+          cc.globalAlpha = 0.6;
+          cc.fillText(`seed ${s.seed}`, cx - fw / 2 + 200, my);
+          cc.textAlign = 'right';
+          cc.fillStyle = rank === 1 ? '#c9922a' : INK;
+          cc.globalAlpha = 1;
+          cc.font = '700 19px Georgia, serif';
+          cc.fillText(String(s.score), cx + fw / 2 - 22, my);
+          cc.textAlign = 'left';
+          cc.fillStyle = '#4c8a34';
+          cc.font = '700 11px Georgia, serif';
+          cc.fillText('pts', cx + fw / 2 - 96, my);
+          cc.restore();
+          paperEnd(ctx);
+        });
       }
     }
 
@@ -1913,6 +2057,10 @@ _drawAtelier(ctx) {
     if (this.input.pressed('a')) { this.sfx('ui'); this._beginAtelier(); return; }
     if (this.input.pressed('o')) { this._openOptions(); return; }  // M8 P9
     if (this.input.pressed('m')) { this._muteToggle(); return; }
+    // K7 (v1.5 M2): the 'c' hotkey opens the Curator Challenge — but only when
+    // the challenge is actually unlocked (a completed victory). A first-time
+    // save (no victory) gets no challenge hotkey, matching the hidden button.
+    if (this.input.pressed('c') && challengeUnlocked(this.save)) { this.sfx('ui'); this._beginChallengeExpedition(); return; }
     // M8 P7: difficulty select (G/N/B = Gentle/Normal/Bold; 1/2/3 are pigment
     // hotkeys in-game, so avoid them). Persists in options; applied at run start.
     if (this.input.pressed('g')) { this._setDifficulty('gentle'); return; }
@@ -1944,6 +2092,9 @@ _drawAtelier(ctx) {
       // after a victory (g.ng set only when ngUnlocked). It shares the guided
       // slot but that button is fresh-save-only, so the two never coexist.
       if (g.ng && this._mouseIn(g.ng.x, g.ng.y, g.ng.w, g.ng.h)) { this._beginNextExpedition(); return; }
+      // K7 (v1.5 M2): the Curator Challenge button (shown only after a victory;
+      // g.chall is null otherwise). Starts the seeded, scored daily challenge.
+      if (g.chall && this._mouseIn(g.chall.x, g.chall.y, g.chall.w, g.chall.h)) { this.sfx('ui'); this._beginChallengeExpedition(); return; }
       if (this._mouseIn(g.bx, g.by, g.bw, g.bh)) { this.sfx('ui'); this._beginExpedition(); }
       else if (this._mouseIn(g.abx, g.aby, g.abw, g.abh)) { this.sfx('ui'); this._beginAtelier(); }
       else if (this._mouseIn(g.ox, g.oy, g.ow, g.oh)) { this.sfx('ui'); this.optionsOpen = true; }
@@ -2002,8 +2153,16 @@ _drawAtelier(ctx) {
   }
 
   _beginExpedition(guided = false) {
+    // K7 (v1.5 M2): the CURATOR CHALLENGE override. A challenge run is started
+    // by _beginChallengeExpedition(), which sets this.challenge with a
+    // DETERMINISTIC (UTC-day) seed, a seeded random 2-painting loadout (drawn
+    // from the player's OWNED paintings), and a seeded random modifier. Those
+    // three override the normal fresh-world seed / saved-loadout / NG-modifier
+    // below so the whole world shares the SAME daily challenge. A normal run
+    // (this.challenge null) keeps its exact existing behavior byte-for-byte.
+    const _chal = this.challenge && this.challenge.mode === 'challenge' ? this.challenge : null;
     // fresh world each run (title keeps drifting over whatever is left)
-    const seed = (Math.random() * 2 ** 31) | 0;
+    const seed = _chal ? _chal.seed : ((Math.random() * 2 ** 31) | 0);
     this.runSeed = seed; // E2: weather phases derive deterministically from this
     // N1 (v1.3 M14): the run's New Game+ cycle (0 = the base, first-time game;
     // >= 1 = an NG+ cycle). Read from the save so a "Next Expedition" (which
@@ -2014,22 +2173,34 @@ _drawAtelier(ctx) {
     // must run BEFORE makeTuning (it changes which paintings the loadout
     // contains, which makeTuning consumes). Cycle-0 never carries a modifier
     // (save.ngModifier is null), so the first-time loadout is byte-identical.
-    const _modId = this.ngCycle >= 1 ? saveModifier(this.save) : null;
+    // K7: a challenge run carries its OWN seeded modifier (not save.ngModifier),
+    // applied AFTER the NG+ scaling (see below) — never the masters-palette
+    // pre-lock (that is a player-chosen NG+ modifier, not a challenge draw).
+    let _modId = (this.ngCycle >= 1 && !_chal) ? saveModifier(this.save) : null;
     let _loadout = this.save.loadout;
     if (_modId === 'masters-palette') {
       const _pl = MODIFIERS[_modId].preLock;
       _loadout = Array.isArray(_pl) && _pl.length ? _pl.slice() : _loadout;
     }
+    // K7: the challenge's seeded loadout + modifier OVERRIDE the run setup.
+    // _chal.modifier is applied via applyModifier below (challenges always run
+    // one, even on a cycle-0 save — the challenge is a scored mode, not NG+).
+    if (_chal) { _loadout = _chal.loadout; _chal._modApplied = null; }
+    const _chalModId = _chal ? _chal.modifier : null;
     this.world = new World(mulberry32(seed), seed % 99991);
     this.tuning = makeTuning(this.save.upgrades, _loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
     // N2 (v1.3 M14): NG+ per-cycle scaling — applied ONLY when ngCycle >= 1 so
     // a first-time (cycle 0) run's tuning stays byte-identical to pre-NG+.
-    if (this.ngCycle >= 1) applyNGPlus(this.tuning, this.ngCycle);
+    if (this.ngCycle >= 1 && !_chal) applyNGPlus(this.tuning, this.ngCycle);
     // N4 (v1.3 M14): the player-chosen expedition modifier (chosen at the
     // "Next Expedition" prompt) — applied ONLY on NG+ cycles, AFTER the NG+
     // scaling, through the standard tuning path. A cycle-0 run never reaches
     // this (ngCycle < 1), so a first-time run's tuning is byte-identical.
-    if (this.ngCycle >= 1) applyModifier(this.tuning, _modId);
+    if (this.ngCycle >= 1 && !_chal) applyModifier(this.tuning, _modId);
+    // K7: apply the challenge's seeded modifier (always, regardless of cycle).
+    // This is the challenge's fixed daily modifier — distinct from the NG+
+    // player-chosen modifier above (a challenge run never carries both).
+    if (_chal && _chalModId) applyModifier(this.tuning, _chalModId);
     // N4: High Tide widens the water — hand the render-side multiplier to the
     // fresh per-run world (defaults to 1; a cycle-0 run never carries it).
     this.world.waterWidthMult = this.tuning.waterWidthMult || 1;
@@ -2132,6 +2303,31 @@ _drawAtelier(ctx) {
     this.help = false;   // M8 P6: start a run with the field guide closed
     this.banners = [];
     this.state = 'expedition';
+    // K7 (v1.5 M2): the CURATOR CHALLENGE per-run score tracking. `this.challenge`
+    // is set by _beginChallengeExpedition() (a {mode:'challenge', seed, loadout,
+    // modifier, restored0} object) and cleared at the end of the run (in
+    // _endRun). A NORMAL run (this.challenge null) keeps every one of these
+    // counters inert (the guarded hooks below no-op), so a first-time run is
+    // byte-identical in behavior. The counters accumulate ONLY in a challenge:
+    //   · enemies  — regular + mid + surge enemies defeated this run
+    //   · orbs     — pigment orbs collected this run
+    //   · bossTime — the heron fight duration (engage -> defeated), or null
+    //   · restored — the color-reveal fraction gained this run (0..1)
+    // `this.challenge._modApplied` latches so the modifier is applied once.
+    if (_chal) {
+      _chal.enemies = 0;
+      _chal.orbs = 0;
+      _chal.bossTime = null;
+      _chal._bossEngage = null;   // set when the heron leaves its intro (engaged)
+      // the color-restoration baseline is the REVEAL FRACTION (0..1) at the
+      // run's start, so the score's "restored" term is the fraction GAINED this
+      // run (end-of-run revealProgress minus this). Stored as a single number
+      // (no per-frame allocation) — read once at run start.
+      _chal.restored0 = revealProgressOf(this.world.worldColorSat());
+    } else {
+      this.challenge = null;   // a normal run — ensure no stale challenge state
+    }
+    this._challengeResult = null; // a fresh run starts with no filed score (K7)
     // B5: one-time "progress may not persist" notice when persistent storage is
     // unavailable (we are running on the in-memory fallback). Emitted once per
     // page load — the flag lives on the Game instance, not the save, so it
@@ -2179,6 +2375,14 @@ _drawAtelier(ctx) {
     // reveal to 38s — just after the last tutorial step — so the boss lands as
     // a clean "now you know the tools" moment. Returning players: 3.2s (unchanged).
     this.heron._intro = firstRun ? 38 : 3.2;
+    // K7 (v1.5 M2): a CURATOR CHALLENGE run gets a distinct banner (it is a
+    // scored daily mode — same world, seeded loadout + modifier — that files a
+    // score to the atelier's challenge panel). A normal run shows nothing here.
+    if (_chal) {
+      const _mn = MODIFIERS[_chal.modifier] ? MODIFIERS[_chal.modifier].name : _chal.modifier;
+      this.addBanner('The Curator\u2019s Challenge — today\u2019s swamp, today\u2019s brush.', 4.6, this.ch * 0.3);
+      this.addBanner(`Today: ${_mn}. Paint the swamp, clear the heron — your score is filed at the Atelier.`, 5.2, this.ch * 0.3 + 40);
+    }
     // T1 (v1.2 M13): a fresh save may start the guided first expedition. It is
     // a SEPARATE pre-run layer — the timed clock is frozen and the boss deferred
     // for its duration, so it never inflates the 15-20 min expedition timing.
@@ -2728,7 +2932,7 @@ _drawAtelier(ctx) {
         e._burnTick = 0;
         this.particles.embers(e.x, e.y - 10, 2);
       }
-      if (e.dead) { this._onEnemyDead(e); this.enemies.splice(i, 1); }
+      if (e.dead) { this._onEnemyDead(e); this._challengeAdd('enemy'); this.enemies.splice(i, 1); }
     }
 
     // ----- T1/T2 (v1.2 M13): advance the tutorial once the REAL effect lands.
@@ -2763,6 +2967,9 @@ _drawAtelier(ctx) {
         this.addBanner('THE GREAT GRAY HERON', 3.2, 150);
         this.addBanner('Paint red, blue, and green to wake it — then paint fast while it shimmers!', 4.4, 195);
         this.zoomTarget = 0.92;
+        // K7 (v1.5 M2): the final heron has engaged — start the challenge's
+        // boss clock (the boss-time bonus is the fight duration).
+        this._challengeAdd('bossEngage');
       }
     }
     if (this.heron._intro <= 0) this._updateBoss(dt);
@@ -3173,6 +3380,7 @@ _drawAtelier(ctx) {
         // goldEarn latch makes it fire exactly once across a career, so we can
         // call the check every pickup — it is a silent no-op after the first.
         this.runOrbs += 1;
+        this._challengeAdd('orb'); // K7 (v1.5 M2): count a challenge orb collected
         if (this.runOrbs === 100) this._awardGold(goldEventOrbs(this.runOrbs), 'A hundred orbs in one expedition — GOLD for the Curator.');
         if (this.stock[o.color] < this.tuning.capacity) {
           this.stock[o.color] += v;
@@ -3276,6 +3484,41 @@ _drawAtelier(ctx) {
     }
     if (victory) { this.save.stats.victories += 1; this.save.flags.heronDefeated = true; }
     else this.save.stats.deaths += 1;
+    // K7 (v1.5 M2): file the CURATOR CHALLENGE score. Only a victory files a
+    // score (a defeat clears it silently), and only when this run WAS a
+    // challenge (this.challenge set by _beginChallengeExpedition). The score is
+    // the pure challengeScore (logic.js) of four signals, all gathered from the
+    // per-run counters _endRun's challenge hooks maintained:
+    //   · restored — the color-restoration fraction GAINED this run (the
+    //     revealProgress at end-of-run minus the run's starting baseline)
+    //   · enemies  — regular/mid/surge enemies defeated in time
+    //   · orbs     — pigment orbs collected
+    //   · bossTime — the heron fight duration (the boss-time bonus; faster is
+    //                better). `restored` is a single end-of-run read (no
+    //                per-frame allocation). The result is persisted to the
+    //                saved top-5 best-score list (challengeFileScore) and is
+    //                EXCLUDED from the first-time pacing band (this is a
+    //                scored mode, not a first-time run).
+    if (victory && this.challenge && this.challenge.mode === 'challenge') {
+      const _ch = this.challenge;
+      const _restoredEnd = this.world ? revealProgressOf(this.world.worldColorSat()) : 0;
+      const _restoredGained = Math.max(0, _restoredEnd - (_ch.restored0 != null ? _ch.restored0 : 0));
+      const _score = challengeScore({
+        restored: _restoredGained,
+        enemies: _ch.enemies || 0,
+        orbs: _ch.orbs || 0,
+        bossTimeSec: _ch.bossTime || 0,
+      });
+      challengeFileScore(this.save, _ch.seed, _score);
+      SaveSys.save(this.save);
+      // rank = 1 + how many FILED scores are strictly better (deterministic;
+      // ties for the score count as the same rank). Shown on the end card so
+      // the player sees where today's run landed in the daily best list.
+      const _cs = this.save.challengeScores || [];
+      const _rank = 1 + _cs.reduce((n, s) => (s.score > _score ? n + 1 : n), 0);
+      this._challengeResult = { score: _score, seed: _ch.seed, rank: _rank };
+      this.challenge = null; // consumed — the run is over
+    }
     this.save.stats.treasures += 0; // reserved for future content
         // best run: a cleared victory with more pigments beats everything;
         // otherwise the longer un-cleared run is the "furthest you got" record
@@ -3539,6 +3782,9 @@ _drawAtelier(ctx) {
     const h = this.heron;
     this.save.stats.heronsPainted += 1;
     SaveSys.save(this.save);
+    // K7 (v1.5 M2): stop the challenge's boss clock (records the fight
+    // duration as bossTime; a no-op for a normal run).
+    this._challengeAdd('bossDefeat');
     this.sfx('awaken');
         this.addShake(16);
         // J2 (v1.4): the big moment — ~0.8 s of slow-mo (~0.35×) + a white
@@ -4474,13 +4720,24 @@ _drawAtelier(ctx) {
     const dy = slotPush, dH = 30, dW = 88, dGap = 10;
     const dTotal = dW * 3 + dGap * 2, dStartX = cx - dTotal / 2;
     const diff = ['gentle', 'normal', 'bold'].map((id, i) => ({ id, x: dStartX + i * (dW + dGap), y: dy, w: dW, h: dH, label: (DIFFICULTIES[id] || {}).label }));
-    const abw = 200, abh = 44, aby = dy + dH + 12;
-    // P9: two secondary buttons (Atelier + Options) as a symmetric pair centered
-    // on the title. No test clicks them by coordinate (smoke calls _beginAtelier
-    // directly), so this pair layout is free to tune.
-    const gap = 24;
-    const abx = cx - (abw + gap / 2), ox = cx + gap / 2, ow = abw, oh = abh, oy = aby;
-    return { cx, pw, ph, px, py, bx, by, bw, bh, tw, th, tx, ty, diff, abx, aby, abw, abh, ox, oy, ow, oh, ng };
+    // K7 (v1.5 M2): the CURATOR CHALLENGE button. Gated behind a completed
+    // victory (challengeUnlocked = same gate as ngUnlocked) so a first-time
+    // player never sees it. It shares the difficulty row's Y with the
+    // Atelier/Options secondary pair (aby = dy + dH + 12) but sits in a WIDER
+    // centered 3-button row (Challenge | Atelier | Options) so it is a
+    // distinct, prominent entry — never stacked onto the difficulty pills.
+    // When absent (no victory) the Atelier/Options pair keeps its exact
+    // original centered geometry (challengeUnlocked false -> rowW 424).
+    const challShow = challengeUnlocked(this.save);
+    const chw = 150, chh = 44, cgap = 24;
+    const rowW = (challShow ? chw + cgap : 0) + 200 + cgap + 200;
+    const rowX = cx - rowW / 2;
+    const aby2 = dy + dH + 12, abw2 = 200, abh2 = 44;
+    const abx2 = rowX, ox2 = rowX + (challShow ? chw + cgap : 0) + 200 + cgap;
+    const ow2 = 200, oh2 = abh2;
+    const abx = abx2, aby = aby2, abw = abw2, abh = abh2, ox = ox2, ow = ow2, oh = oh2;
+    const chall = challShow ? { x: rowX, y: aby2, w: chw, h: chh } : null;
+    return { cx, pw, ph, px, py, bx, by, bw, bh, tw, th, tx, ty, diff, abx, aby, abw, abh, ox, oy: aby2, ow, oh, ng, chall };
   }
   _setDifficulty(id) {
     if (!DIFFICULTIES[id] || this.options.difficulty === id) return;
@@ -4799,6 +5056,16 @@ _drawAtelier(ctx) {
         // (O / click handled in _updateTitle). L3: staggered step 3.
         ctx.save();
         ctx.globalAlpha = titleItemAlpha(this._titleShowT, 3);
+        // K7 (v1.5 M2): the Curator Challenge button (victory-gated). It is a
+        // distinct, prominent entry (a gilded-ink "Curator's pick" frame) shown
+        // only when challengeUnlocked — a first-time save never sees it. It
+        // carries the day's seed hint so the shared-daily nature reads clearly.
+        if (g.chall) {
+          const chov = this._mouseIn(g.chall.x, g.chall.y, g.chall.w, g.chall.h);
+          uiButton(ctx, g.chall.x, g.chall.y, g.chall.w, g.chall.h, 'Challenge  [C]', chov, false, { seed: 58, size: 15, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+          const day = challengeDate(challengeDaySeed(Date.now()));
+          centerText(ctx, `today's pick · ${day}`, g.chall.x + g.chall.w / 2, g.chall.y - 8, 'italic 10px Georgia, serif', '#e8c86a', 0.9);
+        }
         uiButton(ctx, g.abx, g.aby, g.abw, g.abh, 'Visit the Atelier', this._mouseIn(g.abx, g.aby, g.abw, g.abh), false, { seed: 6, size: 15 });
         uiButton(ctx, g.ox, g.oy, g.ow, g.oh, 'Options', this._mouseIn(g.ox, g.oy, g.ow, g.oh), false, { seed: 7, size: 15 });
         ctx.restore();
@@ -5160,8 +5427,19 @@ _drawAtelier(ctx) {
       centerText(c, `best run — ${what}`, cx, py + (victory ? 396 : 296), '700 13px Georgia, serif', INK, 0.8);
     }
 
-    // spend hint
+    // spend hint (replaced on a challenge victory by the filed score + rank,
+    // which is the more meaningful line for that run — the spend hint is
+    // redundant there and the slot is otherwise empty on a victory card).
+    if (victory && this._challengeResult) {
+      // K7 (v1.5 M2): the filed challenge score + where it ranked in the
+      // daily best list — the player's reward for today's seeded swamp.
+      const cr = this._challengeResult;
+      const rankTxt = cr.rank <= 5 ? `#${cr.rank} of 5` : 'below the top 5';
+      centerText(c, `The Curator's Challenge — score ${cr.score} · filed ${rankTxt} on today's best list`, cx, py + 420, '700 13px Georgia, serif', '#a3762a', 0.95);
+      centerText(c, `the whole world shares today's swamp (${challengeDate(cr.seed)}) — see the best list at the Atelier's Challenge panel`, cx, py + 440, 'italic 12px Georgia, serif', INK, 0.6);
+    } else {
         centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + (victory ? 420 : 320), 'italic 12px Georgia, serif', INK, 0.55);
+    }
 
     // C2 (v1.3 M16): the "Season" summary (VICTORY ONLY) — a compact read of the
     // NG+ season this victory belongs to: the cycle, the modifier chosen for it,

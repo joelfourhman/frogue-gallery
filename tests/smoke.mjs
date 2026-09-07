@@ -3149,8 +3149,9 @@ console.log('== stage 52: v1.3 M15 G3 — Gilded Frame (NG+ prestige tier) ==');
   const S52 = await import('../src/save.js');
   const KEY = 'frogue_gallery_save';
 
-  // (0) schema: a fresh save is NOT gilded, SAVE_VERSION is now 8.
-  assert(L52.SAVE_VERSION === 8, `G3: SAVE_VERSION is now 8 (first-victory cinematic era; got ${L52.SAVE_VERSION})`);
+  // (0) schema: a fresh save is NOT gilded, SAVE_VERSION is now 9 (K7: 8 -> 9
+  // adds the challengeScores best-score list; the v9 era supersedes the v8 one).
+  assert(L52.SAVE_VERSION === 9, `G3: SAVE_VERSION is now 9 (K7 challenge era; got ${L52.SAVE_VERSION})`);
   const fresh = L52.freshSave();
   assert(fresh.gildedFrame === false, 'G3: a fresh save has gildedFrame false');
   assert(L52.isGilded(fresh) === false, 'G3: isGilded is false on a fresh save');
@@ -4513,7 +4514,7 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
 {
   console.log('== stage 69: v1.4 M1 — first-victory cinematic beat (headless) ==');
   const L = await import('../src/logic.js');
-  assert(L.SAVE_VERSION === 8, 'M1: SAVE_VERSION is 8 (7 -> 8 for the cinematic seen-flag)');
+  assert(L.SAVE_VERSION === 9, 'M1: SAVE_VERSION is 9 (K7 bumped 8 -> 9 for the challengeScores list; the cinematic seen-flag from 7 -> 8 is unchanged)');
   // Headless AudioContext that RECORDS every tone scheduled, so we can assert
   // the arpeggio shape (a soft RISING sequence) + that it rides the melody
   // layer (musicBus), not the sfx bus. Mirrors the S1/S2 stage pattern.
@@ -5391,6 +5392,123 @@ console.log('== stage 77: v1.5 K6 — NG+ "MASTER" TIER (cycle 4+ capped escalat
   assert(a5.enemyHp === a4.enemyHp && a5.enemyDmg === a4.enemyDmg && a5.spawnRate === a4.spawnRate, 'K6: applyNGPlus(cycle 5) == applyNGPlus(cycle 4) (the Master cap)');
 
   console.log('ok — K6: the NG+ Master tier (cycle 4+) is a capped scaling step (HP +50% / dmg +25% over cycle 3, spawn held), strictly harder than cycle 3, bounded (cycle 4 == cycle 5 == cycle 99), and cycles 0-3 are unchanged (pure logic, no game.js change)');
+}
+
+// stage 78 — v1.5 M2 K7: the CURATOR CHALLENGE. A victory-gated title button
+// that runs a SEEDED daily expedition: seed = current UTC day (shared worldwide),
+// loadout = a seeded 2-painting draw from owned paintings, modifier = a seeded
+// pick from MODIFIERS. A victory computes a SCORE (restored + enemies + orbs +
+// boss-time bonus) and files it to a saved top-5 best-score list, shown in a NEW
+// atelier panel. Pure logic lives in logic.js (day seed / loadout / modifier /
+// score / file); game.js only wires it. We assert the gate, the deterministic
+// seed (same day -> same draw), the score math, the top-5 file (ordered desc,
+// max 5, older dropped), the v8->v9 migration, and an END-TO-END challenge
+// victory that files a score to the save (persisted).
+console.log('== stage 78: v1.5 M2 K7 — Curator Challenge (seeded daily expedition) ==');
+{
+  const L78 = await import('../src/logic.js');
+
+  // (1) GATE: a fresh save (no victory) does NOT unlock the challenge; a save
+  // with a victory does. Same predicate shape as ngUnlocked.
+  assert(L78.challengeUnlocked(L78.freshSave()) === false, 'K7: a fresh save (no victory) does NOT unlock the challenge');
+  const won78 = L78.freshSave(); won78.stats.victories = 1;
+  won78.owned = ['moonlit-pond', 'dancing-salamander', 'spring-garden', 'king-frog', 'storm-cloud'];
+  assert(L78.challengeUnlocked(won78) === true, 'K7: a save with a completed victory unlocks the challenge');
+  // The title layout shows the button only when unlocked (g.chall set/null).
+  const cv78a = makeCanvas(); const g78a = new Game(cv78a); g78a.start();
+  g78a.save = L78.freshSave(); // no victory
+  const layFresh = g78a._titleLayout();
+  assert(layFresh.chall === null, 'K7: the title layout has NO challenge button on a fresh (no-victory) save');
+  g78a.save = won78;
+  const layWon = g78a._titleLayout();
+  assert(layWon.chall && layWon.chall.w > 0, 'K7: the title layout EXPOSES the challenge button on a victory save');
+
+  // (2) DETERMINISM: the seed is the current UTC day and the loadout/modifier
+  // are derived deterministically from it — the SAME day yields the SAME
+  // (seed, loadout, modifier) triple for a given owned set (the whole world
+  // shares one challenge per day).
+  const day = L78.challengeDaySeed();
+  assert(typeof day === 'number' && Number.isFinite(day) && day > 0, `K7: the day seed is a finite positive UTC-day number (${day})`);
+  const owned78 = ['moonlit-pond', 'dancing-salamander', 'spring-garden', 'self-portrait', 'king-frog'];
+  const lo1 = L78.challengeDrawLoadout(day, owned78), lo2 = L78.challengeDrawLoadout(day, owned78);
+  assert(lo1.length === 2 && lo2.length === 2, `K7: the challenge loadout is a 2-painting draw (${lo1.join(', ')})`);
+  assert(lo1[0] === lo2[0] && lo1[1] === lo2[1], 'K7: the loadout is DETERMINISTIC for the same (day, owned) (same draw twice)');
+  assert(lo1.every(id => owned78.includes(id)), "K7: the loadout is drawn only from the player's OWNED paintings");
+  const mod1 = L78.challengeDrawModifier(day), mod2 = L78.challengeDrawModifier(day);
+  assert(mod1 === mod2 && L78.MODIFIERS[mod1], `K7: the modifier is DETERMINISTIC + valid for the same day (${mod1})`);
+  // A different day can (and for most pairs does) yield a different draw.
+  const dayB = day + 1;
+  const loB = L78.challengeDrawLoadout(dayB, owned78);
+  // (not asserting inequality — a different day CAN coincide; we assert the
+  //  different-seed path still returns a valid 2-subset of owned.)
+  assert(loB.length === 2 && loB.every(id => owned78.includes(id)), 'K7: a different day still yields a valid 2-subset of owned paintings');
+
+  // (3) SCORE: the pure score is restored + enemies + orbs + a boss-time bonus,
+  // with faster boss times scoring higher.
+  const s0 = L78.challengeScore({ restored: 0, enemies: 0, orbs: 0, bossTimeSec: 0 });
+  assert(Number.isFinite(s0) && s0 >= 0, `K7: an empty score is a finite non-negative number (${s0})`);
+  const sFull = L78.challengeScore({ restored: 1, enemies: 40, orbs: 120, bossTimeSec: 40 });
+  const sSlow = L78.challengeScore({ restored: 1, enemies: 40, orbs: 120, bossTimeSec: 400 });
+  assert(sFull > sSlow, `K7: a FASTER boss time scores higher than a slow one (fast ${sFull} > slow ${sSlow})`);
+  const sMore = L78.challengeScore({ restored: 1, enemies: 60, orbs: 160, bossTimeSec: 40 });
+  assert(sMore > sFull, 'K7: more enemies + orbs + full restoration score higher');
+
+  // (4) FILE: challengeFileScore persists a {seed,date,score} entry, ordered
+  // DESC by score, capped at top 5 (older dropped). A corrupt/missing list is
+  // normalized to a valid list.
+  const fs = L78.freshSave();
+  L78.challengeFileScore(fs, 100, 10);
+  L78.challengeFileScore(fs, 101, 90);
+  L78.challengeFileScore(fs, 102, 50);
+  assert(fs.challengeScores.length === 3, 'K7: each filed score is added to the save list');
+  assert(fs.challengeScores[0].score === 90 && fs.challengeScores[2].score === 10, 'K7: the list is ordered DESC by score (90, 50, 10)');
+  assert(fs.challengeScores[0].seed === 101 && typeof fs.challengeScores[0].date === 'string' && fs.challengeScores[0].date.length === 10, 'K7: each entry is {seed, date(YYYY-MM-DD), score}');
+  for (let i = 0; i < 6; i++) L78.challengeFileScore(fs, 200 + i, 1000 + i);
+  assert(fs.challengeScores.length === 5, `K7: the list is capped at the top ${L78.CHALLENGE_TOP_N} (older scores dropped)`);
+  assert(fs.challengeScores[0].score === 1005 && fs.challengeScores[4].score === 1001, 'K7: after 6 more filings the top 5 keep the HIGHEST 5 (1005..1001)');
+  // The v8 -> v9 migration adds challengeScores [] to a legacy save (no field)
+  // and re-stamps the version; a fresh save is already v9.
+  const legacy78 = L78.freshSave(); legacy78.saveVersion = 8; delete legacy78.challengeScores;
+  const mig78 = L78.migrateSave(legacy78);
+  assert(mig78.saveVersion === L78.SAVE_VERSION, 'K7: a v8 save migrates to the current saveVersion');
+  assert(Array.isArray(mig78.challengeScores) && mig78.challengeScores.length === 0, 'K7: a legacy save (no challengeScores) migrates to an empty list (no error)');
+  assert(L78.freshSave().challengeScores.length === 0, 'K7: a fresh save carries an empty challengeScores list');
+
+  // (5) END-TO-END: a seeded challenge expedition is started from a victory
+  // save, the heron is painted to a victory, and a score is FILED to the save
+  // (persisted). A second expedition on a normal path files nothing.
+  const cv78 = makeCanvas(); const g78 = new Game(cv78); g78.start();
+  g78.save = won78; // has a victory -> challenge unlocked
+  let t78 = 1000;
+  const fr78 = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t78 += step; g78._frame(t78); } };
+  g78._beginChallengeExpedition();
+  assert(g78.state === 'expedition', 'K7: a challenge expedition starts (state expedition)');
+  assert(g78.challenge && g78.challenge.mode === 'challenge', 'K7: the run carries the challenge mode flag');
+  assert(g78.challenge.seed === day, `K7: the challenge run uses the current UTC day as its seed (${g78.challenge.seed} == ${day})`);
+  assert(g78.challenge.loadout.length === 2 && g78.challenge.loadout.every(id => won78.owned.includes(id)), 'K7: the challenge run has a 2-painting seeded loadout drawn from owned paintings');
+  assert(JSON.stringify(g78.challenge.loadout) === JSON.stringify(L78.challengeDrawLoadout(day, won78.owned)), "K7: the run's seeded loadout matches the deterministic draw for (day, owned)");
+  assert(L78.MODIFIERS[g78.challenge.modifier], `K7: the challenge run has a valid seeded modifier (${g78.challenge.modifier})`);
+  // Now paint the heron to a victory.
+  const h78 = g78.heron;
+  h78._intro = 0; h78.awakened = true; h78.awakenedT = 99; h78.hp = 12; h78.state = 'idle'; h78.stateT = 999;
+  g78.player.x = h78.x - 55; g78.player.y = h78.y - 60; g78.player.iframes = 999;
+  const v78 = g78._view();
+  g78.input.mouse.x = (h78.x - v78.x) * v78.scale; g78.input.mouse.y = (h78.y - 100 - v78.y) * v78.scale;
+  g78.input.mouse.lDown = true;
+  fr78(240);
+  g78.input.mouse.lDown = false;
+  assert(h78.hp <= 0 || h78.flying > 0, 'K7: the challenge heron is defeated/fleeing');
+  fr78(260); // let the victory flight play out to the end state
+  assert(g78.state === 'end' && g78.endKind === 'victory', 'K7: the challenge run reaches the victory end state');
+  assert(g78.save.stats.victories === 2, 'K7: the challenge victory is recorded in save stats');
+  assert(g78.save.challengeScores.length === 1, `K7: the challenge victory FILED exactly one score to the save (${JSON.stringify(g78.save.challengeScores)})`);
+  assert(g78.save.challengeScores[0].seed === day && typeof g78.save.challengeScores[0].score === 'number' && g78.save.challengeScores[0].score >= 0, 'K7: the filed entry is {seed: today, score: >=0}');
+  assert(g78._challengeResult && g78._challengeResult.score === g78.save.challengeScores[0].score, 'K7: the run\'s challenge result matches the filed score');
+  // The save's CHOSEN loadout was untouched by the challenge (the seeded
+  // loadout is per-run, not persisted).
+  assert(Array.isArray(g78.save.loadout), 'K7: a challenge does not corrupt the save\'s loadout field');
+
+  console.log('ok — K7: a victory-gated "Challenge" button runs a SEEDED daily expedition (day seed -> seeded 2-painting loadout + seeded modifier), a victory files a deterministic score (restored + enemies + orbs + boss-time bonus) to a saved top-5 best-score list (ordered desc, max 5), shown in a new atelier panel; pure logic in logic.js (deterministic + testable), migration v8->v9 safe');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');
