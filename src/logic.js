@@ -633,6 +633,114 @@ export function challengeUnlocked(save) {
 }
 
 // ----------------------------------------------------------------
+// R5 (v1.6 Module R): BENEATH THE REEDS — the new VICTORY-GATED biome.
+//
+// The Reeds entry is VICTORY-GATED: a first-time (cycle-0 swamp) player NEVER
+// sees it, so the first-time 15–20 min run stays byte-identical. R1 ships the
+// entry + biome + lantern behind this "same ngUnlocked-style gate" — a save has
+// at least one victory recorded. R5 (a later item) promotes this to a
+// PERSISTENT `save.reedsUnlocked` latch (set on the first swamp victory, with a
+// SAVE_VERSION 9→10 migration + normalizer so every pre-v1.6 save loads false —
+// nobody backfills access) and makes the title/atelier entry read that field.
+// For R1 the gate is the pure victory predicate below.
+export function reedsUnlocked(save) {
+  return !!(save && save.stats && Number(save.stats.victories) > 0);
+}
+
+// ----------------------------------------------------------------
+// R1 (v1.6 Module R): THE LANTERN — the Reeds biome's signature mechanic.
+//
+// The frog carries a PAPER LANTERN (a new L-key toggle). It has a light RADIUS
+// and a CANDLE FUEL bar that DRAINS over time and REFILLS at fireflies /
+// lantern-rest spots scattered through the biome. Unlit: short visibility
+// radius, enemies sit at reduced aggro / sleeping; lit: full visibility, some
+// enemies avoid the light. THE LANTERN is a real gameplay layer:
+//
+//   · All RULES live here (pure). The light radius is RENDER-ONLY — a single
+//     CACHED radial gradient composited in _drawAll (no per-pixel work, no new
+//     save data beyond R5's gate flag). Enemy light behaviors arrive in R3; R1
+//     ships the state + HUD + fuel loop.
+//   · `lightFactor` (0..1) is the value the new bestiary (R3) keys to: how far
+//     the lantern's light actually reaches for a given fuel level.
+//
+// The fuel is a bounded [0,1] scalar. It drains at a constant per-second rate
+// while the lantern is LIT (an unlit lantern costs nothing — you can't burn a
+// flame you never lit). When it hits 0 the lantern goes out (auto-extinguish,
+// so the player can't hover the lit toggle on an empty wick). Refills at a rest
+// spot (full) and at a firefly (a smaller top-up), both driven by the caller's
+// proximity check.
+export const LANTERN = {
+  lightRadius: 260,     // px world-space radius of a fully-fueled lit lantern
+  minRadius: 88,        // px — the radius floor when the fuel runs low (never 0)
+  fuelDrain: 0.04,      // fuel / second while LIT (a full wick burns ~25s)
+  refillRestSpot: 0.6,  // fuel added per second while standing on a rest spot
+  refillFirefly: 0.45,  // fuel added per second while inside a firefly's glow
+  restSpotRadius: 90,   // px — a rest spot refills within this distance
+  fireflyRadius: 64,    // px — a firefly refills within this distance
+  // The light radius EASES toward its target (rather than snapping) so a dying
+  // wick visibly dims before it flares back — a render-only smoothing rate.
+  radiusEase: 6,
+};
+
+// R1: a clean lantern STATE object. `fuel` is clamped to [0,1]; `lit` is a
+// boolean. A missing/garbled input reads back as an unlit lantern at full fuel
+// (the safe default — a fresh Reeds run starts lit-ready). Pure.
+export function lanternState(fuel = 1, lit = false) {
+  const f = Number(fuel);
+  const c = Number.isFinite(f) ? Math.max(0, Math.min(1, f)) : 1;
+  return { fuel: c, lit: !!lit };
+}
+
+// R1: THE LIGHT FACTOR (0..1) the bestiary (R3) keys to. It is the DISTANCE
+// FALLOFF of the lantern's light at a world point (x, y) measured from the
+// lantern's light source (cx, cy), using the state's CURRENT radius (set by
+// fuel) as the falloff extent: 1.0 at the source, easing to 0.0 at/ beyond the
+// radius. An UNLIT (or empty-wick) lantern lights nothing — it reaches 0
+// everywhere (the player then sees only the short ambient radius). R3 reads
+// this per-creature so light-homing / light-avoiding / blue-blind behaviors key
+// to how much light a creature actually receives. Pure + deterministic.
+export function lightFactor(state, x, y, cx, cy) {
+  const st = lanternState(state && state.fuel, state && state.lit);
+  const R = lanternRadius(st);
+  if (!st.lit || R <= 0) return 0;
+  const d = Math.hypot(x - cx, y - cy);
+  if (d >= R) return 0;
+  // a light-like falloff: full at the center, a gentle curve down to the edge
+  const t = 1 - d / R;
+  return t * t * (3 - 2 * t);   // smoothstep, 1 -> 0 across the radius
+}
+
+// R1: advance the lantern one simulation step. `dt` seconds; `lit` is whether
+// the lantern is currently lit; `nearRest`/`nearFirefly` are the caller's
+// proximity booleans. Rules: drain (lit only), refill (rest spot + firefly,
+// both, bounded to 1), auto-extinguish at 0 fuel. Returns a NEW state object
+// (the caller stores it). Pure — no browser APIs.
+export function lanternTick(state, dt, lit, nearRest = false, nearFirefly = false) {
+  const st = lanternState(state && state.fuel, state && state.lit);
+  let fuel = st.fuel;
+  const isLit = !!lit;
+  if (isLit) fuel -= LANTERN.fuelDrain * dt;
+  if (nearRest) fuel += LANTERN.refillRestSpot * dt;
+  if (nearFirefly) fuel += LANTERN.refillFirefly * dt;
+  fuel = Math.max(0, Math.min(1, fuel));
+  // auto-extinguish: a lit lantern with an empty wick goes out (you cannot
+  // keep a flame lit on nothing). An unlit lantern never "lights" here.
+  const outLit = fuel <= 0 ? false : isLit;
+  return { fuel, lit: outLit };
+}
+
+// R1: the lantern's rendered light RADIUS (px) for a state — the render-only
+// value that drives the cached radial gradient. It is a pure function of the
+// state's fuel: a full wick reaches LANTERN.lightRadius and an empty one the
+// LANTERN.minRadius floor. 0 when UNLIT (the short ambient radius is handled by
+// the dark overlay, not this gradient). Pure.
+export function lanternRadius(state) {
+  const st = lanternState(state && state.fuel, state && state.lit);
+  if (!st.lit) return 0;
+  return LANTERN.minRadius + (LANTERN.lightRadius - LANTERN.minRadius) * st.fuel;
+}
+
+// ----------------------------------------------------------------
 // K8 (v1.5 M2): the CHALLENGE REWARD — the Masterpiece "The Heron, Waking".
 //
 // First-EVER Curator Challenge completion mints a UNIQUE MASTERPIECE painting:

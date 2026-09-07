@@ -752,6 +752,23 @@ export class AudioSys {
         this._noise(t, 0.06, 'lowpass', 600, 0.7, 0.1);
         break;
       }
+      // R1 (v1.6): THE LANTERN — a soft paper "flick" for a real light toggle.
+      // A brief airy bandpass swish + a warm low flick (the wick catching / the
+      // flame dropping). No gameplay effect.
+      case 'paperFlick': {
+        const on = opt.on !== false;   // default: flipping ON
+        this._noise(t, 0.09, 'bandpass', on ? 1400 : 900, 1.4, 0.12);
+        this._tone(t, 'sine', on ? 520 : 300, on ? 700 : 160, 0.1, 0.1);
+        break;
+      }
+      // R1 (v1.6): THE LANTERN — a quiet "wick catching" blip when fuel starts
+      // refilling at a firefly / lantern-rest spot. A gentle rising sine + a
+      // tiny high sparkle. Latched by the caller to fire once per source-entry.
+      case 'wickCatch': {
+        this._tone(t, 'sine', 600, 860, 0.16, 0.09);
+        this._tone(t + 0.05, 'sine', 1500, 1800, 0.08, 0.045);
+        break;
+      }
       case 'paint-hit': {
         const p = opt.pigment || 'dry';
         this._noise(t, 0.08, 'bandpass', p === 'red' ? 700 : p === 'blue' ? 500 : 900, 2, 0.35);

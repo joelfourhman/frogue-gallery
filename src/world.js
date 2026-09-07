@@ -79,14 +79,29 @@ export function wetRimRadius(cell) {
 export const WET_RIM_CAP = 96;
 
 export class World {
-  constructor(rng, seed) {
+  constructor(rng, seed, opts = {}) {
     this.w = 5400; this.h = 1500;   // P5: widened for 15–20 min run pacing (was 2400)
     this.seed = seed;
     this.rng = rng;
+    // R1 (v1.6): the Reeds VARIANT flag (opts.reeds). Set BEFORE build() so the
+    // build pass can populate the light economy. A base world (opts.reeds
+    // falsy) stays exactly as before.
+    this.reedsVariant = !!opts.reeds;
     this.grass = [];
     this.ripples = [];
     this.obstacles = [];      // rocks/bushes: {x,y,r,seed,kind}
     this.pads = [];           // lily pads: {x,y,r} — safe, regen
+    // R1 (v1.6): the Reeds biome's light economy — the frog's PAPER LANTERN
+    // refills its candle fuel here. `fireflies` drift slowly and top up the
+    // wick while the frog rests near one (a living, moving refill source);
+    // `restSpots` are static lantern-rest stones (a fixed, reliable refill).
+    // Only the Reeds variant (opts.reeds) populates them; a normal swamp
+    // world carries empty arrays, so a first-time run is byte-identical.
+    this.fireflies = [];       // {x,y,r,seed,ph} — drifting light, refills the lantern
+    this.restSpots = [];       // {x,y,r,seed} — lantern-rest stones
+    // R1 (v1.6): `this.reedsVariant` (set from opts.reeds above) marks the
+    // Reeds VARIANT world. `this.reeds` (below) is the GROWN-REEDS array
+    // (vegetation) — a different thing — hence the distinct flag.
     this.veg = [];            // vegetation: {x,y,h,seed,burn,alive}
     this.soil = [];           // soil patches: {x,y,r}
     this.reeds = [];          // grown reeds: {x,y,h,burn}
@@ -105,6 +120,23 @@ export class World {
   build() {
     const rng = this.rng;
     const k = this.w / 2400; // P5: decoration density follows world width
+    // R1 (v1.6): the Reeds VARIANT — a darker-palette, flooded, deeper-swamp
+    // world (SAME painting, deeper — not a genre shift). The zone layout /
+    // obstacles / pads / vegetation are IDENTICAL to the base swamp, so the
+    // painting and traversal carry over; what changes is (a) the palette is
+    // darker (a render-only cap, below) and (b) the light economy is populated
+    // here: drifting fireflies + static lantern-rest stones where the frog's
+    // paper lantern refills its candle fuel. A base (non-Reeds) world leaves
+    // these arrays empty, so a first-time run is byte-identical.
+    if (this.reedsVariant) {
+      for (let i = 0; i < 46; i++) {
+        this.fireflies.push({ x: 150 + rng() * (this.w - 300), y: 120 + rng() * (this.h - 240), r: 9 + rng() * 10, seed: (i * 37) % 991, ph: rng() * TAU });
+      }
+      // lantern-rest stones: ~7 spread along the corridor so the fuel loop is
+      // winnable without backtracking (a rest roughly every 700 px of travel).
+      const restXs = [700, 1400, 2150, 2900, 3650, 4400, 5050];
+      restXs.forEach((x, i) => this.restSpots.push({ x: x + wobble(this.seed, i * 3, 60), y: (i % 2 ? 1150 : 430) + wobble(this.seed, i * 7 + 2, 90), r: 34, seed: (i * 53) % 997 }));
+    }
     // grass tufts
     for (let i = 0; i < Math.round(260 * k); i++) {
       this.grass.push({ x: rng() * this.w, y: rng() * this.h, s: 2 + rng() * 4, seed: (i * 31) % 97 });
@@ -350,6 +382,56 @@ export class World {
       this.pctx.fillStyle = 'rgba(0,0,0,0.06)';
       this.pctx.fillRect(0, 0, this.paintCanvas.width, this.paintCanvas.height);
       this.pctx.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  // R1 (v1.6): draw the Reeds biome's LIGHT ECONOMY — the drifting fireflies
+  // and the static lantern-rest stones. Called ONLY for the Reeds variant (from
+  // _drawAll's world-space pass) in world space (the camera transform is already
+  // applied by the caller). Both are cheap and VIEW-CULLED so they never add to
+  // the P10 draw budget on a full-world view. Fireflies drift on a slow bounded
+  // sine (a function of now + their seed — no per-frame world state, so pacing
+  // probes are untouched) and pulse; rest stones carry a soft amber aura marking
+  // where the paper lantern refills its candle fuel.
+  drawReedsLights(ctx, view, now) {
+    if (!this.reedsVariant) return;
+    const vx = view.x - 60, vy = view.y - 60, vw = view.w + 120, vh = view.h + 120;
+    // lantern-rest stones: a mossy rock with a soft warm aura + a tiny flame.
+    for (const s of this.restSpots) {
+      if (s.x < vx || s.x > vx + vw || s.y < vy || s.y > vy + vh) continue;
+      const a = 0.5 + 0.2 * Math.sin(now * 1.2 + s.seed);
+      ctx.save();
+      ctx.globalAlpha = 0.35 * a;
+      ctx.fillStyle = '#e8b24a';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 1.7, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = '#5a5142';
+      traceBlob(ctx, s.x, s.y, s.r, s.seed, 0.14);
+      ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(244,234,216,0.5)';
+      ctx.beginPath(); ctx.arc(s.x, s.y - s.r * 0.35, 4.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ffcf6b';
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y - s.r * 0.35 - 9);
+      ctx.quadraticCurveTo(s.x + 4, s.y - s.r * 0.35 - 3, s.x, s.y - s.r * 0.35 + 2);
+      ctx.quadraticCurveTo(s.x - 4, s.y - s.r * 0.35 - 3, s.x, s.y - s.r * 0.35 - 9);
+      ctx.fill();
+      ctx.restore();
+    }
+    // fireflies: drifting, pulsing points of light (a moving refill source).
+    for (const f of this.fireflies) {
+      const dx = f.x + Math.sin(now * 0.5 + f.ph) * 26;
+      const dy = f.y + Math.cos(now * 0.4 + f.ph * 1.7) * 18;
+      if (dx < vx || dx > vx + vw || dy < vy || dy > vy + vh) continue;
+      const pulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(now * 1.8 + f.seed));
+      ctx.save();
+      ctx.globalAlpha = 0.5 * pulse;
+      ctx.fillStyle = '#d6f36b';
+      ctx.beginPath(); ctx.arc(dx, dy, f.r * 1.9, 0, TAU); ctx.fill();
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = '#f2ffd0';
+      ctx.beginPath(); ctx.arc(dx, dy, f.r * 0.5, 0, TAU); ctx.fill();
+      ctx.restore();
     }
   }
 

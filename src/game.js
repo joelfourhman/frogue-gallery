@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -277,6 +277,18 @@ export class Game {
 
     // ---------- world (persists as the title backdrop, re-seeded per run) ----------
     this.world = new World(mulberry32((Date.now() % 100000) | 0), (Date.now() % 99991) | 0);
+    // R1 (v1.6 Module R): THE LANTERN — the Reeds biome's signature light
+    // mechanic. The in-run state object lives here; all the RULES (drain /
+    // refill / radius / light factor / the victory gate) are pure in logic.js.
+    // `this.lantern` is the current {fuel, lit} state; `this.lanternReeds` is
+    // whether THIS expedition is a Reeds variant (the lantern is only active /
+    // only drawn / only drained there — a first-time swamp run never touches
+    // it, so the 15–20 min cycle-0 run stays byte-identical). The cached light
+    // gradient + its radius are lazily built per-radius (never per-frame).
+    this.lantern = { fuel: 1, lit: true };
+    this.lanternReeds = false;
+    this._lanternGrad = null;      // cached radial gradient for the lit radius
+    this._lanternGradR = -1;       // the radius the cache was built for
 
     // ---------- camera (world coords of screen center) ----------
     this.cam = { x: PLAYER_START_X, y: PLAYER_START_Y };
@@ -2198,6 +2210,11 @@ _drawAtelier(ctx) {
     // the challenge is actually unlocked (a completed victory). A first-time
     // save (no victory) gets no challenge hotkey, matching the hidden button.
     if (this.input.pressed('c') && challengeUnlocked(this.save)) { this.sfx('ui'); this._beginChallengeExpedition(); return; }
+    // R1 (v1.6): the 'r' hotkey opens BENEATH THE REEDS — but only when the Reeds
+    // biome is actually unlocked (a completed victory, reedsUnlocked). A
+    // first-time save (no victory) gets no Reeds hotkey, matching the hidden
+    // button — a cycle-0 player never sees or can enter the biome.
+    if (this.input.pressed('r') && reedsUnlocked(this.save)) { this.sfx('ui'); this._beginExpedition(false, { reeds: true }); return; }
     // M8 P7: difficulty select (G/N/B = Gentle/Normal/Bold; 1/2/3 are pigment
     // hotkeys in-game, so avoid them). Persists in options; applied at run start.
     if (this.input.pressed('g')) { this._setDifficulty('gentle'); return; }
@@ -2232,6 +2249,11 @@ _drawAtelier(ctx) {
       // K7 (v1.5 M2): the Curator Challenge button (shown only after a victory;
       // g.chall is null otherwise). Starts the seeded, scored daily challenge.
       if (g.chall && this._mouseIn(g.chall.x, g.chall.y, g.chall.w, g.chall.h)) { this.sfx('ui'); this._beginChallengeExpedition(); return; }
+      // R1 (v1.6): the "Beneath the Reeds" entry (shown only after a victory;
+      // g.reeds is null otherwise). Starts the victory-gated Reeds expedition
+      // VARIANT (darker, deeper swamp + THE LANTERN). A first-time save never
+      // sees or reaches this button.
+      if (g.reeds && this._mouseIn(g.reeds.x, g.reeds.y, g.reeds.w, g.reeds.h)) { this.sfx('ui'); this._beginExpedition(false, { reeds: true }); return; }
       if (this._mouseIn(g.bx, g.by, g.bw, g.bh)) { this.sfx('ui'); this._beginExpedition(); }
       else if (this._mouseIn(g.abx, g.aby, g.abw, g.abh)) { this.sfx('ui'); this._beginAtelier(); }
       else if (this._mouseIn(g.ox, g.oy, g.ow, g.oh)) { this.sfx('ui'); this.optionsOpen = true; }
@@ -2289,7 +2311,15 @@ _drawAtelier(ctx) {
     if (this.sfx) this.sfx('paint-swipe', { pig: 'dry' });
   }
 
-  _beginExpedition(guided = false) {
+  _beginExpedition(guided = false, opts = {}) {
+    // R1 (v1.6 Module R): `opts.reeds` marks a BENEATH-THE-REEDS expedition
+    // (the victory-gated, darker, deeper-swamp variant). It changes ONLY the
+    // world variant (the light economy is populated) and activates THE LANTERN
+    // (see this.lanternReeds below) — it never touches the cycle-0 swamp world,
+    // so a first-time 15–20 min run stays byte-identical. The title/atelier
+    // entry that sets this is itself victory-gated (reedsUnlocked), so a
+    // first-time player never reaches this path.
+    const _isReeds = !!opts.reeds;
     // K7 (v1.5 M2): the CURATOR CHALLENGE override. A challenge run is started
     // by _beginChallengeExpedition(), which sets this.challenge with a
     // DETERMINISTIC (UTC-day) seed, a seeded random 2-painting loadout (drawn
@@ -2324,7 +2354,8 @@ _drawAtelier(ctx) {
     // one, even on a cycle-0 save — the challenge is a scored mode, not NG+).
     if (_chal) { _loadout = _chal.loadout; _chal._modApplied = null; }
     const _chalModId = _chal ? _chal.modifier : null;
-    this.world = new World(mulberry32(seed), seed % 99991);
+    this.world = new World(mulberry32(seed), seed % 99991, { reeds: _isReeds });
+    this.lanternReeds = _isReeds;               // R1: activate THE LANTERN (only in the Reeds variant)
     this.tuning = makeTuning(this.save.upgrades, _loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
     // N2 (v1.3 M14): NG+ per-cycle scaling — applied ONLY when ngCycle >= 1 so
     // a first-time (cycle 0) run's tuning stays byte-identical to pre-NG+.
@@ -2342,6 +2373,16 @@ _drawAtelier(ctx) {
     // fresh per-run world (defaults to 1; a cycle-0 run never carries it).
     this.world.waterWidthMult = this.tuning.waterWidthMult || 1;
     this.player = new Player(PLAYER_START_X, PLAYER_START_Y, this.tuning);
+    // R1 (v1.6): reset THE LANTERN for this run. In the Reeds variant it starts
+    // full + lit (the frog carries a fresh paper lantern); otherwise it is
+    // simply inactive (fuel 0 / unlit, never drawn or drained). The cached light
+    // gradient is discarded so it is rebuilt (at most once per radius) for this
+    // run's player. No save data — the lantern is purely in-run (R5's gate flag
+    // is the only Reeds save field).
+    this.lantern = _isReeds ? { fuel: 1, lit: true } : { fuel: 0, lit: false };
+    this._lanternGrad = null;
+    this._lanternGradR = -1;
+    this._wickLatch = false;   // R1: the "wick catching" SFX latch (once per source-entry)
     this.paint = new Paint(this.player, this.world, this.tuning, (n, o) => this.sfx(n, o), this.particles);
     this.tutorial = null;   // T1 (v1.2 M13): fresh state each run; set below if guided
     this.sketchHeron = null;   // T3 (v1.2 M13): the teaching sketch heron (absent by default)
@@ -2926,6 +2967,24 @@ _drawAtelier(ctx) {
     p._plumeSuppress = !!(this.heron && this.heron.gilded && !this.heron.flying
       && this.heron._intro <= 0 && this.heron.plumeT > 0);
     p.update(dt, this.input, this.tuning, this.world, this._view());
+    // R1 (v1.6): THE LANTERN (Reeds variant only). The L key toggles the paper
+    // lantern; the pure lanternTick drains the candle fuel (and auto-snuffs an
+    // empty lantern) and refills it at nearby fireflies / lantern-rest spots.
+    // Inactive outside the Reeds run (lanternReeds false) so the cycle-0 swamp
+    // path is byte-identical. lightFactor (0..1, the R3 bestiary key) is
+    // refreshed by _updateLantern for a Reeds run.
+    this.lantern.lightFactor = 0;
+    if (this.lanternReeds) {
+      if (this.input.pressed('l')) {
+        // Toggling back on an empty lantern is a no-op (no fuel); toggling off
+        // is always allowed. A soft paper "flick" SFX for a real state change.
+        const _wasLit = this.lantern.lit;
+        this.lantern.lit = !this.lantern.lit;
+        if (this.lantern.lit && this.lantern.fuel <= 0) this.lantern.lit = false; // can't relight with no fuel
+        if (this.lantern.lit !== _wasLit) this.sfx('paperFlick', { on: this.lantern.lit });
+      }
+      this._updateLantern(dt, p);
+    }
     // J5 (v1.4): capture the orb-streak trail behind the frog every frame the
     // streak is ACTIVE (presentation only — reads from the already-simmed
     // position; never feeds runT). Capped so it can't grow unbounded.
@@ -3198,6 +3257,43 @@ _drawAtelier(ctx) {
     for (let i = 0; i < 2; i++) {
       this.orbs.push({ x: rx + (Math.random() - 0.5) * 160, y: ry + (Math.random() - 0.5) * 120, color: ORB_COLORS[(Math.random() * 3) | 0], t: 0 });
     }
+  }
+
+  // R1 (v1.6): THE LANTERN update (Reeds variant only). Advances the pure
+  // lanternTick (drain while lit / auto-extinguish / refill at a nearby
+  // firefly or lantern-rest spot) and refreshes the two render-only fields the
+  // dark overlay + HUD read: `lanternRadius` (the eased light radius) and
+  // `lightFactor` (the 0..1 value the R3 bestiary keys to, at the frog). The
+  // refill proximity is a world-space distance check (the lantern is carried by
+  // the frog, so the source is the frog). No save data. Presentation-only
+  // radius easing — the fuel rules are the pure lanternTick.
+  _updateLantern(dt, p) {
+    const nearRest = this._lanternNear(p.x, p.y, this.world.restSpots, LANTERN.restSpotRadius);
+    const nearFirefly = this._lanternNear(p.x, p.y, this.world.fireflies, LANTERN.fireflyRadius);
+    this.lantern = lanternTick(this.lantern, dt, this.lantern.lit, nearRest, nearFirefly);
+    // A successful refill (fuel strictly up while at a source) gives a soft,
+    // quiet "wick catching" blip — at most ONCE per source-entry (latched) so it
+    // doesn't spam while the frog stands on a spot. The latch clears when the
+    // frog leaves the source (fuel stops rising) or the wick tops up.
+    const refilling = nearRest || nearFirefly;
+    if (refilling && !this._wickLatch) { this._wickLatch = true; this.sfx('wickCatch'); }
+    if (!refilling || this.lantern.fuel >= 1) this._wickLatch = false;
+    // Refresh the eased render radius (the cached gradient is keyed to it) +
+    // the frog's own lightFactor for R3.
+    this._lanternEasedR = lanternRadius(this.lantern);
+    this.lantern.lightFactor = lightFactor(this.lantern, p.x, p.y, p.x, p.y);
+  }
+  // R1 (v1.6): does any source in `list` lie within `radius` of (x, y)? A
+  // small pure-ish proximity helper (world-space, no browser APIs). Returns the
+  // first hit's index (-1 none). Kept tiny so the drain loop stays cheap.
+  _lanternNear(x, y, list, radius) {
+    if (!list || !list.length) return false;
+    const r2 = radius * radius;
+    for (let i = 0; i < list.length; i++) {
+      const dx = list[i].x - x, dy = list[i].y - y;
+      if (dx * dx + dy * dy <= r2) return true;
+    }
+    return false;
   }
 
   // E2 (v1.2 M10): drive the current zone's weather/tide phase. It fires the
@@ -4236,6 +4332,66 @@ _drawAtelier(ctx) {
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
+  // R1 (v1.6): THE REEDS light render (Reeds variant only). SCREEN-space, so it
+  // covers the whole frame and the HUD (drawn after it) stays fully lit. Two
+  // cheap layers: (a) a deep near-black wash for the flooded darkness, then (b)
+  // a CACHED offscreen radial-gradient "light sprite" drawn at the lantern's
+  // screen position with a single drawImage (additive 'lighter') so the area
+  // around the frog brightens back out of the dark. The sprite (a warm
+  // paper-lantern glow, radius LANTERN.lightRadius) is baked ONCE per session
+  // into this._lanternSprite — never per frame — and is merely SCALED per frame
+  // to the lantern's eased radius (a full wick ~lightRadius, low fuel ~minRadius,
+  // unlit ~ the short ambient radius). No per-pixel work (no
+  // getImageData/putImageData), so P10 stays green.
+  _drawReedsLight(ctx, v) {
+    const p = this.player;
+    const cw = ctx.canvas.width, ch = ctx.canvas.height;
+    const scale = v.scale;
+    // world -> screen (the camera transform maps (world - view.xy) * scale).
+    const sx = (p.x - v.x) * scale;
+    const sy = (p.y - v.y) * scale;
+    // (a) the darkness wash — the deeper-swamp near-black. A flat fill (one
+    // rect, no gradient) so it is cheap; the light below carves the visible
+    // area out of it.
+    ctx.save();
+    ctx.fillStyle = 'rgba(6,8,14,0.86)';
+    ctx.fillRect(0, 0, cw, ch);
+    // (b) the lantern light: the cached sprite scaled to the eased radius.
+    // Lit: the eased radius (a full wick reaches the full sprite; a dying wick
+    // shrinks toward the floor). Unlit: a SHORT ambient radius (LANTERN.min
+    // floor) drawn dimmer — the "short visibility" of an unlit lantern.
+    const lit = this.lantern && this.lantern.lit && (this._lanternEasedR || 0) > 0;
+    const worldR = lit ? this._lanternEasedR : (LANTERN.minRadius * 0.6);
+    const cutR = worldR * scale;
+    if (cutR > 1) {
+      if (!this._lanternSprite) {
+        const d = Math.ceil(LANTERN.lightRadius * 2);
+        const sp = document.createElement('canvas');
+        sp.width = d; sp.height = d;
+        const sc = sp.getContext('2d');
+        const R = LANTERN.lightRadius;
+        const g = sc.createRadialGradient(R, R, 0, R, R, R);
+        // warm paper-lantern core (the lantern's glow) easing to transparent.
+        g.addColorStop(0.0, 'rgba(255,216,150,0.95)');
+        g.addColorStop(0.3, 'rgba(246,200,126,0.72)');
+        g.addColorStop(0.65, 'rgba(150,120,80,0.26)');
+        g.addColorStop(1.0, 'rgba(20,20,30,0)');
+        sc.fillStyle = g;
+        sc.fillRect(0, 0, d, d);
+        this._lanternSprite = sp;
+      }
+      const size = cutR * 2;
+      // A low-fuel or unlit light is dimmer (globalAlpha), a full wick bright.
+      const bright = lit ? 0.75 + 0.25 * (this.lantern.fuel || 0) : 0.45;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = bright;
+      ctx.drawImage(this._lanternSprite, sx - cutR, sy - cutR, size, size);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.restore();
+  }
+
   _drawAll() {
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -4284,6 +4440,11 @@ _drawAtelier(ctx) {
     this.world.drawBackground(ctx, v, drawSatFinal);
     this.world.drawProps(ctx, v, drawSatFinal, this.now);
     this.world.drawObstacles(ctx, v, drawSatFinal);
+    // R1 (v1.6): the Reeds biome's LIGHT ECONOMY — the drifting fireflies + the
+    // static lantern-rest stones (world space, VIEW-CULLED so they never add to
+    // the P10 draw budget). No-op for a base (non-Reeds) world, so a first-time
+    // run renders exactly as before.
+    this.world.drawReedsLights(ctx, v, this.now);
     // J1 (v1.4): short-lived wet residue marks sit on the surface, under the
     // active stroke and all entities (draw-only; never affects logic).
     this.paint && this.paint.drawWet(ctx);
@@ -4315,6 +4476,23 @@ _drawAtelier(ctx) {
       ctx.fillStyle = 'rgba(10,14,30,0.34)';
       ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       ctx.restore();
+    }
+    // R1 (v1.6): THE REEDS — the biome's dark-water darkness + THE LANTERN's
+    // light. A RENDER-ONLY pass in SCREEN space (after the camera transform is
+    // restored, before the HUD) so it covers the whole frame and the HUD stays
+    // fully lit/legible. It draws:
+    //   (a) a deep near-black wash (the flooded, deeper-swamp darkness),
+    //   (b) a single CACHED radial-gradient SPRITE (baked ONCE into an offscreen
+    //       canvas, keyed to the eased radius) drawn scaled via one drawImage at
+    //       the lantern's screen position (additive 'lighter'), plus a short
+    //       ambient radius when unlit.
+    // The sprite is cached: it is (re)built ONLY when the eased radius moves
+    // by >= 4px (this._lanternGradR), never per frame, so a full ~25s wick burn
+    // yields a handful of rebuilds, not thousands. No per-pixel work. Active
+    // ONLY when lanternReeds (the Reeds variant) — a cycle-0 swamp run never
+    // sets it, so its render is byte-identical.
+    if ((this.state === 'expedition' || this.state === 'end') && this.lanternReeds && this.player) {
+      this._drawReedsLight(ctx, v);
     }
     if (this.state === 'expedition' || this.state === 'end') {
       this._drawOffscreenHeronArrow(ctx, v);
@@ -4660,6 +4838,51 @@ _drawAtelier(ctx) {
       ctx.restore();
     }
 
+    // ---- R1 (v1.6): THE LANTERN — the CANDLE FUEL bar (top-right, under the
+    // orb streak) + the L-key lit/unlit state. REEDS-VARIANT ONLY (guarded by
+    // this.lanternReeds) so a cycle-0 swamp run's HUD is byte-identical. The bar
+    // fills with a warm amber (the candle) whose width = the lantern's fuel; the
+    // lit state is a tiny lit flame / a grayed-out "out" when unlit. A dim,
+    // quiet "L" key hint sits at the right so the player learns the toggle. ----
+    if (this.lanternReeds && this.lantern) {
+      const chipW = 150, chipH = 24, cx2 = this.cw - chipW - 14, cy2 = 44;
+      const lit = !!this.lantern.lit;
+      const fuel = Math.max(0, Math.min(1, this.lantern.fuel));
+      const low = lit && fuel < 0.25;   // a dying wick reads red
+      ctx.save();
+      this._paperChip(ctx, cx2, cy2, chipW, chipH, 6);
+      ctx.globalAlpha = 1;
+      // the fuel track + fill (a horizontal candle, left -> right).
+      const tx = cx2 + 12, ty = cy2 + chipH / 2 - 4, tw = chipW - 40, th = 8;
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = sat('#8d9aa0', 0.2);
+      this._blobRect(ctx, tx, ty, tw, th, 4);
+      ctx.fill();
+      if (fuel > 0.001) {
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = low ? '#d8543c' : (lit ? '#e8a54a' : '#c9b48a');
+        this._blobRect(ctx, tx, ty, Math.max(6, tw * fuel), th, 4);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      // a tiny flame glyph on the far left: lit = amber, unlit = a grayed-out dot.
+      ctx.fillStyle = lit ? (low ? '#d8543c' : '#e8a54a') : 'rgba(90,85,70,0.5)';
+      ctx.beginPath();
+      if (lit) {
+        ctx.moveTo(cx2 + 8, cy2 + chipH / 2 - 6);
+        ctx.quadraticCurveTo(cx2 + 12, cy2 + chipH / 2 - 1, cx2 + 8, cy2 + chipH / 2 + 4);
+        ctx.quadraticCurveTo(cx2 + 4, cy2 + chipH / 2 - 1, cx2 + 8, cy2 + chipH / 2 - 6);
+        ctx.fill();
+      } else {
+        ctx.arc(cx2 + 8, cy2 + chipH / 2, 3, 0, TAU);
+        ctx.fill();
+      }
+      // the "L" key hint at the right end.
+      centerText(ctx, 'L', cx2 + chipW - 14, cy2 + chipH / 2 + 1,
+        '700 11px Georgia, serif', lit ? '#b8741f' : INK, lit ? 1 : 0.6);
+      ctx.restore();
+    }
+
     // ---- pigment slots (under hearts) ----
     const order = ['red', 'blue', 'green', 'dry'];
     for (let i = 0; i < 4; i++) {
@@ -4906,7 +5129,21 @@ _drawAtelier(ctx) {
     const ow2 = 200, oh2 = abh2;
     const abx = abx2, aby = aby2, abw = abw2, abh = abh2, ox = ox2, ow = ow2, oh = oh2;
     const chall = challShow ? { x: rowX, y: aby2, w: chw, h: chh } : null;
-    return { cx, pw, ph, px, py, bx, by, bw, bh, tw, th, tx, ty, diff, abx, aby, abw, abh, ox, oy: aby2, ow, oh, ng, chall };
+    // R1 (v1.6): the "Beneath the Reeds" entry — the victory-gated new expedition
+    // VARIANT. It shares the SAME ngUnlocked-style gate as Next Expedition / the
+    // Curator Challenge (reedsUnlocked = at least one victory), so a first-time
+    // (cycle-0) save NEVER sees it and the first-time 15–20 min run stays
+    // byte-identical. It is a distinct, dimmer entry: a wide button on its own
+    // row just under the NG+ button (the NG/guided slot is above; the difficulty
+    // row is below it), carrying the "deeper" subtitle. When absent (no victory)
+    // the layout is exactly the pre-Reeds geometry (reeds null).
+    const reedsShow = reedsUnlocked(this.save);
+    const rw2 = 260, rh2 = 36, rx2 = cx - rw2 / 2, ry2 = aby2 + abh2 + 16;
+    const reeds = reedsShow ? { x: rx2, y: ry2, w: rw2, h: rh2 } : null;
+    // the footer stats sit below the atelier/options row; when the Reeds entry is
+    // shown they are pushed down one row so nothing overlaps.
+    const fpush = reedsShow ? (rh2 + 16) : 0;
+    return { cx, pw, ph, px, py, bx, by, bw, bh, tw, th, tx, ty, diff, abx, aby, abw, abh, ox, oy: aby2, ow, oh, ng, chall, reeds, fpush };
   }
   _setDifficulty(id) {
     if (!DIFFICULTIES[id] || this.options.difficulty === id) return;
@@ -5237,17 +5474,31 @@ _drawAtelier(ctx) {
         }
         uiButton(ctx, g.abx, g.aby, g.abw, g.abh, 'Visit the Atelier', this._mouseIn(g.abx, g.aby, g.abw, g.abh), false, { seed: 6, size: 15 });
         uiButton(ctx, g.ox, g.oy, g.ow, g.oh, 'Options', this._mouseIn(g.ox, g.oy, g.ow, g.oh), false, { seed: 7, size: 15 });
+        // R1 (v1.6): the "Beneath the Reeds" entry — the victory-gated new
+        // expedition VARIANT. Drawn only when g.reeds (a victory has been earned);
+        // a first-time save never sees it (byte-identical title). A distinct,
+        // dimmer "deeper" entry — the same painting, deeper — carrying the
+        // lantern hint. Clicking it (or pressing R) starts the Reeds run.
+        if (g.reeds) {
+          ctx.save();
+          ctx.globalAlpha = 0.92;
+          uiButton(ctx, g.reeds.x, g.reeds.y, g.reeds.w, g.reeds.h, 'Beneath the Reeds  [R]', this._mouseIn(g.reeds.x, g.reeds.y, g.reeds.w, g.reeds.h), false, { seed: 59, size: 14, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+          centerText(ctx, 'the deeper swamp · carry a lantern', g.reeds.x + g.reeds.w / 2, g.reeds.y + g.reeds.h + 9, 'italic 10px Georgia, serif', 'rgba(253,246,233,0.6)', 0.9);
+          ctx.restore();
+        }
         ctx.restore();
 
-        // little footer stats
+        // little footer stats (pushed down one row when the Reeds entry shows so
+        // nothing overlaps — see _titleLayout's fpush)
         const s = this.save.stats;
-        centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, g.aby + g.abh + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
+        const fpush = g.fpush || 0;
+        centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, g.aby + g.abh + 18 + fpush, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
         const br = this.save.bestRun;
         if (br) {
           const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
-          centerText(ctx, `best run — ${what}`, cx, g.aby + g.abh + 38, '700 14px Georgia, serif', '#e8c86a', 0.95);
+          centerText(ctx, `best run — ${what}`, cx, g.aby + g.abh + 38 + fpush, '700 14px Georgia, serif', '#e8c86a', 0.95);
         }
-        centerText(ctx, 'G/N/B to set difficulty · M to mute · A for the atelier · "New Game" = erase save (bottom left)', cx, g.aby + g.abh + (br ? 58 : 38), '12px Georgia, serif', '#fdf6e9', 0.5);
+        centerText(ctx, 'G/N/B to set difficulty · M to mute · A for the atelier · R for the Reeds · "New Game" = erase save (bottom left)', cx, g.aby + g.abh + (br ? 58 : 38) + fpush, '12px Georgia, serif', '#fdf6e9', 0.5);
         // erase-save link (bottom-left; two-click confirm, see _updateTitle)
         const ex = 16, ey = this.ch - 40;
         const armed = (this.now - (this._eraseArm || -99)) < 3;

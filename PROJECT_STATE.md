@@ -218,6 +218,14 @@ and **4th boss archetype** (→ R4)):
    lantern dial HUD; flooded lower banks + inverted-gravity pockets; the
    `reedsUnlocked` victory gate + SAVE_VERSION 9→10 + Field Guide entries
    + first-sight callouts + Reeds one-liners).
+   **Progress (2026-09-07): R1 ✅ DONE + committed** (THE LANTERN + Reeds
+   biome shell + victory-gated title entry + HUD fuel bar; new smoke
+   stage 83, 25 assertions; full suite green; P10
+   culling + cached-sprite light invariant green; cycle-0 pace 17.3 /
+   humance 18.5 min — IN the 15–20 band, byte-identical). **Next: R2
+   (flooded lower banks + inverted-gravity pockets), then R5
+   (`reedsUnlocked` save gate + SAVE_VERSION 9→10 + Field Guide Reeds
+   entries).** See commit log.
 2. **BATCH 2 — R3, R4, R6** (the bestiary: Wisp/Serpent/Leech light-keyed
    behaviors; The Silt Wyrm boss; `tests/reedspace.mjs` probe +
    full-season pacing re-verification + cycle-0 tuning byte-identity).

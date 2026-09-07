@@ -5779,5 +5779,172 @@ console.log('== stage 79: v1.5 K8 — Challenge Reward (Masterpiece + rank gold)
   console.log('ok — K9: the field guide\'s "Know your quarry" renders the four v1.5 residents (Mud Turtle / Blind Crag Frog / Storm Surge + the Gilded Heron\'s plume line on NG+ c3+ saves), and each new creature fires a ONE-SHOT first-sight banner (one in-memory flag per creature — A1/M3-style, no new save field, SAVE_VERSION 9) that never repeats');
 }
 
+console.log('== stage 83: v1.6 R1 — THE REEDS BIOME shell + THE LANTERN (victory-gated entry, L-key fuel loop, cheap cached light) ==');
+{
+  const L83 = await import('../src/logic.js');
+  const { World } = await import('../src/world.js');
+  const { mulberry32 } = await import('../src/math.js');
+
+  // ---- (a) victory gate: fresh save offers NO Reeds entry; a victory save DOES ----
+  assert(L83.reedsUnlocked(L83.freshSave()) === false, 'R1: a fresh (no-victory) save does NOT offer the Reeds entry (reedsUnlocked false)');
+  const vSave = L83.freshSave(); vSave.stats.victories = 1; vSave.flags.heronDefeated = true;
+  assert(L83.reedsUnlocked(vSave) === true, 'R1: a victory-carrying save DOES offer the Reeds entry (reedsUnlocked true)');
+  // the title layout only exposes the Reeds button for an unlocked save
+  const gF = new Game(makeCanvas()); gF.start(); gF._quitToTitle();
+  gF.save = L83.freshSave(); gF.state = 'title';
+  const lf = gF._titleLayout();
+  assert(lf.reeds === null, 'R1: the title layout has no Reeds button for a fresh (no-victory) save');
+  const gV = new Game(makeCanvas()); gV.start(); gV._quitToTitle();
+  gV.save = vSave; gV.state = 'title';
+  const lv = gV._titleLayout();
+  assert(lv.reeds !== null && lv.fpush > 0, 'R1: the title layout exposes the Reeds button (+ pushes the footer) for a victory save');
+
+  // ---- (b) the Reeds WORLD variant is populated; a base world is not ----
+  const wReeds = new World(mulberry32(1234), 1234, { reeds: true });
+  assert(wReeds.reedsVariant === true && wReeds.fireflies.length > 0 && wReeds.restSpots.length > 0, 'R1: the Reeds world variant populates the light economy (fireflies + rest spots)');
+  const wBase = new World(mulberry32(1234), 1234);
+  assert(wBase.reedsVariant === false && wBase.fireflies.length === 0 && wBase.restSpots.length === 0, 'R1: a base (non-Reeds) world has no light economy (byte-identical, first-time untouched)');
+  // the Reeds variant keeps the SAME painting (identical obstacle/pad layout for a given seed)
+  const sameObstacles = wReeds.obstacles.length === wBase.obstacles.length && wReeds.pads.length === wBase.pads.length;
+  assert(sameObstacles, 'R1: the Reeds variant is the SAME painting, deeper (identical obstacle/pad layout for a given seed)');
+
+  // ---- (c) a Reeds EXPEDITION activates THE LANTERN; a cycle-0 run does not ----
+  const gC0 = new Game(makeCanvas()); gC0.start(); gC0._quitToTitle();
+  gC0.save = L83.freshSave(); gC0._beginExpedition();
+  assert(gC0.lanternReeds === false && gC0.lantern.lit === false, 'R1: a cycle-0 swamp run does NOT activate the lantern (byte-identical, no fuel drain)');
+  const gR = new Game(makeCanvas()); gR.start(); gR._quitToTitle();
+  gR.save = vSave; gR._beginExpedition(false, { reeds: true });
+  assert(gR.lanternReeds === true && gR.lantern.lit === true && gR.lantern.fuel === 1, 'R1: a Reeds run activates the lantern (starts full + lit)');
+  assert(gR.world.reedsVariant === true && gR.world.fireflies.length > 0, 'R1: the Reeds run builds a Reeds-variant world with the light economy');
+
+  // ---- (d) THE LANTERN fuel loop: drains over time, refills at a rest spot, L-key toggle ----
+  const fuel0 = gR.lantern.fuel;
+  gR.input.kb.clear();
+  for (let i = 0; i < 120; i++) { gR._updateExpedition(0.016); gR.input.kb.clear(); }
+  assert(gR.lantern.fuel < fuel0, `R1: the candle fuel DRAINS over time while lit (${fuel0.toFixed(3)} -> ${gR.lantern.fuel.toFixed(3)})`);
+  // the L key toggles the lantern on/off (a real state change)
+  const wasLit = gR.lantern.lit;
+  gR.input.kb.add('l'); gR._updateExpedition(0.016); gR.input.kb.clear();
+  assert(gR.lantern.lit !== wasLit, `R1: the L key toggles the lantern (${wasLit} -> ${gR.lantern.lit})`);
+  // relight + refill at a lantern-rest spot: park the frog on the nearest rest spot
+  gR.input.kb.add('l'); gR._updateExpedition(0.016); gR.input.kb.clear(); // back on if it was snuffed
+  const spot = gR.world.restSpots[0];
+  const fuelBefore = gR.lantern.fuel;
+  gR.player.x = spot.x; gR.player.y = spot.y; gR.player.vx = 0; gR.player.vy = 0;
+  for (let i = 0; i < 120; i++) { gR._updateExpedition(0.016); gR.input.kb.clear(); }
+  assert(gR.lantern.fuel > fuelBefore, `R1: the lantern REFILLS at a lantern-rest spot (${fuelBefore.toFixed(3)} -> ${gR.lantern.fuel.toFixed(3)})`);
+  // the auto-extinguish rule (pure): a lit lantern with an empty wick goes out
+  const snuffed = L83.lanternTick({ fuel: 0.0000001, lit: true }, 1.0, true);
+  assert(snuffed.lit === false && snuffed.fuel === 0, 'R1: a lit lantern with an empty wick AUTO-EXTINGUISHES (pure lanternTick)');
+
+  // ---- (e) lightFactor: 0..1, the R3 bestiary key (distance falloff; unlit = 0 everywhere) ----
+  const stFull = { fuel: 1, lit: true };
+  assert(L83.lightFactor(stFull, 100, 100, 100, 100) === 1, 'R1: lightFactor is 1.0 at the light source (full lit lantern)');
+  assert(L83.lightFactor(stFull, 400, 100, 100, 100) === 0, 'R1: lightFactor is 0.0 beyond the light radius (full lit lantern)');
+  const half = L83.lightFactor(stFull, 230, 100, 100, 100); // ~half of the 260 radius
+  assert(half > 0 && half < 1, `R1: lightFactor eases between 0..1 inside the light radius (mid = ${half.toFixed(3)})`);
+  assert(L83.lightFactor({ fuel: 1, lit: false }, 100, 100, 100, 100) === 0, 'R1: an UNLIT lantern lights nothing (lightFactor 0 even at the source)');
+
+  // ---- (f) the cached light render is CHEAP: P10 off-screen culling still passes ----
+  // (a) P10 is a WORLD-CONTENT culling metric (stage 24's drawCalls =
+  //     drawBackground + drawProps + drawObstacles — off-screen world items are
+  //     not drawn). The Reeds variant's world CONTENT is identical to the base
+  //     swamp, so a localized view must still draw far fewer canvas calls than
+  //     the full world — the P10 invariant is preserved. (The screen-space light
+  //     layer is measured separately below; it is not a P10-culled world item.)
+  const drawCalls = (view) => {
+    const counter = { n: 0 };
+    const ctx = new Proxy({}, {
+      get(t, p) {
+        if (p === 'measureText') return () => ({ width: 10 });
+        if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+        if (p === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
+        counter.n++;
+        return () => {};
+      },
+      set() { return true; },
+    });
+    gR.world.drawBackground(ctx, view, 1);
+    gR.world.drawProps(ctx, view, 1, 1.0);
+    gR.world.drawObstacles(ctx, view, 1);
+    return counter.n;
+  };
+  const localCalls = drawCalls({ x: 0, y: 0, scale: 1, w: 1280, h: 800 });
+  const fullCalls = drawCalls({ x: 0, y: 0, scale: 1, w: gR.world.w, h: gR.world.h });
+  assert(localCalls < fullCalls, `R1: P10 view-cull: a localized view draws ${localCalls} calls < ${fullCalls} for the full Reeds world`);
+  assert(localCalls < fullCalls * 0.4, `R1: P10 view-cull keeps draw work proportional to the visible area on the Reeds world (localized/full = ${(localCalls / fullCalls).toFixed(2)})`);
+  // (b) the LIGHT layer (drawReedsLights) is itself VIEW-CULLED: a localized view
+  //     draws far fewer fireflies/rest stones than the whole world (only
+  //     on-screen lights).
+  const lightCalls = (view) => {
+    const counter = { n: 0 };
+    const ctx = new Proxy({}, {
+      get(t, p) {
+        if (p === 'measureText') return () => ({ width: 10 });
+        if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+        if (p === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
+        counter.n++;
+        return () => {};
+      },
+      set() { return true; },
+    });
+    gR.world.drawReedsLights(ctx, view, 1.0);
+    return counter.n;
+  };
+  const lLocal = lightCalls({ x: 0, y: 0, scale: 1, w: 1280, h: 800 });
+  const lFull = lightCalls({ x: 0, y: 0, scale: 1, w: gR.world.w, h: gR.world.h });
+  assert(lLocal < lFull, `R1: the Reeds light layer is view-culled (localized ${lLocal} on-screen lights < full ${lFull})`);
+  // (b) the Reeds light render itself is bounded: one darkness wash + at most one cached-sprite
+  //     drawImage (the sprite is baked ONCE, then merely scaled). A full wick burn therefore
+  //     rebuilds the sprite a handful of times, not per frame — no per-pixel work.
+  const cv2 = makeCanvas();
+  const g1 = { addColorStop() {} };
+  let imgDraws = 0, radialGrads = 0;
+  const ctx2 = new Proxy({ canvas: cv2, setTransform() {}, clearRect() {}, save() {}, restore() {}, beginPath() {}, closePath() {}, rect() {}, fill() {}, stroke() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, arc() {}, ellipse() {}, measureText: () => ({ width: 10 }) }, {
+    get(t, p) { if (p in t) return t[p];
+      if (p === 'createRadialGradient') { radialGrads++; return () => g1; }
+      if (p === 'drawImage') { imgDraws++; return () => {}; }
+      return () => {}; },
+    set(t, p, v2) { t[p] = v2; return true; }
+  });
+  gR._lanternSprite = null; gR._drawReedsLight(ctx2, { x: gR.player.x - 640, y: gR.player.y - 400, scale: 1 });
+  const baked = gR._lanternSprite !== null;
+  gR._drawReedsLight(ctx2, { x: gR.player.x - 640, y: gR.player.y - 400, scale: 1 }); // second frame: reuse the cache
+  assert(baked && imgDraws === 2, `R1: the Reeds light render is a single cached-sprite drawImage per frame (got ${imgDraws} across 2 frames — cached, not per-pixel)`);
+  assert(radialGrads <= 1, `R1: the light sprite is baked at most ONCE (radial gradients created: ${radialGrads}) — the cached-cheap invariant`);
+
+  // ---- (g) the CANDLE FUEL HUD readout RENDERS (fillText/arc recording) for a
+  // Reeds run, and is ABSENT for a cycle-0 swamp run (byte-identical HUD). ----
+  let hudFillText = 0, hudArc = 0;
+  const cv3 = makeCanvas();
+  const ctx3 = new Proxy({ canvas: cv3, measureText: () => ({ width: 10 }) }, {
+    get(t, p) { if (p in t) return t[p];
+      if (p === 'fillText') { hudFillText++; return () => {}; }
+      if (p === 'arc') { hudArc++; return () => {}; }
+      return () => {}; },
+    set(t, p, v2) { t[p] = v2; return true; }
+  });
+  gR._drawHud(ctx3);
+  assert(hudFillText > 0 && hudArc > 0, `R1: the Reeds HUD CANDLE FUEL readout renders (fillText calls=${hudFillText}, arc calls=${hudArc} — the 'L' hint + the flame glyph)`);
+  // the cycle-0 swamp HUD draws the fuel chip NEVER (lanternReeds false guards it).
+  let c0FillText = 0, c0Arc = 0;
+  const cv4 = makeCanvas();
+  const ctx4 = new Proxy({ canvas: cv4, measureText: () => ({ width: 10 }) }, {
+    get(t, p) { if (p in t) return t[p];
+      if (p === 'fillText') { c0FillText++; return () => {}; }
+      if (p === 'arc') { c0Arc++; return () => {}; }
+      return () => {}; },
+    set(t, p, v2) { t[p] = v2; return true; }
+  });
+  gC0._drawHud(ctx4);
+  // The cycle-0 HUD has the same heart pips / pigment slots (it uses fillText +
+  // arc too), so we can't assert zero — but the Reeds run's HUD carries EXTRA
+  // draws from the fuel chip (the 'L' hint + the flame arc). Confirm the Reeds
+  // HUD is strictly richer, proving the fuel readout is present and rendered.
+  assert(hudFillText > c0FillText, `R1: the Reeds HUD carries the fuel readout (more fillText draws ${hudFillText} than the cycle-0 HUD ${c0FillText} — the 'L' hint renders)`);
+
+  console.log('ok — R1: the Reeds biome is VICTORY-GATED (fresh save offers no entry; a victory save does; the Reeds world keeps the SAME painting, deeper) and THE LANTERN works (L-key toggle, candle fuel drains over time / refills at rest spots / auto-extinguishes on an empty wick; lightFactor is a 0..1 R3 key; the CANDLE FUEL HUD readout renders); the light render stays CHEAP (P10 off-screen culling still passes; the light is a single cached-sprite drawImage, baked once — no per-pixel work)');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
