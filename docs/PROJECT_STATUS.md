@@ -73,8 +73,9 @@ byte-identical. **No open scope for v1.6** — the next phase is whatever
 Joel approves after v1.6 review (the deferred list in ROADMAP §v1.6 is the
 boundary: accessibility X1–X3, gold pigment, gamepad, NG+, CRT filters).
 
-**v1.7 "The Ever-Shifting Swamp" — IN PROGRESS (session v17-3, 2026-09-07;
-D1 + D2 + D3 + D4 + a hygiene commit landed — the full D-item set is DONE).**
+**v1.7 "The Ever-Shifting Swamp" — IN PROGRESS (session v17-f1, 2026-09-08;
+D1 + D2 + D3 + D4 + a hygiene commit + **F1** landed — the full D-item set is
+DONE and the 5th boss (the Hollow Warden) is in).**
 v1.6 is COMPLETE and stays untouched;
 v1.7 adds **THE WANDER** — a bounded, OPT-IN (default OFF) procedural
 expedition variant. **D1 done: the PURE seeded wander content generator** —
@@ -130,12 +131,38 @@ carries wanderSeed + saveVersion 11, validates through `validateSaveBlob`,
 a v1-era blob imports to v11 with wanderSeed 0, a malformed wanderSeed is
 refused). Smoke stage 98 proves the toggle (persists + re-reads +
 legacy-migrates-to-OFF) + the export/import parity + seed reproducibility
-across a save/load cycle. **All D-items (D1–D4) are DONE.** Suite 98
-stages green ×3 (deterministic); hand-tuned pace 17.3 / humance 18.7 /
-reedspace 22.2 min UNCHANGED (Wander OFF by default); `wandpace.mjs` both
-legs in-band; flakecheck 10/10. Remaining v1.7: **F1** (the Hollow Warden
-5th boss), **O1–O2** (QoL), **I1** (final season audit — reuses the
-`wandpace.mjs` probe). Next session picks up F1.
+across a save/load cycle. **All D-items (D1–D4) are DONE.** **F1 done: THE
+HOLLOW WARDEN, the 5th boss archetype (the Wander-apex, `086c05f`).** A pale,
+lantern-eating creature that spawns ONLY as the end boss of a WANDER
+expedition (a hand-tuned cycle-0 / NG+ / Reeds run never meets it — the Warden
+branch is a pure additive, byte-identical when Wander OFF). New pure
+`logic.js`: `WARDEN` (52k HP — the Wander apex, above the wyrm's 48k) +
+`wardenStep` (the maw-window state machine: mawClosed -> telegraph -> mawOpen;
+INVULNERABLE except while the maw is open — a telegraphed window reusing the
+Silt-Wyrm ripple-ring language) + `wardenTasteFactor` (taste-seeded aggression:
+a Feast Warden's gaps are shorter -> the maw opens more often + a faster
+siphon) + `wardenFuelSiphon` (drains a full wick in ~60s base while the
+lantern is LIT, taste-scaled 45s feast / 75s quiet; stops unlit/empty,
+auto-extinguishes at 0). The 3-hue awaken works through the EXISTING
+`paintBoss`/`bossStep` path. game.js: boss SELECTION (Wander ON -> Warden;
+Wander OFF + Reeds -> Silt Wyrm; Wander OFF -> heron) + the `_updateWarden`
+drive + the `_drawWarden` render (PALE palette, P10-capped) + the maw-window
+paint gating + the defeat/sink beat + a Warden-aware recap line + a
+`warden-rumble` SFX. Smoke **stage 99** (24 asserts) proves: Warden-only-in-
+Wander (byte-identical when Wander OFF), the maw window, the fuel siphon, the
+3-hue awaken, and the taste-seeded aggression. **NEW `tests/wardpace.mjs`**
+measures the Warden at ~3.9–4.1 min human (god-mode ~98–104s) — in the 2–4 min
+band, comparable to the Silt Wyrm's 3.9 min. NOTE: the spec's "~1.5 s maw
+window" is preserved as the TELEGRAPH duration; the PAINTABLE maw-open window
+was tuned to 10.5s (vs the wyrm's 7.0s surfaced) so the 52k HP lands in the
+human band — a deliberate, documented deviation. Suite **99 stages green**
+(deterministic); hand-tuned pace 17.3 / humance 17.8 / reedspace 22.2 /
+wandpace both legs UNCHANGED (Wander OFF by default); `wardpace.mjs` in-band;
+the D3 smoke assertion now expects the Warden (not the wyrm) as the Wander ×
+Reeds boss. Remaining v1.7: **O1** (pre-expedition seed card), **O2** (Wander
+run-recap line — the recap already has a minimal Warden line from F1; O2 adds
+the taste/seed flavor), **I1** (final season audit — reuses `wandpace.mjs` +
+`wardpace.mjs`, must be a clean fresh session). Next session picks up O1.
 
 ## Release readiness
 

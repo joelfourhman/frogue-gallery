@@ -814,6 +814,17 @@ export class AudioSys {
         this._tone(t + 0.05, 'triangle', 90, 50, 0.2, 0.16);
         break;
       }
+      // F1 (v1.7): THE HOLLOW WARDEN — its engage RUMBLE (S2 pattern, like the
+      // wyrm but HOLLOW + COLD instead of muddy). A pale, echoing, hollow chime
+      // that feels like light being drained — distinct from the wyrm's mud swell
+      // (a higher, thinner sine + a hollow overtone, no low mud noise). Reuses
+      // the existing 'wyrm-breach' thwomp for the maw-strike (no new asset).
+      case 'warden-rumble': {
+        this._tone(t, 'sine', 150, 90, 0.9, 0.14);
+        this._tone(t + 0.12, 'triangle', 220, 150, 0.7, 0.12);
+        this._tone(t + 0.2, 'sine', 70, 50, 0.6, 0.1);   // the hollow low undertone
+        break;
+      }
       case 'paint-hit': {
         const p = opt.pigment || 'dry';
         this._noise(t, 0.08, 'bandpass', p === 'red' ? 700 : p === 'blue' ? 500 : 900, 2, 0.35);

@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.7 "The Ever-Shifting Swamp" — NEXT ACTION (session v17-3, 2026-09-07; D1 + D2 + D3 + D4 landed)
+### v1.7 "The Ever-Shifting Swamp" — NEXT ACTION (session v17-f1, 2026-09-08; D1 + D2 + D3 + D4 + **F1** landed)
 
 **v1.6 is COMPLETE** (all 13 items R1–R6 / W1–W3 / Q1–Q3 / A1 committed, 94/94
 green, all pacing in band, 114 commits since v1.5). The full **v1.7
@@ -66,52 +66,78 @@ the swamp that is never the same twice.
   wanderSeed 0, a malformed wanderSeed is refused). Smoke **stage 98** proves the
   toggle (persists + re-reads + legacy-migrates-to-OFF) + the export/import
   parity + seed reproducibility across a save/load cycle.
+- **F1** `086c05f` — **THE HOLLOW WARDEN, the 5th boss archetype** (the
+  Wander-apex, the deferred "5th boss / more Reeds depth" item). A pale,
+  lantern-eating creature that spawns ONLY as the end boss of a WANDER
+  expedition (a hand-tuned cycle-0 / NG+ / Reeds run never meets it — the Warden
+  branch is a pure additive, byte-identical when Wander OFF). New pure
+  `logic.js`: `WARDEN` tuning (52k HP — the Wander apex, above the wyrm's 48k)
+  + `wardenStep` (the maw-window state machine: mawClosed -> telegraph ->
+  mawOpen; the Warden is INVULNERABLE except while its maw is open — a
+  telegraphed window reusing the Silt-Wyrm ripple-ring language) + `wardenTasteFactor`
+  (the taste-seeded aggression: a Feast Warden's invulnerable gaps are shorter ->
+  the maw opens more often + a faster siphon) + `wardenFuelSiphon` (drains a full
+  wick in ~60s base while the lantern is LIT, taste-scaled to 45s feast / 75s
+  quiet; stops when unlit/empty, auto-extinguishes at 0). The 3-hue awaken works
+  through the EXISTING `paintBoss`/`bossStep` path (the same awaken latch).
+  game.js: boss SELECTION wiring (Wander ON -> Warden; Wander OFF + Reeds ->
+  Silt Wyrm; Wander OFF -> heron) + the `_updateWarden` drive (wardenStep + the
+  fuel siphon + the maw-strike) + the `_drawWarden` render (a PALE palette + the
+  maw-head + the slithering body-line, P10-capped) + the maw-window paint gating
+  + the defeat/sink beat + a Warden-aware end-screen recap line. A low
+  `warden-rumble` SFX reuses the audio synth (no new asset). Smoke **stage 99**
+  proves: Warden-only-in-Wander (byte-identical when Wander OFF — a hand-tuned
+  cycle-0 / NG+ / Reeds run keeps its heron / wyrm), the maw window, the fuel
+  siphon, the 3-hue awaken, and the taste-seeded aggression (Feast opens its maw
+  before Quiet). NEW `tests/wardpace.mjs` (modeled on reedspace.mjs) measures the
+  Warden at **~3.9–4.1 min human** (god-mode ~98–104s) — in the 2–4 min band,
+  comparable to the Silt Wyrm's 3.9 min (the Warden is the 52k-HP apex, the
+  longest of the Reeds bosses). NOTE: the spec's "~1.5 s maw window" is preserved
+  as the TELEGRAPH duration; the PAINTABLE maw-open window was tuned to 10.5s
+  (vs the wyrm's 7.0s surfaced) so the 52k HP lands in the human band — a
+  deliberate deviation from a literal 1.5s paint window, documented here.
 
-**Invariants held after D1–D4:** smoke x3 ALL PASSED (98 stages; deterministic —
-the same run produces the same result every time, and the orchestrator's 10-run
-flakecheck stays green). Hand-tuned pacing **UNCHANGED** (Wander is OFF by
-default so those probes measure the hand-tuned runs): `pace.mjs` ~17.3 min,
-`humance.mjs` ~18.7 min (15–20 band), `reedspace.mjs` ~22.2 min (20–25 band).
-NEW `wandpace.mjs` both legs in-band (first-time 16.9–17.8; Wander × Reeds
-21.6–22.7) + deterministic. `SAVE_VERSION = 11` (D2–D4 add no save field — the
-taste is derived from the latched `wanderSeed`; D4 is options-migration +
-presentation only).
+**Invariants held after D1–D4 + F1:** smoke x3 ALL PASSED (**99 stages**;
+deterministic — the same run produces the same result every time, and the
+orchestrator's 10-run flakecheck stays green). Hand-tuned pacing **UNCHANGED**
+(Wander is OFF by default so those probes measure the hand-tuned runs):
+`pace.mjs` ~17.3 min, `humance.mjs` ~18.7 min (15–20 band), `reedspace.mjs`
+~22.2 min (20–25 band), `bosspace.mjs` ~1.8 min (heron). NEW `wandpace.mjs`
+both legs in-band (first-time 16.9–17.8; Wander × Reeds 21.6–22.7) +
+deterministic. NEW `tests/wardpace.mjs` (F1) measures the Warden at ~3.9–4.1 min
+human (in the 2–4 min band, comparable to the Silt Wyrm's 3.9 min).
+`SAVE_VERSION = 11` (F1 adds no save field — the Warden is a pure boss-variant
+additive, Wander-only, so the save schema is unchanged).
 
-**NEXT ACTION (next re-kick): F1, then O1, O2, then I1** — D1–D4 (the full
-Wander D-item set) are DONE. The next item is **F1 (the 5th boss: the Hollow
-Warden)**, then the QoL items O1/O2, then the I1 season audit. The
-`docs/ROADMAP.md` §v1.7 plan-of-record is the authoritative list; D1–D4 are
-checked off below and F1/O1/O2/I1 remain:
-- **F1**: the 5th boss — the Hollow Warden (a pale, lantern-eating Wander-mode
-  apex predator: spawns only at the end of a Wander expedition; siphons candle
-  fuel while the lantern is lit; vulnerable only in a telegraphed maw window that
-  reuses the Silt-Wyrm telegraph; 3-hue awaken via the EXISTING
-  `paintBoss`/`bossStep` path; taste-seeded aggression; ~52k HP; a NEW
-  `logic.js` `WARDEN` tuning + `wardenStep` alongside `SILT_WYRM`/`wyrmStep`,
-  default-OFF so hand-tuned runs are byte-identical). Wire the boss SELECTION:
-  the end-of-Wander-expedition boss is the Hollow Warden (Wander ON) vs the
-  Silt Wyrm (Wander OFF Reeds) / heron (Wander OFF expedition).
+**NEXT ACTION (next re-kick): O1, then O2, then I1** — F1 (the 5th boss: the
+Hollow Warden) is DONE. The next items are the QoL items **O1 + O2**, then the
+I1 season audit (the final gate). The `docs/ROADMAP.md` §v1.7 plan-of-record is
+the authoritative list; D1–D4 + F1 are checked off below and O1/O2/I1 remain:
 - **O1**: the pre-expedition seed card (a paper card shown before a Wander run
   begins: the seed, the taste name + its one-line flavor, the zone count /
   enemy-count envelope — so a player knows what they're walking into + can note
-  the seed to replay it).
+  the seed to replay it). Pure presentation over `pickWanderSeed` / `wanderTaste`
+  / `wanderContent` (NO new save field). Show it when the player enters a Wander
+  run (the `options.wander` toggle is ON + a new expedition begins).
 - **O2**: the Wander run-recap line on the end screen (the existing v1.6 Q2
   recap strip gains a "Wandering · seed N · <taste>" line when a Wander run
-  ends — pure presentation over `wanderSeedRun` / `wanderTaste`).
-- **I1**: the K10 / C4 / A1-style season audit (the final gate): smoke x3 green;
-  `pace.mjs` + `humance.mjs` first-time IN the 15–20 band (hand-tuned, Wander
-  OFF); `ngpace.mjs` cycle-1 in band; `bosspace.mjs` + `reedspace.mjs` in their
-  documented ranges; the NEW `wandpace.mjs` (landed early in D3) in its
-  documented bands (first-time 15–20 + Wander × Reeds 20–25); P10 culling green.
+  ends — pure presentation over `wanderSeedRun` / `wanderTaste`). NOTE: F1
+  already made `_recapBossLine` Warden-aware ("the warden sleeps on") — O2 adds
+  the seed/taste flavor line on top of that.
+- **I1**: the K10 / C4 / A1-style season audit (the final gate, a clean fresh
+  session): smoke x3 green; `pace.mjs` + `humance.mjs` first-time IN the 15–20
+  band (hand-tuned, Wander OFF); `ngpace.mjs` cycle-1 in band; `bosspace.mjs` +
+  `reedspace.mjs` in their documented ranges; the NEW `wandpace.mjs` (D3) in its
+  documented bands (first-time 15–20 + Wander × Reeds 20–25); the NEW
+  `wardpace.mjs` (F1) in the 2–4 min band; P10 culling green.
 
-**Batch 3 plan (for the next re-kick session):** land F1 (the Hollow Warden 5th
-boss: `logic.js` WARDEN tuning + wardenStep + boss-selection wiring + a smoke
-stage + a `wardenspace`-style pacing check) as its own `feat(v1.7 F1)` commit,
-then O1 (seed card) + O2 (recap line) as `feat(v1.7 O1)`/`feat(v1.7 O2)`, then
-I1 (the season audit) as the final gate. Stop at a clean committed chunk + update
-this NEXT ACTION if the budget runs out mid-chunk. Never discard uncommitted user
-work (there is none now — only the orchestrator's `.before-logic.mjs` snapshot is
-untracked; leave it).
+**Batch 4 plan (for the next re-kick session):** land O1 (the pre-expedition
+seed card) as `feat(v1.7 O1)` + O2 (the Wander run-recap line) as
+`feat(v1.7 O2)`, then I1 (the season audit) as the final gate (a clean fresh
+session). Stop at a clean committed chunk + update this NEXT ACTION if the
+budget runs out mid-chunk. Never discard uncommitted user work (there is none
+now — only the orchestrator's `.before-logic.mjs` snapshot is untracked; leave
+it).
 
 **Headline (D1–D4): "The Wander"** — a **bounded, pacing-safe procedural
 expedition** (the deferred procgen item revisited with the two-biome data).

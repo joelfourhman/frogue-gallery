@@ -7463,9 +7463,13 @@ console.log('== stage 97: D3 (v1.7) — THE WANDER NG+ + Reeds parity (NG+ appli
   assert(gr.wanderActive === true && gr.lanternReeds === true, 'D3: Wander × Reeds — the Wander run is active AND the Reeds light economy (lantern) is on');
   assert(gr.world.reedsVariant === true && gr.world.w === L97.REEDS_WIDTH, 'D3: Wander × Reeds — the Reeds world variant (deeper layout) is in effect');
   assert(gr.lantern && gr.lantern.lit === true && gr.lantern.fuel === 1, 'D3: Wander × Reeds — the lantern fuel loop starts lit at full fuel (the R1 mechanic is live)');
-  // the Silt Wyrm (the Reeds 4th-boss archetype) is the end boss — the Reeds
-  // variant is intact on top of the generated content.
-  assert(!!gr.heron && gr.heron.wyrm === true, 'D3: Wander × Reeds — the Silt Wyrm is the end boss (the Reeds variant is intact)');
+  // F1 (v1.7): in a WANDER expedition the end-of-run boss is THE HOLLOW WARDEN
+  // (the 5th boss archetype), NOT the Silt Wyrm. The Warden takes the Wander end
+  // boss slot (the D1 "Wander ON" run); the Silt Wyrm stays the end boss of a
+  // Wander-OFF Reeds run (asserted in (c) below) — so a generated (Wander ON)
+  // Reeds run now carries the Warden apex on top of the generated content + the
+  // Reeds light economy / R3 bestiary. The Reeds variant is still intact.
+  assert(!!gr.heron && gr.heron.warden === true && gr.heron.wyrm !== true, 'F1: Wander × Reeds — the HOLLOW WARDEN (the 5th boss) is the end boss (the Wander run takes the apex; the Silt Wyrm is the Wander-OFF Reeds boss, asserted below)');
   // the R3 bestiary (wisp/serpent/leech) applies on top of the generated content.
   assert(L97.REEDS_BESTIARY && ['wispHoming', 'serpentTelegraph', 'leechDrainDps'].every(k => k in L97.REEDS_BESTIARY),
     'D3: the R3 Reeds bestiary (wisp/serpent/leech) mechanic set is the Reeds enemy set');
@@ -7597,7 +7601,158 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
   assert(JSON.stringify(repro2.zones.map(z => ({ mix: z.mix, sig: z.sig }))) === zones1,
     'D4: a second load of the latched seed reproduces identical generated content (byte-identical across a save/load cycle)');
 
-  console.log('ok — D4: the Options panel carries a "Wandering Expeditions" toggle (default OFF; a legacy options blob with no wander field migrates to OFF; clicking it flips + persists to the options blob and a freshly-loaded Game re-reads it), and the existing save export/import round-trips the wanderSeed field (the exported blob carries wanderSeed + saveVersion 11, validates through validateSaveBlob, a v1-era blob imports to v11 with wanderSeed 0, a malformed wanderSeed is refused) — so a generated run is reproducible from its latched seed across a save/load cycle.');
+  console.log('ok — D4: the Options panel carries a "Wandering Expeditions" toggle (default OFF; a legacy options blob with no field migrates to OFF; clicking it flips + persists to the options blob and a freshly-loaded Game re-reads it), and the existing save export/import round-trips the wanderSeed field (the exported blob carries wanderSeed + saveVersion 11, validates through validateSaveBlob, a v1-era blob imports to v11 with wanderSeed 0, a malformed wanderSeed is refused) — so a generated run is reproducible from its latched seed across a save/load cycle.');
+}
+
+// ====================================================================
+// stage 99: F1 (v1.7) — THE HOLLOW WARDEN (5th boss archetype, the
+//     Wander-apex): the end-of-Wander-expedition boss. Only in a
+//     WANDER run (a hand-tuned / Reeds / NG+ run never meets it,
+//     byte-identical when Wander OFF). Invulnerable except its
+//     maw-open window (a telegraphed ~1.5 s ripple-ring reuse of the
+//     Silt-Wyrm language); siphons lantern fuel while LIT (stopping
+//     when unlit / empty); the 3-hue awaken works through the EXISTING
+//     paintBoss/bossStep path; its aggression is taste-seeded (Feast
+//     > Quiet). HP in the ~52k class (the Wander apex, above the
+//     Silt-Wyrm's 48k).
+// ====================================================================
+{
+  const L1 = await import('../src/logic.js');
+  const F1 = L1;
+  const G1 = await import('../src/game.js');
+  // Reset the options blob (stage 98 D4 may have persisted wander: true to the
+  // options blob; a default-OFF cycle-0 run in (a) below must NOT inherit it).
+  try { (globalThis.localStorage || {}).setItem('frogue_gallery_options', JSON.stringify(L1.freshOptions())); } catch {}
+  const W = F1.WARDEN, T1 = F1.makeTuning();
+  // ---- (0) the boss constant: the 5th archetype, 52k HP (the Wander apex) ----
+  assert(W.kind === 'warden' && W.hp === 52000, 'F1: the Hollow Warden is declared (kind warden, 52k HP — the Wander apex, above the Silt Wyrm 48k)');
+  assert(W.surfacePoints === 3 && W.telegraph > 0 && W.mawOpen > 0 && W.mawClosed > 0, 'F1: 3 telegraphed maw points on the arena line (a ~1.5s ripple-ring tell; a maw-open paintable window + a maw-closed invulnerable window)');
+  assert(W.awakenNeed.red === 45 && W.awakenNeed.blue === 45 && W.awakenNeed.green === 45, 'F1: the SAME 3-hue awaken rhythm as the herons / wyrm (45/45/45)');
+  assert(W.siphonRate > 0 && Math.abs(W.siphonRate - 1 / 60) < 1e-4, 'F1: the siphon rate drains a full wick in ~60s (base; taste-scaled to 45s feast / 75s quiet)');
+  // a fresh Warden boss object (mirrors the _beginExpedition spawn fields).
+  const mkWarden = (hp, tasteFactor) => ({
+    warden: true, kind: 'warden', hp, maxHp: W.hp, phase: 'mawClosed', phaseT: W.mawClosed,
+    surfIdx: 0, tasteFactor: tasteFactor || 1.0, _intro: 0,
+    hue: { red: 0, blue: 0, green: 0 }, awakened: false, awakenedT: 0,
+    awakenNeed: { ...W.awakenNeed }, flying: 0, sinking: 0,
+  });
+
+  // ---- (1) the Warden spawns ONLY at the end of a WANDER expedition ----
+  const vSave = F1.freshSave(); vSave.stats.victories = 1; vSave.flags.heronDefeated = true; vSave.flags.reedsUnlocked = true;
+  // a WANDER expedition (options.wander ON) carries the Warden.
+  const gW1 = new G1.Game(makeCanvas()); gW1.start(); gW1._quitToTitle();
+  gW1.save = vSave; gW1.options.wander = true; gW1._beginExpedition();
+  assert(gW1.wanderActive === true, 'F1 (setup): a Wander expedition is active');
+  assert(gW1.heron && gW1.heron.warden === true && gW1.heron.kind === 'warden' && gW1.heron.hp === W.hp, 'F1: a WANDER expedition spawns THE HOLLOW WARDEN as its end boss (the 5th archetype, 52k HP)');
+  assert(!gW1.heron.wyrm && !gW1.heron.flying, 'F1: the Warden is its OWN archetype (not the wyrm, not a flying heron)');
+  // a hand-tuned CYCLE-0 SWAMP run (Wander OFF) still spawns the gray heron — NOT the Warden.
+  const gS1 = new G1.Game(makeCanvas()); gS1.start(); gS1._quitToTitle();
+  gS1.save = F1.freshSave(); gS1._beginExpedition();
+  assert(gS1.heron && !gS1.heron.warden && gS1.heron.kind === 'gray', 'F1: a hand-tuned (Wander-OFF) cycle-0 SWAMP run still spawns the gray heron — the Warden is Wander-only (never in a hand-tuned run)');
+  // a Wander-OFF REEDS run spawns the Silt Wyrm (NOT the Warden) — the Reeds apex is unchanged.
+  const gR1 = new G1.Game(makeCanvas()); gR1.start(); gR1._quitToTitle();
+  gR1.save = vSave; gR1._beginExpedition(false, { reeds: true });
+  assert(gR1.heron && gR1.heron.wyrm === true && !gR1.heron.warden, 'F1: a Wander-OFF REEDS run still spawns the Silt Wyrm (the Warden only takes the WANDER end-boss slot; the Reeds apex is unchanged)');
+  // an NG+ (Wander-OFF) green heron run also never meets the Warden.
+  const gN1 = new G1.Game(makeCanvas()); gN1.start(); gN1._quitToTitle();
+  gN1.save = F1.freshSave(); gN1.save.ngCycle = 1; gN1._beginExpedition();
+  assert(gN1.heron && !gN1.heron.warden && gN1.heron.kind === 'green', 'F1: a Wander-OFF NG+ (cycle 1) run still spawns the green heron — the Warden is never a hand-tuned apex');
+  // ---- BYTE-IDENTICAL when Wander OFF: the Warden wiring is a pure ADDITIVE
+  //      branch. A hand-tuned cycle-0 heron's identity fields are exactly the
+  //      pre-F1 heron (kind gray, the heron HP, no warden/wardenStep field). ----
+  const HERON_HP = (G1.HERONS && G1.HERONS.gray && G1.HERONS.gray.hp) || (gS1.heron.maxHp);
+  assert(gS1.heron.kind === 'gray' && gS1.heron.maxHp === HERON_HP && gS1.heron.warden === undefined, 'F1: a Wander-OFF heron is byte-identical to the pre-F1 heron (the Warden branch is a pure additive, never reached)');
+
+  // ---- (2) the maw WINDOW: the Warden is invulnerable EXCEPT while the maw is open ----
+  const wd0 = mkWarden(W.hp);
+  // drive through a full cadence cycle: mawClosed (2.4s) -> telegraph (1.5s) -> mawOpen (10.5s) -> maw-close. ~14.4s = ~864 frames.
+  let sawTele = false, sawOpen = false, sawClose = false, idxBefore = 0, evs = [];
+  for (let i = 0; i < 1000; i++) {
+    const ev = F1.wardenStep(wd0, 1 / 60, { left: 0, right: 6000, playerX: 100 }, T1, i / 60);
+    if (wd0.phase === 'telegraph') sawTele = true;
+    if (ev === 'maw-open') sawOpen = true;
+    if (ev === 'maw-close') { sawClose = true; }
+    if (wd0.phase === 'mawOpen' && i > 0) { evs.push(wd0.phase); }
+  }
+  assert(sawTele, 'F1: the Warden TELEGRAPHS the maw opening (a ripple-ring tell) — reusing the Silt-Wyrm telegraph language');
+  assert(sawOpen && sawClose, 'F1: the maw OPENS (the paintable window) and CLOSES (the invulnerable retreat) in a cadence');
+  // the maw-open is the ONLY paintable phase: paint routing gates on phase === 'mawOpen'.
+  const wdPaint = mkWarden(W.hp);
+  let openPhases = 0, otherPhases = 0;
+  // drive ~15s (900 frames) to cover mawClosed (2.4s) + telegraph (1.5s) + mawOpen (10.5s).
+  for (let i = 0; i < 900; i++) { F1.wardenStep(wdPaint, 1 / 60, { left: 0, right: 6000, playerX: 100 }, T1, i / 60); if (wdPaint.phase === 'mawOpen') openPhases++; else otherPhases++; }
+  assert(openPhases > 0 && otherPhases > 0, 'F1: the maw has BOTH a paintable (mawOpen) window and an invulnerable (mawClosed/telegraph) window');
+  assert(otherPhases > 0, 'F1: between maw openings the Warden is INVULNERABLE (the game routes no paint to it when phase !== mawOpen — the same gate the wyrm uses)');
+
+  // ---- (3) the FUEL SIPHON: drains lantern fuel while LIT + engaged; stops when unlit / empty ----
+  // engaged + lit -> fuel drains (siphon is taste-scaled).
+  const lit = F1.lanternState(1.0, true);
+  const out1 = F1.wardenFuelSiphon(mkWarden(W.hp, 1.0), { fuel: 1.0, lit: true }, 1.0);
+  assert(out1.fuel < 1.0 && out1.fuel > 0, 'F1: while the Warden is engaged + the lantern is LIT, the siphon DRAINS fuel (a full wick in ~60s base)');
+  assert(Math.abs(out1.fuel - (1.0 - W.siphonRate * 1.0)) < 1e-6, 'F1: the siphon drains at the documented base rate (1/60 fuel/s, taste×1.0)');
+  // unlit -> the siphon STOPS (no drain).
+  const out2 = F1.wardenFuelSiphon(mkWarden(W.hp, 1.0), { fuel: 1.0, lit: false }, 5.0);
+  assert(out2.fuel === 1.0, 'F1: when the lantern is UNLIT the siphon STOPS (the Warden cannot feed on darkness)');
+  // empty -> the siphon STOPS (and the lantern auto-extinguishes at 0).
+  const out3 = F1.wardenFuelSiphon(mkWarden(W.hp, 1.0), { fuel: 0.0, lit: true }, 5.0);
+  assert(out3.fuel === 0.0 && out3.lit === false, 'F1: when the wick is EMPTY the siphon cannot feed + the lantern auto-extinguishes');
+  // NOT engaged (the intro reveal) -> no siphon.
+  const out4 = F1.wardenFuelSiphon({ ...mkWarden(W.hp, 1.0), _intro: 2.0 }, { fuel: 1.0, lit: true }, 5.0);
+  assert(out4.fuel === 1.0, 'F1: while the Warden is in its intro reveal (not engaged) the siphon STOPS');
+  // a Feast (aggressive) Warden siphons FASTER than a Quiet one (taste bias).
+  const feastOut = F1.wardenFuelSiphon(mkWarden(W.hp, 1.15), { fuel: 1.0, lit: true }, 30.0);
+  const quietOut = F1.wardenFuelSiphon(mkWarden(W.hp, 0.85), { fuel: 1.0, lit: true }, 30.0);
+  assert(feastOut.fuel < quietOut.fuel, 'F1: the FEAST taste siphons FASTER than the QUIET taste (1.15 > 0.85) — the taste bias is the F<->D tie (D2)');
+
+  // ---- (4) the 3-HUE AWAKEN works through the EXISTING paintBoss path ----
+  const wdAw = mkWarden(1000);
+  let awoken = null;
+  // a single hue, repeated coats, does NOT awaken (all three hues are needed):
+  for (let i = 0; i < 8; i++) { const r = F1.paintBoss(wdAw, 'red', T1.bossPaintHit, T1); if (r === 'awaken') awoken = r; }
+  assert(awoken === null && wdAw.awakened === false, 'F1: one hue alone does NOT awaken the Warden (the 3-hue rhythm is intact — same as the herons / wyrm)');
+  // all three hues reach the threshold -> the SAME paintBoss 'awaken' latch fires.
+  for (let i = 0; i < 8; i++) F1.paintBoss(wdAw, 'blue', T1.bossPaintHit, T1);
+  for (let i = 0; i < 8; i++) { const r = F1.paintBoss(wdAw, 'green', T1.bossPaintHit, T1); if (r === 'awaken') awoken = r; }
+  assert(awoken === 'awaken' && wdAw.awakened === true, 'F1: painting all 3 hues fires the EXISTING paintBoss awaken latch (the same event the herons / wyrm emit)');
+  assert(wdAw.awakenedT > 0, 'F1: the awaken window is live (awakenedT set, the full-damage phase)');
+  // the awaken SPEEDS the maw cadence (the wyrm's 0.62 factor).
+  const waAw = mkWarden(10000); waAw.awakened = true;
+  const waBase = mkWarden(10000); waBase.awakened = false;
+  waAw.phase = 'mawClosed'; waAw.phaseT = W.mawClosed; waBase.phase = 'mawClosed'; waBase.phaseT = W.mawClosed;
+  // step one tick: the awakened Warden's mawClosed timer is shorter (0.62×).
+  F1.wardenStep(waAw, 0.001, { left: 0, right: 6000, playerX: 100 }, T1, 0.001);
+  assert(waAw.phaseT < waBase.phaseT, 'F1: the AWAKENED Warden cycles its maw FASTER (shorter invulnerable gap, 0.62× — the full-damage phase speeds the rhythm)');
+
+  // ---- (5) taste-seeded AGGRESSION: a Feast Warden fights FASTER (more maw openings) ----
+  // the taste bias shortens the invulnerable gaps (mawClosed + telegraph) so the
+  // maw opens MORE OFTEN. Measure: time to the FIRST maw-open event (the feast
+  // gap is shorter, so it reaches the paintable window first).
+  const wdFeast = mkWarden(W.hp, 1.15);
+  const wdQuiet = mkWarden(W.hp, 0.85);
+  let framesToOpenF = -1, framesToOpenQ = -1;
+  for (let i = 0; i < 600 && (framesToOpenF < 0 || framesToOpenQ < 0); i++) {
+    if (framesToOpenF < 0 && F1.wardenStep(wdFeast, 1 / 60, { left: 0, right: 6000, playerX: 100 }, T1, i / 60) === 'maw-open') framesToOpenF = i;
+    if (framesToOpenQ < 0 && F1.wardenStep(wdQuiet, 1 / 60, { left: 0, right: 6000, playerX: 100 }, T1, i / 60) === 'maw-open') framesToOpenQ = i;
+  }
+  assert(framesToOpenF > 0 && framesToOpenQ > 0, 'F1 (setup): both tastes reach a maw-open');
+  assert(framesToOpenF < framesToOpenQ, `F1: the FEAST taste (1.15) opens its maw FIRST (${framesToOpenF}f) before the QUIET taste (${framesToOpenQ}f) — the taste seeds aggression (the same boss feels different per run)`);
+
+  // ---- (6) defeat: hp<=0 ends the Wander run in victory (like a heron / wyrm) ----
+  const wdDeath = mkWarden(50);
+  let defeat = false;
+  for (let i = 0; i < 240 && !defeat; i++) { wdDeath.hp = 0; defeat = F1.wardenStep(wdDeath, 1 / 60, { left: 0, right: 6000, playerX: 100 }, T1, i / 60) === 'defeated'; }
+  assert(defeat, 'F1: when the Warden is painted to hp<=0, the state machine emits "defeated" (the Wander run ends in victory, like a heron / wyrm defeat)');
+
+  // ---- (7) the pale draw path renders headless without throwing (P10-safe) ----
+  const dctx = makeCtx(makeCanvas());
+  const drawW1 = mkWarden(W.hp);
+  for (const ph of ['mawClosed', 'telegraph', 'mawOpen']) {
+    drawW1.phase = ph; drawW1.phaseT = ph === 'telegraph' ? 1.0 : 5.0;
+    try { gW1._drawWarden(dctx, drawW1, 0.4); } catch (e) { assert(false, 'F1: _drawWarden threw for phase ' + ph + ': ' + e.message); }
+  }
+  assert(true, 'F1: the pale draw path (the maw-head + the slithering pale body-line, capped segments; the ripple-ring maw tell) renders headless without throwing (P10 allocation-safe)');
+
+  console.log('ok — F1: THE HOLLOW WARDEN — the 5th boss ARCHETYPE (the deferred "5th boss / more Reeds depth" item, the Wander-apex). It spawns ONLY at the end of a WANDER expedition (a hand-tuned cycle-0 / NG+ / Reeds run never meets it — byte-identical when Wander OFF, the Warden branch is a pure additive). A PALE, lantern-eating creature: while the lantern is LIT it SIPHONS candle fuel (a full wick in ~60s base, taste-scaled to 45s feast / 75s quiet; it STOPS when unlit or empty, and the wick auto-extinguishes); it is INVULNERABLE except while its MAW is OPEN (a telegraphed window reusing the Silt-Wyrm ripple-ring language). The 3-hue awaken STILL applies through the EXISTING paintBoss/bossStep path (the same awaken latch fires; the awaken speeds the cadence 0.62×). Its aggression is SEED-BIASED by the Wander taste (Feast > Quiet: the feast maw opens more often + siphons faster). HP in the ~52k class (the Wander apex, above the Silt Wyrm 48k); a distinct pale palette + a low rumble SFX; defeat ends the Wander run in victory like a heron / wyrm defeat.');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

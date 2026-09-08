@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -2860,6 +2860,43 @@ _drawAtelier(ctx) {
     // bossStep/3-hue machinery; distinct gold palette + a heal-absorbing plume.
     const isGildedHeron = this.ngCycle >= GILDED_HERON.minCycle;
     const isGreen = this.ngCycle >= 1 && !isGildedHeron;
+    // F1 (v1.7): in a WANDER expedition the end-of-run boss is THE HOLLOW
+    // WARDEN (the 5th boss archetype, the Wander-apex). It reuses the EXISTING
+    // paintBoss/bossStep 3-hue awaken latch + the heron defeat/victory (sink)
+    // path, but with a NEW maw-window state machine (wardenStep): the Warden is
+    // INVULNERABLE except while its maw is OPEN (a telegraphed ~1.5 s window
+    // reusing the Silt-Wyrm ripple-ring telegraph). While the player's lantern
+    // is LIT it SIPHONS candle fuel (wardenFuelSiphon); when unlit/empty the
+    // siphon stops and the Warden turns evasive (longer maw-closed time). Its
+    // aggression is SEED-BIASED by the Wander taste (wardenTasteFactor): a
+    // "Feast Season" Warden is faster / a "Quiet Reeds" Warden evasive — the
+    // same boss feels different per run. It occupies the same `this.heron`
+    // slot so the paint routing, awaken handler, camera, and _endRun('victory')
+    // all reuse the heron machinery. A hand-tuned (Wander-OFF) run never enters
+    // this branch — its heron (gray/green/gilded) or the Reeds Silt Wyrm stays
+    // byte-identical. Wander takes precedence over Reeds: a Wander × Reeds run
+    // (the D3 variant) also fights the Warden (its lantern economy + siphon
+    // interplay is the Reeds synergy the ROADMAP calls out).
+    if (this.wanderActive) {
+      const s0 = wardenSurfacePoint({ surfIdx: 0 }, 0, this.world.w);
+      this.heron = {
+        kind: WARDEN.kind, warden: true,
+        x: s0[0], y: s0[1],
+        hp: WARDEN.hp, maxHp: WARDEN.hp,
+        phase: 'mawClosed', state: 'idle', stateT: 2.2, hue: { red: 0, blue: 0, green: 0 },
+        awakened: false, awakenedT: 0, summonT: 9, lungeDir: -1,
+        targetX: this.world.w - 650, diveH: 0, facing: -1,
+        flying: 0, _intro: 3.4,
+        // the Warden's state machine fields (wardenStep): it begins maw-CLOSED
+        // (invulnerable) with its timer + the surface-point index set.
+        phaseT: WARDEN.mawClosed, surfIdx: 0,
+        // the taste-seeded aggression factor (pure; deterministic on the run
+        // taste). 1.15 feast / 1.0 calm+grump / 0.85 quiet (see wardenTasteFactor).
+        tasteFactor: wardenTasteFactor(this.wanderTaste),
+        // the pure 3-hue awaken (the SAME latch as the herons — paintBoss reads this):
+        awakenNeed: { ...WARDEN.awakenNeed },
+      };
+    } else if (_isReeds) {
     // R4 (v1.6 Module R): in a BENEATH-THE-REEDS expedition the end-of-run boss
     // is THE SILT WYRM (the 4th boss archetype) — a subterranean creature that
     // reuses the EXISTING paintBoss/bossStep awaken latch + the heron defeat/victory
@@ -2867,7 +2904,6 @@ _drawAtelier(ctx) {
     // occupies the same `this.heron` slot (so the paint routing, the awaken
     // handler, the camera, and _endRun('victory') all reuse the heron machinery).
     // A cycle-0 (swamp) run never enters this branch — its heron is byte-identical.
-    if (_isReeds) {
       const s0 = wyrmSurfacePoint({ surfIdx: 0 }, 0, this.world.w);
       this.heron = {
         kind: SILT_WYRM.kind, wyrm: true,
@@ -3544,7 +3580,8 @@ _drawAtelier(ctx) {
       // R4 (v1.6): the Wyrm is PAINTABLE only while surfaced (the breach-strike
       // window) — between surfaces it is underground + INVULNERABLE + untargetable.
       const hPaintable = this.heron && this.heron.hp > 0 && !this.heron.flying && this.heron._intro <= 0
-        && !(this.heron.wyrm && this.heron.phase !== 'surfaced');
+        && !(this.heron.wyrm && this.heron.phase !== 'surfaced')
+        && !(this.heron.warden && this.heron.phase !== 'mawOpen');
       if (hPaintable) {
         const res = this.paint.paintBossHit(this.heron, p.pigment, this.tuning.bossPaintHit);
         if (res === 'awaken') {
@@ -3606,7 +3643,8 @@ _drawAtelier(ctx) {
       // R4 (v1.6): the wyrm is splashed only while surfaced (untargetable
       // underground — same rule as the swipe path).
       if (this.heron && this.heron.hp > 0 && !this.heron.flying
-        && !(this.heron.wyrm && this.heron.phase !== 'surfaced')) {
+        && !(this.heron.wyrm && this.heron.phase !== 'surfaced')
+        && !(this.heron.warden && this.heron.phase !== 'mawOpen')) {
         const d = dist(p.x, p.y, this.heron.x, this.heron.y - 140);
         if (d <= this.tuning.splashRadius + 60) {
           this.paint.paintBossHit(this.heron, p.pigment, this.tuning.bossPaintHit);
@@ -3665,7 +3703,24 @@ _drawAtelier(ctx) {
     // intro lapses) only when the frog REACHES THE ARENA at the end of the run
     // (a proper end-of-Reeds boss, not a far-away attacker). The swamp heron
     // engages on its short 3.2 s reveal as before (byte-identical).
-    if (this.heron.wyrm) {
+    if (this.heron.warden) {
+      // F1 (v1.7): the Warden engages on ARENA entry (like the Silt Wyrm — it
+      // is an end-of-run arena apex, not a far-away attacker). Wander is
+      // Reeds-compatible (D3), so the arena gate is identical to the wyrm's.
+      const wardenArena = p.x > this.world.w - 900;
+      if (this.heron._intro > 0) this.heron._intro -= dt;
+      if (wardenArena && this.heron._intro > 0) this.heron._intro = 0;   // lapse on arena entry
+      if (this.heron._intro <= 0 && !this._wardenEngaged) {
+        this._wardenEngaged = true;
+        this.sfx('warden-rumble');
+        if (this.audio.setBossTheme) this.audio.setBossTheme(true);   // the darker boss loop
+        const tNote = this.wanderTaste ? this.wanderTaste.name : '';
+        this.addBanner('THE HOLLOW WARDEN', 3.2, 150);
+        this.addBanner('Its maw opens in a TELL — paint it ONLY while open. Its lantern-hunger SIPHONS your fuel!', 4.8, 195);
+        if (tNote) this.addBanner('The ' + tNote + ' taste rides this Warden.', 3.2, 185);
+        this.zoomTarget = 0.92;
+      }
+    } else if (this.heron.wyrm) {
       const wyrmArena = p.x > this.world.w - 900;
       if (this.heron._intro > 0) this.heron._intro -= dt;
       if (wyrmArena && this.heron._intro > 0) this.heron._intro = 0;   // lapse on arena entry
@@ -3698,7 +3753,7 @@ _drawAtelier(ctx) {
         this._challengeAdd('bossEngage');
       }
     }
-    if (this.heron._intro <= 0) (this.heron.wyrm ? this._updateWyrm(dt) : this._updateBoss(dt));
+    if (this.heron._intro <= 0) (this.heron.warden ? this._updateWarden(dt) : (this.heron.wyrm ? this._updateWyrm(dt) : this._updateBoss(dt)));
 
     // ----- E1: the Painted Heron (mid-run set-piece) -----
     // Non-blocking: dormant until the frog draws near, then it announces
@@ -4729,6 +4784,66 @@ _drawAtelier(ctx) {
       // _drawWyrm (P10: capped segment count, no per-frame allocation).
     }
 
+  // F1 (v1.7): drive THE HOLLOW WARDEN (the 5th boss archetype, the Wander-apex)
+  // with the pure wardenStep state machine — the SAME maw-window rhythm as the
+  // Silt Wyrm, but PALE + a taste-seeded tempo. It reuses the existing 3-hue
+  // awaken machinery (paintBoss/bossStep) so the paint routing, the awaken
+  // handler, the camera, and _endRun('victory') all reuse the heron machinery.
+  // While the lantern is LIT it SIPHONS candle fuel (the pure wardenFuelSiphon
+  // tick); when the lantern is unlit/empty the siphon stops and the Warden is
+  // only as evasive as its (taste-scaled) maw-closed window makes it. The
+  // maw-strike hits the lane at the surface point (the frog dodges by standing
+  // clear of the marked point — the tell told it where to be).
+  _updateWarden(dt) {
+    const h = this.heron; const p = this.player;
+    if (!h || h.flying > 0 || h.sinking > 0 || this.dying) return;
+    // Advance the pure movement state machine (it reads h.awakened + h.tasteFactor
+    // to speed the maw cadence — the 3-hue awaken's "faster rhythm" + the D2
+    // taste bias, both pure).
+    const v = this._view();
+    const ev = wardenStep(h, dt, { left: v.x, right: v.x + v.w / v.scale, playerX: p.x }, this.tuning, this.now);
+    // Position the Warden's head at its maw point (it slithers toward it while
+    // the maw is closed; it sits at the point while the tell + maw window play).
+    // No per-frame allocation — one surface-point read.
+    const [spX, spY] = wardenSurfacePoint(h, h.surfIdx, this.world.w);
+    h.y = spY;
+    h.x = spX;
+    // F1: the FUEL SIPHON — while the Warden is active + the lantern is LIT, it
+    // drains candle fuel (the pure wardenFuelSiphon tick; taste-scaled). The
+    // returned state reassigns this.lantern; the caller (_updateLantern, the
+    // next frame) refreshes the eased radius + lightFactor from it, so in a
+    // Wander x Reeds run the siphon also shrinks the light radius (the Reeds
+    // bestiary's input) — a genuine synergy, not a bolt-on.
+    if (this.lantern) {
+      this.lantern = wardenFuelSiphon(h, this.lantern, dt);
+      // Refresh the eased render radius + the frog's lightFactor from the
+      // post-siphon state (the light dims as the Warden feeds — the player
+      // SEES the lantern being eaten, the same render path as the Reeds drain).
+      this._lanternEasedR = lanternRadius(this.lantern);
+      this.lantern.lightFactor = lightFactor(this.lantern, p.x, p.y, p.x, p.y);
+    }
+    if (ev === 'maw-open') {
+      // the maw just SNAPPED open — the paint window opens (the tell is done).
+      // The maw-strike hits the lane at the point (the frog dodges by standing
+      // clear of the marked point during the tell).
+      this.sfx('wyrm-breach');   // reuse the wyrm's heavy breach thwomp (no new asset)
+      this.addShake(8);
+      this.particles.splatter(spX, spY, WARDEN.paleHueLight, 10, 180);
+      this.particles.ripple(spX, spY, 'rgba(200,207,196,0.6)');
+      if (p.alive && p.iframes <= 0) {
+        const d = dist(p.x, p.y, spX, spY);
+        if (d <= WARDEN.strikeReach) {
+          p.hurt(WARDEN.strikeDmg * (this.tuning.dmgTakenMult || 1), this.tuning);
+          this.addShake(10);
+        }
+      }
+    } else if (ev === 'defeated') {
+      this._onHeronDefeated();
+    }
+    // the pale body-line slither + the ripple-ring maw tell are drawn by
+    // _drawWarden (P10: capped segment count, no per-frame allocation).
+  }
+
   // T3 (v1.2 M13): drive the low-HP "sketch" heron with the shared bossStep
   // machinery — the SAME 3-hue awaken cadence as the real heron, at a low-HP
   // scale. It is ONLY live during the guided teaching layer (the 'sketch'
@@ -4775,13 +4890,17 @@ _drawAtelier(ctx) {
         // Great Gray Heron on a first-time run, the Great Green Heron on NG+.
         // R4 (v1.6): the Silt Wyrm has its own defeat beat (it is painted into
         // the mud and sinks back under the water line — not a flight).
+        // F1 (v1.7): the Hollow Warden has the SAME defeat beat (it dissolves
+        // back into the pale reeds and sinks — not a flight) + its own banner.
         if (h.wyrm) {
           this.addBanner('The Silt Wyrm is painted — it sinks back beneath the reeds!', 4, 200);
+        } else if (h.warden) {
+          this.addBanner('The Hollow Warden is painted — it drains the last of the light and sinks beneath the reeds!', 4.4, 200);
         } else {
           this.addBanner(h.green ? 'The Great Green Heron blooms and takes flight!' : 'The Great Gray Heron blooms and takes flight!', 4, 200);
         }
         for (const c of ORB_COLORS) this.particles.sparkles(h.x, h.y - 160, PIGMENTS[c].light, 10);
-        if (h.wyrm) { h.sinking = 0.001; } else { h.flying = 0.001; }   // hand off to the victory beat
+        if (h.wyrm || h.warden) { h.sinking = 0.001; } else { h.flying = 0.001; }   // hand off to the victory beat
         // story beat: the first heron ever painted summons the swamp's critic
         if (!this.save.flags.croaksworthAsked) {
           this.save.flags.croaksworthAsked = true;
@@ -5165,6 +5284,175 @@ _drawAtelier(ctx) {
     }
   }
 
+  // F1 (v1.7): draw THE HOLLOW WARDEN. The signature is the MAW: the Warden
+  // dwells at its surface point with its mouth CLAMPED SHUT (invulnerable) —
+  // only while the maw is OPEN (phase 'mawOpen') can it be painted, and that
+  // open window is the vulnerable one. The ripple-ring tell (a PALE variant of
+  // the Silt-Wyrm language) grows at the point before the maw opens. A faint
+  // pale SIPHON stream runs from the frog's lit lantern to the maw while it is
+  // draining fuel (the lantern-eating mechanic, so the player can see their
+  // fuel being eaten). P10: a fixed body-segment count + a few arcs — 60fps-safe.
+  _drawWarden(ctx, h, now) {
+    const W = this.world.w;
+    const surfY = WARDEN.surfaceY;
+    const N = WARDEN.surfacePoints;
+    const idx = ((h.surfIdx || 0) % N + N) % N;
+    const cur = wardenSurfacePoint(h, idx, W);
+    const headX = cur[0];
+    const mawOpen = h.phase === 'mawOpen';
+    const telegraphing = h.phase === 'telegraph';
+    const sinking = !!h.sinking;
+    // -------- the pale body line (a gaunt, ash-thin serpent at the point) ----
+    const bodyY = surfY + 44;
+    const SEG = WARDEN.bodySegments;              // fixed count (P10)
+    const span = 300;                            // the body coils behind the head
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = h.awakened ? WARDEN.paleHueLight : WARDEN.paleHue;
+    ctx.globalAlpha = mawOpen ? 0.95 : 0.6;
+    ctx.lineWidth = mawOpen ? 30 : 22;
+    ctx.beginPath();
+    ctx.moveTo(headX, surfY + (mawOpen ? -10 : 6));
+    for (let i = 1; i <= SEG; i++) {
+      const t = i / SEG;
+      const bx = headX - t * span;
+      const by = bodyY + Math.sin(now * (mawOpen ? 6 : 3) - t * 5) * 12;
+      ctx.lineTo(bx, by);
+    }
+    ctx.stroke();
+    ctx.restore();
+    // -------- the head (a pale, hollow maw) --------------------------------
+    if (!sinking) {
+      ctx.save();
+      ctx.translate(headX, surfY);
+      const c = h.hitFlash > 0 ? '#f7f2e6' : WARDEN.paleHue;
+      const c2 = h.hitFlash > 0 ? '#fff' : WARDEN.paleHueLight;
+      // the skull (a pale, elongated wedge with a hollower look than the wyrm)
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.moveTo(0, -58);
+      ctx.quadraticCurveTo(30, -30, 22, 18);
+      ctx.quadraticCurveTo(0, 42, -22, 18);
+      ctx.quadraticCurveTo(-30, -30, 0, -58);
+      ctx.fill();
+      ctx.strokeStyle = c2;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      // the MAW — closed (a thin slit) or OPEN (a dark, glowing gape). The
+      // open maw is the ONLY paintable state; the glow telegraphs it.
+      if (mawOpen) {
+        const gape = 20 + Math.sin(now * 12) * 3;
+        ctx.fillStyle = WARDEN.mawGlow;
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(-14, 6);
+        ctx.quadraticCurveTo(0, 10 + gape, 14, 6);
+        ctx.quadraticCurveTo(0, 2, -14, 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // teeth: a row of pale fangs ringing the open gape
+        ctx.fillStyle = '#f4efe6';
+        for (let i = -2; i <= 2; i++) {
+          ctx.beginPath();
+          ctx.moveTo(i * 6 - 2, 6);
+          ctx.lineTo(i * 6, 15);
+          ctx.lineTo(i * 6 + 2, 6);
+          ctx.closePath();
+          ctx.fill();
+        }
+      } else {
+        // the clamped slit (invulnerable)
+        ctx.strokeStyle = c2;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-16, 8);
+        ctx.quadraticCurveTo(0, 13, 16, 8);
+        ctx.stroke();
+      }
+      // eyes (a hollow, faint glow — brighter while awakened)
+      ctx.fillStyle = h.awakened ? '#d7ff9a' : '#b9c4b4';
+      ctx.beginPath();
+      ctx.arc(-9, -24, 5, 0, TAU);
+      ctx.arc(9, -24, 5, 0, TAU);
+      ctx.fill();
+      // a 3-hue coat wash while it carries paint (the awaken progress reads)
+      if (h.hue && (h.hue.red > 0 || h.hue.blue > 0 || h.hue.green > 0)) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = h.hue.red > 0 ? PIGMENTS.red.color : (h.hue.blue > 0 ? PIGMENTS.blue.color : PIGMENTS.green.color);
+        ctx.beginPath();
+        ctx.arc(0, -10, 18, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+    }
+    // -------- the ripple-ring TELEGRAPH before the maw opens --------------
+    if (telegraphing && !sinking) {
+      const prog = 1 - Math.max(0, Math.min(1, (h.phaseT || 0) / WARDEN.telegraph));
+      const r = 24 + prog * 150;
+      const pulse = 0.7 + Math.sin(now * 10) * 0.3;
+      ctx.save();
+      ctx.translate(headX, surfY);
+      ctx.globalAlpha = (0.4 + prog * 0.5) * pulse;
+      ctx.strokeStyle = h.awakened ? '#c7e06a' : '#b9c4b4';   // pale-ash tell
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 8]);
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.16 * pulse;
+      ctx.fillStyle = h.awakened ? '#c7e06a' : '#b9c4b4';
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    // -------- the SIPHON stream (lantern fuel being eaten) ---------------
+    // The Warden drains the lit lantern's fuel. Draw a faint pale stream from
+    // the frog's lantern up to the maw so the player sees the theft in action.
+    // Reeds-gated (a non-Reeds Wander run has no lantern economy — lantern.fuel
+    // is 0/unlit there, so this never draws), and only while the Warden is
+    // engaged and the lantern is actually lit + has fuel.
+    const L = this.lantern;
+    const p = this.player;
+    if (this.lanternReeds && L && L.lit && L.fuel > 0 && p && h._intro <= 0 && !sinking) {
+      const sx = p.x, sy = p.y - 8, ex = headX, ey = surfY + 6;
+      const g = ctx.createLinearGradient(sx, sy, ex, ey);
+      g.addColorStop(0, 'rgba(255,216,150,0.55)');
+      g.addColorStop(1, 'rgba(215,255,154,0.5)');
+      ctx.save();
+      ctx.globalAlpha = 0.35 + Math.sin(now * 14) * 0.15;
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      const mx = (sx + ex) / 2, my = (sy + ey) / 2 - 40;   // an arcing sip
+      ctx.quadraticCurveTo(mx, my, ex, ey);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // -------- the boss HP bar (world space, above the point) --------------
+    if (h.hp < h.maxHp && !sinking) {
+      const bw = 260, bx = headX - bw / 2, by = surfY - 96;
+      const frac = Math.max(0, h.hp / h.maxHp);
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = 'rgba(16,16,20,0.6)';
+      ctx.fillRect(bx, by, bw, 7);
+      ctx.fillStyle = frac > 0.4 ? WARDEN.paleHueLight : '#c8452c';
+      ctx.fillRect(bx, by, bw * frac, 7);
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#f4efe6';
+      ctx.font = '600 15px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('THE HOLLOW WARDEN', headX, by - 10);
+      ctx.restore();
+    }
+  }
+
   // ================= part 4: rendering =====================================
   _screenSpace() {
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -5292,7 +5580,7 @@ _drawAtelier(ctx) {
     this.paint && this.paint.drawWet(ctx);
     this.paint && this.paint.drawTrails(ctx);
     if (this.state === 'expedition' || this.state === 'end') {
-      if (this.heron) (this.heron.wyrm ? this._drawWyrm(ctx, this.heron, this.now) : this._drawHeron(ctx, this.heron, this.now)); // R4: the Silt Wyrm
+      if (this.heron) (this.heron.warden ? this._drawWarden(ctx, this.heron, this.now) : (this.heron.wyrm ? this._drawWyrm(ctx, this.heron, this.now) : this._drawHeron(ctx, this.heron, this.now))); // F1: Warden / R4: Silt Wyrm / heron
       if (this.midHeron) this._drawHeron(ctx, this.midHeron, this.now); // E1: Painted Heron
       for (const e of this.enemies) drawEnemy(ctx, e, this.now);
       this._drawHazards(ctx, drawSatFinal); // E3: Bold-only zone hazards
@@ -5860,7 +6148,7 @@ _drawAtelier(ctx) {
       ctx.restore();
       const frac = Math.max(0, h.hp / h.maxHp);
       ctx.save();
-      centerText(ctx, 'THE GREAT GRAY HERON', this.cw / 2, by + 4, '700 12px Georgia, serif', INK, 0.85);
+      centerText(ctx, h.warden ? 'THE HOLLOW WARDEN' : 'THE GREAT GRAY HERON', this.cw / 2, by + 4, '700 12px Georgia, serif', INK, 0.85);
       ctx.fillStyle = 'rgba(43,35,32,0.18)';
       this._blobRect(ctx, bx, by + 12, bw, 12, 1);
       ctx.fill();
@@ -6818,6 +7106,11 @@ _drawAtelier(ctx) {
   // and the boss result. NO new persistence — the save is untouched by it.
   _recapBossLine() {
     if (this.endKind !== 'victory') return 'it buried you';
+    // F1 (v1.7): a WANDER run's apex is THE HOLLOW WARDEN (not the wyrm), so a
+    // victory over it gets its own line. The heron object (kind 'warden') is the
+    // live boss and persists to the end screen. (O2 expands this with the run's
+    // taste / seed flavor; this is the minimal F1-correct line.)
+    if (this.heron && this.heron.kind === 'warden') return 'the warden sleeps on';
     return (this.world && this.world.reedsVariant) ? 'the wyrm sleeps on' : 'the heron bloomed';
   }
   _drawRecap(ctx) {

@@ -1324,6 +1324,153 @@ export function wyrmSurfacePoint(h, surfIdx, worldW) {
   return [x, SILT_WYRM.surfaceY];
 }
 
+// F1 (v1.7): THE HOLLOW WARDEN — the 5th boss archetype, the Wander-apex. It
+// appears ONLY as the finale of a Wander expedition (Wander ON); the hand-tuned
+// first-time / NG+ / Reeds apexes keep their herons / Silt Wyrm, so a Wander-OFF
+// run NEVER meets it. It is a PALE, lantern-eating creature: while the player's
+// lantern is LIT it SIPHONS candle fuel (the pure wardenFuelSiphon tick — a new
+// pure layer, the documented rate is siphonRate fuel/sec, taste-scaled); when
+// the lantern is UNLIT or EMPTY it siphons nothing. It is VULNERABLE only while
+// its maw is open — a telegraphed WARDEN.mawOpen window (~1.8 s) that REUSES the
+// Silt-Wyrm ripple-ring telegraph language (the maw glows during the tell, then
+// snaps open); between openings it is invulnerable. Its aggression is SEEDED
+// by the Wander taste (D2): a "Feast Season" Warden is more aggressive / faster
+// siphon (wardenTasteFactor > 1); a "Quiet Reeds" Warden is more evasive (< 1)
+// — the same boss feels different per run, tying F to D. The 3-hue awaken still
+// applies through the EXISTING paintBoss / bossStep path (a new kind:'warden'
+// variant; the SAME paintBoss latch fires 'awaken' + the 2x damage window
+// exactly as the herons / wyrm do). HP 52k — above the Silt Wyrm's 48k (the
+// Wander apex). Wander-mode only (Wander OFF never selects it).
+export const WARDEN = {
+  kind: 'warden',               // the 5th boss archetype (vs gray/green/gilded/wyrm)
+  hp: 52000,                    // 52k — above the wyrm's 48k (the Wander apex)
+  awakenNeed: { red: 45, blue: 45, green: 45 }, // the SAME 3-hue rhythm as the herons / wyrm
+  strikeDmg: 12,                // the maw-strike's damage (a big hit, dodgeable — same as the wyrm)
+  strikeReach: 220,             // a frog within this of the surface point is hit
+  surfacePoints: 3,             // the telegraphed maw points on the arena line (same geometry as the wyrm)
+  telegraph: 1.5,               // the ripple-ring tell before the maw opens (~1.5 s — the wyrm's language)
+  mawOpen: 10.5,                // the maw-open (PAINT IT) window — the dominant phase (the wyrm's surfaced 7.0 + the Warden's 3-hue-awaken tempo; cadence tuned to the 2–4 min human band, comparable to the Silt Wyrm)
+  mawClosed: 2.4,               // the maw-closed (invulnerable) window it retreats behind
+  surfaceY: 780,                // the arena water line (same line the wyrm slithers along)
+  // F1 (v1.7): the FUEL SIPHON rate. Base drains a FULL wick (fuel 1→0) in
+  // 60s while the lantern is LIT (0.01667/s = 1/60). The taste bias scales it
+  // (a "Feast Season" Warden siphons faster, a "Quiet Reeds" Warden slower):
+  //   feast  ×1.15 → 45s per wick · neutral ×1.0 → 60s · quiet ×0.85 → 75s.
+  // This is distinct from the ambient LANTERN.fuelDrain (0.04/s while lit) —
+  // the siphon is the Warden's active feeding, on TOP of the ambient burn, and
+  // it auto-extinguishes the lantern when the wick empties. Deterministic +
+  // pure in wardenFuelSiphon(warden, lantern, dt).
+  siphonRate: 0.01667,          // fuel / second while the Warden is engaged + the lantern is LIT (a full wick in 60s, taste-scaled)
+  paleHue: '#c8cfc4',           // the distinct PALE palette (a lantern-eating pallor, not the wyrm's mud)
+  paleHueLight: '#eef0e6',
+  mawGlow: '#e8836b',           // the maw's ember glow (the 3-hue awaken / maw-window tell)
+  // P10: the body line is drawn as a CAPPED segment count (no per-frame
+  // allocation), like the wyrm — the underground slither is the perf risk.
+  bodySegments: 14,
+};
+// F1: the Warden's TASTE BIAS — a pure aggression / siphon multiplier keyed to
+// the D2 Wander taste tag. A "Feast Season" Warden (tag 'swarm') is MORE
+// aggressive: it moves faster AND siphons faster (> 1); a "Quiet Reeds" Warden
+// (tag 'calm') is more evasive: slower, a gentler siphon (< 1); the neutral
+// tags (grump / mixed) are the base rate (1.0). This is the D<->F tie: the
+// SAME boss feels different per run, seeded by the taste. Deterministic on the
+// tag (no Math.random). Pure.
+export function wardenTasteFactor(taste) {
+  const tag = taste && taste.tag;
+  if (tag === 'swarm') return 1.15;   // Feast Season: the more aggressive / faster-siphon Warden
+  if (tag === 'calm') return 0.85;    // Quiet Reeds: the more evasive Warden (slower, gentler siphon)
+  return 1.0;                         // the neutral tags (grump / mixed) — the base rate
+}
+// F1: THE WARDEN STATE MACHINE (a pure movement pattern; testable headless, the
+// wyrmStep template). h = the boss object (carries warden, phase, phaseT,
+// surfIdx, tasteFactor). Advances dt; returns an event: 'maw-open' (the maw
+// just snapped open — PAINT IT now; a maw-strike fires at the point) |
+// 'maw-close' (the maw sealed shut — invulnerable) | 'defeated' (hp<=0) | 0.
+// The RHYTHM (mirrors the wyrm): it RETREATS behind its maw (phase 'mawClosed',
+// invulnerable + untargetable, the body slithers beneath), then TELEGRAPHS the
+// maw with a growing ripple ring at its next surface point (phase 'telegraph').
+// When the tell lapses the MAW OPENS (phase 'mawOpen' — PAINTABLE through the
+// existing paintBoss path) and a maw-strike hits the lane at the point. The
+// 3-hue awaken (h.awakened) speeds the RHYTHM + the taste (h.tasteFactor)
+// scales the siphon: the same boss, a different tempo per taste.
+export function wardenStep(h, dt, view, tuning, now) {
+  h.phaseT -= dt;
+  if (h.hp <= 0) return 'defeated';
+  // The awaken WINDOW lapses exactly like the herons / wyrm (bossStep/wyrmStep):
+  // after the bossAwakenDuration the Warden de-awakens and its hue resets, so
+  // the 3-hue rhythm is a recurring CYCLE, not a permanent state.
+  if (h.awakened) {
+    h.awakenedT = (h.awakenedT || 0) - dt;
+    if (h.awakenedT <= 0) { h.awakened = false; h.hue.red = 0; h.hue.blue = 0; h.hue.green = 0; }
+  }
+  // The taste bias + the awaken drive the CADENCE. The Warden's vulnerable
+  // window (mawOpen) is a FIXED, fair mechanic — taste does not change how long
+  // it can be painted, only HOW OFTEN it opens. An AGGRESSIVE taste (Feast,
+  // tasteFactor > 1) closes the invulnerable gaps (mawClosed + telegraph) so the
+  // maw opens MORE OFTEN (a frenetic, faster tempo); an EVASIVE taste (Quiet,
+  // < 1) lengthens them (rarer windows, a slower fight). The awaken then speeds
+  // the whole rhythm by the wyrm's 0.62 factor (all three phases). Deterministic
+  // (reads h.tasteFactor, set from the seed at the arena entry).
+  const gapScale = 1.0 / (h.tasteFactor || 1.0);   // aggressive → shorter gaps
+  const awakenScale = h.awakened ? 0.62 : 1.0;
+  if (h.phase === 'mawClosed') {
+    // the maw is sealed (invulnerable) — the body slithers toward the next point.
+    if (h.phaseT <= 0) {
+      h.phase = 'telegraph';
+      h.phaseT = WARDEN.telegraph * gapScale * awakenScale;
+    }
+  } else if (h.phase === 'telegraph') {
+    // the growing ripple-ring tell at the NEXT surface point (the wyrm's language).
+    if (h.phaseT <= 0) {
+      h.phase = 'mawOpen';
+      h.phaseT = WARDEN.mawOpen * awakenScale;
+      return 'maw-open';   // the maw snaps open (paintable now) + a maw-strike at the point
+    }
+  } else if (h.phase === 'mawOpen') {
+    if (h.phaseT <= 0) {
+      // the maw seals shut and it begins the retreat toward the NEXT point.
+      h.phase = 'mawClosed';
+      h.phaseT = WARDEN.mawClosed * gapScale * awakenScale;
+      h.surfIdx = (((h.surfIdx || 0) + 1) % WARDEN.surfacePoints);
+      return 'maw-close';
+    }
+  }
+  return 0;
+}
+// F1: the Warden's maw point (index 0..n-1), cycling on its arena line — the
+// SAME geometry as the wyrm (the 3 points span the end-of-run arena). Pure;
+// returns [x, y].
+export function wardenSurfacePoint(h, surfIdx, worldW) {
+  const n = WARDEN.surfacePoints;
+  const i = ((surfIdx % n) + n) % n;
+  const x = (worldW - 900) + (i / (n - 1)) * 750;   // arenaStart .. +750
+  return [x, WARDEN.surfaceY];
+}
+// F1: THE WARDEN FUEL SIPHON (a pure tick). While the Warden is active (engaged,
+// not defeated) and the player's lantern is LIT, it drains candle fuel at the
+// taste-scaled rate — the pale creature FEEDS on the light. It siphons NOTHING
+// when the lantern is UNLIT or its fuel is EMPTY (it is a lantern-eater, not a
+// lantern-breaker — the player can dodge it by extinguishing the wick). In a
+// Wander x Reeds run this INTERACTS with the Reeds lantern economy (the siphon
+// also shrinks the light radius, which is what the Reeds bestiary keys to) — a
+// genuine synergy, not a bolt-on. Returns a NEW lantern state (see lanternTick:
+// a pure, non-mutating tick) so the caller reassigns this.lantern; the caller
+// refreshes the eased radius / lightFactor from the returned state. Pure +
+// deterministic.
+export function wardenFuelSiphon(warden, lantern, dt) {
+  const base = lanternState(lantern && lantern.fuel, lantern && lantern.lit);
+  // Only siphon while the Warden is engaged + alive + the lantern is lit.
+  const active = warden && warden._intro <= 0 && warden.hp > 0 && !warden.flying && !warden.sinking;
+  // If the wick is already empty but the lantern claims to be lit, the auto-
+  // extinguish rule (the lantern's own) must snap lit off — a lit lantern with
+  // no fuel is impossible, and the Warden cannot feed on an already-empty wick.
+  if (base.lit && base.fuel <= 0) return { fuel: 0, lit: false };
+  if (!active || !base.lit || base.fuel <= 0 || dt <= 0) return base;
+  const rate = WARDEN.siphonRate * (warden.tasteFactor || 1.0);
+  const fuel = Math.max(0, base.fuel - rate * dt);
+  return { fuel, lit: fuel > 0 ? base.lit : false };   // auto-extinguish at 0 (the lantern's own rule)
+}
+
 // ----------------------------------------------------------------
 // A4 (v1.2 M9): 'Rehung Frame' — a prestige-lite, NOT save-wipe. Retiring a
 // fully-completed collection (all 8 paintings owned + at least one ★-hung)
