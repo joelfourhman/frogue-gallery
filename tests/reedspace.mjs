@@ -85,6 +85,15 @@ const { Game } = await import('../src/game.js');
 const { REEDS_WIDTH, REEDS_FLOOD_FLOOR } = await import('../src/logic.js');
 
 // ------------------------------------------------------------------ config
+// Deterministic probe: the sim's INTERNAL randomness (paint-splat radii,
+// particle spawns, spawn rolls) is what made the wyrm-fight measurement
+// wobble run-to-run (~97–101s) and occasionally trip the 4.0 min assertion
+// boundary. The REEDS_SEED flag (documented in the header) was always
+// intended to seed this — wire it here, the ngpace.mjs way: a seeded
+// mulberry32 PRNG in place of Math.random for the whole probe.
+const seed = parseInt(process.env.REEDS_SEED || '20260907', 10);
+const rnd = mulberry32(seed);
+globalThis.Math.random = rnd;
 // A post-victory save (reedsUnlocked) so the Reeds entry is available. Use
 // the Game's REAL fresh save (so bank/upgrades/loadout/owned exist —
 // _beginExpedition's applyWelcomeGrant reads save.bank) and just flip the
