@@ -8034,5 +8034,125 @@ console.log('== stage 102: G1 (v1.8) — the BLACK REEDS NG+ variant (REEDS_DARK
   console.log('ok — G1: the BLACK REEDS NG+ variant. A NEW REEDS_DARK layout (a deeper 7200px descent, a denser Wisp/Serpent/Leech bestiary, an extra gravity pocket, a deeper/slower flood band, its own darker lantern-economy tuning) gated behind ngCycle >= 1 AND a Reeds victory (the pure blackReedsUnlocked + a flags.reedsVictory latch set on a Reeds-biome victory). Every EXISTING run is byte-identical: a cycle-0 Reeds world stays the v1.6 6000px/3-pocket/LANTERN/default-bestiary content; the pure *For lantern wrappers equal R1 under LANTERN; and the gate fires ONLY for a hand-tuned NG+ Reeds run with a Reeds victory (never cycle-0, never no-victory, never Wander, never base-swamp). SAVE_VERSION stays 11 (the flag is a flags field).');
 }
 
+// ====================================================================
+// Stage 103: G3 (v1.8) — the SELECTION WIRING + the Umbral Wyrm mechanics.
+// The end-of-Reeds-descent boss is the UMBRAL WYRM (NG+ Reeds variant) vs
+// the SILT WYRM (cycle-0 Reeds) vs the WARDEN (Wander × Reeds). Proves:
+// (1) the three-way selection, (2) cycle-0 Reeds is byte-identical (the
+// variant only activates at NG+ + a Reeds victory), (3) the Umbral Wyrm is
+// only-in-Black-Reeds, (4) the dual-phase + siphon + maw mechanics, and
+// (5) the gate logic.
+// ====================================================================
+console.log('== stage 103: G3 (v1.8) — the end-of-Reeds boss SELECTION (Umbral Wyrm [NG+ Reeds] vs Silt Wyrm [cycle-0 Reeds] vs Warden [Wander × Reeds]) + the Umbral Wyrm mechanics ==');
+{
+  const LG3 = await import('../src/logic.js');
+  const GGame = await import('../src/game.js');
+
+  // a save factory: a victory-carrying save with the given ngCycle + reedsVictory.
+  const mkSave = (ng, win) => {
+    const s = LG3.freshSave();
+    s.stats.victories = 1;
+    s.ngCycle = ng;
+    s.flags = { ...s.flags, intro: true, heronDefeated: true, reedsUnlocked: true, reedsVictory: !!win };
+    return s;
+  };
+
+  // ---- (1) the THREE-WAY end-of-Reeds selection matrix ----
+  // (a) cycle-0 Reeds (ngCycle 0) → the SILT WYRM (the v1.6 Reeds boss, untouched).
+  const sC0 = mkSave(0, false);
+  const gC0 = new GGame.Game(makeCanvas()); gC0.start(); gC0._quitToTitle();
+  gC0.save = sC0; gC0._beginExpedition(false, { reeds: true });
+  assert(gC0.heron.wyrm === true && gC0.heron.umbra !== true && gC0.heron.kind === 'wyrm', 'G3: a CYCLE-0 Reeds run fights the SILT WYRM (the v1.6 boss, not the Umbral)');
+  assert(gC0.heron.maxHp === LG3.SILT_WYRM.hp, `G3: the cycle-0 Reeds boss carries the Silt Wyrm's HP (${LG3.SILT_WYRM.hp})`);
+
+  // (b) NG+ Reeds WITHOUT a Reeds victory (ngCycle 1, no reedsVictory) → the
+  // SILT WYRM (the gate needs BOTH ngCycle >= 1 AND a Reeds victory).
+  const sNoWin = mkSave(1, false);
+  const gNoWin = new GGame.Game(makeCanvas()); gNoWin.start(); gNoWin._quitToTitle();
+  gNoWin.save = sNoWin; gNoWin._beginExpedition(false, { reeds: true });
+  assert(gNoWin.heron.wyrm === true && gNoWin.heron.umbra !== true, 'G3: an NG+ Reeds run WITHOUT a Reeds victory fights the SILT WYRM (the gate needs a Reeds victory)');
+  assert(gNoWin.world.blackReeds === false && gNoWin.world.w === 6000, 'G3: a no-Reeds-victory NG+ run stays the cycle-0 layout (w=6000)');
+
+  // (c) NG+ Reeds WITH a Reeds victory (hand-tuned, Wander OFF) → the UMBRAL WYRM.
+  const sBR = mkSave(1, true);
+  const gBR = new GGame.Game(makeCanvas()); gBR.start(); gBR._quitToTitle();
+  gBR.save = sBR; gBR._beginExpedition(false, { reeds: true });
+  assert(gBR.heron.umbra === true && gBR.heron.wyrm !== true && gBR.heron.kind === 'umbra', 'G3: a hand-tuned NG+ Reeds run WITH a Reeds victory fights the UMBRAL WYRM (the 6th boss)');
+  assert(gBR.heron.maxHp === LG3.UMBRA_WYRM.hp, `G3: the Black Reeds boss carries the Umbral Wyrm's HP (${LG3.UMBRA_WYRM.hp})`);
+  assert(gBR.world.blackReeds === true && gBR.world.w === 7200, 'G3: the Black Reeds run builds the REEDS_DARK 7200px world');
+
+  // (d) NG+ Reeds WITH a Reeds victory BUT WANDER ON → the WARDEN (the Wander apex;
+  // the Warden takes precedence over the Black Reeds — a Wander × Reeds run is
+  // the v1.7 D3 variant). The Black Reeds gate requires a hand-tuned run.
+  const sW = mkSave(1, true);
+  const gW = new GGame.Game(makeCanvas()); gW.start(); gW._quitToTitle();
+  gW.save = sW; gW.options.wander = true; gW._beginExpedition(false, { reeds: true });
+  assert(gW.heron.warden === true && gW.heron.umbra !== true && gW.heron.wyrm !== true, 'G3: a WANDER × Reeds NG+ run fights the WARDEN (the Wander apex; the Black Reeds is hand-tuned-only)');
+  assert(gW.world.blackReeds === false, 'G3: a WANDER × Reeds run does NOT build the Black Reeds world (the gate requires hand-tuned)');
+
+  // ---- (2) the CYCLE-0 Reeds boss is BYTE-IDENTICAL to the v1.6 Silt Wyrm ----
+  // The cycle-0 Reeds world + boss are the EXACT v1.6 content (w=6000, 3 pockets,
+  // Silt Wyrm HP/awakenNeed, the default lantern + bestiary). A fresh
+  // non-Black-Reeds Reeds world must deep-equal the v1.6 layout data.
+  const wC0a = new (await import('../src/world.js')).World((await import('../src/math.js')).mulberry32(4321), 4321, { reeds: true });
+  const wC0b = new (await import('../src/world.js')).World((await import('../src/math.js')).mulberry32(4321), 4321, { reeds: true });
+  assert(wC0a.w === 6000 && wC0a.blackReeds === false, 'G3: a cycle-0 Reeds world is the v1.6 6000px layout (byte-identical)');
+  assert(wC0a.reedsPockets.length === 3 && wC0a.reedsWater.floor === 900 && wC0a.reedsWater.factor === 0.72, 'G3: a cycle-0 Reeds world has the v1.6 pockets (3) + flood band (floor=900, factor=0.72)');
+  assert(wC0a.reedsBestiary === null, 'G3: a cycle-0 Reeds world uses the DEFAULT v1.6 bestiary ladder');
+  const sameOb = wC0a.obstacles.length === wC0b.obstacles.length && wC0a.obstacles.every((o, i) => Math.abs(o.x - wC0b.obstacles[i].x) < 0.5 && Math.abs(o.y - wC0b.obstacles[i].y) < 0.5);
+  assert(sameOb, 'G3: a cycle-0 Reeds world is DETERMINISTIC per seed (byte-identical, same as v1.6)');
+
+  // ---- (3) the Umbral Wyrm is ONLY-IN-Black-Reeds (never cycle-0, never no-victory, never Wander) ----
+  assert(!(gC0.heron.umbra) && !(gNoWin.heron.umbra) && !(gW.heron.umbra), 'G3: the Umbral Wyrm is ONLY in a hand-tuned NG+ Reeds run with a Reeds victory (never cycle-0, never no-victory, never Wander)');
+  assert(!!gBR.heron.umbra, 'G3: the Umbral Wyrm IS in the Black Reeds run');
+
+  // ---- (4) the Umbral Wyrm MECHANICS (dual-phase + siphon + maw) ----
+  const U = LG3.UMBRA_WYRM;
+  // (4a) the ~60k HP + 3-hue awaken (the SAME latch as every boss):
+  assert(U.hp === 60000, 'G3: the Umbral Wyrm is ~60k HP (one tier above the Silt Wyrm 48k)');
+  assert(U.awakenNeed.red === 90 && U.awakenNeed.blue === 90 && U.awakenNeed.green === 90, 'G3: the Umbral Wyrm uses the 3-hue awaken (the SAME latch as every boss)');
+  // (4b) the DUAL maw: umbrStep marks BOTH the primary + its adjacent point (the
+  // telegraph). Advance a fresh umbr boss through one cycle and verify the
+  // _partnerIdx is set + the dual-telegraph event fires.
+  const um = { umbra: true, kind: 'umbra', hp: U.hp, maxHp: U.hp, phase: 'transit', phaseT: U.transit, surfIdx: 0, hue: { red: 0, blue: 0, green: 0 }, awakened: false, _intro: 0 };
+  let sawDual = 0;
+  for (let i = 0; i < 600 && sawDual < 1; i++) {
+    const ev = LG3.umbrStep(um, 1 / 60, { worldW: 7200 }, {}, i / 60);
+    if (ev === 'dual-breach') sawDual++;
+  }
+  assert(sawDual >= 1, 'G3: the Umbral Wyrm fires the DUAL-maw telegraph (dual-breach)');
+  assert(um._partnerIdx != null && um._partnerIdx !== um.surfIdx, 'G3: the Umbral Wyrm marks a DUAL partner point (the adjacent maw point)');
+  // (4c) the "deep dark" final phase: below deepDarkPhase HP the cadence
+  // escalates (faster transit) + the siphon feeds harder.
+  assert(LG3.umbrDeepDark({ hp: U.hp * 0.5, maxHp: U.hp, umbra: true }) === false, 'G3: the "deep dark" is OFF above the HP threshold');
+  assert(LG3.umbrDeepDark({ hp: U.hp * 0.3, maxHp: U.hp, umbra: true }) === true, 'G3: the "deep dark" is ON below the HP threshold');
+  // (4d) the FUEL SIPHON (Warden-inherited): drains the lantern while engaged +
+  // lit (faster in the "deep dark"); a lantern-eater, not a breaker (no drain
+  // when unlit).
+  const sip1 = LG3.umbraFuelSiphon({ hp: U.hp, maxHp: U.hp, _intro: 0, flying: 0, sinking: 0, umbra: true }, { fuel: 1, lit: true }, 1.0);
+  assert(sip1.fuel < 1.0 && sip1.fuel > 0.9, `G3: the Umbral siphon DRAINS the lantern (1.0 → ${sip1.fuel.toFixed(3)} in 1s)`);
+  const sipUnlit = LG3.umbraFuelSiphon({ hp: U.hp, maxHp: U.hp, _intro: 0, flying: 0, sinking: 0, umbra: true }, { fuel: 1, lit: false }, 1.0);
+  assert(sipUnlit.fuel === 1.0, 'G3: the Umbral siphon siphons NOTHING when the lantern is UNLIT (a lantern-eater, not a breaker)');
+  const sipDeep = LG3.umbraFuelSiphon({ hp: U.hp * 0.3, maxHp: U.hp, _intro: 0, flying: 0, sinking: 0, umbra: true }, { fuel: 1, lit: true }, 1.0);
+  const sipBase = LG3.umbraFuelSiphon({ hp: U.hp, maxHp: U.hp, _intro: 0, flying: 0, sinking: 0, umbra: true }, { fuel: 1, lit: true }, 1.0);
+  assert(sipDeep.fuel < sipBase.fuel, 'G3: the Umbral siphon feeds HARDER in the "deep dark" final phase (faster drain)');
+  // (4e) the "deep dark" LANtern-mandatory rule (umbraPaintable): the wyrm is
+  // paintable only while surfaced AND (in the "deep dark") the lantern is LIT.
+  assert(LG3.umbraPaintable({ hp: U.hp, maxHp: U.hp, phase: 'surfaced', flying: 0, sinking: 0 }, true) === true, 'G3: the Umbral is paintable while surfaced (phase 1, lantern lit)');
+  assert(LG3.umbraPaintable({ hp: U.hp, maxHp: U.hp, phase: 'surfaced', flying: 0, sinking: 0 }, false) === true, 'G3: the Umbral is paintable while surfaced in phase 1 even if the lantern is unlit (phase 1 is not the "deep dark")');
+  assert(LG3.umbraPaintable({ hp: U.hp * 0.3, maxHp: U.hp, phase: 'surfaced', flying: 0, sinking: 0 }, true) === true, 'G3: the Umbral is paintable in the "deep dark" IF the lantern is LIT');
+  assert(LG3.umbraPaintable({ hp: U.hp * 0.3, maxHp: U.hp, phase: 'surfaced', flying: 0, sinking: 0 }, false) === false, 'G3: the Umbral is NOT paintable in the "deep dark" when the lantern is UNLIT (the lantern is MANDATORY)');
+  assert(LG3.umbraPaintable({ hp: U.hp, maxHp: U.hp, phase: 'transit', flying: 0, sinking: 0 }, true) === false, 'G3: the Umbral is NOT paintable while underground (transit / invulnerable)');
+
+  // ---- (5) the GATE logic (the pure blackReedsUnlocked) ----
+  assert(LG3.blackReedsUnlocked({ ngCycle: 0, flags: { reedsVictory: true } }) === false, 'G3: the gate is CLOSED at cycle 0 (even with a Reeds victory)');
+  assert(LG3.blackReedsUnlocked({ ngCycle: 1, flags: {} }) === false, 'G3: the gate is CLOSED at NG+ WITHOUT a Reeds victory');
+  assert(LG3.blackReedsUnlocked({ ngCycle: 1, flags: { reedsVictory: true } }) === true, 'G3: the gate is OPEN at NG+ WITH a Reeds victory');
+  assert(LG3.blackReedsUnlocked({ ngCycle: 3, flags: { reedsVictory: true } }) === true, 'G3: the gate stays OPEN on higher NG+ cycles');
+  assert(LG3.blackReedsUnlocked(null) === false && LG3.blackReedsUnlocked(LG3.freshSave()) === false, 'G3: the gate is CLOSED for a fresh (no-NG+, no-victory) save');
+
+  console.log('ok — G3: the SELECTION WIRING + the Umbral Wyrm mechanics. The end-of-Reeds-descent boss is the UMBRAL WYRM (a hand-tuned NG+ Reeds run with a Reeds victory) vs the SILT WYRM (cycle-0 Reeds / NG+ without a Reeds victory) vs the WARDEN (Wander × Reeds — the Wander apex). cycle-0 Reeds is byte-identical (the v1.6 6000px/3-pocket/Silt-Wyrm content, deterministic per seed). The Umbral Wyrm is only-in-Black-Reeds. The mechanics verified: ~60k HP, the 3-hue awaken (the same latch), the DUAL-maw telegraph (both points marked), the "deep dark" final phase (cadence escalation + a HARDER fuel-siphon), and the lantern-MANDATORY paint rule (umbraPaintable). The pure blackReedsUnlocked gate fires only at NG+ + a Reeds victory. SAVE_VERSION stays 11.');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
