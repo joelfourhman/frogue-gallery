@@ -3,6 +3,130 @@
 // so the user can adjust them independently.
 'use strict';
 
+// ==================== S2 (v1.9): PURE music-dynamics data + selector ====================
+// Module-level (NOT class-scoped) so the pure themeSelector() below can be
+// imported + asserted by a node test with ZERO browser dependency (the S2
+// evidence — the music layer can't be screenshotted, so the selector + its
+// density/extra-voice contract IS the acceptance). The AudioSys class methods
+// delegate to these same constants so the pure selector and the live music
+// layer can never drift apart.
+//
+// Presentation-only invariant (v1.9): these are AUDIO PRESETS. logic.js
+// (makeTuning) is untouched; the 9 pacing probes are unchanged (audio does not
+// feed runT); SAVE_VERSION stays 12. A denser pattern (more non-rest steps) =
+// a higher patternDensity = a more intense moment.
+
+// The per-BIOME zone themes. Each biome is a 5-element array (zone index
+// 0..4; index 4 is a safe out-of-range fallback = zone 0). `swamp` is the
+// EXACT pre-S2 hand-tuned set (byte-identical to v1.4 S1) so the base swamp
+// run sounds unchanged; `reeds` + `blackReeds` are new distinct biome themes
+// (low / watery / slow, then darker / lower / sparser) so entering those
+// places is sonically unmistakable (today they reused the swamp presets).
+const ZONE_THEMES = {
+  swamp: [
+    { root: 220.0, scale: [0, 3, 5, 7, 10],  pattern: [ 0, -1, 2, 4, -1, 3, -1, 2,  0, -1, 4, 2, -1, 3, 2, -1], stepDur: 0.34, detune: 6 },
+    { root: 207.65, scale: [0, 3, 5, 7, 10], pattern: [ 0, 2, -1, 0, 3, -1, 4, 3,  2, -1, 0, -1, 5, 4, 3, -1], stepDur: 0.30, detune: -8 },
+    { root: 233.08, scale: [0, 2, 5, 7, 9],  pattern: [ 0, 4, 2, -1, 3, 5, -1, 3,  4, 2, 5, -1, 7, 5, 4, 2 ], stepDur: 0.28, detune: 5 },
+    { root: 196.0, scale: [0, 1, 5, 7, 10], pattern: [ 0, -1, 1, 0, 7, -1, 5, 1,  0, -1, 1, 7, 5, -1, 4, -1], stepDur: 0.26, detune: -6 },
+    { root: 220.0, scale: [0, 3, 5, 7, 10],  pattern: [ 0, -1, 2, 4, -1, 3, -1, 2,  0, -1, 4, 2, -1, 3, 2, -1], stepDur: 0.34, detune: 6 },
+  ],
+  // REEDS — low, watery, SLOW: a wet minor/mixolydian drone (mixolydian scale
+  // [0,2,4,7,9] = 1 b3 4 5 b7), a low root, a long stepDur (slower than any
+  // swamp zone) + a wider detune for a "wet" shimmer. Sparser than swamp.
+  reeds: [
+    { root: 146.83, scale: [0, 2, 4, 7, 9],  pattern: [ 0, -1, -1, 2,  -1, -1, 4, -1,  7, -1, -1, 5,  -1, 2, -1, -1], stepDur: 0.42, detune: 8 },
+    { root: 130.81, scale: [0, 2, 4, 7, 9],  pattern: [ 0, -1, 4, -1,  2, -1, -1, 5,  -1, 3, -1, -1,  0, -1, -1, -1], stepDur: 0.40, detune: -6 },
+    { root: 146.83, scale: [0, 2, 5, 7, 9],  pattern: [ 2, -1, -1, 0,  -1, 4, -1, -1,  5, -1, 2, -1,   0, -1, -1, -1], stepDur: 0.38, detune: 6 },
+    { root: 123.47, scale: [0, 1, 4, 7, 9],  pattern: [ 0, -1, -1, 1,  -1, -1, 4, -1,  7, -1, -1, -1,  5, -1, -1, -1], stepDur: 0.36, detune: -8 },
+    { root: 146.83, scale: [0, 2, 4, 7, 9],  pattern: [ 0, -1, -1, 2,  -1, -1, 4, -1,  7, -1, -1, 5,  -1, 2, -1, -1], stepDur: 0.42, detune: 8 },
+  ],
+  // BLACK REEDS — darker, LOWER, SPARSER: a sub-A root, a chromatic minor
+  // color, the slowest stepDur of any theme, a wider negative detune (a "dark"
+  // pull), and only 3-4 active steps per 16 (a near-silent, dread-filled bed).
+  blackReeds: [
+    { root: 110.00, scale: [0, 1, 4, 7, 10], pattern: [ 0, -1, -1, -1,  3, -1, -1, -1,  -1, -1, 5, -1,  -1, -1, 1, -1], stepDur: 0.50, detune: -10 },
+    { root: 98.00,  scale: [0, 1, 4, 7, 10], pattern: [ 0, -1, -1, -1,  -1, -1, -1, 4,  -1, -1, 1, -1,  -1, 5, -1, -1], stepDur: 0.48, detune: -14 },
+    { root: 103.83, scale: [0, 1, 3, 7, 10], pattern: [ 0, -1, -1, -1,  -1, -1, 3, -1,  -1, 1, -1, -1,   5, -1, -1, -1], stepDur: 0.46, detune: -12 },
+    { root: 87.31,  scale: [0, 1, 4, 6, 10], pattern: [ 0, -1, -1, -1,  -1, -1, -1, -1,  6, -1, -1, -1,  1, -1, -1, -1], stepDur: 0.44, detune: -16 },
+    { root: 110.00, scale: [0, 1, 4, 7, 10], pattern: [ 0, -1, -1, -1,  3, -1, -1, -1,  -1, -1, 5, -1,  -1, -1, 1, -1], stepDur: 0.50, detune: -10 },
+  ],
+};
+
+// The BOSS battle patterns (the "faster than any zone" step rate = intensity).
+// `gray` / `green` mirror the pre-S2 _bossThemeData values (byte-identical);
+// a `pulse` flag marks the low off-beat thump layer the tick schedules.
+const BOSS_THEMES = {
+  gray:  { root: 110.0,  scale: [0, 3, 6, 7, 10], pattern: [0, -1, 3, 0,  6, -1, 7, 6,  3, -1, 0, 7,  12, 10, 7, 6], stepDur: 0.18, detune: -6,  pulse: true, mode: 'minor' },
+  green: { root: 98.0,   scale: [0, 1, 3, 6, 10], pattern: [0, 1, -1, 3,  6, -1, 10, 7,  3, 1, 0, -1,  11, 10, 6, -1], stepDur: 0.17, detune: -10, pulse: true, mode: 'minor' },
+};
+
+// The FULL COLLECTION moment's own short phrase — a bright, DENSE triumphant
+// climb (I-V-I color) on the melody layer. Its patternDensity (14) is the
+// highest of any theme: the "the museum keeps you better" climax.
+const COLLECTION_THEME = {
+  themeId: 'collection', root: 261.63, scale: [0, 4, 7, 12],
+  pattern: [0, -1, 1, 2,  3, 2, 1, 2,  0, -1, 1, 2,  3, 2, 1, 0], stepDur: 0.16, detune: 6,
+};
+
+// The LOW-HP uneasy ostinato — a sparse, HIGH, slightly dissonant pattern
+// (an A4 root with a b9 / tritone neighbor), a slow stepDur (a sparse, uneasy
+// pulse), kept at a low gain so it is a quiet layer under the zone/boss theme.
+// Driven by setLowHp() + ticked through the same _tickThemes machinery (the
+// tick only reads + schedules a bounded note — no per-frame allocation).
+const LOWHP_THEME = {
+  themeId: 'lowhp', root: 440.0, scale: [0, 3, 6, 10],
+  pattern: [0, -1, -1, -1,  6, -1, -1, 3,  -1, -1, -1, -1, 0, -1, -1, -1], stepDur: 0.6, detune: 0,
+};
+
+function _countActive(pattern) {
+  let n = 0;
+  for (let i = 0; i < pattern.length; i++) if (pattern[i] >= 0) n++;
+  return n;
+}
+
+// S2 (v1.9) PURE ACCEPTANCE: the music-dynamics selector. Given the current
+// game state (which zone + biome, is the boss engaged, is the frog low-HP, is
+// the full collection complete) it returns the theme to play, its
+// patternDensity (a higher = more intense moment), and the EXTRA danger voices
+// that should swell in on top. Pure (no browser, no Math.random, no time) so
+// a node test asserts the right theme + density + voices for each of
+// swamp / Reeds / Black Reeds / boss / lowHp / collection. The music slider
+// still controls all of it (everything rides melodyMaster -> musicBus).
+export function themeSelector(state) {
+  const zone = (state && (state.zone | 0)) || 0;
+  const biome = (state && state.biome) || 'swamp';
+  const bossEngaged = !!(state && state.bossEngaged);
+  const lowHp = !!(state && state.lowHp);
+  const collection = !!(state && state.collection);
+
+  const extraVoices = [];
+  let themeId;
+  let pattern;
+  if (collection) {
+    // The full-collection moment owns its own phrase (a triumphant swell on the
+    // melody layer, under the sfxBus collection-fanfare).
+    themeId = COLLECTION_THEME.themeId;
+    pattern = COLLECTION_THEME.pattern;
+    extraVoices.push('collection-swell');
+  } else if (bossEngaged) {
+    // The boss loop is the live melody; the low off-beat PULSE swells in under
+    // it (and the boss drops to a faster pattern on a new phase — the wiring).
+    themeId = 'boss';
+    pattern = BOSS_THEMES.gray.pattern;
+    extraVoices.push('boss-pulse');
+  } else {
+    // Normalize the biome so an UNKNOWN biome (e.g. 'watery') falls back to the
+    // swamp set AND reports the swamp themeId (the S2 byte-identical safety).
+    const effBiome = ZONE_THEMES[biome] ? biome : 'swamp';
+    const arr = ZONE_THEMES[effBiome];
+    const i = ((zone % arr.length) + arr.length) % arr.length;
+    themeId = effBiome + '-' + i;
+    pattern = arr[i].pattern;
+  }
+  if (lowHp && !collection) extraVoices.push('lowhp-ostinato');
+  return { themeId, patternDensity: _countActive(pattern), extraVoices };
+}
+
 export class AudioSys {
   constructor() {
     this.ctx = null;
@@ -45,6 +169,21 @@ export class AudioSys {
     // one-shot phrases scheduled on the same melody layer.
     this._bossMusic = false;   // true while the boss loop is the live melody
     this._bossThemes = [];     // live/fading boss loop instances (crossfade overlap)
+    // ---- S2 (v1.9): the INTENSITY / DANGER layer (music dynamics) ----
+    // A sparse tension layer on the SAME melody layer (melodyMaster -> musicBus)
+    // that SWELLS IN under the zone/boss themes: (a) a low off-beat PULSE under
+    // the boss fight, (b) a sparse high uneasy ostinato at low frog HP, (c) a
+    // brief swell on zone entry, (d) a triumphant collection-swell phrase. The
+    // PURE selector for theme + density + extra-voices is themeSelector
+    // (exported, node-testable — the S2 evidence).
+    //
+    // P10 invariant: nothing allocates per-frame in the tick. The danger layer
+    // is LAZILY built ONCE (on the first setLowHp) as a small set of persistent
+    // gains; the tick only reads + schedules a bounded note through the shared
+    // _tone (which itself builds one osc+gain per scheduled note — the same
+    // bounded per-note allocation every other melody/boss note already makes,
+    // exempt from the sfx-bus cap).
+    this._danger = null;        // { master, lowOn, lowThemes[] } — lazy (setLowHp builds it)
     // ---- S3 (v1.4): a hard cap on simultaneously-LIVE sfx-bus voices ----
     // Painting is fast (several swipes/splashes + status blips per second, and a
     // charge is a burst). Without a cap a flurry could spawn hundreds of short
@@ -300,18 +439,11 @@ export class AudioSys {
   // Deterministic per zone; the melody rides melodyMaster -> musicBus so it
   // inherits the music slider + mute for free, and sits ABOVE the V3 ambient
   // bed (which stays as the low drone).
-  _zoneThemeData() {
-    // minor-pentatonic-leaning sets, each with a distinct character:
-    // 0 Reed Flats (calm, open), 1 Slick Hollow (uneasy, minor), 2 Bramble
-    // Thicket (folky, brighter), 3 The Gray Shore (tense, chromatic edge).
-    // Index 4 exists as a safe fallback (same as 0) for an out-of-range zone.
-    return [
-      { root: 220.0, scale: [0, 3, 5, 7, 10],  pattern: [ 0, -1, 2, 4, -1, 3, -1, 2,  0, -1, 4, 2, -1, 3, 2, -1], stepDur: 0.34, detune: 6 },
-      { root: 207.65, scale: [0, 3, 5, 7, 10], pattern: [ 0, 2, -1, 0, 3, -1, 4, 3,  2, -1, 0, -1, 5, 4, 3, -1], stepDur: 0.30, detune: -8 },
-      { root: 233.08, scale: [0, 2, 5, 7, 9],  pattern: [ 0, 4, 2, -1, 3, 5, -1, 3,  4, 2, 5, -1, 7, 5, 4, 2 ], stepDur: 0.28, detune: 5 },
-      { root: 196.0, scale: [0, 1, 5, 7, 10], pattern: [ 0, -1, 1, 0, 7, -1, 5, 1,  0, -1, 1, 7, 5, -1, 4, -1], stepDur: 0.26, detune: -6 },
-      { root: 220.0, scale: [0, 3, 5, 7, 10], pattern: [ 0, -1, 2, 4, -1, 3, -1, 2,  0, -1, 4, 2, -1, 3, 2, -1], stepDur: 0.34, detune: 6 },
-    ];
+  _zoneThemeData(biome) {
+    // S2 (v1.9): delegate to the PURE per-biome data (ZONE_THEMES). `swamp` is
+    // the exact pre-S2 hand-tuned set (byte-identical); `reeds` / `blackReeds`
+    // are the new distinct biome themes. An unknown biome falls back to swamp.
+    return ZONE_THEMES[biome] || ZONE_THEMES.swamp;
   }
 
   // Crossfade the melody to the zone just entered (game.js calls this from
@@ -320,12 +452,15 @@ export class AudioSys {
   // crossfade; the new theme starts at ~0 and ramps up. Both schedule through
   // melodyMaster -> musicBus, so the music slider + mute scale them all. A list
   // of active themes supports the ~1 s overlap during the fade.
-  setZoneTheme(zoneI) {
+  setZoneTheme(zoneI, biome) {
     if (!this.ctx || !this._melodyMaster) return;
     if (this._bossMusic) return; // S2: the boss loop owns the melody while engaged
     if (zoneI === this._zoneThemeI) return; // idempotent (same zone)
     if (!this._zoneThemes) this._zoneThemes = [];
-    const data = this._zoneThemeData();
+    // S2 (v1.9): the per-BIOME zone theme (swamp | reeds | blackReeds). game.js
+    // passes this.runBiome (see _updateZoneAmbient); a missing biome falls back
+    // to swamp (byte-identical base-run behavior).
+    const data = this._zoneThemeData(biome || 'swamp');
     const theme = data[((zoneI % data.length) + data.length) % data.length];
     // fade the previous theme(s) out: stop their notes, ramp the zone gain down.
     for (const th of this._zoneThemes) {
@@ -352,20 +487,19 @@ export class AudioSys {
   // it rides melodyMaster -> musicBus (music slider + mute for free) and needs
   // no setInterval / audio files / new deps. The Great Green Heron (NG+) gets
   // its own darker, slightly faster variant. `green` picks the variant.
+  // S2 (v1.9): delegate to the PURE boss data (BOSS_THEMES) + the pre-built
+  // phase-2 (denser / faster) variants the boss drops to on a phase change
+  // (pre-built here at theme-setup time so `bossPhaseUp()` only SWAPS A
+  // REFERENCE — no pattern allocation at the phase moment, the P10 invariant).
   _bossThemeData() {
-    // Each boss theme: { root, scale (semis from root), pattern (16 steps; -1
-    // rest), stepDur (faster than any zone theme = the "faster step rate"),
-    // detune, pulse (bool — the low off-beat thump layer), mode ('minor'|'major')
-    // for the stinger flavor. The scale leans toward a darker, more chromatic
-    // minor set than the zone themes, and stepDur is shorter -> the intensity.
     return {
-      // Great GRAY Heron (first-time run): a tense minor drive on A, faster
-      // than any zone loop, with a pulse layer underneath the melody.
-      gray:   { root: 110.0,  scale: [0, 3, 6, 7, 10], pattern: [0, -1, 3, 0,  6, -1, 7, 6,  3, -1, 0, 7,  12, 10, 7, 6], stepDur: 0.18, detune: -6, pulse: true,  mode: 'minor' },
-      // Great GREEN Heron (NG+): a darker, brooding variant — lower root, a
-      // tritone-ish color (the 1-3-6 scale is a phrygian-flavored minor), the
-      // same fast step rate so it reads as "the same fight, one shade darker".
-      green:  { root: 98.0,   scale: [0, 1, 3, 6, 10], pattern: [0, 1, -1, 3,  6, -1, 10, 7,  3, 1, 0, -1,  11, 10, 6, -1], stepDur: 0.17, detune: -10, pulse: true,  mode: 'minor' },
+      gray:  BOSS_THEMES.gray,
+      green: BOSS_THEMES.green,
+      // The DENSER phase-2 patterns (the boss "drops to a new phase"): the same
+      // scale + faster stepDur (stepDur * 0.8) + a denser 16-step pattern (more
+      // active steps) = a higher patternDensity = higher intensity. Pre-built.
+      gray2:  { ...BOSS_THEMES.gray,  pattern: [0, 3, -1, 3,  6, 7, -1, 6,  3, 0, 7, 6,  12, 10, 7, 6], stepDur: BOSS_THEMES.gray.stepDur * 0.8 },
+      green2: { ...BOSS_THEMES.green, pattern: [0, 1, 3, -1,  6, 7, 10, -1,  3, 1, 0, 3,  11, 10, 6, 10], stepDur: BOSS_THEMES.green.stepDur * 0.8 },
     };
   }
 
@@ -403,7 +537,101 @@ export class AudioSys {
     zg.gain.setValueAtTime(0.0001, this.ctx.currentTime);
     zg.gain.setTargetAtTime(1, this.ctx.currentTime + 0.05, this._crossFade / 4);
     zg.connect(this._melodyMaster);
-    this._bossThemes.push({ zone: -1, green: !!green, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.35, muted: false, fading: false });
+    this._bossThemes.push({ zone: -1, green: !!green, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.35, muted: false, fading: false, _phase: 0 });
+  }
+
+  // S2 (v1.9): the boss DROPS TO A NEW PHASE — swap the live boss loop to its
+  // pre-built DENSER phase-2 pattern (faster stepDur + more active steps = a
+  // higher patternDensity = higher intensity). The denser patterns are pre-
+  // built in _bossThemeData (gray2/green2), so this only SWAPS A REFERENCE on
+  // the live theme object — no pattern allocation at the phase moment (the
+  // P10 invariant: the tick path allocates nothing new). Idempotent per phase.
+  bossPhaseUp() {
+    if (!this.ctx || !this._bossMusic) return;
+    const th = this._bossThemes && this._bossThemes[this._bossThemes.length - 1];
+    if (!th || th._phase > 0) return; // already in the denser phase
+    const data = this._bossThemeData();
+    const denser = th.green ? data.green2 : data.gray2;
+    if (denser) th.theme = denser; // swap to the pre-built denser pattern
+    th._phase = 1;
+  }
+
+  // ==================== S2 (v1.9): the INTENSITY / DANGER layer =============
+  // A sparse tension layer on the SAME melody layer (melodyMaster -> musicBus)
+  // that SWELLS IN under the zone/boss themes:
+  //   (a) the low off-beat PULSE under the boss fight — the boss themes carry
+  //       `pulse: true`, so the existing _tickThemes pulse layer IS the boss
+  //       swell (no extra wiring needed);
+  //   (b) a sparse HIGH uneasy ostinato at low frog HP — a slow step-sequencer
+  //       loop (LOWHP_THEME) driven through the SAME _tickThemes machinery;
+  //   (c) a brief SWELL on zone entry — a short chord scheduled once;
+  //   (d) a triumphant COLLECTION-SWELL phrase (the full-collection moment).
+  // All of it rides melodyMaster -> musicBus (the music slider + mute inherit
+  // for free). P10: the tick only reads + schedules one bounded note per
+  // danger loop per scheduled step — no per-frame allocation of voice graphs.
+  _dangerBuild() {
+    if (this._danger) return this._danger;
+    if (!this.ctx || !this._melodyMaster) return null;
+    try {
+      const g = this.ctx.createGain();
+      g.gain.value = 1;
+      g.connect(this._melodyMaster);
+      this._danger = { master: g, lowOn: false, lowNext: 0, lowNote: 0, lowThemes: [] };
+      return this._danger;
+    } catch (e) { return null; /* headless */ }
+  }
+  // (b) low-HP unease: cross the sparse high ostinato in / out (a step loop,
+  // not a per-frame voice — the same bounded machinery as a zone theme).
+  setLowHp(on) {
+    if (!this.ctx || !this._melodyMaster) return;
+    const d = this._dangerBuild();
+    if (!d) return;
+    on = !!on;
+    if (on === d.lowOn) return;
+    d.lowOn = on;
+    if (on) {
+      try {
+        const zg = this.ctx.createGain();
+        zg.gain.value = 0.4; // a LOW level: an uneasy UNDERLAY, not a lead
+        zg.connect(this._melodyMaster);
+        d.lowThemes = [{ zone: -99, theme: { root: LOWHP_THEME.root, scale: LOWHP_THEME.scale, pattern: LOWHP_THEME.pattern, stepDur: LOWHP_THEME.stepDur, detune: LOWHP_THEME.detune }, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.4, muted: false, fading: false }];
+      } catch (e) { d.lowThemes = []; /* headless */ }
+    } else {
+      this._fadeMelodyLayer(d.lowThemes);
+      d.lowThemes = [];
+    }
+  }
+  // (c) a brief zone-entry SWELL — a short chord scheduled once (not a loop).
+  zoneSwell() {
+    if (!this.ctx || !this._melodyMaster) return;
+    try {
+      const t = this.ctx.currentTime;
+      const g = this.ctx.createGain();
+      g.gain.value = 0.4;
+      g.connect(this._melodyMaster);
+      const f = [196.0, 246.94, 293.66, 392.0]; // a rising open minor-ish swell
+      for (let i = 0; i < f.length; i++) {
+        try { this._tone(t + i * 0.05, 'sine', f[i], f[i], 1.6, 0.12, 0, g); } catch (e) { /* headless */ }
+      }
+      try { this._tone(t, 'sine', 98.0, 98.0, 2.0, 0.1, 0, g); } catch (e) { /* headless */ }
+    } catch (e) { /* headless */ }
+  }
+  // (d) the FULL COLLECTION moment — a short triumphant chord swell on the
+  // melody layer (under the sfxBus collection-fanfare + the cinematicArp).
+  collectionSwell() {
+    if (!this.ctx || !this._melodyMaster) return;
+    try {
+      const t = this.ctx.currentTime;
+      const g = this.ctx.createGain();
+      g.gain.value = 0.55;
+      g.connect(this._melodyMaster);
+      const f = [261.63, 329.63, 392.0, 523.25]; // a rising major triad + octave
+      for (let i = 0; i < f.length; i++) {
+        try { this._tone(t + i * 0.14, 'triangle', f[i], f[i], 2.2, 0.2, 0, g); } catch (e) { /* headless */ }
+        try { this._tone(t + i * 0.14, 'sine', f[i] * 2, f[i] * 2, 1.6, 0.06, 0, g); } catch (e) { /* headless */ }
+      }
+      try { this._tone(t + 0.5, 'sine', 130.81, 130.81, 2.6, 0.12, 0, g); } catch (e) { /* headless */ }
+    } catch (e) { /* headless */ }
   }
 
   // Stinger: a short one-shot melodic phrase, scheduled on the melody layer
@@ -513,6 +741,10 @@ export class AudioSys {
     this._tickThemes(this._zoneThemes || []);
     this._tickThemes(this._bossThemes || []);
     this._tickThemes(this._encoreThemes || []); // M2: the encore arpeggio
+    // S2 (v1.9): the LOW-HP uneasy ostinato — the same bounded step machinery.
+    // `setLowHp(true)` pushed a slow loop here; the tick only reads + schedules
+    // its (bounded) notes. No per-frame allocation (P10).
+    if (this._danger && this._danger.lowThemes) this._tickThemes(this._danger.lowThemes);
   }
 
   // Shared lookahead step-scheduler for a list of { theme, gain, step, nextAt,
@@ -583,6 +815,12 @@ export class AudioSys {
     this._fadeMelodyLayer(this._zoneThemes || []);
     this._fadeMelodyLayer(this._bossThemes || []);
     this._fadeMelodyLayer(this._encoreThemes || []);
+    // S2 (v1.9): fade the low-HP uneasy ostinato too (the run's place ended).
+    if (this._danger && this._danger.lowThemes) {
+      this._fadeMelodyLayer(this._danger.lowThemes);
+      this._danger.lowThemes = [];
+      this._danger.lowOn = false;
+    }
     this._zoneThemes = []; // no active loops remain — a new run seeds its own
     this._zoneThemeI = -1;
     this._bossThemes = [];
@@ -1143,3 +1381,10 @@ export class AudioSys {
     }
   }
 }
+
+// S2 (v1.9): the PURE theme/density/extra-voices selector + the per-biome +
+// boss + low-HP theme data are exported so a node test (tests/music.mjs) can
+// assert the right theme + density for swamp / Reeds / Black Reeds / boss /
+// lowHp / collection WITHOUT a browser or an AudioContext. Presentation-only
+// (logic.js untouched; makeTuning byte-identical).
+export { ZONE_THEMES, BOSS_THEMES, LOWHP_THEME, COLLECTION_THEME };

@@ -2909,6 +2909,10 @@ _drawAtelier(ctx) {
       && !!(this.save.flags && this.save.flags.reedsVictory)
       && this.options.wander !== true;
     this.world = new World(mulberry32(seed), seed % 99991, { reeds: _isReeds, blackReeds: this.blackReeds });
+    // S2 (v1.9): the run's MUSIC biome — which per-biome zone-theme set the
+    // melody layer plays. 'blackReeds' > 'reeds' > 'swamp' (the base run,
+    // byte-identical). Presentation/audio only (never feeds runT).
+    this.runBiome = this.blackReeds ? 'blackReeds' : (_isReeds ? 'reeds' : 'swamp');
     this.lanternReeds = _isReeds;               // R1: activate THE LANTERN (only in the Reeds variant)
     // G1 (v1.8): the run's lantern-economy TUNING table. A Black Reeds run uses
     // REEDS_DARK_LANTERN (a faster drain + shorter reach — the "deep dark"); every
@@ -3683,6 +3687,15 @@ _drawAtelier(ctx) {
     p._plumeSuppress = !!(this.heron && this.heron.gilded && !this.heron.flying
       && this.heron._intro <= 0 && this.heron.plumeT > 0);
     p.update(dt, this.input, this.tuning, this.world, this._view());
+    // S2 (v1.9): the LOW-HP uneasy ostinato — a sparse, high, uneasy layer that
+    // SWELLS IN when the frog drops below ~30% HP and fades out above it. A
+    // single per-frame boolean comparison (presentation/audio only; never
+    // feeds runT). setLowHp is idempotent (only crossfades on a true->false or
+    // false->true flip), so the steady-state call is a cheap no-op.
+    if (this.audio.setLowHp) {
+      const _lowHp = p.alive && p.maxHp > 0 && (p.hp / p.maxHp) < 0.30;
+      this.audio.setLowHp(_lowHp);
+    }
     // R3 (v1.6): detect the frame a hop STARTS (hopT goes from <=0 to >0) so the
     // bestiary can peel a clinging leech (one hop breaks the cling). Reeds-only
     // effect — a cycle-0 run has no leech to peel.
@@ -4287,7 +4300,12 @@ _drawAtelier(ctx) {
     this.audio.setZoneAmbient(this._zoneI);
     // S1 (v1.4): also (cross)fade the melodic theme to the zone just entered.
     // It lives on melodyMaster (a separate gain) above the ambient bed.
-    if (this.audio.setZoneTheme) this.audio.setZoneTheme(this._zoneI);
+    // S2 (v1.9): pass the run's BIOME so Reeds/Black Reeds runs get their own
+    // distinct zone themes (the base swamp run passes undefined -> swamp,
+    // byte-identical). Also fire the brief zone-entry SWELL (a short chord on
+    // the melody layer) so crossing into a zone reads as a change of place.
+    if (this.audio.setZoneTheme) this.audio.setZoneTheme(this._zoneI, this.runBiome);
+    if (this.audio.zoneSwell) this.audio.zoneSwell();
   }
 
   // E3: apply the active hazards' effects (thorn reed = brief root, mud pool =
@@ -4745,6 +4763,10 @@ _drawAtelier(ctx) {
         // under the music-layer cinematicArp it accompanies. The "museum keeps
         // you better" moment. Fires exactly once (the galleryComplete latch).
         this.sfx('collection-fanfare');
+        // S2 (v1.9): the music-layer COLLECTION-SWELL — a short triumphant chord
+        // phrase on melodyMaster -> musicBus, UNDERNEATH the sfxBus fanfare +
+        // the cinematicArp (the full-collection moment's own musical beat).
+        if (this.audio.collectionSwell) this.audio.collectionSwell();
         this.addBanner('THE FULL COLLECTION — the museum keeps you better.', 4.6, this.ch * 0.34);
       }
     }
@@ -4922,6 +4944,11 @@ _drawAtelier(ctx) {
         this.sfx('boss-growl');
         this.addShake(8);
         this.addBanner('The Heron\u2019s frenzy deepens\u2026', 3, 240);
+        // S2 (v1.9): the boss DROPS TO A NEW PHASE — the melody layer swaps to
+        // the pre-built DENSER pattern (faster stepDur + more active steps =
+        // higher intensity). A reference swap on the live theme (no allocation
+        // at the phase moment; idempotent, so phase3 re-fires are no-ops).
+        if (this.audio.bossPhaseUp) this.audio.bossPhaseUp();
       } else if (name === 'phase3') {
         this.sfx('boss-growl');
         this.addShake(12);
