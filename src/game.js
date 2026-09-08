@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -3009,6 +3009,29 @@ _drawAtelier(ctx) {
     // occupies the same `this.heron` slot (so the paint routing, the awaken
     // handler, the camera, and _endRun('victory') all reuse the heron machinery).
     // A cycle-0 (swamp) run never enters this branch — its heron is byte-identical.
+    // G2 (v1.8): the BLACK REEDS NG+ variant (this.blackReeds) fights THE
+    // UMBRAL WYRM (the 6th boss archetype) INSTEAD of the Silt Wyrm. It is a
+    // "darker twin": the SAME underground-transit + 3-hue-awaken machinery, but
+    // ~60k HP + a telegraphed DUAL maw + a "deep dark" final phase (lantern
+    // mandatory) + the Warden's fuel-siphon. A CYCLE-0 Reeds run (this.blackReeds
+    // false) still fights the Silt Wyrm — its end boss is byte-identical to v1.7.
+    if (this.blackReeds) {
+      const u0 = umbrSurfacePoint({ surfIdx: 0 }, 0, this.world.w);
+      this.heron = {
+        kind: UMBRA_WYRM.kind, umbra: true,
+        x: u0[0], y: u0[1],
+        hp: UMBRA_WYRM.hp, maxHp: UMBRA_WYRM.hp,
+        phase: 'transit', state: 'idle', stateT: 2.2, hue: { red: 0, blue: 0, green: 0 },
+        awakened: false, awakenedT: 0, summonT: 9, lungeDir: -1,
+        targetX: this.world.w - 650, diveH: 0, facing: -1,
+        flying: 0, _intro: 3.4,
+        // the Umbral's state machine fields (umbrStep): it begins UNDERGROUND in
+        // transit toward maw point 0 (the DUAL partner is its adjacent point).
+        phaseT: UMBRA_WYRM.transit, surfIdx: 0, _partnerIdx: 1, strikeArmed: false,
+        // the pure 3-hue awaken (the SAME latch as every boss — paintBoss reads this):
+        awakenNeed: { ...UMBRA_WYRM.awakenNeed },
+      };
+    } else {
       const s0 = wyrmSurfacePoint({ surfIdx: 0 }, 0, this.world.w);
       this.heron = {
         kind: SILT_WYRM.kind, wyrm: true,
@@ -3024,6 +3047,7 @@ _drawAtelier(ctx) {
         // the pure 3-hue awaken (the SAME latch as the herons — paintBoss reads this):
         awakenNeed: { ...SILT_WYRM.awakenNeed },
       };
+    }
     } else {
       this.heron = {
         x: this.world.w - 350, y: HERON_Y,
@@ -3684,8 +3708,12 @@ _drawAtelier(ctx) {
       // paint the heron too (only while boss is "live" and player not dying)
       // R4 (v1.6): the Wyrm is PAINTABLE only while surfaced (the breach-strike
       // window) — between surfaces it is underground + INVULNERABLE + untargetable.
+      // G2 (v1.8): the Umbral Wyrm is paintable per the pure umbraPaintable —
+      // surfaced AND (in the "deep dark" final phase) the player's lantern must
+      // be LIT (the lantern is MANDATORY: the wyrm is only paintable in light).
       const hPaintable = this.heron && this.heron.hp > 0 && !this.heron.flying && this.heron._intro <= 0
         && !(this.heron.wyrm && this.heron.phase !== 'surfaced')
+        && !(this.heron.umbra && !umbraPaintable(this.heron, this.lantern && this.lantern.lit))   // G2: surfaced + (deep dark ⇒ lantern lit)
         && !(this.heron.warden && this.heron.phase !== 'mawOpen');
       if (hPaintable) {
         const res = this.paint.paintBossHit(this.heron, p.pigment, this.tuning.bossPaintHit);
@@ -3749,6 +3777,7 @@ _drawAtelier(ctx) {
       // underground — same rule as the swipe path).
       if (this.heron && this.heron.hp > 0 && !this.heron.flying
         && !(this.heron.wyrm && this.heron.phase !== 'surfaced')
+        && !(this.heron.umbra && this.heron.phase !== 'surfaced')   // G2: the Umbral Wyrm is splashed only while surfaced
         && !(this.heron.warden && this.heron.phase !== 'mawOpen')) {
         const d = dist(p.x, p.y, this.heron.x, this.heron.y - 140);
         if (d <= this.tuning.splashRadius + 60) {
@@ -3825,6 +3854,21 @@ _drawAtelier(ctx) {
         if (tNote) this.addBanner('The ' + tNote + ' taste rides this Warden.', 3.2, 185);
         this.zoomTarget = 0.92;
       }
+    } else if (this.heron.umbra) {
+      // G2 (v1.8): the UMBRAL WYRM engages on ARENA entry (like the Silt Wyrm —
+      // it is the Black Reeds' end-of-run apex). It reuses the wyrm's arena
+      // gate (Reeds-compatible) + its own dual-maw / deep-dark tell.
+      const umbraArena = p.x > this.world.w - 900;
+      if (this.heron._intro > 0) this.heron._intro -= dt;
+      if (umbraArena && this.heron._intro > 0) this.heron._intro = 0;   // lapse on arena entry
+      if (this.heron._intro <= 0 && !this._umbraEngaged) {
+        this._umbraEngaged = true;
+        this.sfx('wyrm-rumble');
+        if (this.audio.setBossTheme) this.audio.setBossTheme(true);   // the darker boss loop
+        this.addBanner('THE UMBRAL WYRM', 3.2, 150);
+        this.addBanner('It strikes in DUAL MAWS — strike it at BOTH marked points. In the DEEP DARK, your LANTERN is the only light it fears!', 4.8, 195);
+        this.zoomTarget = 0.92;
+      }
     } else if (this.heron.wyrm) {
       const wyrmArena = p.x > this.world.w - 900;
       if (this.heron._intro > 0) this.heron._intro -= dt;
@@ -3858,7 +3902,7 @@ _drawAtelier(ctx) {
         this._challengeAdd('bossEngage');
       }
     }
-    if (this.heron._intro <= 0) (this.heron.warden ? this._updateWarden(dt) : (this.heron.wyrm ? this._updateWyrm(dt) : this._updateBoss(dt)));
+    if (this.heron._intro <= 0) (this.heron.warden ? this._updateWarden(dt) : (this.heron.umbra ? this._updateUmbra(dt) : (this.heron.wyrm ? this._updateWyrm(dt) : this._updateBoss(dt))));
 
     // ----- E1: the Painted Heron (mid-run set-piece) -----
     // Non-blocking: dormant until the frog draws near, then it announces
@@ -4920,6 +4964,80 @@ _drawAtelier(ctx) {
       // _drawWyrm (P10: capped segment count, no per-frame allocation).
     }
 
+  // G2 (v1.8): drive THE UMBRAL WYRM (the 6th boss archetype, the Black Reeds
+  // apex) with the pure umbrStep state machine — the Silt Wyrm's wyrmStep made
+  // DUAL-PHASE + faster + deeper. It reuses the existing 3-hue awaken via the
+  // SAME paint path (umbrPaintable → paintBossHit → paintBoss) and the
+  // _onHeronDefeated → victory-sink path. Two inherited mechanics: the
+  // FUEL-SIPHON (Warden-inherited; the deep-dark phase siphons faster) and the
+  // FLOOD-POCKET (Wyrm-inherited: it surfaces in the Reeds flood band). The
+  // DUAL maw: umbrStep cycles the primary point; the partner is the adjacent
+  // point (both telegraphed + both paintable at breach). The "deep dark" final
+  // phase (hp <= deepDarkPhase) makes the lantern MANDATORY: the world overlay
+  // darkens and the maw strikes harder + the siphon runs faster (the pure
+  // umbrDeepDark flag drives the cadence; the overlay + siphon are the
+  // presentation layer). No per-frame allocation — one surface-point read + one
+  // lerp (P10). Pure logic lives in logic.js (umbrStep / umbrSurfacePoint /
+  // umbraFuelSiphon).
+  _updateUmbra(dt) {
+    const h = this.heron; const p = this.player;
+    if (!h || h.flying > 0 || h.sinking > 0 || this.dying) return;
+    const v = this._view();
+    const ev = umbrStep(h, dt, { worldW: this.world.w }, this.tuning, this.now);
+    // Position the head at the primary maw point (it slithers from the point it
+    // left toward it; it sits at the point while the telegraph + surfaced window
+    // play). No per-frame allocation — one lerp.
+    const [spX, spY] = umbrSurfacePoint(h, h.surfIdx, this.world.w);
+    h.y = spY;
+    if (h.phase === 'transit') {
+      const fromX = (h._transitFromX != null) ? h._transitFromX : spX;
+      const transitMult = (h.awakened ? 0.6 : 1.0) * (umbrDeepDark(h) ? UMBRA_WYRM.transitDeep : 1.0);
+      const prog = 1 - Math.max(0, h.phaseT) / (UMBRA_WYRM.transit * transitMult);
+      h.x = fromX + (spX - fromX) * Math.min(1, prog);
+    } else {
+      h.x = spX;
+    }
+    // G2: the FUEL SIPHON (Warden-inherited) — while engaged + the lantern is LIT,
+    // it drains candle fuel (faster in the deep dark). The returned state
+    // reassigns this.lantern; _updateLantern (next frame) refreshes the eased
+    // radius + lightFactor from it, so the siphon ALSO shrinks the light radius
+    // (the Black Reeds bestiary's input) — a genuine synergy, not a bolt-on.
+    if (this.lantern) {
+      this.lantern = umbraFuelSiphon(h, this.lantern, dt);
+      const ltSiphon = this._lanternTuning || LANTERN;
+      this._lanternEasedR = lanternRadiusFor(this.lantern, ltSiphon);
+      this.lantern.lightFactor = lanternLightFactor(this.lantern, p.x, p.y, p.x, p.y, ltSiphon);
+    }
+    if (ev === 'dual-breach') {
+      // both maws surfaced — the paint window opens + the maw-strikes hit BOTH
+      // points. The deep dark makes the strikes HARDER (the lantern-mandatory
+      // phase: a lit lantern's light is the counter, the player stands in the
+      // glow / paints both). The player dodges by standing clear of BOTH marked
+      // points during the telegraph.
+      h._transitFromX = spX;
+      this.sfx('wyrm-breach');   // reuse the wyrm's heavy breach thwomp (no new asset)
+      this.addShake(10);
+      const deep = umbrDeepDark(h);
+      this.particles.splatter(spX, spY, UMBRA_WYRM.hueLight, 12, 200);
+      this.particles.ripple(spX, spY, 'rgba(90,80,150,0.7)');
+      if (p.alive && p.iframes <= 0) {
+        const [sp2X, sp2Y] = umbrSurfacePoint(h, h._partnerIdx != null ? h._partnerIdx : ((h.surfIdx + 1) % UMBRA_WYRM.surfacePoints), this.world.w);
+        const dmg = UMBRA_WYRM.strikeDmg * (deep ? UMBRA_WYRM.deepStrikeMult : 1.0) * (this.tuning.dmgTakenMult || 1);
+        const d1 = dist(p.x, p.y, spX, spY);
+        const d2 = dist(p.x, p.y, sp2X, sp2Y);
+        if (d1 <= UMBRA_WYRM.strikeReach || d2 <= UMBRA_WYRM.strikeReach) {
+          p.hurt(dmg, this.tuning);
+          this.addShake(12);
+        }
+      }
+    } else if (ev === 'defeated') {
+      this._onHeronDefeated();
+    }
+    // the underground body-line slither + the dual ripple-ring tell + the deep-
+    // dark overlay are drawn by _drawUmbra (P10: capped segment count, no
+    // per-frame allocation).
+  }
+
   // F1 (v1.7): drive THE HOLLOW WARDEN (the 5th boss archetype, the Wander-apex)
   // with the pure wardenStep state machine — the SAME maw-window rhythm as the
   // Silt Wyrm, but PALE + a taste-seeded tempo. It reuses the existing 3-hue
@@ -5034,13 +5152,15 @@ _drawAtelier(ctx) {
         // back into the pale reeds and sinks — not a flight) + its own banner.
         if (h.wyrm) {
           this.addBanner('The Silt Wyrm is painted — it sinks back beneath the reeds!', 4, 200);
+        } else if (h.umbra) {
+          this.addBanner('The Umbral Wyrm is painted — it slithers back into the deep dark, and the light holds!', 4.4, 200);   // G2: the 6th boss's own defeat beat
         } else if (h.warden) {
           this.addBanner('The Hollow Warden is painted — it drains the last of the light and sinks beneath the reeds!', 4.4, 200);
         } else {
           this.addBanner(h.green ? 'The Great Green Heron blooms and takes flight!' : 'The Great Gray Heron blooms and takes flight!', 4, 200);
         }
         for (const c of ORB_COLORS) this.particles.sparkles(h.x, h.y - 160, PIGMENTS[c].light, 10);
-        if (h.wyrm || h.warden) { h.sinking = 0.001; } else { h.flying = 0.001; }   // hand off to the victory beat
+        if (h.wyrm || h.umbra || h.warden) { h.sinking = 0.001; } else { h.flying = 0.001; }   // hand off to the victory beat
         // story beat: the first heron ever painted summons the swamp's critic
         if (!this.save.flags.croaksworthAsked) {
           this.save.flags.croaksworthAsked = true;
@@ -5424,6 +5544,168 @@ _drawAtelier(ctx) {
     }
   }
 
+  // G2 (v1.8): draw THE UMBRAL WYRM (the 6th boss, the Black Reeds NG+ apex).
+  // Modeled on _drawWyrm (the Silt Wyrm's twin) but a DARKER, DUAL-PHASE
+  // creature: a violet-abyss palette (vs the Silt Wyrm's dark mud), a DUAL
+  // ripple-ring telegraph (BOTH maw points marked at once during 'dual-
+  // telegraph'), and a "deep dark" escalation (phase 2, hp <= deepDarkPhase)
+  // where the body/eyes deepen and the arena darkens further (the lantern is
+  // the only light left). A faint SIPHON stream runs from the frog's lit
+  // lantern to the head while the wyrm is draining fuel (the Warden-inherited
+  // lantern-eater, so the player sees its light being eaten). P10: a fixed
+  // body-segment count + a few arcs — 60fps-safe (no per-frame allocation).
+  _drawUmbra(ctx, h, now) {
+    const W = this.world.w;
+    const surfY = UMBRA_WYRM.surfaceY;
+    const N = UMBRA_WYRM.surfacePoints;
+    // the 4 telegraphed maw points on the arena line.
+    const pts = [];
+    for (let i = 0; i < N; i++) pts.push(umbrSurfacePoint(h, i, W));
+    const idx = (((h.surfIdx || 0) % N) + N) % N;
+    const cur = pts[idx], prev = pts[((idx - 1) + N) % N];
+    const phase2 = umbrDeepDark(h);
+    const phase = h.phase;
+    // the HEAD x: at the active point while dual-telegraph/surfaced; while in
+    // transit it slithers from where it left (_transitFromX) toward the next.
+    let headX;
+    if (phase === 'transit') {
+      const fromX = (h._transitFromX != null) ? h._transitFromX : prev.x;
+      const transitDur = UMBRA_WYRM.transit * (h.awakened ? 0.6 : 1.0) * (phase2 ? UMBRA_WYRM.transitDeep : 1.0);
+      const prog = 1 - Math.max(0, Math.min(1, (h.phaseT || 0) / (transitDur || 1)));
+      headX = fromX + (cur.x - fromX) * prog;
+    } else {
+      headX = cur.x;
+    }
+    const surfacing = phase === 'surfaced';
+    const sinking = !!h.sinking;
+    // the "deep dark" dims + deepens the palette (the final phase is darker).
+    const bodyCol = h.awakened ? (phase2 ? '#9a6bff' : UMBRA_WYRM.abyssHueLight) : (phase2 ? '#4a3570' : UMBRA_WYRM.abyssHue);
+    // -------- the slithering body line (beneath the water, capped segments) --
+    const bodyY = surfY + 46;
+    const SEG = UMBRA_WYRM.bodySegments;             // fixed count (P10)
+    const span = Math.max(300, headX - (W - 1050));  // the body trails back from the head
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = bodyCol;
+    ctx.globalAlpha = surfacing ? 0.96 : 0.5;        // dim underground, solid surfaced
+    ctx.lineWidth = 30;
+    ctx.beginPath();
+    ctx.moveTo(headX, surfY + (surfacing ? -10 : 12));
+    for (let i = 1; i <= SEG; i++) {
+      const t = i / SEG;
+      const bx = headX - t * span;
+      const by = bodyY + Math.sin(now * 4.5 - t * 7) * 11;   // the traveling slither
+      ctx.lineTo(bx, by);
+    }
+    ctx.stroke();
+    ctx.restore();
+    // -------- the surfaced HEAD (a violet wyrm's head breaking the water) ----
+    if (surfacing || sinking) {
+      ctx.save();
+      ctx.translate(headX, surfY);
+      const c = h.hitFlash > 0 ? '#f2e9dc' : bodyCol;
+      const c2 = h.hitFlash > 0 ? '#fff' : (phase2 ? '#c79bff' : UMBRA_WYRM.abyssHueLight);
+      ctx.globalAlpha = sinking ? Math.max(0, 1 - (h.sinking || 0) / 3) : 1;
+      // the head (a broad violet wedge) + fangs
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.moveTo(0, -58);
+      ctx.quadraticCurveTo(40, -22, 24, 30);
+      ctx.quadraticCurveTo(0, 46, -24, 30);
+      ctx.quadraticCurveTo(-40, -22, 0, -58);
+      ctx.fill();
+      // the fangs
+      ctx.fillStyle = c2;
+      ctx.beginPath();
+      ctx.moveTo(-16, 20); ctx.lineTo(-10, 34); ctx.lineTo(-6, 18); ctx.closePath();
+      ctx.moveTo(16, 20); ctx.lineTo(10, 34); ctx.lineTo(6, 18); ctx.closePath();
+      ctx.fill();
+      // eyes (glowing violet while awakened — it is awake to the paint)
+      ctx.fillStyle = h.awakened ? (phase2 ? '#e0b0ff' : '#b478ff') : c2;
+      ctx.beginPath();
+      ctx.arc(-11, -26, 6, 0, TAU);
+      ctx.arc(11, -26, 6, 0, TAU);
+      ctx.fill();
+      // a 3-hue coat wash while it carries paint (the awaken progress reads)
+      if (h.hue && (h.hue.red > 0 || h.hue.blue > 0 || h.hue.green > 0)) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = h.hue.red > 0 ? PIGMENTS.red.color : (h.hue.blue > 0 ? PIGMENTS.blue.color : PIGMENTS.green.color);
+        ctx.beginPath();
+        ctx.arc(0, -6, 20, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    // -------- the DUAL ripple-ring TELEGRAPH (BOTH maw points marked) --------
+    // The signature of the Umbral Wyrm: during 'dual-telegraph' TWO ripple rings
+    // grow at once — the primary (cur) AND its adjacent partner. The player sees
+    // both maws opening and must stand clear of the lanes.
+    if (phase === 'dual-telegraph' && !sinking) {
+      const teleDur = UMBRA_WYRM.dualTelegraph * (h.awakened ? 0.6 : 1.0);
+      const prog = 1 - Math.max(0, Math.min(1, (h.phaseT || 0) / (teleDur || 1)));
+      const partnerIdx = ((h.surfIdx || 0) + 1) % N;
+      const p0 = cur, p1 = pts[partnerIdx];
+      for (const P of [p0, p1]) {
+        const r = 24 + prog * 150;                     // grows toward the breach
+        const pulse = 0.7 + Math.sin(now * 11) * 0.3;
+        ctx.save();
+        ctx.translate(P[0], surfY);
+        ctx.globalAlpha = (0.4 + prog * 0.5) * pulse;
+        ctx.strokeStyle = h.awakened ? (phase2 ? '#e063ff' : '#c04ae0') : '#5a4a9a';  // dark-violet tell
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 8]);
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, TAU);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.16 * pulse;
+        ctx.fillStyle = h.awakened ? (phase2 ? '#e063ff' : '#c04ae0') : '#5a4a9a';
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    // -------- the FUEL SIPHON stream (the Warden-inherited lantern-eater) ----
+    // A faint violet stream runs from the frog's lit lantern to the head while
+    // the wyrm is actively draining fuel (a lit lantern + the wyrm engaged +
+    // not defeated). The player sees its light being eaten.
+    if (!sinking && this.lantern && this.lantern.lit && (this.lantern.fuel || 0) > 0) {
+      const p = this.player;
+      // draw in world space (the camera transform is active when _drawUmbra
+      // runs) — a single dashed quadratic from the frog to the wyrm's head.
+      ctx.save();
+      ctx.globalAlpha = 0.28 + Math.sin(now * 8) * 0.08;
+      ctx.strokeStyle = phase2 ? '#b478ff' : '#7a5aa8';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 6]);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y - 20);
+      ctx.quadraticCurveTo((p.x + headX) / 2, (p.y + surfY) / 2 - 40, headX, surfY - 40);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+    // -------- the boss HP bar (world space, above the arena) --------------
+    if (h.hp < h.maxHp && !sinking) {
+      const bw = 280, bx = headX - bw / 2, by = surfY - 104;
+      const frac = Math.max(0, h.hp / h.maxHp);
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = 'rgba(16,14,24,0.6)';
+      ctx.fillRect(bx, by, bw, 7);
+      ctx.fillStyle = frac > (UMBRA_WYRM.deepDarkPhase || 0.4) ? UMBRA_WYRM.abyssHueLight : '#c8452c';
+      ctx.fillRect(bx, by, bw * frac, 7);
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#f4efe6';
+      ctx.font = '600 15px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(phase2 ? 'THE UMBRAL WYRM — THE DEEP DARK' : 'THE UMBRAL WYRM', headX, by - 10);
+      ctx.restore();
+    }
+  }
+
   // F1 (v1.7): draw THE HOLLOW WARDEN. The signature is the MAW: the Warden
   // dwells at its surface point with its mouth CLAMPED SHUT (invulnerable) —
   // only while the maw is OPEN (phase 'mawOpen') can it be painted, and that
@@ -5720,7 +6002,7 @@ _drawAtelier(ctx) {
     this.paint && this.paint.drawWet(ctx);
     this.paint && this.paint.drawTrails(ctx);
     if (this.state === 'expedition' || this.state === 'end') {
-      if (this.heron) (this.heron.warden ? this._drawWarden(ctx, this.heron, this.now) : (this.heron.wyrm ? this._drawWyrm(ctx, this.heron, this.now) : this._drawHeron(ctx, this.heron, this.now))); // F1: Warden / R4: Silt Wyrm / heron
+      if (this.heron) (this.heron.warden ? this._drawWarden(ctx, this.heron, this.now) : (this.heron.umbra ? this._drawUmbra(ctx, this.heron, this.now) : (this.heron.wyrm ? this._drawWyrm(ctx, this.heron, this.now) : this._drawHeron(ctx, this.heron, this.now)))); // F1: Warden / G2: Umbral Wyrm / R4: Silt Wyrm / heron
       if (this.midHeron) this._drawHeron(ctx, this.midHeron, this.now); // E1: Painted Heron
       for (const e of this.enemies) drawEnemy(ctx, e, this.now);
       this._drawHazards(ctx, drawSatFinal); // E3: Bold-only zone hazards

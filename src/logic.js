@@ -1638,6 +1638,192 @@ export function wardenFuelSiphon(warden, lantern, dt) {
 }
 
 // ----------------------------------------------------------------
+// G2 (v1.8): THE UMBRAL WYRM — the 6th boss archetype, the Black Reeds' apex
+// predator. It is the Silt Wyrm's TWIN (a darker, faster, DUAL-PHASE subterranean
+// wyrm) and the only boss that uses BOTH of the Reeds bosses' signature
+// mechanics: the Warden's FUEL SIPHON (it feeds on the lantern's light) and the
+// Silt Wyrm's FLOOD-POCKET transit (it slithers the flooded lower banks).
+//
+// It reuses the EXISTING paintBoss / bossStep 3-hue awaken latch + the heron
+// defeat/victory (sink) path end-to-end (occupying the same `this.heron` slot
+// in game.js), but with a NEW underground-transit movement state machine
+// (umbrStep) that is DUAL-PHASE:
+//   · PHASE 1 (hp > deepDarkPhase): the Silt Wyrm's rhythm — transit → a
+//     TELEGRAPHED DUAL MAW (two surface points marked at once) → a surfaced
+//     strike window (the paint window) → re-submerge. Faster than the Silt Wyrm.
+//   · PHASE 2 (the "DEEP DARK" final phase, hp <= deepDarkPhase): the wyrm
+//     speeds up (a shorter transit) and the lantern becomes MANDATORY — it is
+//     INVULNERABLE while the player's lantern is UNLIT (the deep dark only
+//     yields to light) AND it SIPHONS candle fuel (the Warden-inherited
+//     lantern-eater). The flood-pocket transit (the wyrm-inherited mechanic) is
+//     what the player dodges.
+//
+// It is DEFAULT-OFF — it only appears in the Black Reeds variant (gated behind
+// ngCycle >= 1 AND a Reeds victory, see G1's blackReedsUnlocked), so every
+// EXISTING run is byte-identical. All numbers live here (logic.js) so a
+// balance pass is one file edit.
+export const UMBRA_WYRM = {
+  kind: 'umbra',
+  hp: 60000,                    // ~60k HP — one tier above the Silt Wyrm's 48k
+  surfaceY: 1500,               // the flooded lower-bank line it surfaces on (the Silt Wyrm's)
+  surfacePoints: 4,             // 4 maw points (it pairs two of them — the DUAL maw)
+  transit: 0.85,               // a BRIEF transit — the "faster twin": the body only ducks briefly between breaches (vs the Silt Wyrm's 1.8)
+  transitDeep: 0.7,             // the "deep dark" phase transit multiplier (faster still)
+  dualTelegraph: 0.6,           // the DUAL-maw telegraph (BOTH points marked at once — short; the maws then stay open a long time)
+  surfaced: 6.7,                // the surfaced PAINT window (the dominant phase — the DUAL maws stay open; the danger is the dual strike, not invulnerability)
+  surfacedDeep: 5.4,            // the "deep dark" surfaced window (still long — the phase-2 danger is the dark + siphon, not invulnerability)
+  strikeReach: 170,             // a frog this close to a surf point takes the maw hit
+  strikeDmg: 14,                // the maw-strike damage (a heavier twin)
+  deepStrikeMult: 1.2,          // the "deep dark" maw-hit multiplier (heavier strikes in the final phase)
+  awakenNeed: { red: 90, blue: 90, green: 90 },  // the 3-hue awaken (the SAME latch as every boss)
+  deepDarkPhase: 0.4,           // HP fraction where the "deep dark" final phase begins
+  siphonRate: 0.05,             // the FUEL SIPHON rate (Warden-inherited; lantern-eater)
+  siphonDeep: 1.6,              // the "deep dark" siphon multiplier (it feeds harder in phase 2)
+  hue: '#6d4a8f',               // the base indigo-violet head (a darker twin than the silt's brown)
+  hueLight: '#c8a4e8',          // the base light hue
+  deepHue: '#3b2566',           // the "deep dark" final-phase head (a deeper violet)
+  deepHueLight: '#b478ff',      // the "deep dark" light hue (a cold glow)
+  mudHueLight: 'rgba(150,120,200,0.6)',  // an indigo/violet hue (a darker twin than the silt's mud)
+};
+
+// G2: the Umbral Wyrm's maw point (index 0..n-1) — the SAME geometry as the Silt
+// Wyrm (the points span the end-of-run arena). Pure; returns [x, y]. (The Black
+// Reeds arena is wider (world.w 7200) so the arena start shifts — this reads the
+// world width like wyrmSurfacePoint does.)
+export function umbrSurfacePoint(h, surfIdx, worldW) {
+  const n = UMBRA_WYRM.surfacePoints;
+  const i = ((surfIdx % n) + n) % n;
+  // the arena spans the right ~900px of the Black Reeds descent (4 points):
+  const x = (worldW - 1050) + (i / (n - 1)) * 900;   // arenaStart .. +900 (4 points)
+  return [x, UMBRA_WYRM.surfaceY];
+}
+
+// G2: the Umbral Wyrm's DUAL-maw partner point — the SECOND point it marks at
+// the same time as its primary (h.surfIdx). It is the next point in the cycle
+// (a distinct, adjacent point, so the two maws are never the same point). Pure;
+// returns the partner's surfIdx (a 0..n-1 index).
+export function umbrDualPartner(h) {
+  const n = UMBRA_WYRM.surfacePoints;
+  return (((h.surfIdx || 0) + 1) % n);   // the adjacent point (the dual maw's second head)
+}
+
+// G2: is the Umbral Wyrm in its "deep dark" final phase (phase 2)? A pure read
+// of the HP fraction against deepDarkPhase. The game.js layer uses this to make
+// the lantern MANDATORY (invulnerable while unlit) + ramp the siphon.
+export function umbrDeepDark(h) {
+  if (!h || !h.maxHp) return false;
+  return (h.hp / h.maxHp) <= UMBRA_WYRM.deepDarkPhase;
+}
+
+// G2: the Umbral Wyrm's movement state machine — the Silt Wyrm's wyrmStep, made
+// DUAL-PHASE + faster + deeper. h = the boss object (carries umbra, phase,
+// phaseT, surfIdx, awakened, hue, hp, maxHp). It advances a pure per-phase
+// timer (the SAME timing contract as wyrmStep / bossStep: phaseT counts down;
+// on lap it sets the NEXT phase + that phase's duration). Phases:
+//   'transit'         — underground, the body slithers to the next maw point
+//                       (INVULNERABLE, untargetable).
+//   'dual-telegraph'  — the DUAL maw tell: BOTH the primary point AND its
+//                       adjacent partner ripple at once (~1 s; the heavier hit
+//                       is telegraphed by a WIDER tell, per spec).
+//   'surfaced'        — the maw points are open + PAINTABLE (the dominant
+//                       phase; the player paints the head at a maw point).
+// The "deep dark" (phase 2, hp/maxHp <= 0.5) escalates the cadence (a shorter
+// transit + a shorter surfaced window) — the fight gets faster as the wyrm
+// weakens. The 3-hue awaken (h.awakened) speeds the transit cadence (the
+// "faster rhythm", shared with every boss). Pure + deterministic (no
+// Math.random — the maw points are DETERMINISTIC: the primary cycles
+// 0,1,2,3... and the partner is its adjacent point; the strike target is fixed
+// by the arena geometry, not a roll). Returns an event string ('transit' on
+// the re-submerge, 'dual-breach' on the dual maw surfacing, 'submerge' on the
+// re-submerge, 'defeated' on hp<=0) or 0 (steady). The caller (game.js
+// _updateUmbra) positions the head + handles the strike/defeat.
+export function umbrStep(h, dt, view, tuning, now) {
+  if (h.hp <= 0) { h.sinking = (h.sinking || 0) + dt; return 'defeated'; }
+  // the 3-hue awaken window lapses exactly like the herons / the wyrm (the full
+  // 3-hue rhythm is a recurring CYCLE, not a permanent state).
+  if (h.awakened) {
+    h.awakenedT = (h.awakenedT || 0) - dt;
+    if (h.awakenedT <= 0) { h.awakened = false; h.hue.red = 0; h.hue.blue = 0; h.hue.green = 0; }
+  }
+  const phase2 = umbrDeepDark(h);
+  const transitMult = (h.awakened ? 0.6 : 1.0) * (phase2 ? UMBRA_WYRM.transitDeep : 1.0);
+  const transitDur = UMBRA_WYRM.transit * transitMult;
+  const surfacedDur = (phase2 ? UMBRA_WYRM.surfacedDeep : UMBRA_WYRM.surfaced);
+  h.phaseT -= dt;
+  if (h.phase === 'transit' || h.phase == null) {
+    // underground: the body slithers toward the current maw point. It re-
+    // surfaces AT that point (the head sits at it while the DUAL telegraph
+    // plays, both points marked — the player sees TWO ripples at once).
+    if (h.phaseT <= 0) {
+      h.phase = 'dual-telegraph';
+      h.phaseT = UMBRA_WYRM.dualTelegraph * (h.awakened ? 0.6 : 1.0);
+      h.strikeArmed = true;
+    }
+  } else if (h.phase === 'dual-telegraph') {
+    // the DUAL maw telegraph ends — it SURFACES at its point (paint window
+    // OPENS). The breach locks to the CURRENT surface point (like the wyrm);
+    // the DUAL partner is its ADJACENT point (both ripples already marked).
+    if (h.phaseT <= 0) {
+      h.phase = 'surfaced';
+      h.phaseT = surfacedDur;
+      // the DUAL partner is the adjacent maw point (deterministic):
+      h._partnerIdx = ((h.surfIdx || 0) + 1) % UMBRA_WYRM.surfacePoints;
+      return 'dual-breach';
+    }
+  } else if (h.phase === 'surfaced') {
+    if (h.strikeArmed && h.hp > 0) {
+      h.strikeArmed = false;
+      return 'strike';   // the maw-strike hits the lanes at the maw points
+    }
+    if (h.phaseT <= 0) {
+      // withdraw + begin the transit toward the NEXT maw point. Remember where
+      // it just was (the transit's start) so game.js interpolates the head
+      // toward the next point; the new point is the next index.
+      h._transitFromX = umbrSurfacePoint(h, h.surfIdx, view.worldW)[0];
+      h.phase = 'transit';
+      h.phaseT = transitDur;
+      h.surfIdx = (((h.surfIdx || 0) + 1) % UMBRA_WYRM.surfacePoints);
+    }
+  }
+  return 0;
+}
+
+// G2: the Umbral Wyrm's FUEL SIPHON (a pure tick) — the Warden-inherited
+// lantern-eater. While the wyrm is engaged + alive and the player's lantern is
+// LIT, it drains candle fuel (faster in the "deep dark" phase, the Warden's
+// siphonDeep multiplier). It siphons NOTHING when the lantern is UNLIT or empty
+// (a lantern-eater, not a breaker). Returns a NEW lantern state (see
+// lanternTick: a pure, non-mutating tick) so the caller reassigns this.lantern.
+// Pure + deterministic.
+export function umbraFuelSiphon(umbra, lantern, dt) {
+  const base = lanternState(lantern && lantern.fuel, lantern && lantern.lit);
+  // Only siphon while the wyrm is engaged + alive + the lantern is lit.
+  const active = umbra && umbra._intro <= 0 && umbra.hp > 0 && !umbra.flying && !umbra.sinking;
+  // A lit lantern with no fuel is impossible — the auto-extinguish rule must
+  // snap it off; the wyrm cannot feed on an already-empty wick.
+  if (base.lit && base.fuel <= 0) return { fuel: 0, lit: false };
+  if (!active || !base.lit || base.fuel <= 0 || dt <= 0) return base;
+  const mult = umbrDeepDark(umbra) ? UMBRA_WYRM.siphonDeep : 1.0;
+  const rate = UMBRA_WYRM.siphonRate * mult * (umbra.tasteFactor || 1.0);
+  const fuel = Math.max(0, base.fuel - rate * dt);
+  return { fuel, lit: fuel > 0 ? base.lit : false };   // auto-extinguish at 0 (the lantern's own rule)
+}
+
+// G2: is the Umbral Wyrm PAINTABLE right now (the "deep dark" lantern-mandatory
+// rule)? A pure read: the wyrm is paintable while its maw is open (surfaced) AND
+// (in the "deep dark" phase) the player's lantern is LIT. In phase 1 the maw
+// being open is enough. In phase 2 an UNLIT lantern makes it INVULNERABLE (the
+// deep dark only yields to light) — this is the mechanic that makes the lantern
+// MANDATORY in the final phase. `lanternLit` is the caller's boolean (the
+// player's lantern.lit). Pure + deterministic.
+export function umbraPaintable(h, lanternLit) {
+  if (!h || h.hp <= 0 || h.flying > 0 || h.sinking > 0) return false;
+  if (h.phase !== 'surfaced') return false;
+  if (umbrDeepDark(h) && !lanternLit) return false;   // the "deep dark" needs the lantern
+  return true;
+}
+
+// ----------------------------------------------------------------
 // A4 (v1.2 M9): 'Rehung Frame' — a prestige-lite, NOT save-wipe. Retiring a
 // fully-completed collection (all 8 paintings owned + at least one ★-hung)
 // mints a permanent, saved `galleryBonus` level. Each level is a small
