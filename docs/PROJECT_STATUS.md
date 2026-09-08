@@ -73,6 +73,45 @@ byte-identical. **No open scope for v1.6** — the next phase is whatever
 Joel approves after v1.6 review (the deferred list in ROADMAP §v1.6 is the
 boundary: accessibility X1–X3, gold pigment, gamepad, NG+, CRT filters).
 
+**v1.7 "The Ever-Shifting Swamp" — IN PROGRESS (session v17-2, 2026-09-07;
+D1 + D2 + a hygiene commit landed).** v1.6 is COMPLETE and stays untouched;
+v1.7 adds **THE WANDER** — a bounded, OPT-IN (default OFF) procedural
+expedition variant. **D1 done: the PURE seeded wander content generator** —
+`wanderContent(seed, zones, bias)` in `logic.js` builds a reproducible
+layout from its own `mulberry32(seed + WANDER_SALT)` stream (R2 pattern,
+separate from the terrain pass) inside a hand-tuned `WANDER_BUDGET`
+envelope (4 zones, per-zone normal 3–9 / total 18–30, elite 1–2 / 4–7, 2
+rest orbs/zone, boss-eligible — hand-tuned 23/6/8 sits mid-band);
+`pickWanderSeed` (no Math.random) + `normalizeWanderSeed`; `options.wander`
+default OFF (legacy options migrate to OFF); `save.wanderSeed` latch;
+**SAVE_VERSION 10 → 11** (v10→v11 migration; all era-pinned stage asserts
+updated to 11). When OFF (the default) the generated path NEVER runs →
+hand-tuned ZONES + cycle-0 tuning byte-identical (the JSON-compare gate is
+now asserted in the D1 smoke stage, not just implied). Smoke stage 95 (27
+asserts) proves pure (no Math.random/Date.now), same-seed identical,
+fresh-seed differs, 40-seed sweep in-budget, default-OFF byte-identical,
+and a real ON run latches a reproducible non-zero seed. **Hygiene commit
+done (the pre-existing stage-75 K4 flake):** the harness already stubs the
+CLOCK, so the ONLY non-determinism source in a full `node tests/smoke.mjs`
+run is `Math.random()` (enemy/heron wander in enemies.js, particle/trail
+scatter) — the fix is a SEEDED mulberry32 `Math.random` in the harness + a
+deterministic paint-target in the K4 stage, so the whole suite is
+byte-reproducible (pins the K4/E1/T3 flake class at once; stages that
+override/restore `Math.random` are unaffected). 15/15 flake-check green.
+**D2 done: the WANDER "taste"** — `wanderTaste(seed) -> {id,name,tag,bias}`
+from a hand-tuned set of 4 flavor archetypes (The Quiet Reeds / Feast
+Season / The Long Dark / Ink Bloom), picked PURE + deterministically on the
+seed's own salted lane (WANDER_TASTE_SALT, separate from the content
+stream). The bias only re-weights WHICH KINDS fill each zone's slots — it
+NEVER changes the per-zone or total counts — so a biased run stays in-band
+exactly as the neutral one (repeat-avoidance is the D1 seed latch). The
+taste name is one line of flavor in the Wandering badge. Smoke stage 96
+(40 asserts). Suite 96 stages green ×3; hand-tuned pace 17.3 / humance 18.2
+min UNCHANGED (Wander OFF by default). Remaining v1.7: **D3** (the new
+`wandpace.mjs` probe + envelope audit), **D4** (Wander Options toggle + save
+export/import parity), **F1** (the Hollow Warden 5th boss), **O1–O2** (QoL),
+**I1** (final season audit). Next session picks up D3.
+
 ## Release readiness
 
 Release: ready (DoD met, suite green). v1.1: **complete** — M7 + M7.5 + M8

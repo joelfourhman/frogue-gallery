@@ -5,12 +5,72 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.7 "The Ever-Shifting Swamp" — NEXT ACTION (orchestrator handoff, 2026-09-07)
+### v1.7 "The Ever-Shifting Swamp" — NEXT ACTION (session v17-2, 2026-09-07; D1 + D2 landed)
 
 **v1.6 is COMPLETE** (all 13 items R1–R6 / W1–W3 / Q1–Q3 / A1 committed, 94/94
-green, all pacing in band, SAVE_VERSION 10, tree clean, 114 commits since v1.5).
-The full **v1.7 plan-of-record is written in `docs/ROADMAP.md` §v1.7** — read
-it first. Theme: the swamp that is never the same twice.
+green, all pacing in band, 114 commits since v1.5). The full **v1.7
+plan-of-record is written in `docs/ROADMAP.md` §v1.7** — read it first. Theme:
+the swamp that is never the same twice.
+
+**Landed this session (3 commits, all green):**
+- **D1** `22c5d85` — the PURE seeded Wander content generator (`wanderContent` /
+  `pickWanderSeed` / `WANDER_BUDGET` envelope / `normalizeWanderSeed` /
+  `options.wander` default-OFF / `SAVE_VERSION 10→11` + v10→v11 migration).
+  game.js wires the gate + the "Wandering · seed N" HUD badge; a default-OFF run
+  is byte-identical to v1.6 (hand-tuned `ZONES` same reference + cycle-0 tuning
+  deep-equals a plain `makeTuning`). Smoke **stage 95** proves it.
+- **HYGIENE** `144fb1c` — made the whole smoke suite **deterministic**: the
+  harness already stubs the clock, so the only non-determinism left was
+  `Math.random()` leaking into the REAL Game update path (enemy/heron wander at
+  enemies.js, particle/trail scatter in paint.js). A full `new Game(...)` +
+  several frames of AI made real-Game positions frame-nondeterministic, which is
+  exactly the pre-existing v1.7 **stage-75 K4 flake** (`healAcc 0.00 -> -0.28`,
+  ~1-in-12) AND the same flake class latent in E1 + T3. Fix = a SEEDED
+  mulberry32 `Math.random` in the harness (the v1.6 R2 hardening) + a
+  K4-specific deterministic-target pin (the brush fan aims at `p.aimA`
+  (mouse), so the frog now aims at the tanky foe + the foe is pinned to a fixed
+  coordinate each frame). 30-run flakecheck **0 failures** (was ~2-3/30).
+- **D2** `b093ebf` — THE WANDER "taste": a pure `wanderTaste(seed) -> {id,name,
+  tag, bias}` over a 4-archetype hand-tuned set (The Quiet Reeds / Feast
+  Season / The Long Dark / Ink Bloom), each a different weight profile that only
+  re-weights WHICH KINDS fill the zones (never the counts) so a biased run is
+  inside `WANDER_BUDGET` exactly as the neutral one is. The Wandering HUD badge
+  gains a second line — the taste name (one line of flavor). Smoke **stage 96**
+  proves it.
+
+**Invariants held after D2:** smoke x3 ALL PASSED (deterministic now — the same
+run produces the same result every time). Hand-tuned pacing unchanged:
+`pace.mjs` ~17.3 min, `humance.mjs` ~18.2 min (15–20 band; Wander is OFF by
+default so those probes measure the hand-tuned runs). `SAVE_VERSION = 11`
+(D2 adds no save field — the taste is derived from the latched `wanderSeed`,
+never persisted).
+
+**NEXT ACTION (next re-kick): D3, then D4, then F1, O1, O2, I1** — see the
+plan-of-record in `docs/ROADMAP.md` §v1.7 for the full item list:
+- **D3**: a **Wander × Reeds cross-run** — the two-biome data finally used: a
+  Wander-ON + Reeds-ON expedition variant (a new entry button, victory-gated
+  like Reeds), with its own envelope + its own boss selection (the Hollow
+  Warden, F1, or a seeded taste-variant of the Silt Wyrm). `tests/wandpace.mjs`
+  (new, modeled on humance.mjs) measures a generated first-time Wander run
+  (first-time 15–20 min band) AND a Wander × Reeds run (20–25 min band) across
+  ≥ 5 seeds — the "procgen envelope is tight" invariant the I1 audit gate
+  depends on. **This is the load-bearing new probe for the I1 gate; do it next.**
+- **D4**: the **Wander toggle** in the Options panel (a 4th row alongside
+  paper-grain / gamepad / etc.), plus save export/import parity for the
+  `wanderSeed` field (already in the schema; `validateSaveBlob` handles it).
+- **F1**: the 5th boss — the Hollow Warden (Wander-mode apex; siphons lantern
+  fuel; telegraphed maw window; 3-hue awaken via the existing paintBoss/bossStep
+  path; taste-seeded aggression; ~52k HP).
+- **O1 + O2**: pre-expedition seed card + Wander run-recap line.
+- **I1**: the K10/C4/A1-style season audit (smoke x3; all pacing probes in band
+  UNCHANGED; the new `wandpace.mjs` in its documented bands; P10 culling green).
+
+**Batch 2 plan (for the next re-kick session):** land D3 (Wander × Reeds variant
++ `tests/wandpace.mjs` + smoke stage) as its own `feat(v1.7 D3)` commit, then D4
+(the options toggle + export/import parity) as its own `feat(v1.7 D4)` commit.
+Stop at a clean committed chunk + update this NEXT ACTION if the budget runs out
+mid-chunk. Never discard uncommitted user work (there is none now — only the
+orchestrator's `.before-logic.mjs` snapshot is untracked; leave it).
 
 **Headline (D1–D4): "The Wander"** — a **bounded, pacing-safe procedural
 expedition** (the deferred procgen item revisited with the two-biome data).
@@ -36,18 +96,23 @@ window reusing the Silt-Wyrm telegraph; 3-hue awaken via the EXISTING
 byte-identical. Wander is default-OFF; cycle-0 swamp + cycle-0 Reeds + NG+
 cycle-1 with Wander OFF must deep-equal v1.6 tuning/content. The four existing
 probes re-run IN BAND UNCHANGED; only `wandpace.mjs` exercises generated
-content. `SAVE_VERSION 10→11` (`wanderSeed`). Zero new dependencies. One
+content. `SAVE_VERSION 10→11` (`wanderSeed`) — DONE. Zero new dependencies. One
 conventional commit per item.
-
-**Batch 1:** D1 (wander content engine + flag + `wanderSeed` + SAVE_VERSION 11
-+ `tests/wandpace.mjs` + smoke stage). Then D2 → D3 → D4 → F1 → O1 → O2 → I1.
-Re-plan / re-pick batch sizing in your own voice; the items above are the
-scope, not a rigid order. Continue the project; milestone v1.7 = the I1 audit
-commit. Never discard uncommitted user work (there is none now — tree clean).
 
 ---
 
-Last verified: 2026-09-07. **v1.6 "Beneath the Reeds" COMPLETE — all 13 items (R1–R6 / W1–W3 / Q1–Q3 / A1) done and committed.** `node tests/smoke.mjs` = **ALL 94 STAGES PASSED** (stages 92–94 added by v1.6 BATCH 4: 92 = v1.6 Q1 **PAUSE-MENU RUN SUMMARY** — the J5 pause card (now 320px) carries a compact "this expedition" block: run time via the existing `runT` read, current zone name, enemies painted so far (a run-local `runEnemies` counter incremented in `_onEnemyDead`, in-memory only, NEVER persisted), and orbs collected; zero tuning change, SAVE_VERSION stays 10. 93 = v1.6 Q2 **END-SCREEN RUN RECAP** — a "the last expedition" strip ABOVE the end card on BOTH the victory AND defeat screens: a 6-zone minimap with the run's route as a wobbly ink line (a run-local `runWaypoints` list sampled ~500 ms, cap 40 oldest-dropped, via the pure `routeTrail`/`ROUTE_WAYPOINT_CAP` helper in `logic.js`), the run time, and the boss result line; pure presentation, NO new persistence — the save is byte-identical before/after the end screen. 94 = v1.6 Q3 **SAVE EXPORT/IMPORT (paste-based)** — the Options panel gains a "Save" section: Export copies the save JSON to the clipboard (`navigator.clipboard.writeText`, loopback-safe, no file APIs; stashed on `_lastExportBlob` for the headless path), Import reads a pasted blob via a paper-styled field (input.js gains a guarded `_fieldFocus` char capture, inert when unfocused) and validates it through the new PURE `logic.validateSaveBlob` (schema version + the EXISTING migration chain + a hard refuse on anything that does not parse/normalize) → replaces the save and reloads; a corrupt paste is REFUSED with the current save untouched + a one-line banner, and a valid-but-old v1-era blob imports through the migration chain to v10; SAVE_VERSION stays 10). Stages 89–91 = v1.6 W1–W3 (gamepad: raw-Gamepad feed, connection state + full-screen focus, Reeds-mode parity). Stage 88 = v1.6 R6 the Reeds run probe, stages 83–87 = v1.6 R1–R5 (THE LANTERN + Reeds biome shell, flooded banks + inverted-gravity, R5 save gate, R3 bestiary, R4 the Silt Wyrm). Stage 80 = v1.5 K9 Field Guide + first-sight callouts, and every earlier stage (P10 culling stage 24, the main-flow stages, save/migration, NG+ scaling, gold economy, Curator Challenge, SFX/music, presentation, and micro-polish) remains green.
+Last verified: 2026-09-07 (v17-2 session). **v1.7 Batch 1 (D1 + D2 + smoke-suite determinism hygiene) COMPLETE.** `node tests/smoke.mjs` = **ALL STAGES PASSED** (now **deterministic** — the harness seeds `Math.random` with a fixed mulberry32, so the I1 "smoke x3" audit gate is fully reproducible). The new stages 95 (D1) + 96 (D2) verify the Wander pure-path + the taste system; the older version-pin stages (M1/G3/K9/R5/Q3/W1) were updated to the current `SAVE_VERSION = 11`. Hand-tuned pacing unchanged: `pace.mjs` ~17.3 min, `humance.mjs` ~18.2 min (15–20 band). `SAVE_VERSION = 11`. **D3 is next (Wander × Reeds cross-run + `tests/wandpace.mjs`).**
+
+Last verified: 2026-09-07. **v1.7 IN PROGRESS — D1 (pure seeded wander
+content) + D2 (the Wander "taste") + a hygiene commit landed (sessions v17 /
+v17-2). `node tests/smoke.mjs` = ALL SMOKE TESTS PASSED ×3 (now 96 stages:
+95 = D1 the pure seeded wander content generator, 96 = D2 the Wander
+taste). SAVE_VERSION is now 11 (D1 bumped 10 → 11 for `save.wanderSeed`);
+the era-pinned stage asserts (G3 / M1 / K9 / R5 / W1 / Q3) all updated to
+11. The pre-existing stage-75 K4 flake is PINNED (harness Math.random is now
+a seeded mulberry32 stream, so the whole suite is byte-reproducible; 15/15
+flake-check green). Hand-tuned pace 17.3 / humance 18.2 min UNCHANGED
+(Wander is OFF by default). Below, the v1.6 COMPLETE note. ---... [truncated]
 
 **v1.3 M14 N1 (NG+ unlock + Next Expedition flow) — implemented + tested (2026-09-06, Batch 7, item 1).** `SAVE_VERSION` 3→4 with a `SAVE_MIGRATIONS` v3→v4 step + `normalizeNGCycle` (a v3 save with no `ngCycle` loads as `ngCycle: 0`, unchanged, no NG+ UI visible). A flat `save.ngCycle` field (0 = first-time player) persists the New Game+ cycle. `ngUnlocked(save)` (pure, `stats.victories > 0`) gates all NG+ UI. A "Next Expedition (New Game+)" button appears on the **title** (shared slot with the fresh-save-only guided button — they never coexist) and the **end screen** (slotted between "Rest at the Atelier" and "Return to the Pond") **only when a victory is recorded**; a returning first-time player (ngCycle 0) sees ZERO new UI. Choosing it (`_beginNextExpedition()`) advances `save.ngCycle` by 1, persists it, and starts a run that carries `ngCycle` (drives NG+ scaling N2 + boss selection N3). Smoke stage 46 (fresh save shows no NG+ UI; a completed-victory save shows the button; choosing it starts a run with `ngCycle 1`, persisted on disk at saveVersion 4 + round-trips through the loader; a first-time save cannot accidentally advance). **Suite now 48/48 (with N2+N3). First-time pacing unchanged (N1 adds no timed-run time — NG+ is gated behind a victory).**
 
