@@ -907,3 +907,135 @@ with Wander OFF) holds. The season is signed off.
   envelope data from `wandpace.mjs` proves a wider generation is safe.
 - **Image/audio/font assets** — invariant, unchanged: everything is
   procedural (math.js shapes, canvas, WebAudio synth).
+---
+
+## v1.8 — "The Full Collection" (PLANNED; the 1.0 release version)
+
+**Theme:** the gallery is *full*. Every version so far has added a *way to
+play* (the tutorial, gold/NG+, Reeds, the gamepad, QoL, Wander procgen + the
+Warden). v1.8 closes the loop it has been implying since the game was named:
+**the gallery actually completes**, the last deferred depth item (a "true" NG+
+Reeds variant / a dedicated 6th boss) lands, and the game gets a real **1.0
+release surface** (README + version string + a one-line changelog). It is the
+version a player can actually be *finished* on.
+
+**Scope (small-to-medium; the version that ships 1.0):**
+
+### A. The NG+ Reeds descent + the 6th boss archetype (the deferred depth item)
+
+The deferred list named this explicitly and v1.7 reduced (but did not close)
+the need: D3's Wander × Reeds parity gives NG+ players *generated* Reeds
+content, but a **dedicated, hand-tuned NG+ Reeds layout** — a deeper lower-bank
+with a denser bestiary and a Silt Wyrm "twin" — is still the named next-depth
+item. v1.8 lands it as a real place, not a procgen roll.
+
+- **G1 — the "Black Reeds" (NG+ Reeds variant).** A second Reeds *layout*
+  variant, victory-gated **AND NG+-gated** (unlocks at `ngCycle >= 1` and a
+  Reeds victory, mirroring how Reeds itself gates on a swamp victory). A NEW
+  `REEDS_DARK` layout table (or a parameterized variant of the existing one):
+  a deeper descent, a denser Wisp/Serpent/Leech bestiary, an extra flood /
+  gravity pocket, and its own lantern-economy tuning. The v1.6 Reeds layout
+  (cycle-0 Reeds) is **untouched** — a cycle-0 Reeds run stays byte-identical.
+- **G2 — the "Umbral Wyrm" (6th boss archetype).** The Black Reeds' apex
+  predator: the Silt Wyrm's *twin*, a darker, faster, **dual-phase** boss that
+  uses both the fuel-siphon (Warden-inherited) and the flood-pocket (Wyrm-
+  inherited) mechanics. A NEW `logic.js` `UMBRA_WYRM` tuning + `umbrStep`
+  alongside `SILT_WYRM`/`wyrmStep`. ~60k HP, 3-hue awaken via the existing
+  `paintBoss`/`bossStep` path, a telegraphed dual maw + a "deep dark" final
+  phase where the lantern is mandatory. Default-OFF (it only appears in the
+  NG+ Reeds variant), so every existing run is byte-identical. A NEW
+  `tests/umbrapace.mjs` probe targets a **2.5–4 min** human band (the longest
+  Reeds boss, one tier above the Silt Wyrm's ~3.9).
+- **G3 — the selection wiring + a `blackpace.mjs` probe.** The end-of-Reeds-
+  descent boss is the Umbral Wyrm (NG+ Reeds variant) vs the Silt Wyrm (cycle-0
+  Reeds) vs the Wander-apex Warden (Wander × Reeds). A NEW
+  `tests/blackpace.mjs` probe measures the Black Reeds run (a new hand-tuned
+  22–26 min band, one tier above Reeds) + the Umbral Wyrm (the 2.5–4 min band).
+  A smoke stage proves: cycle-0 Reeds is byte-identical (the new variant only
+  activates at NG+), the Umbral Wyrm is only-in-Black-Reeds, the dual-phase +
+  siphon + maw mechanics, and the gate logic.
+
+**The load-bearing invariant for G1–G3 (pin this):** every *existing* run
+stays byte-identical. The Black Reeds variant + Umbral Wyrm are gated behind
+`ngCycle >= 1` AND a Reeds victory, so a cycle-0 Reeds run, a Wander × Reeds
+run, and a hand-tuned (Wander-OFF) Reeds run must deep-equal their v1.7
+tuning / content. `reedspace.mjs` (the cycle-0 Reeds probe) is **re-verified
+in band unchanged** (20–25 min); only the NEW `blackpace.mjs` /
+`umbrapace.mjs` probes measure the new content.
+
+### B. The gallery completes (the namesake payoff)
+
+The game is called *Frogue Gallery* but a player can never be *finished* on it.
+v1.8 gives the gallery a **completion state**.
+
+- **H1 — the "Full Collection" ledger.** A NEW `logic.js` `GALLERY_COMPLETE`
+  tuning + a `galleryCompletion(save)` pure check: the catalog of 10 paintings
+  **all owned** + every boss defeated at least once (gray / green / gilded /
+  Silt Wyrm / Warden / Umbral Wyrm) + a first-time victory + a Reeds victory.
+  The existing `galleryBonus` "Rehung Frame" meta (A4) becomes the *capstone*:
+  at Full Collection the player unlocks a **permanent** `galleryBonus` level (a
+  saved, persistent tuning bump — the "the museum keeps you better" payoff) +
+  a one-time cinematic (reusing the v1.5 first-victory cinematic machinery,
+  the "full gallery blooms" beat). A NEW `save.galleryComplete` boolean latch
+  (SAVE_VERSION 11 → 12, migration defaults `false` for legacy saves).
+- **H2 — the ledger UI + the completion beat.** The existing gallery / ledger
+  frame (the G2 gilded-frame presentation) gains a **progress readout**
+  (X / 10 paintings, Y / 6 bosses) so a player can *see* what they are missing.
+  At Full Collection, a title-screen "collection complete" badge + the capstone
+  cinematic. Pure presentation over `galleryCompletion(save)`.
+
+### C. Release surface (productization)
+
+- **R1 — the README + version string.** A `README.md` (the game's public face):
+  what it is, how to play (open `index.html` in a browser — the loopback-only
+  note), the controls (keyboard + gamepad, from the v1.6 W1 map), the meta
+  (build → expedition → gallery), the NG+ / Reeds / Wander modes, and a short
+  changelog. `index.html` + the title screen carry a **`1.0.0`** version
+  string (replacing the dev-marker). `docs/PROJECT_STATUS.md` gets the
+  "v1.8 = 1.0.0 release" marker.
+- **R2 — the changelog + DECISIONS.md close-out.** `docs/DECISIONS.md`
+  records the 1.0 call + the v1.8 scope decisions (the NG+ Reeds variant
+  choice, the Full Collection capstone, the version bump). `docs/ROADMAP.md`
+  gets the post-v1.8 deferred list.
+
+### D. Season audit (the final gate)
+
+- **A1 — the v1.8 audit (K10/C4/A1-style, the 1.0 gate):** smoke ×3 green;
+  `pace.mjs` + `humance.mjs` first-time IN the 15–20 band (hand-tuned, Wander
+  OFF); `ngpace.mjs` cycle-1 in band; `bosspace.mjs` + `reedspace.mjs` in their
+  documented ranges **UNCHANGED**; the NEW `blackpace.mjs` (Black Reeds 22–26
+  min + Umbral Wyrm) and `umbrapace.mjs` (2.5–4 min) in their bands; the NEW
+  Full Collection gate (a save with every painting + every boss + both
+  victories → `galleryCompletion` true + the capstone `galleryBonus` applied);
+  the byte-identity re-check (a cycle-0 Reeds run, a Wander × Reeds run, and a
+  hand-tuned run all deep-equal their v1.7 tuning / content — JSON-compare
+  `makeTuning` / `applyNGPlus` across the whole v1.8 diff); P10 culling green;
+  **zero new dependencies** (git-diff since v1.7-complete `34eeda2`: only
+  `src/` + `tests/` + `docs/` + `PROJECT_STATE.md` + the new `README.md`);
+  **SAVE_VERSION 12** migration chain loads a v1-era save end-to-end; tree
+  clean; PROJECT_STATE.md + docs/PROJECT_STATUS.md marked v1.8 / **1.0.0
+  COMPLETE** with the audit table. Acceptance: the commit itself.
+
+### Explicitly deferred past v1.8 (not forgotten)
+
+- **Accessibility (X1 colorblind glyphs, X2 remappable keys, X3 text-size
+  toggle)** — Joel's standing call; X2 (key remapping) is the natural companion
+  to the v1.6 gamepad and stays parked with it.
+- **Gold as a 4th combat pigment** — still fights the 3-hue pillar; stays
+  meta-only.
+- **CRT scanlines / retro filters** — rejected three times; the painted world
+  has no retro mode.
+- **Co-op / multiplayer** — still an architecture mismatch with loopback-only,
+  single-session, localStorage; no near-term plan.
+- **Lantern in the swamp** — deliberately Reeds-only for v1.6; a balance item,
+  not a scope item.
+- **Unbounded / infinite procedural generation** — v1.7's Wander is a
+  **bounded, pacing-envelope** variant, not an infinite generator; a true
+  open-ended generator still risks both pacing targets and stays out until the
+  envelope data from `wandpace.mjs` proves a wider generation is safe.
+- **A second expedition *biome* (a new hand-tuned place beyond swamp + Reeds +
+  Black Reeds)** — v1.8 lands the Black Reeds as the *third* place (a variant
+  of Reeds, not a net-new biome); a genuinely new biome (e.g. a "Gallery
+  Underground" / "the Atelier at night") is a future-version item.
+- **Image/audio/font assets** — invariant, unchanged: everything is
+  procedural (math.js shapes, canvas, WebAudio synth).

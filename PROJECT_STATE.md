@@ -5,6 +5,96 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
+### v1.8 "The Full Collection" — NEXT ACTION (orchestrator handoff, 2026-09-08)
+
+**v1.7 is COMPLETE** (all 9 items D1–D4 / F1 / O1 / O2 / I1 committed, 101/101
+smoke green, all 7 probes in band, hand-tuned runs byte-identical with Wander
+OFF, 13 commits, season signed off at `34eeda2`). The full **v1.8
+plan-of-record is now in `docs/ROADMAP.md` §v1.8** — read it first. v1.8 is
+**the 1.0 release version** ("The Full Collection"): the last deferred depth
+item (a dedicated NG+ Reeds variant + its 6th boss, the Umbral Wyrm) lands,
+the gallery gets a real **completion state** (the namesake payoff the game
+never had), and the game gets a real **release surface** (README + 1.0.0
+version string + changelog).
+
+**Batch 1 (this re-kick): land G1, then G2, then G3** — the Black Reeds NG+
+Reeds variant + the Umbral Wyrm 6th boss + the selection wiring + the two new
+probes (`blackpace.mjs` + `umbrapace.mjs`) as their own `feat(v1.8 G1)` /
+`feat(v1.8 G2)` / `feat(v1.8 G3)` commits, each smoke-green. The load-bearing
+invariant: **every existing run stays byte-identical** (the Black Reeds variant
++ Umbral Wyrm are gated behind `ngCycle >= 1` AND a Reeds victory; a cycle-0
+Reeds run, a Wander × Reeds run, and a hand-tuned run must deep-equal their
+v1.7 tuning / content; `reedspace.mjs` re-verified in band unchanged). Do NOT
+touch H (gallery completion) or R (release surface) this session — G1–G3 is a
+full session on its own.
+
+**Full item list (per the plan-of-record):**
+- **G1** `feat(v1.8 G1)` — the "Black Reeds" NG+ Reeds variant: a NEW
+  `REEDS_DARK` layout (deeper descent, denser Wisp/Serpent/Leech bestiary, an
+  extra flood / gravity pocket, its own lantern-economy tuning), gated behind
+  `ngCycle >= 1` AND a Reeds victory. The v1.6 Reeds layout (cycle-0) is
+  untouched.
+- **G2** `feat(v1.8 G2)` — the "Umbral Wyrm" 6th boss archetype: a NEW
+  `logic.js` `UMBRA_WYRM` tuning + `umbrStep` alongside `SILT_WYRM`/
+  `wyrmStep`; ~60k HP, 3-hue awaken via the existing `paintBoss`/`bossStep`
+  path, a telegraphed dual maw + a "deep dark" final phase where the lantern is
+  mandatory; the fuel-siphon (Warden-inherited) + flood-pocket (Wyrm-
+  inherited) mechanics; default-OFF (only appears in the Black Reeds variant);
+  a NEW `tests/umbrapace.mjs` probe targeting a **2.5–4 min** human band.
+- **G3** `feat(v1.8 G3)` — the selection wiring (end-of-Reeds-descent boss:
+  Umbral Wyrm [NG+ Reeds] vs Silt Wyrm [cycle-0 Reeds] vs Warden [Wander ×
+  Reeds]) + a NEW `tests/blackpace.mjs` probe (the Black Reeds run, a new
+  hand-tuned 22–26 min band, one tier above Reeds) + a smoke stage proving:
+  cycle-0 Reeds is byte-identical, the Umbral Wyrm is only-in-Black-Reeds, the
+  dual-phase + siphon + maw mechanics, and the gate logic.
+- **H1** `feat(v1.8 H1)` — the "Full Collection" ledger: a NEW `logic.js`
+  `GALLERY_COMPLETE` tuning + `galleryCompletion(save)` pure check (all 10
+  paintings owned + every boss defeated at least once [gray / green / gilded /
+  Silt Wyrm / Warden / Umbral Wyrm] + a first-time victory + a Reeds victory);
+  the existing `galleryBonus` "Rehung Frame" meta becomes the *capstone* (a
+  permanent saved `galleryBonus` level at Full Collection — the "the museum
+  keeps you better" payoff) + a one-time cinematic (reusing the v1.5 first-
+  victory cinematic machinery). A NEW `save.galleryComplete` boolean latch +
+  boss-defeat tracking flags (SAVE_VERSION 11 → 12, migration defaults
+  `false` / `[]` for legacy saves).
+- **H2** `feat(v1.8 H2)` — the ledger UI + the completion beat: the existing
+  gallery / ledger frame gains a **progress readout** (X / 10 paintings, Y / 6
+  bosses) so a player can *see* what they are missing; at Full Collection a
+  title-screen "collection complete" badge + the capstone cinematic. Pure
+  presentation over `galleryCompletion(save)`.
+- **R1** `feat(v1.8 R1)` — the README + version string: a `README.md` (what it
+  is, how to play [open `index.html` in a browser, loopback-only], the controls
+  [keyboard + gamepad, from the v1.6 W1 map], the meta [build → expedition →
+  gallery], the NG+ / Reeds / Wander modes, a short changelog); `index.html` +
+  the title screen carry a **`1.0.0`** version string; `docs/PROJECT_STATUS.md`
+  gets the "v1.8 = 1.0.0 release" marker.
+- **R2** `docs(v1.8 R2)` — the changelog + DECISIONS.md close-out:
+  `docs/DECISIONS.md` records the 1.0 call + the v1.8 scope decisions;
+  `docs/ROADMAP.md` gets the post-v1.8 deferred list.
+- **A1** `docs(v1.8)` — the v1.8 / 1.0.0 season audit (K10/C4/A1-style, the
+  final gate): smoke ×3 green; `pace.mjs` + `humance.mjs` first-time IN the
+  15–20 band (hand-tuned, Wander OFF); `ngpace.mjs` cycle-1 in band;
+  `bosspace.mjs` + `reedspace.mjs` in their documented ranges **UNCHANGED**; the
+  NEW `blackpace.mjs` (Black Reeds 22–26 min + Umbral Wyrm) and
+  `umbrapace.mjs` (2.5–4 min) in their bands; the NEW Full Collection gate (a
+  save with every painting + every boss + both victories → `galleryCompletion`
+  true + the capstone `galleryBonus` applied); the byte-identity re-check (a
+  cycle-0 Reeds run, a Wander × Reeds run, and a hand-tuned run all deep-equal
+  their v1.7 tuning / content — JSON-compare `makeTuning` / `applyNGPlus`
+  across the whole v1.8 diff); P10 culling green; **zero new dependencies**
+  (git-diff since v1.7-complete `34eeda2`: only `src/` + `tests/` + `docs/` +
+  `PROJECT_STATE.md` + the new `README.md`); **SAVE_VERSION 12** migration chain
+  loads a v1-era save end-to-end; tree clean; PROJECT_STATE.md +
+  docs/PROJECT_STATUS.md marked v1.8 / **1.0.0 COMPLETE** with the audit table.
+  Acceptance: the commit itself.
+
+**Operating loop (unchanged):** read `AGENTS.md` + `PROJECT_STATE.md` + the
+§v1.8 plan-of-record first; work in bounded chunks (one item = one commit);
+test (smoke green) after each commit; keep PROJECT_STATE.md + docs/
+PROJECT_STATUS.md updated; ping the orchestrator (committed git + state docs)
+when a chunk lands; never leave a `http.server` running; never discard
+uncommitted user work. The full invariants are in the plan-of-record.
+
 ### v1.7 "The Ever-Shifting Swamp" — COMPLETE (session v17-f1, 2026-09-08; all 9 items landed — D1 + D2 + D3 + D4 + **F1** + **O1** + **O2** + **I1** — the I1 season audit signed the season off)
 
 **v1.6 is COMPLETE** (all 13 items R1–R6 / W1–W3 / Q1–Q3 / A1 committed, 94/94
