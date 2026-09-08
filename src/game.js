@@ -622,7 +622,7 @@ export class Game {
         // the options focus list: the gamepad-mode toggle + the visual toggles
         // + back (the sliders are drag-only, not focus-steppable — a gamepad
         // can't scrub a slider without a horizontal cursor).
-        return { id: 'options', list: [o.gpad, o.shake, o.vignette, o.grain, o.back] };
+        return { id: 'options', list: [o.gpad, o.shake, o.vignette, o.grain, o.wander, o.back] };
       }
       const t = g._titleLayout();
       const items = [ { rect: { x: t.bx, y: t.by, w: t.bw, h: t.bh } } ];        // Start
@@ -6045,29 +6045,36 @@ _drawAtelier(ctx) {
     // bottom (py + ph - 66), so its rect moves down with the taller panel.
     // Q3 (v1.6): the Save section grows it 462->560 (clear of an 800-tall
     // viewport and the smoke test's 900x700 canvas).
-    const pw = 460, ph = 560, px = cx - pw / 2, py = cy - ph / 2;
+    // D4 (v1.7): the Wandering Expeditions toggle (a FIFTH toggle, default OFF)
+    // grows it 560->598; the back button stays anchored to py + ph - 66.
+    const pw = 460, ph = 598, px = cx - pw / 2, py = cy - ph / 2;
     const padX = 46;
     const trackX = px + padX, trackW = pw - padX * 2;
     const row = (baseY) => ({ x: trackX, y: baseY, w: trackW, h: 22 });
     const yMusic = py + 112, ySfx = py + 178, yShake = py + 240, yVign = py + 278, yGrain = py + 316;
+    // D4 (v1.7): the "Wandering Expeditions" toggle sits below the paper-grain
+    // row; the panel grows 560->598 to fit it and the gamepad + Save rows below
+    // shift down with it (the back button is anchored to py + ph - 66).
+    const yWander = py + 354;
     // W1 (v1.6 Module W): the "Gamepad: Auto / Off" row sits below the paper
     // grain toggle; the panel grows 424->462 to fit it and the back button
     // (anchored to py + ph - 66) moves down with the taller panel.
-    const yGpad = py + 354;
+    const yGpad = py + 392;
     // Q3 (v1.6): SAVE EXPORT/IMPORT — the sanctioned loopback-only escape hatch
     // is a PASTE-based round trip (no file APIs, no server). The "Save" section
     // below the gamepad row has an EXPORT button (copies the save JSON to the
     // clipboard), an IMPORT button, and a paper-styled PASTE field (a text
     // input) on the right. The panel grows 462->558 to fit the section; the
     // back button stays anchored to py + ph - 66 and moves down with it.
-    const ySaveHead = py + 392;
-    const yExport = py + 410, yImport = py + 450, yField = py + 410;
+    const ySaveHead = py + 430;
+    const yExport = py + 448, yImport = py + 488, yField = py + 448;
     const back = { x: cx - 90, y: py + ph - 66, w: 180, h: 46 };
     return { cx, cy, pw, ph, px, py, padX, trackX, trackW,
       music: row(yMusic), sfx: row(ySfx),
       shake: { x: trackX, y: yShake, w: trackW, h: 26 },
       vignette: { x: trackX, y: yVign, w: trackW, h: 26 },
       grain: { x: trackX, y: yGrain, w: trackW, h: 26 },
+      wander: { x: trackX, y: yWander, w: trackW, h: 26 },
       gpad: { x: trackX, y: yGpad, w: trackW, h: 26 },
       saveHead: ySaveHead,
       export: { x: trackX, y: yExport, w: 132, h: 34 },
@@ -6239,6 +6246,7 @@ _drawAtelier(ctx) {
       if (this._mouseIn(g.shake.x, g.shake.y, g.shake.w, g.shake.h)) { this._toggleOpt('shake'); return; }
       if (this._mouseIn(g.vignette.x, g.vignette.y, g.vignette.w, g.vignette.h)) { this._toggleOpt('vignette'); return; }
       if (this._mouseIn(g.grain.x, g.grain.y, g.grain.w, g.grain.h)) { this._toggleOpt('grain'); return; }
+      if (this._mouseIn(g.wander.x, g.wander.y, g.wander.w, g.wander.h)) { this._toggleOpt('wander'); return; }   // D4 (v1.7): the Wandering Expeditions toggle
       // W1: the gamepad Auto/Off row toggles the feed mode.
       if (this._mouseIn(g.gpad.x, g.gpad.y, g.gpad.w, g.gpad.h)) { this._setGamepadMode(); return; }
       // Q3: the Save section. Export writes the save blob to the clipboard.
@@ -6315,6 +6323,10 @@ _drawAtelier(ctx) {
     this._drawToggle(c, g.vignette, 'Low-HP vignette', this.options.vignette);
     // C3 (v1.3 M16): the paper-grain presentation toggle (default OFF).
     this._drawToggle(c, g.grain, 'Paper grain', this.options.grain);
+    // D4 (v1.7): the "Wandering Expeditions" toggle (default OFF). A FIFTH row,
+    // the same P9 machinery as the other toggles — clicking it flips
+    // options.wander and persists to the options blob.
+    this._drawToggle(c, g.wander, 'Wandering Expeditions', this.options.wander);
     // W1 (v1.6 Module W): the "Gamepad: Auto / Off" row. A two-state pill:
     // Auto (engages while a pad is connected + active) vs Off (feed skipped).
     this._drawGpad(c, g.gpad, this.options.gamepad);

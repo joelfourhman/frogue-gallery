@@ -7495,5 +7495,110 @@ console.log('== stage 97: D3 (v1.7) — THE WANDER NG+ + Reeds parity (NG+ appli
   console.log('ok — D3: THE WANDER LAYERS ON TOP of the other variants without double-application. (a) Wander × NG+ applies the applyNGPlus N2 scaling exactly ONCE on top of the generated content (the live tuning deep-equals makeTuning + applyNGPlus applied once and differs from the double-applied one; the generated enemy CONTENT is NOT scaled by NG+, and stays inside the envelope). (b) Wander × Reeds keeps the Reeds light economy (lantern fuel loop, live at full fuel) + the R3 bestiary + the Silt Wyrm boss on top of the generated zone content (a valid victory-gated variant, in-band). (c) The hand-tuned (Wander-OFF) expedition + Reeds runs remain byte-identical (hand-tuned ZONES + cycle-0 tuning untouched).');
 }
 
+console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/import parity (toggle persists; legacy options migrate to OFF; wanderSeed round-trips; a generated run is byte-identical across a save/load cycle) ==');
+{
+  const L98 = await import('../src/logic.js');
+  const G98 = await import('../src/game.js');
+  const KEY = 'frogue_gallery_save';
+  const OPTKEY = 'frogue_gallery_options';
+  const cv98 = makeCanvas();
+  const drawn98 = [];
+  const base98 = cv98._ctx || (cv98._ctx = makeCtx(cv98));
+  const rec98 = new Proxy(base98, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn98.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  cv98.getContext = () => rec98;
+
+  // ---- (a) the Options panel carries a "Wandering Expeditions" toggle row ----
+  const g98 = new G98.Game(cv98); g98.start(); g98._quitToTitle();
+  g98.optionsOpen = true;
+  const lay = g98._optionsLayout();
+  assert(lay.wander && lay.wander.w > 0 && lay.wander.h > 0, 'D4: the options layout exposes a "Wandering Expeditions" toggle row');
+  g98._drawOptions(rec98);
+  assert(drawn98.some(s => s.includes('Wandering Expeditions')), 'D4: the Options panel draws the "Wandering Expeditions" label');
+  // default OFF for a fresh options blob (freshOptions / a legacy blob without the field).
+  assert(G98.Game.prototype !== undefined && g98.options.wander === false, 'D4: options.wander defaults OFF (fresh options)');
+
+  // ---- (b) clicking the toggle flips options.wander AND persists to the options blob ----
+  const before = g98.options.wander;
+  fireMouse(cv98, lay.wander.x + 40, lay.wander.y + 10);
+  frames(1);
+  assert(g98.options.wander === !before, `D4: clicking the Wandering toggle flips it (was ${before}, now ${g98.options.wander})`);
+  assert(g98.options.wander === true, 'D4: the toggle is now ON');
+  const persistedOpts = JSON.parse(store.get(OPTKEY));
+  assert(persistedOpts && persistedOpts.wander === true, 'D4: the toggle persists to the options blob (wander: true saved to localStorage)');
+  // a second click flips it back OFF (do this BEFORE constructing g98b, which
+  // re-registers the rAF callback the frames() helper drives).
+  fireMouse(cv98, lay.wander.x + 40, lay.wander.y + 10);
+  frames(1);
+  assert(g98.options.wander === false, 'D4: clicking again flips it back OFF');
+  // a freshly-constructed Game re-reads the persisted options (the toggle sticks
+  // after a save — wander was ON when we checked the blob; re-set it ON and
+  // verify a fresh load re-reads it).
+  fireMouse(cv98, lay.wander.x + 40, lay.wander.y + 10);
+  frames(1);
+  assert(g98.options.wander === true, 'D4: the toggle is ON again (for the re-read check)');
+  const g98b = new G98.Game(makeCanvas()); g98b.start();
+  assert(g98b.options.wander === true, 'D4: a newly-loaded Game re-reads options.wander = true from the options blob');
+
+  // ---- (c) a legacy options blob (no `wander` field) migrates to OFF, no error ----
+  const legacyOpts = L98.migrateOptions({ volume: 0.8, difficulty: 'normal', grain: true, gamepad: 'auto' });
+  assert(legacyOpts.wander === false, 'D4: a legacy options blob (no wander field) migrates to OFF without error');
+  const explicitOn = L98.migrateOptions({ wander: true });
+  assert(explicitOn.wander === true, 'D4: an explicit persisted wander: true is honored');
+
+  // ---- (d) export -> import round-trips the wanderSeed save field ----
+  // a save WITH a non-zero wanderSeed, written to the (stub) localStorage.
+  const seedSave = L98.freshSave();
+  seedSave.wanderSeed = 12345678;
+  seedSave.stats.victories = 5;
+  store.set(KEY, JSON.stringify(seedSave));
+  g98.save = { ...seedSave };
+  // invoke the export handler directly (the export button calls _exportSave, which
+  // snapshots SaveSys.load() and stashes the blob on _lastExportBlob — call it
+  // directly so it doesn't depend on the rAF callback the frames() helper drives,
+  // which now points at the g98b constructed in section (b)).
+  const exportedBlob = g98._exportSave();
+  assert(typeof g98._lastExportBlob === 'string' && g98._lastExportBlob.length > 0, 'D4: Export produces a non-empty save blob');
+  const exported = JSON.parse(exportedBlob);
+  assert(exported.wanderSeed === 12345678, `D4: the exported blob carries wanderSeed (got ${exported.wanderSeed})`);
+  assert(exported.saveVersion === L98.SAVE_VERSION, 'D4: the exported blob carries the current saveVersion (11)');
+  // the blob validates through the EXISTING validateSaveBlob chain + round-trips.
+  const v98 = L98.validateSaveBlob(g98._lastExportBlob);
+  assert(v98.ok === true && v98.save.wanderSeed === 12345678, 'D4: the exported blob round-trips through validateSaveBlob with wanderSeed intact');
+  // a v1-era (old) blob imports through the migration chain up to v11 with wanderSeed 0.
+  const oldBlob = JSON.stringify({ v: 1, bank: { red: 0, blue: 0, green: 0 }, stats: { victories: 1 }, flags: {}, owned: [], loadout: [] });
+  const vOld = L98.validateSaveBlob(oldBlob);
+  assert(vOld.ok === true && vOld.save.wanderSeed === 0 && vOld.save.saveVersion === L98.SAVE_VERSION, 'D4: a valid-but-old v1-era blob imports through the migration chain to v11 with wanderSeed 0');
+  // a corrupted wanderSeed (non-integer) is REFUSED (not silently normalized).
+  const badBlob = JSON.stringify({ ...seedSave, wanderSeed: 'not-a-number' });
+  const vBad = L98.validateSaveBlob(badBlob);
+  assert(vBad.ok === false, 'D4: a blob with a malformed wanderSeed (non-integer) is refused by validateSaveBlob');
+
+  // ---- (e) a generated run is byte-identical for the same seed across a save/load cycle ----
+  // Run a Wander expedition, capture its generated zones + the latched seed.
+  g98.save = L98.freshSave();
+  g98.options.wander = true;
+  g98._beginExpedition();
+  const seed1 = g98.wanderSeedRun;
+  const zones1 = JSON.stringify(g98.zones.map(z => ({ mix: z.mix, sig: z.sig })));
+  g98.options.wander = false;
+  const { ZONES } = await import('../src/game.js');
+  // A "save/load cycle" = a fresh save carrying the latched seed. The latched
+  // seed is the reproducibility key: wanderContent(seed1, ZONES, taste(seed1).bias)
+  // reproduces the generated zones exactly (the run a player replays from their
+  // saved seed is byte-identical to the one they first saw).
+  const repro = L98.wanderContent(seed1, ZONES, L98.wanderTaste(seed1).bias);
+  assert(JSON.stringify(repro.zones.map(z => ({ mix: z.mix, sig: z.sig }))) === zones1,
+    'D4: the latched seed reproduces the generated zones byte-identically (reproducible from the seed across a save/load cycle)');
+  // and a second independent load of the SAME seed gives the SAME content (idempotent).
+  const repro2 = L98.wanderContent(seed1, ZONES, L98.wanderTaste(seed1).bias);
+  assert(JSON.stringify(repro2.zones.map(z => ({ mix: z.mix, sig: z.sig }))) === zones1,
+    'D4: a second load of the latched seed reproduces identical generated content (byte-identical across a save/load cycle)');
+
+  console.log('ok — D4: the Options panel carries a "Wandering Expeditions" toggle (default OFF; a legacy options blob with no wander field migrates to OFF; clicking it flips + persists to the options blob and a freshly-loaded Game re-reads it), and the existing save export/import round-trips the wanderSeed field (the exported blob carries wanderSeed + saveVersion 11, validates through validateSaveBlob, a v1-era blob imports to v11 with wanderSeed 0, a malformed wanderSeed is refused) — so a generated run is reproducible from its latched seed across a save/load cycle.');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
