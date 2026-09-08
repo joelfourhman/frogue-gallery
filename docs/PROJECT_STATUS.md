@@ -4,7 +4,7 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-07 (v1.1 + v1.2 + v1.3 + v1.4 "Make It Amazing" COMPLETE; v1.5 "The Living Swamp" COMPLETE — all 10 items K1–K10 done and committed (smoke 80/80; first-time pace 17.4 / humance 18.0 IN the 15–20 band; NG+ cycle-1 19.5; SAVE_VERSION 9). **v1.6 "Beneath the Reeds" APPROVED + EXECUTING (2026-09-07; Joel: "Plan and execute 1.6" — execution pre-approved): 13 items, 4 modules (R1–R6 biome / W1–W3 gamepad / Q1–Q3 QoL / A1 audit) in `docs/ROADMAP.md` §v1.6 — victory-gated new biome + THE LANTERN mechanic, 3 light-keyed creatures, the 4th boss archetype (The Silt Wyrm), raw-Gamepad-API gamepad support, 3 QoL items, final regression audit. Deferred items folded in: gamepad + 4th boss archetype. **BATCH 1 (R1 + R2 + R5) COMPLETE (smoke 85/85); BATCH 2 (R3 + R4 + R6) COMPLETE (bestiary + the Silt Wyrm 4th boss + reedspace probe — smoke stages 86/87/88; Reeds human ~22.2 min in the 20–25 designed-descent band, Wyrm 3.9 min in the 2–4 min class; first-time 17.3/18.3 IN band, cycle-0 byte-identical). Module R (the Reeds biome) is done — next BATCH 3 (W1+W2+W3 gamepad).** Batch order in PROJECT_STATE.md → Immediate Next Action.
+**Last PM audit: 2026-09-07 (v1.1 + v1.2 + v1.3 + v1.4 "Make It Amazing" COMPLETE; v1.5 "The Living Swamp" COMPLETE — all 10 items K1–K10 done and committed (smoke 80/80; first-time pace 17.4 / humance 18.0 IN the 15–20 band; NG+ cycle-1 19.5; SAVE_VERSION 9). **v1.6 "Beneath the Reeds" COMPLETE (2026-09-07; Joel: "Plan and execute 1.6" — execution pre-approved; all 13 items done and committed): 13 items, 4 modules (R1–R6 biome / W1–W3 gamepad / Q1–Q3 QoL / A1 audit) in `docs/ROADMAP.md` §v1.6 — victory-gated new biome + THE LANTERN mechanic, 3 light-keyed creatures, the 4th boss archetype (The Silt Wyrm), raw-Gamepad-API gamepad support, 3 QoL items, final regression audit. Deferred items folded in: gamepad + 4th boss archetype. **ALL FOUR BATCHES COMPLETE** — BATCH 1 (R1+R2+R5, smoke 85/85), BATCH 2 (R3+R4+R6, smoke stages 86/87/88), BATCH 3 (W1+W2+W3 gamepad, smoke stages 89–91), BATCH 4 (Q1+Q2+Q3 QoL + A1 audit, smoke stages 92–94). Final suite **94/94 green ×3**; first-time **pace 17.3 / humance 18.1 min (IN 15–20)**; NG+ cycle-1 **19.5 min (IN band)**; Reeds run **~22.2 min (IN 20–25)** + Silt Wyrm **~3.9 min human (IN 2–4)**; P10 culling green; zero new deps; SAVE_VERSION 10 migration end-to-end; cycle-0 tuning byte-identical (630-byte blob). **v1.6 COMPLETE — no open scope.** Batch order + full audit table in PROJECT_STATE.md → Immediate Next Action + ROADMAP §v1.6.
 
 ## Current state
 
@@ -60,15 +60,18 @@ None. Loopback dev server, Node, and all tests are healthy.
 ## Next priority
 
 **v1.5 COMPLETE** (2026-09-07). All 10 items K1–K10 done and committed.
-**v1.6 "Beneath the Reeds" APPROVED + EXECUTING** (2026-09-07; execution
-pre-approved by Joel): 13 items, 4 modules (R1–R6 the Reeds biome —
-victory-gated, THE LANTERN, 3 light-keyed creatures, The Silt Wyrm 4th
-boss archetype, `reedspace.mjs` probe — / W1–W3 gamepad (raw Gamepad API) /
-Q1–Q3 QoL / A1 final regression + season audit). Fixed batch order +
-per-item acceptance in `docs/ROADMAP.md` §v1.6 + PROJECT_STATE.md →
-Immediate Next Action. First-time run stays 15–20 min (victory-gated
-biome; re-verify after every in-run item); SAVE_VERSION 9→10 only for the
-`reedsUnlocked` gate flag.
+**v1.6 "Beneath the Reeds" COMPLETE** (2026-09-07; all 13 items R1–R6 /
+W1–W3 / Q1–Q3 / A1 done and committed). The victory-gated Reeds biome
+(THE LANTERN, 3 light-keyed creatures, The Silt Wyrm 4th boss archetype,
+`reedspace.mjs` probe), raw-Gamepad-API gamepad support, 3 QoL items
+(pause run summary / end-screen recap / paste-based save export-import),
+and the final regression + season audit are all done. Final suite 94/94
+green ×3; first-time pace 17.3 / humance 18.1 min (IN 15–20); NG+ cycle-1
+19.5 min; Reeds run ~22.2 min (IN 20–25) + Silt Wyrm ~3.9 min (IN 2–4);
+zero new deps; SAVE_VERSION 10 migration end-to-end; cycle-0 tuning
+byte-identical. **No open scope for v1.6** — the next phase is whatever
+Joel approves after v1.6 review (the deferred list in ROADMAP §v1.6 is the
+boundary: accessibility X1–X3, gold pigment, gamepad, NG+, CRT filters).
 
 ## Release readiness
 
@@ -82,9 +85,8 @@ audio · M moments) across 5 batches of ~3; theme + order + acceptance in
 `docs/ROADMAP.md` §v1.4. The release stays playable at every commit.
 ## Release readiness
 
-Release: ready (DoD met, suite green). v1.1 + v1.2 + v1.3 + v1.4 + v1.5:
-**all complete**. v1.6 "Beneath the Reeds": **APPROVED + EXECUTING**
-(2026-09-07) — 13 items in 4 modules (R the Reeds biome + THE LANTERN · W
-gamepad · Q QoL · A audit); theme + fixed batch order + per-item
-acceptance in `docs/ROADMAP.md` §v1.6. The release stays playable at
-every commit.
+Release: ready (DoD met, suite green). v1.1 + v1.2 + v1.3 + v1.4 + v1.5 +
+v1.6: **all complete**. v1.6 "Beneath the Reeds" **COMPLETE** (2026-09-07)
+— all 13 items in 4 modules (R the Reeds biome + THE LANTERN · W gamepad ·
+Q QoL · A audit); final suite 94/94 green ×3, all pacing probes in band,
+zero new dependencies. The release stays playable at every commit.
