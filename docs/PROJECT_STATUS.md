@@ -4,7 +4,7 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-08 (v1.7 "The Ever-Shifting Swamp" COMPLETE — all 9 items D1–D4 + F1 + O1 + O2 + I1 done and committed; the I1 season audit (final gate, clean fresh session) re-ran every probe on the committed tree and all are IN band — smoke 101 stages green ×3 + 10/10 flakecheck; pace 17.3 / humance 18.7 min (IN 15–20, hand-tuned Wander OFF); ngpace 19.5 (IN band); reedspace 22.2 (IN 20–25) + Silt Wyrm 3.9 min (IN 2–4); wandpace both legs (16.9–17.8 IN 15–20 / 21.6–22.7 IN 20–25, 8 seeds); wardpace the Hollow Warden 3.9–4.1 min human (IN the documented 2–4 min class, comparable to the Wyrm); byte-identity confirmed (`makeTuning` deep-equals v1.6-complete `f746938`); zero new deps; SAVE_VERSION 11; no 8765 server left running. **v1.7 COMPLETE — no open scope. Batch order + full I1 audit table in PROJECT_STATE.md → Next Action + ROADMAP §v1.7.** Earlier: v1.1 + v1.2 + v1.3 + v1.4 "Make It Amazing" COMPLETE; v1.5 "The Living Swamp" COMPLETE — all 10 items K1–K10 done and committed (smoke 80/80; first-time pace 17.4 / humance 18.0 IN the 15–20 band; NG+ cycle-1 19.5; SAVE_VERSION 9). **v1.6 "Beneath the Reeds" COMPLETE (2026-09-07; Joel: "Plan and execute 1.6" — execution pre-approved; all 13 items done and committed): 13 items, 4 modules (R1–R6 biome / W1–W3 gamepad / Q1–Q3 QoL / A1 audit) in `docs/ROADMAP.md` §v1.6 — victory-gated new biome + THE LANTERN mechanic, 3 light-keyed creatures, the 4th boss archetype (The Silt Wyrm), raw-Gamepad-API gamepad support, 3 QoL items, final regression audit. Deferred items folded in: gamepad + 4th boss archetype. **ALL FOUR BATCHES COMPLETE** — BATCH 1 (R1+R2+R5, smoke 85/85), BATCH 2 (R3+R4+R6, smoke stages 86/87/88), BATCH 3 (W1+W2+W3 gamepad, smoke stages 89–91), BATCH 4 (Q1+Q2+Q3 QoL + A1 audit, smoke stages 92–94). Final suite **94/94 green ×3**; first-time **pace 17.3 / humance 18.1 min (IN 15–20)**; NG+ cycle-1 **19.5 min (IN band)**; Reeds run **~22.2 min (IN 20–25)** + Silt Wyrm **~3.9 min human (IN 2–4)**; P10 culling green; zero new deps; SAVE_VERSION 10 migration end-to-end; cycle-0 tuning byte-identical (630-byte blob). **v1.6 COMPLETE — no open scope.** Batch order + full audit table in PROJECT_STATE.md → Immediate Next Action + ROADMAP §v1.6.
+**Last PM audit: 2026-09-08 (v1.8 "The Full Collection" Batch 1 — **G1 + G2 + G3 LANDED** (session v18-g; 3 commits `4ec7d07` / `49f74a8` / `3b5949d`): the BLACK REEDS NG+ Reeds variant (`REEDS_DARK` layout — a deeper 7200px descent, a denser Wisp/Serpent/Leech bestiary, a 4th gravity pocket, a deeper/slower flood band, its own darker `REEDS_DARK_LANTERN` economy) + the UMBRAL WYRM 6th boss archetype (~60k HP, a dual-phase Silt-Wyrm twin with a telegraphed DUAL maw + a "deep dark" final phase where the lantern is mandatory, the Warden fuel-siphon + the Wyrm flood-pocket, 3-hue awaken) + the end-of-Reeds-boss selection wiring (Umbral [NG+ Reeds] vs Silt [cycle-0] vs Warden [Wander × Reeds]) + two new probes (`blackpace.mjs` ~25.8 min IN 22–26 / `umbrapace.mjs` ~3.9 min IN 2.5–4). The load-bearing invariant held: cycle-0 Reeds + Wander × Reeds + hand-tuned cycle-0 Reeds all byte-identical to v1.7 (`reedspace.mjs` re-verified **unchanged** at ~22.2 min IN 20–25); every existing run gated behind `ngCycle >= 1` AND a Reeds victory (`flags.reedsVictory` latch, SAVE_VERSION stays **11**). smoke **103 stages green, deterministic (×2 md5-identical)**; zero new deps; no 8765 server left running. **Next: H1** (the gallery Full-Collection completion capstone — `save.galleryComplete` + boss-defeat flags + the v1.8 gallery UI + SAVE_VERSION 11→12). Earlier: v1.7 "The Ever-Shifting Swamp" COMPLETE — all 9 items D1–D4 + F1 + O1 + O2 + I1 done and committed; the I1 season audit (final gate, clean fresh session) re-ran every probe on the committed tree and all are IN band — smoke 101 stages green ×3 + 10/10 flakecheck; pace 17.3 / humance 18.7 min (IN 15–20, hand-tuned Wander OFF); ngpace 19.5 (IN band); reedspace 22.2 (IN 20–25) + Silt Wyrm 3.9 min (IN 2–4); wandpace both legs (16.9–17.8 IN 15–20 / 21.6–22.7 IN 20–25, 8 seeds); wardpace the Hollow Warden 3.9–4.1 min human (IN the documented 2–4 min class, comparable to the Wyrm); byte-identity confirmed (`makeTuning` deep-equals v1.6-complete `f746938`); zero new deps; SAVE_VERSION 11; no 8765 server left running. **v1.7 COMPLETE — no open scope. Batch order + full I1 audit table in PROJECT_STATE.md → Next Action + ROADMAP §v1.7.** Earlier: v1.1 + v1.2 + v1.3 + v1.4 "Make It Amazing" COMPLETE; v1.5 "The Living Swamp" COMPLETE — all 10 items K1–K10 done and committed (smoke 80/80; first-time pace 17.4 / humance 18.0 IN the 15–20 band; NG+ cycle-1 19.5; SAVE_VERSION 9). **v1.6 "Beneath the Reeds" COMPLETE (2026-09-07; Joel: "Plan and execute 1.6" — execution pre-approved; all 13 items done and committed): 13 items, 4 modules (R1–R6 biome / W1–W3 gamepad / Q1–Q3 QoL / A1 audit) in `docs/ROADMAP.md` §v1.6 — victory-gated new biome + THE LANTERN mechanic, 3 light-keyed creatures, the 4th boss archetype (The Silt Wyrm), raw-Gamepad-API gamepad support, 3 QoL items, final regression audit. Deferred items folded in: gamepad + 4th boss archetype. **ALL FOUR BATCHES COMPLETE** — BATCH 1 (R1+R2+R5, smoke 85/85), BATCH 2 (R3+R4+R6, smoke stages 86/87/88), BATCH 3 (W1+W2+W3 gamepad, smoke stages 89–91), BATCH 4 (Q1+Q2+Q3 QoL + A1 audit, smoke stages 92–94). Final suite **94/94 green ×3**; first-time **pace 17.3 / humance 18.1 min (IN 15–20)**; NG+ cycle-1 **19.5 min (IN band)**; Reeds run **~22.2 min (IN 20–25)** + Silt Wyrm **~3.9 min human (IN 2–4)**; P1... [truncated]
 
 ## Current state
 
@@ -80,8 +80,36 @@ session) — every probe re-run on the committed tree and IN band (pace
 ~17.3 / humance 18.7 / ngpace 19.5 / reedspace 22.2 / wandpace both legs /
 wardpace 3.9–4.1 min), byte-identity confirmed (`makeTuning` deep-equals
 v1.6-complete `f746938`), zero new deps, SAVE_VERSION 11, no 8765 server
-left running. **v1.7 has no open scope.** The active phase is **v1.8
-(awaiting direction)** — see `docs/ROADMAP.md` for the next plan-of-record.
+left running. **v1.7 has no open scope.** The active phase is **v1.8 "The
+Full Collection" (Batch 1 G1–G3 LANDED this session)** — see
+`docs/ROADMAP.md` for the plan-of-record.
+
+**v1.8 "The Full Collection" — Batch 1 (G1 + G2 + G3) COMPLETE (session
+v18-g, 2026-09-08; 3 commits `4ec7d07` / `49f74a8` / `3b5949d`).** The last
+deferred depth item lands as a real place, not a procgen roll: **G1** the
+**Black Reeds** NG+ Reeds variant (a NEW `REEDS_DARK` layout — a deeper 7200px
+descent, a denser Wisp/Serpent/Leech bestiary, a 4th gravity pocket, a
+deeper/slower flood band, its own darker `REEDS_DARK_LANTERN` economy), gated
+behind `ngCycle >= 1` AND a Reeds victory (`flags.reedsVictory` latch; the v1.6
+cycle-0 Reeds layout is untouched). **G2** the **Umbral Wyrm** 6th boss
+archetype — a NEW `UMBRA_WYRM` tuning + `umbrStep` alongside `SILT_WYRM` /
+`wyrmStep`: ~60k HP, a dual-phase Silt-Wyrm twin (a telegraphed DUAL maw + a
+"deep dark" final phase where the lantern is **mandatory**, via the pure
+`umbraPaintable`), the Warden fuel-siphon + the Wyrm flood-pocket, and the
+existing `paintBoss` / `bossStep` 3-hue awaken. **G3** the selection wiring
+(end-of-Reeds boss: Umbral [NG+ Reeds] vs Silt [cycle-0] vs Warden [Wander ×
+Reeds]) + two new probes (`blackpace.mjs` ~25.8 min IN the new 22–26 band /
+`umbrapace.mjs` ~3.9 min IN 2.5–4) + a comprehensive smoke stage (the
+three-way selection, cycle-0 Reeds byte-identity, the Umbral-only-in-Black-
+Reeds gate, and the dual-phase / siphon / maw / lantern-mandatory mechanics).
+The load-bearing invariant held end-to-end: a cycle-0 Reeds run, a Wander ×
+Reeds run, and a hand-tuned (Wander-OFF) Reeds run all deep-equal their v1.7
+tuning / content — `reedspace.mjs` re-verified **unchanged** at ~22.2 min.
+smoke 103 stages green (deterministic ×2); zero new deps; SAVE_VERSION stays
+11 (the 11→12 bump comes in H1); no 8765 server left running. **Next: H1**
+(the gallery Full-Collection completion capstone — `save.galleryComplete` +
+boss-defeat flags + the v1.8 gallery UI + SAVE_VERSION 11→12 — the next
+session's work, NOT started this session).
 
 **v1.7 "The Ever-Shifting Swamp" — COMPLETE (session v17-f1, 2026-09-08;
 D1 + D2 + D3 + D4 + a hygiene commit + **F1** + **O1** + **O2** + **I1**

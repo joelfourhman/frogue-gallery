@@ -5,28 +5,90 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.8 "The Full Collection" — NEXT ACTION (orchestrator handoff, 2026-09-08)
+### v1.8 "The Full Collection" — NEXT ACTION: H1 (session v18-g, 2026-09-08; G1–G3 LANDED — the Black Reeds NG+ variant + the Umbral Wyrm 6th boss + the selection wiring + the two new probes)
 
 **v1.7 is COMPLETE** (all 9 items D1–D4 / F1 / O1 / O2 / I1 committed, 101/101
 smoke green, all 7 probes in band, hand-tuned runs byte-identical with Wander
 OFF, 13 commits, season signed off at `34eeda2`). The full **v1.8
-plan-of-record is now in `docs/ROADMAP.md` §v1.8** — read it first. v1.8 is
+plan-of-record is in `docs/ROADMAP.md` §v1.8** — read it first. v1.8 is
 **the 1.0 release version** ("The Full Collection"): the last deferred depth
 item (a dedicated NG+ Reeds variant + its 6th boss, the Umbral Wyrm) lands,
 the gallery gets a real **completion state** (the namesake payoff the game
 never had), and the game gets a real **release surface** (README + 1.0.0
 version string + changelog).
 
-**Batch 1 (this re-kick): land G1, then G2, then G3** — the Black Reeds NG+
-Reeds variant + the Umbral Wyrm 6th boss + the selection wiring + the two new
-probes (`blackpace.mjs` + `umbrapace.mjs`) as their own `feat(v1.8 G1)` /
-`feat(v1.8 G2)` / `feat(v1.8 G3)` commits, each smoke-green. The load-bearing
-invariant: **every existing run stays byte-identical** (the Black Reeds variant
-+ Umbral Wyrm are gated behind `ngCycle >= 1` AND a Reeds victory; a cycle-0
-Reeds run, a Wander × Reeds run, and a hand-tuned run must deep-equal their
-v1.7 tuning / content; `reedspace.mjs` re-verified in band unchanged). Do NOT
-touch H (gallery completion) or R (release surface) this session — G1–G3 is a
-full session on its own.
+**Batch 1 (session v18-g): G1 → G2 → G3 LANDED** (3 commits, each smoke-green)
+— the Black Reeds NG+ Reeds variant + the Umbral Wyrm 6th boss + the selection
+wiring + the two new probes (`blackpace.mjs` + `umbrapace.mjs`). The
+load-bearing invariant held end-to-end: **every existing run stays
+byte-identical** (the Black Reeds variant + Umbral Wyrm are gated behind
+`ngCycle >= 1` AND a Reeds victory; a cycle-0 Reeds run, a Wander × Reeds run,
+and a hand-tuned run all deep-equal their v1.7 tuning / content;
+`reedspace.mjs` re-verified in band **unchanged** at ~22.2 min).
+
+**Landed this session (3 commits, all green, 103/103 smoke):**
+- **G1** `4ec7d07` `feat(v1.8 G1)` — the BLACK REEDS NG+ Reeds variant. A NEW
+  `REEDS_DARK` layout (a deeper **7200px** descent vs the cycle-0 Reeds'
+  6000px; a **denser** Wisp/Serpent/Leech bestiary pick-ratio
+  `REEDS_DARK_BESTIARY_DENSITY` {wisp 0.94 / serpent 0.905 / leech 0.87} vs
+  {0.965 / 0.935 / 0.905}; an **extra gravity pocket** — 4 vs 3
+  (`REEDS_DARK_POCKETS`); a **deeper/slower flood band** (floor 780 / factor
+  0.62 vs 900 / 0.72); its **own darker lantern-economy tuning**
+  `REEDS_DARK_LANTERN` {radius 213 vs 260, drain 0.054 vs 0.04, minRadius 74 vs
+  88, restSpot 81 vs 90} via pure `lanternTickFor` / `lanternRadiusFor` /
+  `lanternLightFactor` wrappers (default `LANTERN` → cycle-0 byte-identical).
+  Gated behind a pure `blackReedsUnlocked(save)` (`ngCycle >= 1` AND a Reeds
+  victory) + a `flags.reedsVictory` latch set on a Reeds-biome victory (a
+  `save.flags` field → **SAVE_VERSION stays 11**; `migrateSave` carries it).
+  The `World` builds the variant off `{ reeds, blackReeds }`; the three pure
+  Reeds traversal functions (`inGravityPocket` / `hopLift` /
+  `floodedWaterFactor`) are parametrized with backward-compatible defaults so a
+  base / cycle-0 run is byte-identical. Smoke **stage 102** proves the gate +
+  the byte-identity.
+- **G2** `49f74a8` `feat(v1.8 G2)` — the UMBRAL WYRM 6th boss. A NEW
+  `logic.js` `UMBRA_WYRM` tuning (**60k HP**, 4 maw points, ~2.4s cycle,
+  dual-telegraph 0.6, surfaced 6.7 / deep 5.4, strike 14 dmg @ 170 reach × 1.2
+  deep, awaken 90/90/90, siphon 0.05 × 1.6 deep) + `umbrStep` (the Silt Wyrm's
+  `wyrmStep` made DUAL-PHASE + a "deep dark" final phase at 40% HP) alongside
+  `SILT_WYRM` / `wyrmStep`. The 3-hue awaken reuses the EXISTING
+  `paintBoss` / `bossStep` path (the same latch — proven in the smoke stage).
+  A telegraphed DUAL maw (both points marked via `_partnerIdx`), a Warden-
+  inherited `umbraFuelSiphon` (the lantern-eater), and a flood-pocket
+  (Wyrm-inherited) mechanics. The "deep dark" final phase makes the lantern
+  MANDATORY to paint (pure `umbraPaintable`, wired into the paint gate). The
+  Black Reeds run spawns it in place of the Silt Wyrm (`this.blackReeds`); a
+  cycle-0 Reeds run still spawns the Silt Wyrm (byte-identical). game.js wires
+  `_updateUmbra` + `_drawUmbra` (the dual-maw tell + the deep-dark vignette +
+  the siphon stream) + the engage/dispatch/defeat beats. NEW **tests/
+  umbrapace.mjs** probe: the Umbral fight is a **~3.86 min** human estimate
+  (god-mode ~100s × 0.42; one tier above the Silt Wyrm's ~3.9) — **in the
+  2.5–4 min band**.
+- **G3** `3b5949d` `feat(v1.8 G3)` — the SELECTION WIRING verification + a NEW
+  **tests/blackpace.mjs** probe (the full Black Reeds run: a ~25.8 min human
+  estimate — god descent + analytic waves × 7200/5400 + the Umbral at 0.42;
+  **in the 22–26 min band**, one tier above the cycle-0 Reeds' ~20–25) + a
+  comprehensive **smoke stage 103** proving: the end-of-Reeds boss is the
+  Umbral Wyrm (hand-tuned NG+ Reeds with a Reeds victory) vs the Silt Wyrm
+  (cycle-0 Reeds / NG+ without a Reeds victory) vs the Warden (Wander × Reeds);
+  cycle-0 Reeds is byte-identical (the v1.6 6000px / 3-pocket / Silt-Wyrm
+  content, deterministic per seed); the Umbral Wyrm is only-in-Black-Reeds; the
+  dual-phase + siphon + maw mechanics; and the pure `blackReedsUnlocked` gate.
+
+**G1–G3 invariant evidence (measured this session, session v18-g):**
+- `node tests/smoke.mjs` → **103/103 ALL SMOKE TESTS PASSED** (deterministic;
+  two consecutive runs md5-identical; the `144fb1c` flake-pin stays green).
+- `node tests/reedspace.mjs` (cycle-0 Reeds) → **~22.2 min** — IN THE 20–25
+  band and **UNCHANGED** (the load-bearing invariant: a cycle-0 Reeds run is
+  byte-identical to v1.7).
+- `node tests/umbrapace.mjs` (NEW) → **~3.86 min** — in the 2.5–4 min band.
+- `node tests/blackpace.mjs` (NEW) → **~25.8 min** — in the 22–26 min band.
+- `SAVE_VERSION` stays **11** (the `reedsVictory` flag is a `save.flags`
+  field; the 11→12 bump with `galleryCompletion` comes in H1, NOT here).
+- Zero new dependencies; no new assets; the `144fb1c` flake-pin stays green.
+
+**NEXT ACTION: H1** — the gallery COMPLETION state (the namesake payoff) + the
+SAVE_VERSION 11→12 bump. See the plan-of-record §v1.8 item **H1** below. Do
+NOT start H1 until this session is signed off.
 
 **Full item list (per the plan-of-record):**
 - **G1** `feat(v1.8 G1)` — the "Black Reeds" NG+ Reeds variant: a NEW

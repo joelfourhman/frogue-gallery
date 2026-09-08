@@ -929,14 +929,14 @@ content, but a **dedicated, hand-tuned NG+ Reeds layout** — a deeper lower-ban
 with a denser bestiary and a Silt Wyrm "twin" — is still the named next-depth
 item. v1.8 lands it as a real place, not a procgen roll.
 
-- **G1 — the "Black Reeds" (NG+ Reeds variant).** A second Reeds *layout*
+- **G1 — the "Black Reeds" (NG+ Reeds variant).** ✅ **DONE `4ec7d07` (2026-09-08).** A second Reeds *layout*
   variant, victory-gated **AND NG+-gated** (unlocks at `ngCycle >= 1` and a
   Reeds victory, mirroring how Reeds itself gates on a swamp victory). A NEW
   `REEDS_DARK` layout table (or a parameterized variant of the existing one):
   a deeper descent, a denser Wisp/Serpent/Leech bestiary, an extra flood /
   gravity pocket, and its own lantern-economy tuning. The v1.6 Reeds layout
   (cycle-0 Reeds) is **untouched** — a cycle-0 Reeds run stays byte-identical.
-- **G2 — the "Umbral Wyrm" (6th boss archetype).** The Black Reeds' apex
+- **G2 — the "Umbral Wyrm" (6th boss archetype).** ✅ **DONE `49f74a8` (2026-09-08).** The Black Reeds' apex
   predator: the Silt Wyrm's *twin*, a darker, faster, **dual-phase** boss that
   uses both the fuel-siphon (Warden-inherited) and the flood-pocket (Wyrm-
   inherited) mechanics. A NEW `logic.js` `UMBRA_WYRM` tuning + `umbrStep`
@@ -946,7 +946,7 @@ item. v1.8 lands it as a real place, not a procgen roll.
   NG+ Reeds variant), so every existing run is byte-identical. A NEW
   `tests/umbrapace.mjs` probe targets a **2.5–4 min** human band (the longest
   Reeds boss, one tier above the Silt Wyrm's ~3.9).
-- **G3 — the selection wiring + a `blackpace.mjs` probe.** The end-of-Reeds-
+- **G3 — the selection wiring + a `blackpace.mjs` probe.** ✅ **DONE `3b5949d` (2026-09-08).** The end-of-Reeds-
   descent boss is the Umbral Wyrm (NG+ Reeds variant) vs the Silt Wyrm (cycle-0
   Reeds) vs the Wander-apex Warden (Wander × Reeds). A NEW
   `tests/blackpace.mjs` probe measures the Black Reeds run (a new hand-tuned
