@@ -2289,6 +2289,84 @@ export function migrateSave(raw) {
   return withCase(out, 'migrated');
 }
 
+// Q3 (v1.6): SAVE EXPORT/IMPORT validation. The sanctioned escape hatch for the
+// loopback-only localStorage architecture is a PASTE-based round trip (no file
+// APIs, no server): Export copies the save JSON to the clipboard; Import reads
+// a pasted blob and must decide — hard REFUSE on anything that does not parse or
+// normalize to a valid current-schema save, or accept. This is the PURE gate the
+// import path runs every blob through. It reuses the EXISTING migration chain
+// (migrateSave: per-field normalization + the SAVE_MIGRATIONS 1->10 walk), so a
+// valid-but-old (e.g. v1-era) blob migrates forward to the current schema
+// exactly as a local load would.
+//
+// It is STRONGER than a bare migrateSave, because migrateSave is deliberately
+// lenient (it fills missing fields with defaults and returns a fresh save for
+// junk — B2 "keep what we can"). For an EXPLICIT player import we refuse
+// aggressively instead:
+//   (a) the blob must PARSE to a plain JS object (garbage JSON -> refuse);
+//   (b) it must be a recognizable SAVE (a known top-level field present) —
+//       a random object is not a Frogue save (refuse);
+//   (c) a PRESENT saveVersion must be an integer in [1, SAVE_VERSION] — a
+//       future/unknown or malformed version is refused (never trust a blob
+//       ahead of us);
+//   (d) PRESENT structural fields must be the right KIND (bank/flags objects,
+//       owned/loadout arrays, reedsUnlocked a boolean) — a wrong kind would
+//       crash migrateSave's accessors;
+//   (e) the migration must run WITHOUT throwing and NOT collapse to 'fresh'
+//       (the junk-object case) — any throw means the blob does not normalize.
+// Returns { ok: true, save } on success (save is the migrated, SAVE_VERSION-10
+// normalized object) or { ok: false, error } on refuse (error is a short
+// human-readable reason). Never mutates any existing save.
+export function validateSaveBlob(json) {
+  let raw;
+  try {
+    raw = JSON.parse(json);
+  } catch (e) {
+    return { ok: false, error: 'that is not valid JSON — paste the exact Export blob' };
+  }
+  if (!isPlainObj(raw)) {
+    return { ok: false, error: 'a Frogue save is an object — that was not one' };
+  }
+  if (!SAVE_FIELDS.some(k => k in raw)) {
+    return { ok: false, error: 'no save fields found — that is not a Frogue Gallery save' };
+  }
+  // (c) a present saveVersion must be a whole number in [1, SAVE_VERSION].
+  if (raw.saveVersion !== undefined && raw.saveVersion !== null) {
+    const v = raw.saveVersion;
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > SAVE_VERSION) {
+      return { ok: false, error: `unsupported save version ${JSON.stringify(v)} (need 1..${SAVE_VERSION})` };
+    }
+  }
+  // (d) present structural fields must be the right kind.
+  if (raw.bank !== undefined && !isPlainObj(raw.bank)) {
+    return { ok: false, error: 'the bank field was malformed (expected an object)' };
+  }
+  if (raw.flags !== undefined && !isPlainObj(raw.flags)) {
+    return { ok: false, error: 'the flags field was malformed (expected an object)' };
+  }
+  if (raw.owned !== undefined && !Array.isArray(raw.owned)) {
+    return { ok: false, error: 'the owned field was malformed (expected a list)' };
+  }
+  if (raw.loadout !== undefined && !Array.isArray(raw.loadout)) {
+    return { ok: false, error: 'the loadout field was malformed (expected a list)' };
+  }
+  if (raw.reedsUnlocked !== undefined && typeof raw.reedsUnlocked !== 'boolean') {
+    return { ok: false, error: 'the reedsUnlocked flag was malformed (expected true/false)' };
+  }
+  // (e) run the EXISTING migration chain; refuse on any throw or a 'fresh' result.
+  let save;
+  try {
+    save = migrateSave(raw);
+  } catch (e) {
+    return { ok: false, error: 'that save could not be normalized' };
+  }
+  if (save && save._case === 'fresh') {
+    return { ok: false, error: 'that save did not look right — nothing was changed' };
+  }
+  save.saveVersion = SAVE_VERSION;
+  return { ok: true, save };
+}
+
 // P9: options split into separate music (ambient bed) / SFX volumes and add
 // screen-shake + low-HP vignette accessibility toggles. The legacy `volume`
 // field (a single master) is still honored by migrateOptions so pre-P9 saves

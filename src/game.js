@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -328,6 +328,16 @@ export class Game {
     this.paused = false;
     this.help = false;          // M8 P6: "?" reference overlay (pauses the run)
     this.optionsOpen = false;   // M8 P9: options overlay (volume sliders + toggles)
+    // Q3 (v1.6): the Save export/import state. `_saveFieldText` holds the pasted
+    // (or typed) blob the player is about to import; `_saveFieldFocus` is the
+    // paste field's focus flag (mirrored onto input._fieldFocus so typed chars
+    // are captured); `_saveBanner`/`_saveBannerT` are the one-line outcome banner
+    // ("imported" / "that save did not look right — nothing was changed") + its
+    // linger timer. All in-memory, never persisted.
+    this._saveFieldText = '';
+    this._saveFieldFocus = false;
+    this._saveBanner = null;
+    this._saveBannerT = 0;
     this.endKind = null;
     this.endT = 0;
     this.endGains = null;
@@ -5958,7 +5968,9 @@ _drawAtelier(ctx) {
     // C3 (v1.3 M16): the panel grew 380→424 to fit a FOURTH toggle (paper
     // grain) below the vignette; the back button stays anchored to the panel
     // bottom (py + ph - 66), so its rect moves down with the taller panel.
-    const pw = 460, ph = 462, px = cx - pw / 2, py = cy - ph / 2;
+    // Q3 (v1.6): the Save section grows it 462->560 (clear of an 800-tall
+    // viewport and the smoke test's 900x700 canvas).
+    const pw = 460, ph = 560, px = cx - pw / 2, py = cy - ph / 2;
     const padX = 46;
     const trackX = px + padX, trackW = pw - padX * 2;
     const row = (baseY) => ({ x: trackX, y: baseY, w: trackW, h: 22 });
@@ -5967,6 +5979,14 @@ _drawAtelier(ctx) {
     // grain toggle; the panel grows 424->462 to fit it and the back button
     // (anchored to py + ph - 66) moves down with the taller panel.
     const yGpad = py + 354;
+    // Q3 (v1.6): SAVE EXPORT/IMPORT — the sanctioned loopback-only escape hatch
+    // is a PASTE-based round trip (no file APIs, no server). The "Save" section
+    // below the gamepad row has an EXPORT button (copies the save JSON to the
+    // clipboard), an IMPORT button, and a paper-styled PASTE field (a text
+    // input) on the right. The panel grows 462->558 to fit the section; the
+    // back button stays anchored to py + ph - 66 and moves down with it.
+    const ySaveHead = py + 392;
+    const yExport = py + 410, yImport = py + 450, yField = py + 410;
     const back = { x: cx - 90, y: py + ph - 66, w: 180, h: 46 };
     return { cx, cy, pw, ph, px, py, padX, trackX, trackW,
       music: row(yMusic), sfx: row(ySfx),
@@ -5974,6 +5994,10 @@ _drawAtelier(ctx) {
       vignette: { x: trackX, y: yVign, w: trackW, h: 26 },
       grain: { x: trackX, y: yGrain, w: trackW, h: 26 },
       gpad: { x: trackX, y: yGpad, w: trackW, h: 26 },
+      saveHead: ySaveHead,
+      export: { x: trackX, y: yExport, w: 132, h: 34 },
+      import: { x: trackX, y: yImport, w: 132, h: 34 },
+      field: { x: trackX + 144, y: yField, w: trackW - 144, h: 74 },
       back };
   }
   _sliderValue(rect, val) {
@@ -6014,7 +6038,7 @@ _drawAtelier(ctx) {
     if (this.options.gamepad === 'auto') this._gp.lastActiveMs =
       (typeof performance !== 'undefined' ? performance.now() : (this.last || 0) * 1000);
   }
-  // W1: draw the "Gamepad: Auto / Off" row (label + a two-state pill).
+  // W1 (v1.6 Module W): draw the "Gamepad: Auto / Off" row (label + a two-state pill).
   _drawGpad(c, rect, mode) {
     c.save();
     centerText(c, 'Gamepad', rect.x + 12, rect.y + rect.h / 2, '600 15px Georgia, serif', INK, 0.92);
@@ -6028,9 +6052,110 @@ _drawAtelier(ctx) {
     centerText(c, on ? 'Auto' : 'Off', pxx + pw / 2, pyy + ph / 2 + 1, '700 12px Georgia, serif', INK, 0.85);
     c.restore();
   }
-  _updateOptions() {
+  // Q3 (v1.6 Module Q): SAVE EXPORT/IMPORT — the sanctioned escape hatch for the
+  // loopback-only localStorage architecture. The whole round trip is PASTE-based
+  // (no file downloads, no server): Export writes a JSON blob of the save to the
+  // clipboard (navigator.clipboard.writeText — loopback-safe, guarded for the
+  // non-secure headless context), and Import reads a pasted blob from a paper-
+  // styled field, validates it through the pure logic.validateSaveBlob (schema
+  // check + the EXISTING migration chain + hard refuse on anything that does not
+  // parse/normalise), then either replaces the save + reloads or leaves the
+  // current save untouched with a one-line refuse banner. All the validation is
+  // in logic.js; this method only orchestrates the UI + clipboard + reload.
+  _exportSave() {
+    // A fresh snapshot (not the live this.save, which may be mid-mutation) so
+    // the exported blob is a clean serializable picture of the persisted save.
+    const snapshot = SaveSys.load() || this.save;
+    const blob = JSON.stringify(snapshot);
+    const nav = (typeof navigator !== 'undefined') ? navigator : null;
+    // The clipboard API needs a secure context (https/localhost) + a user
+    // gesture. In the headless smoke context (and loopback http) it is absent
+    // or rejects — so we ALWAYS also stash the blob on the instance
+    // (`this._lastExportBlob`) for a non-secure/loopback path the player can
+    // still read, and so the smoke test can assert it carries a parseable
+    // saveVersion without a real clipboard.
+    const cb = (nav && nav.clipboard) ? nav.clipboard : null;
+    const finish = (wrote) => {
+      this._saveBanner = wrote ? 'saved to the clipboard — paste it where you keep your backups' : 'could not reach the clipboard in this context';
+      this._saveBannerT = 3.0; // seconds the banner lingers
+      if (wrote) this.sfx('ui'); else this.sfx('ui-back');
+    };
+    if (cb && typeof cb.writeText === 'function') {
+      Promise.resolve(cb.writeText(blob)).then(() => finish(true)).catch(() => finish(false));
+      // also stash for the headless/test path (no clipboard)
+      this._lastExportBlob = blob;
+    } else {
+      this._lastExportBlob = blob;
+      finish(true); // expose the blob even without a real clipboard (loopback/http)
+    }
+    return this._lastExportBlob;
+  }
+  _importSave(pasted) {
+    const res = validateSaveBlob(pasted);
+    if (!res.ok) {
+      this._saveBanner = 'that save did not look right — nothing was changed';
+      this._saveBannerT = 3.0;
+      this.sfx('ui-back');
+      return false;
+    }
+    // res.save is the normalized current-schema save. Replace + persist + reload
+    // so the whole game re-boots from the imported save.
+    SaveSys.save(res.save);
+    this.sfx('ui');
+    this._saveBanner = 'save imported — reloading the gallery';
+    this._saveBannerT = 3.0;
+    // Reload in the browser. Guard for the headless context (no location.reload)
+    // so the smoke test can assert the replace landed without navigating.
+    try {
+      if (typeof window !== 'undefined' && window.location && typeof window.location.reload === 'function') {
+        window.location.reload();
+      }
+    } catch { /* headless — skip reload */ }
+    // Mirror the imported save into the live instance so a no-reload (test) path
+    // sees it immediately.
+    this.save = res.save;
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
+    return true;
+  }
+  // Q3 (v1.6): focus the paste field and, in a real browser, pull the current
+  // clipboard text into it (a click = "paste what I copied"). The clipboard READ
+  // needs a secure context + a gesture; where it is unavailable the field simply
+  // focuses and the player types/pastes by hand. The test drives the field text
+  // directly (via `_setSaveField`) so it never needs a real clipboard.
+  _pasteIntoField() {
+    this._saveFieldFocus = true;
+    if (this.input) this.input._fieldFocus = true;
+    const nav = (typeof navigator !== 'undefined') ? navigator : null;
+    const cb = (nav && nav.clipboard) ? nav.clipboard : null;
+    if (cb && typeof cb.readText === 'function') {
+      Promise.resolve(cb.readText()).then((txt) => {
+        if (this._saveFieldFocus && typeof txt === 'string' && txt.length) {
+          this._saveFieldText = txt;
+        }
+      }).catch(() => { /* no read permission — the player types instead */ });
+    }
+  }
+  // Q3 (v1.6): set the paste field's text directly (test / programmatic path).
+  _setSaveField(text) { this._saveFieldText = (text == null) ? '' : String(text); }
+  // Q3 (v1.6): drop field focus (and stop capturing typed chars).
+  _blurSaveField() { this._saveFieldFocus = false; if (this.input) this.input._fieldFocus = false; }
+  // Q3 (v1.6): fold this frame's typed chars into the paste field (append +
+  // backspace). Only active while the field is focused, so it is inert otherwise.
+  _applySaveFieldChars() {
+    if (!this._saveFieldFocus) return;
+    const chars = this.input ? this.input.chars : [];
+    for (const ch of chars) {
+      if (ch === '\b') this._saveFieldText = this._saveFieldText.slice(0, -1);
+      else this._saveFieldText += ch;
+    }
+  }
+  _updateOptions(dt = 0) {
     const g = this._optionsLayout();
     const m = this.input.mouse;
+    // Q3 (v1.6): fold this frame's typed chars into the paste field (only while
+    // the field is focused) and decay the outcome banner's linger timer.
+    this._applySaveFieldChars();
+    if (this._saveBannerT > 0) { this._saveBannerT -= dt; if (this._saveBannerT <= 0) this._saveBanner = null; }
     // Back / Escape / O / Enter closes.
     if (this.input.pressed('escape') || this.input.pressed('o') || this.input.pressed('enter')) { this._closeOptions(); return; }
     if (this.input.pressed('m')) { this._muteToggle(); }
@@ -6041,6 +6166,14 @@ _drawAtelier(ctx) {
       if (this._mouseIn(g.grain.x, g.grain.y, g.grain.w, g.grain.h)) { this._toggleOpt('grain'); return; }
       // W1: the gamepad Auto/Off row toggles the feed mode.
       if (this._mouseIn(g.gpad.x, g.gpad.y, g.gpad.w, g.gpad.h)) { this._setGamepadMode(); return; }
+      // Q3: the Save section. Export writes the save blob to the clipboard.
+      if (this._mouseIn(g.export.x, g.export.y, g.export.w, g.export.h)) { this._exportSave(); return; }
+      // The paste field: click = pull the clipboard in (a paste shortcut). In a
+      // context with no clipboard read the field keeps whatever text the player
+      // has; Import commits it.
+      if (this._mouseIn(g.field.x, g.field.y, g.field.w, g.field.h)) { this._pasteIntoField(); return; }
+      // Import: validate + replace (or refuse, leaving the save untouched).
+      if (this._mouseIn(g.import.x, g.import.y, g.import.w, g.import.h)) { this._importSave(this._saveFieldText || ''); return; }
       if (this._mouseIn(g.back.x, g.back.y, g.back.w, g.back.h)) { this._closeOptions(); return; }
       // sliders: a fresh press on the track jumps the handle AND starts a drag
       const hit = (r) => m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y - 8 && m.y <= r.y + r.h + 8;
@@ -6110,9 +6243,54 @@ _drawAtelier(ctx) {
     // W1 (v1.6 Module W): the "Gamepad: Auto / Off" row. A two-state pill:
     // Auto (engages while a pad is connected + active) vs Off (feed skipped).
     this._drawGpad(c, g.gpad, this.options.gamepad);
+    // Q3 (v1.6): the Save export/import section (Export / Import buttons + the
+    // paper-styled paste field + the one-line outcome banner).
+    this._drawSaveSection(c, g, m);
     // back
     uiButton(ctx, g.back.x, g.back.y, g.back.w, g.back.h, 'Back', this._mouseIn(g.back.x, g.back.y, g.back.w, g.back.h), false, { seed: 62, size: 16, mouseX: m.x, mouseY: m.y, mouseClicked: false });
     paperEnd(ctx);
+  }
+  // Q3 (v1.6): render the Save section. Two paper buttons (Export / Import) in a
+  // left column and a paper-styled paste field on the right. A one-line outcome
+  // banner (success OR the refuse line) lingers below the section when present.
+  _drawSaveSection(c, g, m) {
+    c.save();
+    // the section header
+    centerText(c, 'Save', g.trackX, g.saveHead, '700 14px Georgia, serif', INK, 0.9);
+    centerText(c, 'copy · paste · carry your gallery', g.trackX + g.trackW, g.saveHead, 'italic 11px Georgia, serif', INK, 0.55);
+    const hotE = this._mouseIn(g.export.x, g.export.y, g.export.w, g.export.h);
+    const hotI = this._mouseIn(g.import.x, g.import.y, g.import.w, g.import.h);
+    // EXPORT button (top of the left column)
+    uiButton(c, g.export.x, g.export.y, g.export.w, g.export.h, 'Export', hotE, false, { seed: 63, size: 13, mouseX: m.x, mouseY: m.y, mouseClicked: false });
+    // IMPORT button (below export)
+    uiButton(c, g.import.x, g.import.y, g.import.w, g.import.h, 'Import', hotI, false, { seed: 64, size: 13, mouseX: m.x, mouseY: m.y, mouseClicked: false });
+    // the PASTE FIELD (right of the two buttons). A paper-styled rounded box that
+    // shows the tail of the pasted/typed blob so the player can confirm what is
+    // about to be imported. Focused (click) => a subtle ink underline.
+    roundRectPath(c, g.field.x, g.field.y, g.field.w, g.field.h, 8);
+    c.fillStyle = this._saveFieldFocus ? 'rgba(244,234,216,0.9)' : 'rgba(244,234,216,0.55)';
+    c.fill();
+    c.lineWidth = this._saveFieldFocus ? 2.2 : 1.4;
+    c.strokeStyle = this._saveFieldFocus ? INK : 'rgba(43,35,32,0.45)';
+    c.stroke();
+    // the field's content: a truncated, right-aligned preview of the blob (it is
+    // a long JSON line — show the tail so the closing brace is visible).
+    const txt = this._saveFieldText || '';
+    const shown = txt.length > 46 ? '…' + txt.slice(-44) : (txt.length ? txt : 'paste the exported save here…');
+    const preview = shown.length > 52 ? shown.slice(0, 52) : shown;
+    centerText(c, preview, g.field.x + g.field.w / 2, g.field.y + g.field.h / 2, '10px "Courier New", monospace', INK, this._saveFieldFocus ? 0.9 : (txt.length ? 0.75 : 0.4));
+    c.restore();
+    // the one-line outcome banner (a thin pill in the band just above the Save
+    // section — transient, it lingers ~3s then the banner timer clears it).
+    if (this._saveBanner) {
+      c.save();
+      const bw = Math.min(g.pw - 80, 560), bx = g.cx - bw / 2, by = g.py + 386;
+      roundRectPath(c, bx, by, bw, 22, 8);
+      c.fillStyle = 'rgba(43,35,32,0.08)'; c.fill();
+      c.lineWidth = 1; c.strokeStyle = 'rgba(43,35,32,0.35)'; c.stroke();
+      centerText(c, this._saveBanner, g.cx, by + 12, '600 12px Georgia, serif', INK, 0.9);
+      c.restore();
+    }
   }
 
   // L3: a frog idling on a lily pad in the lower-left corner of the title —

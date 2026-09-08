@@ -7054,5 +7054,117 @@ console.log('== stage 93: v1.6 Q2 — END-SCREEN RUN RECAP (minimap route + time
   console.log('ok — Q2: the end screen gains a "the last expedition" recap strip (a tiny minimap of the run route on a 6-zone strip + the run time + the boss outcome) on BOTH victory AND defeat. The waypoint trail is a run-local capped list (~40, oldest dropped, sampled every ~500ms) that is IN-MEMORY ONLY. The recap is pure presentation over existing run data + the P8-style painting-motif rendering; NO new persistence — the save is byte-identical before/after the end screen (SAVE_VERSION stays 10).');
 }
 
+// ========================================================================
+// stage 94: v1.6 Q3 — SAVE EXPORT/IMPORT (paste-based)
+// ========================================================================
+console.log('== stage 94: v1.6 Q3 — SAVE EXPORT/IMPORT (Export->clipboard + Import->validate->replace; corrupt paste refused; v1-era blob migrates) ==');
+{
+  const L = await import('../src/logic.js');
+  const KEY = 'frogue_gallery_save';
+
+  // a recording canvas (capture every fillText) so we can assert the Save
+  // section actually DRAWS the Export / Import / banner text.
+  const cvQ3 = makeCanvas();
+  const drawnQ3 = [];
+  const baseQ3 = cvQ3._ctx || (cvQ3._ctx = makeCtx(cvQ3));
+  const recQ3 = new Proxy(baseQ3, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawnQ3.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  cvQ3.getContext = () => recQ3;
+
+  const g = new Game(cvQ3); g.start(); g._quitToTitle();
+  // a recognizable current-schema save in the (stub) localStorage — the
+  // "current save" the export copies and the import must preserve-or-replace.
+  const curSave = L.freshSave(); curSave.stats.victories = 3; curSave.bank.red = 12;
+  store.set(KEY, JSON.stringify(curSave));
+  g.save = { ...curSave };
+  g.optionsOpen = true;
+  const lay = g._optionsLayout();
+  const centerOf = (r) => [r.x + r.w / 2, r.y + r.h / 2];
+
+  // ---- (a) EXPORT: the button writes a parseable blob carrying saveVersion ----
+  fireMouse(cvQ3, ...centerOf(lay.export));
+  frames(2);
+  assert(typeof g._lastExportBlob === 'string' && g._lastExportBlob.length > 0, 'Q3: Export produces a non-empty blob');
+  const parsed = JSON.parse(g._lastExportBlob);           // throws if not valid JSON
+  assert(parsed.saveVersion === L.SAVE_VERSION, `Q3: the exported blob carries the authoritative saveVersion (${parsed.saveVersion})`);
+  assert(g._saveBanner && g._saveBanner.length > 0, 'Q3: Export raises an outcome banner');
+
+  // the Save section DRAWS the Export + Import + section heading
+  drawnQ3.length = 0;
+  g._drawOptions(cvQ3.getContext('2d'));
+  const dj = drawnQ3.join('\u0001');
+  assert(dj.includes('Export') && dj.includes('Import'), 'Q3: the Options panel draws the Export + Import buttons');
+  assert(dj.includes('Save'), 'Q3: the Options panel draws the "Save" section heading');
+
+  // ---- (b) a VALID blob round-trips through import (replace lands) ----
+  const blob = g._lastExportBlob;
+  const before = JSON.stringify(curSave);
+  const okRoundTrip = g._importSave(blob);
+  frames(2);
+  assert(okRoundTrip === true, 'Q3: a valid exported blob imports successfully (validateSaveBlob -> ok)');
+  const afterImport = JSON.parse(store.get(KEY));
+  assert(afterImport.saveVersion === L.SAVE_VERSION, 'Q3: a valid import persists a current-schema save');
+  assert(afterImport.stats.victories === 3 && afterImport.bank.red === 12, 'Q3: a valid import preserves the recognizable save fields (round-trips)');
+
+  // ---- (c) a CORRUPT paste is REFUSED with the current save untouched ----
+  const pristine = store.get(KEY);
+  const refuseCases = [
+    ['garbage JSON', 'this is definitely { not [ json!!'],
+    ['wrong save version', JSON.stringify({ bank: { red: 1, blue: 0, green: 0 }, saveVersion: 999 })],
+    ['not-a-save (no fields)', JSON.stringify({ hello: 'world', foo: 1 })],
+    ['wrong kind (bank)', JSON.stringify({ bank: [1, 2, 3], saveVersion: 10 })],
+  ];
+  for (const [label, blobBad] of refuseCases) {
+    const r = g._importSave(blobBad);
+    frames(1);
+    assert(r === false, `Q3: ${label} is REFUSED (import returns false)`);
+    assert(g._saveBanner === 'that save did not look right — nothing was changed', `Q3: ${label} raises the one-line refuse banner`);
+    assert(store.get(KEY) === pristine, `Q3: after ${label} the current save in storage is UNTOUCHED`);
+  }
+
+  // ---- (d) a valid-but-OLD v1-era blob imports through the migration chain ----
+  const v1Blob = JSON.stringify({
+    saveVersion: 1,
+    bank: { red: 5, blue: 7, green: 2 },
+    owned: [], loadout: [],
+    stats: { expeditions: 40, victories: 5, deaths: 3, heronsPainted: 2, treasures: 9 },
+    flags: { intro: true, firstOrb: true },
+  });
+  const okV1 = g._importSave(v1Blob);
+  frames(2);
+  assert(okV1 === true, 'Q3: a valid v1-era blob imports (it is a recognizable save)');
+  const migrated = JSON.parse(store.get(KEY));
+  assert(migrated.saveVersion === L.SAVE_VERSION, `Q3: the v1-era blob migrated to the current saveVersion (${migrated.saveVersion})`);
+  assert(migrated.bank.red === 5 && migrated.bank.blue === 7 && migrated.bank.green === 2, 'Q3: the v1-era recognizable fields carried forward through the migration chain');
+  assert(migrated.stats.expeditions === 40, 'Q3: the v1-era stats carried forward');
+  assert(typeof migrated.gold === 'number' && migrated.ngCycle === 0 && Array.isArray(migrated.challengeScores), 'Q3: the migration chain filled in the post-v1 fields (gold / ngCycle / challengeScores) to the current schema');
+
+  // ---- (e) the typed paste FIELD accumulates + import commits its text ----
+  g._saveFieldText = '';
+  g._saveFieldFocus = true;
+  if (g.input) g.input._fieldFocus = true;
+  const curBlob = JSON.stringify({ ...curSave, stats: { ...curSave.stats, victories: 9 } });
+  for (const ch of curBlob) fireKey('keydown', ch);
+  g._applySaveFieldChars();
+  assert(g._saveFieldText === curBlob, 'Q3: the paste field accumulates the typed/pasted chars (a real, non-DOM text path)');
+  g._saveFieldFocus = false;
+  if (g.input) g.input._fieldFocus = false;
+  // and the Import button commits the field text (replacing the save)
+  const preCommit = store.get(KEY);
+  const rCommit = g._importSave(g._saveFieldText || '');
+  frames(2);
+  assert(rCommit === true, 'Q3: the Import button commits the field text');
+  assert(JSON.parse(store.get(KEY)).stats.victories === 9, 'Q3: the field-text import replaced the save (victories now 9)');
+
+  // ---- (f) SAVE_VERSION is unchanged + no save-schema field was added ----
+  assert(L.SAVE_VERSION === 10, 'Q3: SAVE_VERSION is still 10 (export/import is presentation + migration only)');
+  const svKeys = new Set(Object.keys(L.freshSave()));
+  assert(!svKeys.has('runWaypoints') && !svKeys.has('runEnemies'), 'Q3: no run-local field leaked into the save schema');
+
+  console.log('ok — Q3: the Options panel gains a paste-based Save section — Export copies a JSON blob of the save to the clipboard (navigator.clipboard.writeText, loopback-safe, no file APIs); Import reads a pasted blob through the paper-styled field and validates it via the pure logic.validateSaveBlob (schema version check + the EXISTING migration chain + a hard refuse on anything that does not parse/normalize). A valid blob round-trips; a corrupt paste (garbage JSON / wrong version / dropped field / wrong kind) is REFUSED with the current save untouched and a one-line "that save did not look right — nothing was changed" banner; a valid-but-old v1-era blob imports through the migration chain to the current schema. This is the sanctioned escape hatch for the loopback-only localStorage architecture (no file downloads, no server); SAVE_VERSION stays 10.');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

@@ -14,6 +14,11 @@ export class Input {
     this._phys = new Set();
     this.mouse = { x: 0, y: 0, worldX: 0, worldY: 0, lDown: false, rDown: false, lPressed: false, rPressed: false, wheel: 0, _physR: false };
     this.dragging = null;        // P9: name of the UI element being dragged (or null)
+    this.chars = [];             // Q3 (v1.6): printable chars typed THIS frame — the
+    // paste field reads them while `_fieldFocus` is true. Consumed by
+    // `endFrame()`. Guarded: empty when the game never sets `_fieldFocus`, so the
+    // keyboard/mouse paths are byte-identical to the pre-Q3 baseline.
+    this._fieldFocus = false;
     this._bind(canvas);
   }
 
@@ -24,6 +29,13 @@ export class Input {
       if (!this.keys.has(k)) this.kb.add(k);
       this.keys.add(k);
       this._phys.add(k);       // W1: the physical keyboard holds this (the pad feed checks _phys)
+      // Q3 (v1.6): when the paste field is focused, capture printable chars (and
+      // Backspace) so the player can paste/type the save blob into it. Only runs
+      // when `_fieldFocus` is set, so it is inert everywhere else.
+      if (this._fieldFocus) {
+        if (e.key === 'Backspace') this.chars.push('\b');
+        else if (e.key.length === 1) this.chars.push(e.key);
+      }
       if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
     };
     this._ku = (e) => { const k = e.key.toLowerCase(); this.keys.delete(k); this._phys.delete(k); };
@@ -81,5 +93,6 @@ export class Input {
     this.mouse.lPressed = false;
     this.mouse.rPressed = false;
     this.mouse.wheel = 0;
+    this.chars.length = 0;      // Q3 (v1.6): consumed the frame's typed chars
   }
 }
