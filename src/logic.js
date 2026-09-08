@@ -2178,6 +2178,22 @@ export function retrainAllowed(save) {
   return false;                                        // nothing done yet — nothing to replay
 }
 
+// Q2 (v1.6): the run's route — a PURE filter over a run-local waypoint list.
+// Keeps only points whose x lies within the run's world width (drops test
+// scaffolding / out-of-bounds samples) and, when the list exceeds the cap,
+// keeps the NEWEST `cap` (the oldest are dropped, so a long run's tail — its
+// approach to the boss — is always shown). Never mutates the input. The
+// end-screen recap renders whatever this returns as a wobbly ink line on a
+// 6-zone strip: pure presentation over existing run data, NO persistence.
+export const ROUTE_WAYPOINT_CAP = 40;
+export function routeTrail(waypoints, worldW, cap = ROUTE_WAYPOINT_CAP) {
+  const w = (Number.isFinite(worldW) && worldW > 0) ? worldW : Infinity;
+  const pts = Array.isArray(waypoints)
+    ? waypoints.filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0 && p.x <= w)
+    : [];
+  return pts.length > cap ? pts.slice(pts.length - cap) : pts.slice();
+}
+
 // B2: corrupt-save handling. migrateSave never throws and always returns a
 // schema-complete save. The non-enumerable `_case` property documents which
 // outcome applied (non-enumerable so it is never persisted by JSON.stringify):

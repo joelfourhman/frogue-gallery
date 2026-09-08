@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -2791,6 +2791,11 @@ _drawAtelier(ctx) {
     this.orbStreak = 0; // E4: clean-orb streak (resets on a hit) — in-run only, not persisted
     this.runOrbs = 0;   // G1 (v1.3 M15): this expedition's collected orbs (milestone is per-run)
     this.runEnemies = 0; // Q1 (v1.6): enemies painted this expedition — IN-MEMORY ONLY (the pause "this expedition" block reads it; NEVER persisted)
+    // Q2 (v1.6): the run's ROUTE — a capped, run-local list of sampled waypoints
+    // (world x,y every ~500 ms, cap ~40 oldest-dropped) that the end-screen
+    // recap draws as a wobbly ink line on a 6-zone strip. IN-MEMORY ONLY; the
+    // end screen is pure presentation over this + runT + the boss outcome.
+    this.runWaypoints = []; this._lastWpT = 0;
     this.runGold = Math.max(0, Math.floor(this.save.gold) || 0); // C2 (v1.3 M16): the gold total at run start (delta at the end = "gold earned this expedition"; in-run only, not persisted)
     // N3 (v1.3 M14): on NG+ cycles (ngCycle >= 1) the final boss is the Great
     // GREEN Heron instead of the Great Gray Heron (the gray heron stays the
@@ -3333,6 +3338,18 @@ _drawAtelier(ctx) {
 
     // ----- brush charge (hold RMB) -----
     const p = this.player;
+    // Q2 (v1.6): sample the run's ROUTE — a run-local waypoint (world x,y) every
+    // ~500 ms of run time, capped at ROUTE_WAYPOINT_CAP (oldest dropped). The
+    // end-screen recap draws this as a wobbly ink line on a 6-zone strip. Pure
+    // in-memory data (the list is bounded, so no uncontrolled growth); nothing
+    // here touches tuning/spawn/persistence. Skipped for a dying/absent player.
+    if (p && p.alive && this.runWaypoints) {
+      if (this.runT - this._lastWpT >= 0.5) {
+        this._lastWpT = this.runT;
+        this.runWaypoints.push({ x: p.x, y: p.y });
+        if (this.runWaypoints.length > ROUTE_WAYPOINT_CAP) this.runWaypoints.shift();
+      }
+    }
     if (this.input.mouse.rDown && p.splashCharge < 1) {
       p.splashCharge = Math.min(1, p.splashCharge + dt / this.tuning.splashCharge);
       if (p.splashCharge >= 1) { this.sfx('charge-ready'); this._noiseEvent(p.x, p.y); } // K2: a full charge is a noise
@@ -6527,6 +6544,86 @@ _drawAtelier(ctx) {
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
+  // Q2 (v1.6): the end-screen "the last expedition" RECAP. A tiny minimap — the
+  // run's route through the swamp drawn as a wobbly ink line on a 6-zone strip
+  // (the run's visited x-range + the named zones crossed) — plus the run time and
+  // the boss outcome. PURE PRESENTATION: it reads only the run-local waypoint
+  // trail (sampled every ~500 ms, capped at ROUTE_WAYPOINT_CAP), the run's time,
+  // and the boss result. NO new persistence — the save is untouched by it.
+  _recapBossLine() {
+    if (this.endKind !== 'victory') return 'it buried you';
+    return (this.world && this.world.reedsVariant) ? 'the wyrm sleeps on' : 'the heron bloomed';
+  }
+  _drawRecap(ctx) {
+    const cx = this.cw / 2;
+    const py = this.ch / 2 - this._endCardH() / 2, H = this._endCardH();
+    // Q2: the strip floats ABOVE the end card (in the empty band between the
+    // swamp backdrop and the card's top). The card's bottom is crowded on a
+    // victory (Season / challenge block down to py+508) and the buttons live
+    // BELOW the card at py+H+16, so the top is the ONE place free on both a
+    // victory AND a defeat — keeping the card height + button rects unchanged
+    // (V4/N1/C2) and fitting every canvas size. Nothing existing moves.
+    const stripW = 300, stripH = 20, stripX = cx - stripW / 2, stripY = py - 62;
+    const w = (this.world && this.world.w) || 1;
+    const pts = routeTrail(this.runWaypoints, w, ROUTE_WAYPOINT_CAP);
+    // the named zones this run crossed. `_zoneI` is the authoritative count of
+    // zones the player entered this run (0 = still out in the open water before
+    // the first named zone). Fall back to the waypoint max-x when no run state
+    // is present (a drawn end-card with no live run). The strip draws a tick at
+    // every named zone; `crossed` is the count shown on the recap line.
+    const ticks = [];
+    for (const z of ZONES) ticks.push({ x: w * z.x, name: z.name });
+    let crossed;
+    if (typeof this._zoneI === 'number' && this._zoneI >= 0) {
+      crossed = Math.min(ZONES.length, this._zoneI);
+    } else {
+      const maxX = pts.reduce((m, p) => Math.max(m, p.x), 0);
+      crossed = ZONES.filter(z => maxX >= w * z.x).length;
+    }
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    // the strip's paper ground
+    ctx.fillStyle = 'rgba(247,240,224,0.85)';
+    ctx.strokeStyle = 'rgba(43,35,32,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(stripX, stripY, stripW, stripH, 5); else ctx.rect(stripX, stripY, stripW, stripH);
+    ctx.fill(); ctx.stroke();
+    // the named-zone tick marks (a "6-zone strip": 5 named zones + the open water)
+    ctx.strokeStyle = 'rgba(43,35,32,0.35)';
+    ctx.lineWidth = 1;
+    for (const t of ticks) {
+      const tx = stripX + clamp(t.x / w, 0, 1) * stripW;
+      ctx.beginPath(); ctx.moveTo(tx, stripY + stripH - 3); ctx.lineTo(tx, stripY + stripH); ctx.stroke();
+    }
+    // the route: a wobbly ink line through the sampled waypoints (oldest -> newest).
+    // The wobble is a tiny alternating vertical offset so the path reads as hand-
+    // drawn ink, not a ruler line — pure presentation over the waypoint trail.
+    if (pts.length >= 2) {
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (let i = 0; i < pts.length; i++) {
+        const px = stripX + clamp(pts[i].x / w, 0, 1) * stripW;
+        const pyv = stripY + clamp((pts[i].y / (this.world.h || 1)) * stripH, 3, stripH - 3);
+        const wob = (i % 2 ? 1 : -1) * 0.7;
+        if (i === 0) ctx.moveTo(px, pyv + wob);
+        else ctx.lineTo(px, pyv + wob);
+      }
+      ctx.stroke();
+      // a small marker at the end (the frog's resting place)
+      const le = pts[pts.length - 1];
+      ctx.fillStyle = '#3a6d3a';
+      ctx.beginPath(); ctx.arc(stripX + clamp(le.x / w, 0, 1) * stripW, stripY + clamp((le.y / (this.world.h || 1)) * stripH, 3, stripH - 3), 2.6, 0, TAU); ctx.fill();
+    } else {
+      centerText(ctx, 'the route was not recorded', cx, stripY + stripH / 2 + 4, 'italic 11px Georgia, serif', INK, 0.5);
+    }
+    // the recap line: run time + zones crossed + the boss outcome
+    centerText(ctx, `the last expedition — ${this._fmtClock(this.runT || 0)} · ${crossed} zone${crossed === 1 ? '' : 's'} crossed · ${this._recapBossLine()}`, cx, stripY + stripH + 14, '700 12px Georgia, serif', '#5a5a52', 0.92);
+    ctx.restore();
+  }
+
   // V4 (v1.2 M11): the end-card height — taller on a victory (it carries the
   // exhibition), same compact height on a defeat. Both the draw (_drawEnd) and
   // the end-state click rects (input routing above) use this so the buttons
@@ -6643,6 +6740,14 @@ _drawAtelier(ctx) {
     const ph = this._endCardH();   // V4: taller on a victory (carries the exhibition)
     const pw = 560, px = cx - pw / 2, py = this.ch / 2 - ph / 2;
     const c = paperPanel(ctx, px, py, pw, ph, { seed: victory ? 31 : 37 });
+
+    // Q2 (v1.6): the "the last expedition" recap strip (a tiny minimap of the
+    // run's route + the run time + the boss outcome), drawn above the card. Pure
+    // presentation over the run-local waypoint trail + runT + the boss result;
+    // NO new persistence (the save is untouched, SAVE_VERSION stays 10).
+    // Shown for any begun run (runWaypoints is an array; the minimap falls back
+    // to "route not recorded" when <2 points, but the time + boss line always shows).
+    if (Array.isArray(this.runWaypoints)) this._drawRecap(c);
 
     outlineText(c, victory ? 'The Swamp Blooms!' : 'The Brush Rests…', cx, py + 52, '700 40px Georgia, serif', victory ? '#5a9e3d' : '#8d9aa0', INK, 6);
     centerText(c, victory

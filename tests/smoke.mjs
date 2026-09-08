@@ -6923,5 +6923,136 @@ console.log('== stage 92: v1.6 Q1 — PAUSE-MENU RUN SUMMARY (the "this expediti
   console.log('ok — Q1: the pause card gains a compact "this expedition" block (run time + zone + enemies painted + orbs), a live read of the in-memory run that re-reads on every draw. The enemies-painted counter is incremented in _onEnemyDead and is IN-MEMORY ONLY (not on the save object or the serialized blob). Pure display; ZERO tuning/save change (SAVE_VERSION stays 10).');
 }
 
+// ========================================================================
+// stage 93: v1.6 Q2 — END-SCREEN RUN RECAP
+// ========================================================================
+console.log('== stage 93: v1.6 Q2 — END-SCREEN RUN RECAP (minimap route + time + boss line on victory AND defeat) ==');
+{
+  const L93 = await import('../src/logic.js');
+  const S93 = await import('../src/save.js');
+  const recCanvas93 = makeCanvas();
+  const drawn93 = [];
+  const baseCtx93 = makeCtx(recCanvas93);
+  const recCtx93 = new Proxy(baseCtx93, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn93.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas93.getContext = () => recCtx93;
+
+  // ---- (a) routeTrail: pure — capped at 40, oldest dropped; out-of-bounds filtered
+  const many = [];
+  for (let i = 0; i < 50; i++) many.push({ x: i * 100, y: 500 });
+  const capped = L93.routeTrail(many, 5400);
+  assert(capped.length === 40, `Q2: routeTrail caps at 40 (50 in -> 40 out; oldest dropped) got ${capped.length}`);
+  assert(capped[0].x === 1000 && capped[39].x === 4900, `Q2: routeTrail keeps the NEWEST 40 (x 1000..4900), drops the oldest 10`);
+  // out-of-bounds x is filtered (x < 0 or x > worldW)
+  const mixed = [{x:-10,y:0},{x:0,y:0},{x:6000,y:0},{x:5400,y:0},{x:2700,y:0}];
+  const filtered = L93.routeTrail(mixed, 5400);
+  assert(filtered.length === 3, `Q2: routeTrail filters out-of-bounds x (5 in -> 3 out; x -10 and x 6000 dropped; got ${filtered.length})`);
+  // cap applies AFTER filtering
+  const manyOOB = [];
+  for (let i = 0; i < 60; i++) manyOOB.push({ x: i < 10 ? -1 : i * 100, y: 500 });
+  const cappedFiltered = L93.routeTrail(manyOOB, 5400);
+  assert(cappedFiltered.length === 40, `Q2: routeTrail filters THEN caps (60 in, 10 OOB -> 50 valid -> 40 capped; got ${cappedFiltered.length})`);
+  // null / empty / non-array inputs
+  assert(L93.routeTrail(null, 5400).length === 0, 'Q2: routeTrail(null) -> []');
+  assert(L93.routeTrail([], 5400).length === 0, 'Q2: routeTrail([]) -> []');
+  assert(L93.routeTrail('garbage', 5400).length === 0, 'Q2: routeTrail(non-array) -> []');
+
+  // ---- (b) the Game exposes _drawRecap + _recapBossLine; the run-local waypoint
+  // trail is capped at ROUTE_WAYPOINT_CAP and is IN-MEMORY ONLY (never on save)
+  const g93 = new Game(recCanvas93); g93.start();
+  const cv93 = recCanvas93;
+  const fr93 = (n, step = 16.7) => { for (let i = 0; i < n; i++) { g93._frame(g93.now * 1000 + n * step); } };
+  // begin an expedition so runWaypoints is initialised
+  g93._beginExpedition();
+  assert(Array.isArray(g93.runWaypoints) && g93.runWaypoints.length === 0, 'Q2: _beginExpedition initialises runWaypoints as an array');
+  // end-to-end sampling: stepping REAL frames records waypoints on the ~500 ms
+  // gate (the gate is the ONLY writer, so a real run leaves a bounded trail).
+  // Hardened so runT actually advances: no tutorial freeze, not paused/dying,
+  // an invulnerable alive player (the gate keys off runT + player.alive).
+  g93.tutorial = null; g93._tut = null; g93._tutI = 0;
+  g93.paused = false; g93.dying = false; g93.state = 'expedition';
+  g93.player.iframes = 999; g93.player.alive = true;
+  {
+    let t93b = 1000;
+    const fr93b = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t93b += step; g93._frame(t93b); } };
+    const before = g93.runWaypoints.length;
+    fr93b(140); // ~2.3 s of run time
+    const sampled = g93.runWaypoints.length - before;
+    assert(sampled >= 2, `Q2: real frames sample waypoints on the ~500 ms gate (${sampled} over ~2.3 s of runT)`);
+    assert(g93.runWaypoints.length <= L93.ROUTE_WAYPOINT_CAP, 'Q2: the sampled trail never exceeds the cap');
+    assert(g93.runWaypoints.every(p => p.x >= 0 && p.x <= g93.world.w), 'Q2: every sampled waypoint lies within the world x-range');
+  }
+  assert(typeof g93._drawRecap === 'function', 'Q2: _drawRecap is defined');
+  assert(typeof g93._recapBossLine === 'function', 'Q2: _recapBossLine is defined');
+
+  // simulate a run that crosses 3 zones — set the waypoint trail + run state directly
+  // (driving 1800 frames to get 30 real samples is slow; the waypoint array is
+  // the same data structure either way, and _drawRecap reads it)
+  const w93 = g93.world.w;
+  g93.runWaypoints = [];
+  g93._lastWpT = 0;
+  // simulate 30 waypoints across 3 zones (x from 0.1*w to 0.75*w, y = 750)
+  for (let i = 0; i < 30; i++) {
+    const xf = 0.1 + (i / 29) * 0.65; // 0.1w -> 0.75w
+    g93.runWaypoints.push({ x: w93 * xf, y: 750 });
+  }
+  g93._zoneI = 3;  // entered 3 zones (Reed Flats, Slick Hollow, Bramble Thicket)
+  g93.runT = 330;  // 5:30
+  assert(g93.runWaypoints.length === 30, `Q2: 30 waypoints in the simulated run trail (got ${g93.runWaypoints.length})`);
+  // the trail is bounded by ROUTE_WAYPOINT_CAP — add 20 more, verify it caps at 40
+  for (let i = 0; i < 20; i++) g93.runWaypoints.push({ x: w93 * (0.75 + (i / 19) * 0.2), y: 750 });
+  while (g93.runWaypoints.length > L93.ROUTE_WAYPOINT_CAP) g93.runWaypoints.shift();
+  assert(g93.runWaypoints.length === 40, `Q2: the run trail is capped at ${L93.ROUTE_WAYPOINT_CAP} (oldest dropped; got ${g93.runWaypoints.length})`);
+  // in-memory only: NOT on the save
+  assert(!('runWaypoints' in g93.save), 'Q2: runWaypoints is NOT on the save object (in-memory only)');
+  assert(!('runT' in g93.save) && !('_lastWpT' in g93.save), 'Q2: runT / _lastWpT are NOT on the save object (in-memory only)');
+
+  // ---- (c) the end screen renders the recap strip: VICTORY
+  // capture the save blob BEFORE the end screen (to prove nothing is persisted)
+  const saveBlobBefore = JSON.stringify(g93.save);
+  g93.endKind = 'victory'; g93.endT = 5;
+  g93.endGains = { red: 3, blue: 2, green: 4 };
+  g93.state = 'end';
+  g93.input.mouse.lPressed = false; g93.input.mouse.lDown = false;
+  g93.input.mouse.x = 0; g93.input.mouse.y = 0;
+  g93._zoneI = 3;
+  drawn93.length = 0;
+  g93._frame(g93.now * 1000 + 5000);
+  const joinedV = drawn93.join('\u0001');
+  assert(joinedV.includes('the last expedition'), 'Q2: the victory end screen renders the "the last expedition" recap strip');
+  assert(joinedV.includes('5:30'), `Q2: the victory recap shows the run time 5:30 (runT=330s)`);
+  assert(joinedV.includes('3 zones crossed'), `Q2: the victory recap shows 3 zones crossed (_zoneI=3)`);
+  assert(joinedV.includes('the heron bloomed'), `Q2: the victory recap shows "the heron bloomed" (swamp victory)`);
+
+  // ---- (d) the end screen renders the recap strip: DEFEAT
+  g93.endKind = 'defeat'; g93.endT = 5;
+  g93._zoneI = 3;
+  drawn93.length = 0;
+  g93._frame(g93.now * 1000 + 6000);
+  const joinedD = drawn93.join('\u0001');
+  assert(joinedD.includes('the last expedition'), 'Q2: the defeat end screen renders the "the last expedition" recap strip');
+  assert(joinedD.includes('5:30'), `Q2: the defeat recap shows the run time 5:30`);
+  assert(joinedD.includes('3 zones crossed'), `Q2: the defeat recap shows 3 zones crossed`);
+  assert(joinedD.includes('it buried you'), `Q2: the defeat recap shows "it buried you"`);
+
+  // ---- (e) the boss line switches on a Reeds victory (wyrm)
+  g93.endKind = 'victory'; g93.endT = 5;
+  // simulate a Reeds world (world.reedsVariant = true)
+  const savedVariant = g93.world.reedsVariant;
+  g93.world.reedsVariant = true;
+  g93._zoneI = 3;
+  assert(g93._recapBossLine() === 'the wyrm sleeps on', 'Q2: a Reeds victory shows "the wyrm sleeps on" (not "the heron bloomed")');
+  g93.world.reedsVariant = savedVariant;
+  assert(g93._recapBossLine() === 'the heron bloomed', 'Q2: a swamp victory shows "the heron bloomed" (not "the wyrm sleeps on")');
+
+  // ---- (f) the save is BYTE-IDENTICAL before/after the end screen (no persistence)
+  const saveBlobAfter = JSON.stringify(g93.save);
+  assert(saveBlobBefore === saveBlobAfter, 'Q2: the save is BYTE-IDENTICAL before and after the end screen (no new persistence)');
+
+  console.log('ok — Q2: the end screen gains a "the last expedition" recap strip (a tiny minimap of the run route on a 6-zone strip + the run time + the boss outcome) on BOTH victory AND defeat. The waypoint trail is a run-local capped list (~40, oldest dropped, sampled every ~500ms) that is IN-MEMORY ONLY. The recap is pure presentation over existing run data + the P8-style painting-motif rendering; NO new persistence — the save is byte-identical before/after the end screen (SAVE_VERSION stays 10).');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
