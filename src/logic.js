@@ -1835,6 +1835,20 @@ export const GALLERY_BONUS = {
   inkPerLevel: 2,       // flat +N of each pigment color at run start / level
   orbPerLevel: 0.10,    // +10% orb value / level (multiplicative on base)
 };
+// H1 (v1.8): the "Full Collection" CAPSTONE — a permanent, saved tuning bump
+// minted ONCE, at the moment the player's Full Collection latches (all 10
+// paintings + all 6 bosses + a first-time victory + a Reeds victory). It
+// stacks ON TOP OF the repeatable 'Rehung Frame' gallery bonus (the capstone
+// is a distinct, non-repeatable level: "the museum keeps you better"). The
+// level mints exactly once (the save.galleryComplete latch), so it is a saved
+// LEVEL on top of save.galleryBonus, not a re-mintable counter. Off
+// (level 0) by default; a save with galleryComplete false gets no capstone
+// keys, so its tuning is byte-identical (the invariant).
+export const GALLERY_COMPLETE = {
+  capstoneLevel: 1,     // the single permanent capstone level minted at completion
+  inkPerLevel: 4,       // +4 of each pigment color at run start (stacks on Rehung Frame)
+  orbPerLevel: 0.20,    // +20% orb value (stacks on the Rehung Frame orb multiplier)
+};
 export function galleryBonusLevel(save) {
   return Math.max(0, Math.floor(Number(save && save.galleryBonus) || 0));
 }
@@ -1864,6 +1878,90 @@ export function retireCollection(save) {
   if (!canRetireCollection(save)) return galleryBonusLevel(save);
   save.galleryBonus = galleryBonusLevel(save) + 1;
   return save.galleryBonus;
+}
+
+// ---------------------------------------------------------------- H1 (v1.8):
+// the "Full Collection" ledger — the release capstone. PURE (no DOM).
+//
+// The Full Collection is the end-state the game has implied since it was named
+// "Frogue Gallery": OWN every painting (the 8 base + the 2 gold-tier works) AND
+// have defeated EVERY boss at least once (gray / green / gilded herons, the
+// Silt Wyrm, the Warden, the Umbral Wyrm) AND have achieved a first-time
+// victory (a base victory) + a Reeds victory. It is the FINAL meta bar —
+// the game's completion state.
+//
+// Boss defeats are tracked as `save.flags.bossDefeats` — an array of the
+// defeated boss kinds (see BOSS_IDS). It is a NEW field on the EXISTING
+// save.flags object (already serialized wholesale) plus a NEW top-level
+// `save.galleryComplete` boolean latch. Both are introduced with the
+// SAVE_VERSION 11 -> 12 migration, which DEFAULTS them OFF / EMPTY for every
+// legacy save (a v11 save migrates to v12 and plays byte-identically — the
+// capstone is off until the player actually completes the collection).
+export const BOSS_IDS = ['gray', 'green', 'gilded', 'wyrm', 'warden', 'umbra'];
+// The display name for each boss kind (read by the Gallery Wall ledger so a
+// player can SEE which boss they are still missing).
+export const BOSS_NAMES = {
+  gray: 'The Great Gray Heron',
+  green: 'The Great Green Heron',
+  gilded: 'The Gilded Heron',
+  wyrm: 'The Silt Wyrm',
+  warden: 'The Warden of the Reeds',
+  umbra: 'The Umbral Wyrm',
+};
+// True if the save has a recorded defeat of `kind`. Pure + defensive (a legacy
+// save that was never migrated reads an empty list -> false for every kind).
+export function bossDefeated(save, kind) {
+  return !!(save && save.flags && Array.isArray(save.flags.bossDefeats)
+    && save.flags.bossDefeats.includes(kind));
+}
+// True if the save's Full Collection is complete: all 10 PAINTINGS owned +
+// every boss in BOSS_IDS defeated at least once + a first-time victory
+// (save.flags.heronDefeated) + a Reeds victory (save.flags.reedsVictory).
+// Pure + deterministic; a fresh save is false.
+export function galleryCompletion(save) {
+  if (!save || !Array.isArray(save.owned)) return false;
+  const owned = save.owned;
+  const allPaintings = PAINTINGS.every(p => owned.includes(p.id));
+  if (!allPaintings) return false;
+  const beats = (save.flags && Array.isArray(save.flags.bossDefeats)) ? save.flags.bossDefeats : [];
+  const allBosses = BOSS_IDS.every(k => beats.includes(k));
+  if (!allBosses) return false;
+  const firstWin = !!(save.flags && save.flags.heronDefeated);
+  const reedsWin = !!(save.flags && save.flags.reedsVictory);
+  return firstWin && reedsWin;
+}
+// H2 (v1.8): the Gallery Wall progress readout — the counts the player can SEE
+// (paintings owned / total, bosses defeated / total) + the complete flag. Pure
+// + deterministic; a fresh save reads 0/10 + 0/6 + complete:false. This is the
+// single source of truth for the Gallery Wall strip + the title badge + the
+// full-collection glow, so the presentation never re-derives the bar itself.
+export function galleryCompletionProgress(save) {
+  const owned = (save && Array.isArray(save.owned)) ? save.owned : [];
+  const paintingsOwned = PAINTINGS.filter(p => owned.includes(p.id)).length;
+  const beats = (save && save.flags && Array.isArray(save.flags.bossDefeats)) ? save.flags.bossDefeats : [];
+  const bossesDefeated = BOSS_IDS.filter(k => beats.includes(k)).length;
+  return {
+    paintingsOwned,
+    paintingsTotal: PAINTINGS.length,
+    bossesDefeated,
+    bossesTotal: BOSS_IDS.length,
+    complete: galleryCompletion(save),
+  };
+}
+// The permanent CAPSTONE level a save carries: GALLERY_COMPLETE.capstoneLevel
+// once the Full Collection has latched (save.galleryComplete true), else 0.
+// Pure. This is "the museum keeps you better" payoff — a one-time, saved,
+// permanent level minted on top of the repeatable Rehung Frame bonus.
+export function capstoneLevel(save) {
+  return (save && !!save.galleryComplete) ? GALLERY_COMPLETE.capstoneLevel : 0;
+}
+// The EFFECTIVE gallery-bonus level makeTuning should read: the saved
+// 'Rehung Frame' level PLUS the one-time Full Collection CAPSTONE level
+// (0 while the collection is incomplete — so a non-completed save's
+// makeTuning output is byte-identical, the invariant). game.js passes
+// galleryBonusTotal(save) where it used to pass save.galleryBonus. Pure.
+export function galleryBonusTotal(save) {
+  return galleryBonusLevel(save) + capstoneLevel(save);
 }
 
 // ---------------------------------------------------------------- upgrades
@@ -2425,7 +2523,14 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // with wanderSeed 0 (no seed yet) via the v10->v11 migration + normalizeWanderSeed.
 // Wander is OFF by default (options.wander, see migrateOptions) so a default-OFF
 // save NEVER runs the generated-layout path and stays byte-identical to v1.6.
-export const SAVE_VERSION = 11;
+// H1 (v1.8): bumped 11 -> 12 for the "Full Collection" ledger: a NEW top-level
+// `save.galleryComplete` boolean latch (the one-time completion beat) + a NEW
+// `save.flags.bossDefeats` array (the list of boss kinds defeated at least
+// once). Both DEFAULT OFF / EMPTY for every legacy save via the v11->v12
+// migration + normalizeGalleryComplete / normalizeBossDefeats, so a v11 save
+// migrates to v12 and plays byte-identically (the capstone is off until the
+// player actually completes the collection).
+export const SAVE_VERSION = 12;
 
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
@@ -2533,6 +2638,18 @@ const SAVE_MIGRATIONS = [
       out.wanderSeed = normalizeWanderSeed(out.wanderSeed);
     },
   },
+  {
+    from: 11, to: 12,
+    fn: (out) => {
+      // H1 (v1.8): the "Full Collection" ledger. Every pre-v1.8 save (no such
+      // fields) migrates forward with the completion latch DEFAULTED TO false
+      // and the boss-defeat list DEFAULTED TO [] — nobody backfills completion
+      // or defeats, so a v11 save migrates to v12 and plays byte-identically
+      // (galleryCompletion stays false until the player actually earns it).
+      out.galleryComplete = normalizeGalleryComplete(out.galleryComplete);
+      out.flags.bossDefeats = normalizeBossDefeats(out.flags && out.flags.bossDefeats);
+    },
+  },
 ];
 
 // N1 (v1.3 M14): normalize the New Game+ cycle index — a non-negative integer
@@ -2599,6 +2716,29 @@ function normalizeChallengeScores(raw) {
   return keep.slice(0, CHALLENGE_TOP_N);
 }
 
+// H1 (v1.8): normalize the "Full Collection" completion latch to a boolean.
+// A missing / non-boolean field (every pre-v1.8 save) reads back as false —
+// the capstone is OFF until the player actually completes the collection.
+// Pure.
+function normalizeGalleryComplete(raw) {
+  return !!raw;
+}
+
+// H1 (v1.8): normalize the boss-defeat list to a clean array of known BOSS_IDS
+// (no duplicates, no unknown kinds). A missing / non-array field (every
+// pre-v1.8 save) reads back as [] — nobody backfills defeats. Pure.
+function normalizeBossDefeats(raw) {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const k of raw) {
+    if (typeof k === 'string' && BOSS_IDS.includes(k) && !seen.has(k)) {
+      seen.add(k); out.push(k);
+    }
+  }
+  return out;
+}
+
 // N1 (v1.3 M14): a save has earned the New Game+ unlock when at least one
 // victory is recorded. Gating NG+ behind a completed victory keeps it out of the
 // first-time run's pace band; a first-time player (ngCycle 0, no victory) sees
@@ -2614,7 +2754,7 @@ export function freshSave() {
     owned: [],            // painting ids
     loadout: [],          // up to 2 painting ids
     upgrades: { capacity: 0, power: 0, vitality: 0 },
-    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false, tutorialSkipped: false, reedsUnlocked: false, reedsVictory: false },
+    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false, tutorialSkipped: false, reedsUnlocked: false, reedsVictory: false, bossDefeats: [] },
     stats: { expeditions: 0, victories: 0, deaths: 0, heronsPainted: 0, treasures: 0 },
     bestRun: null,        // {pigments, time, cleared}
     galleryBonus: 0,      // A4 (v1.2 M9): 'Rehung Frame' prestige-lite level
@@ -2627,6 +2767,7 @@ export function freshSave() {
     firstVictoryCinematic: false, // M1 (v1.4): the first-victory cinematic beat has been SEEN (a fresh + every migrating-old save = false → they get it once)
     challengeScores: [],  // K7 (v1.5 M2): the CURATOR CHALLENGE best-score file — top 5, each {seed,date,score}, ordered desc by score
     wanderSeed: 0,        // D1 (v1.7): THE WANDER's last-seen seed (integer; 0 = no Wander run yet). Off by default (options.wander), so a default-OFF save never runs the generated-layout path.
+    galleryComplete: false, // H1 (v1.8): the "Full Collection" completion latch (all 10 paintings + all 6 bosses + a first-time + a Reeds victory). false until the player actually completes the collection — the capstone galleryBonus level mints once it flips.
   };
 }
 
@@ -2732,7 +2873,7 @@ export function routeTrail(waypoints, worldW, cap = ROUTE_WAYPOINT_CAP) {
 //                (string/number/array/null); fresh save, nothing preserved
 // (The unparseable-JSON and missing-key cases are handled one level up in
 // SaveSys.load(), which returns null so the caller starts a fresh game.)
-const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned', 'gildedFrame', 'firstVictoryCinematic', 'challengeScores', 'wanderSeed'];
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned', 'gildedFrame', 'firstVictoryCinematic', 'challengeScores', 'wanderSeed', 'galleryComplete'];
 
 function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
 
@@ -2759,8 +2900,18 @@ export function migrateSave(raw) {
     for (const k of Object.keys(f.upgrades)) out.upgrades[k] = Math.max(0, Number(raw.upgrades[k]) || 0);
   }
   if (isPlainObj(raw.flags)) {
-    for (const k of Object.keys(f.flags)) out.flags[k] = !!raw.flags[k];
+    for (const k of Object.keys(f.flags)) {
+      // H1 (v1.8): flags.bossDefeats is an ARRAY (the list of boss kinds
+      // defeated at least once), not a boolean — re-normalize it after the
+      // loop (normalizeBossDefeats) instead of forcing it to a boolean here.
+      if (k === 'bossDefeats') continue;
+      out.flags[k] = !!raw.flags[k];
+    }
   }
+  // H1 (v1.8): carry the boss-defeat list forward (a clean array of known
+  // boss ids; [] for a legacy save with no field, the real list for a v12
+  // save). The v11->v12 migration step re-normalizes defensively on the way up.
+  out.flags.bossDefeats = normalizeBossDefeats(raw.flags && raw.flags.bossDefeats);
   if (isPlainObj(raw.stats)) {
     for (const k of Object.keys(f.stats)) out.stats[k] = Math.max(0, Number(raw.stats[k]) || 0);
   }
@@ -2800,6 +2951,13 @@ export function migrateSave(raw) {
   // chain below is a no-op on a same-version reload, so without this a v9 save
   // with filed scores would lose them on the next load.
   out.challengeScores = normalizeChallengeScores(raw.challengeScores);
+  // H1 (v1.8): carry the "Full Collection" completion latch forward (false for
+  // a legacy v11 save with no field, the real boolean for a v12 save). The
+  // v11->v12 migration step re-normalizes defensively on the way up. Must be a
+  // per-field carry (like galleryBonus/gildedFrame) — the version-migration
+  // chain is a no-op on a same-version reload, so without this a completed save
+  // would lose its latch on the next load.
+  out.galleryComplete = normalizeGalleryComplete(raw.galleryComplete);
   // R5 (v1.6 Module R): carry the reedsUnlocked gate flag forward
   // (false for a legacy v9 save with no field, the real boolean for a
   // v10 save). The v9->v10 migration step re-normalizes defensively.

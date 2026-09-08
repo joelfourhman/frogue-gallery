@@ -3182,7 +3182,7 @@ console.log('== stage 52: v1.3 M15 G3 — Gilded Frame (NG+ prestige tier) ==');
 
   // (0) schema: a fresh save is NOT gilded, SAVE_VERSION is now 11 (D1: 10 -> 11
   // adds the wanderSeed latch; the reedsUnlocked gate at 9 -> 10 is unchanged).
-  assert(L52.SAVE_VERSION === 11, `G3: SAVE_VERSION is now 11 (D1 wander era, 10 -> 11; got ${L52.SAVE_VERSION})`);
+  assert(L52.SAVE_VERSION === 12, `G3: SAVE_VERSION is now 12 (H1 Full Collection era, 11 -> 12; got ${L52.SAVE_VERSION})`);
   const fresh = L52.freshSave();
   assert(fresh.gildedFrame === false, 'G3: a fresh save has gildedFrame false');
   assert(L52.isGilded(fresh) === false, 'G3: isGilded is false on a fresh save');
@@ -4545,7 +4545,7 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
 {
   console.log('== stage 69: v1.4 M1 — first-victory cinematic beat (headless) ==');
   const L = await import('../src/logic.js');
-  assert(L.SAVE_VERSION === 11, 'M1: SAVE_VERSION is 11 (D1 bumped 10 -> 11 for the wanderSeed latch; the cinematic seen-flag from 7 -> 8 is unchanged)');
+  assert(L.SAVE_VERSION === 12, 'M1: SAVE_VERSION is 12 (H1 bumped 11 -> 12 for the Full Collection ledger; the cinematic seen-flag from 7 -> 8 is unchanged)');
   // Headless AudioContext that RECORDS every tone scheduled, so we can assert
   // the arpeggio shape (a soft RISING sequence) + that it rides the melody
   // layer (musicBus), not the sfx bus. Mirrors the S1/S2 stage pattern.
@@ -5828,7 +5828,7 @@ console.log('== stage 79: v1.5 K8 — Challenge Reward (Masterpiece + rank gold)
   // K9 itself introduced no save field (the first-sight flags are a plain
   // in-memory object on the Game, absent from the save). R5 (later) bumped the
   // schema 9 -> 10 for the reedsUnlocked gate flag — the current version is 10.
-  assert(L80.SAVE_VERSION === 11, 'K9: SAVE_VERSION is 11 (chain: 9 -> 10 at R5, 10 -> 11 at D1; K9 first-sight flags remain in-memory, not persisted)');
+  assert(L80.SAVE_VERSION === 12, 'K9: SAVE_VERSION is 12 (chain: 9 -> 10 at R5, 10 -> 11 at D1, 11 -> 12 at H1; K9 first-sight flags remain in-memory, not persisted)');
   assert(g81.save._firstSight === undefined, 'K9: the first-sight flags live on the Game (in-memory), not the save');
 
   console.log('ok — K9: the field guide\'s "Know your quarry" renders the four v1.5 residents (Mud Turtle / Blind Crag Frog / Storm Surge + the Gilded Heron\'s plume line on NG+ c3+ saves), and each new creature fires a ONE-SHOT first-sight banner (one in-memory flag per creature — A1/M3-style, no new save field, SAVE_VERSION 9) that never repeats');
@@ -6117,7 +6117,7 @@ console.log('== stage 85: v1.6 R5 — REEDS SAVE GATE (save.flags.reedsUnlocked,
   // stamps the CURRENT version (11) after walking the full chain, so the
   // version asserts below check the current stamp, and the reedsUnlocked
   // v9->v10 step is still exercised through the walk.
-  assert(L85.SAVE_VERSION === 11, `R5: SAVE_VERSION is 11 (chain grew 9 -> 10 at R5, 10 -> 11 at D1; got ${L85.SAVE_VERSION})`);
+  assert(L85.SAVE_VERSION === 12, `R5: SAVE_VERSION is 12 (chain grew 9 -> 10 at R5, 10 -> 11 at D1, 11 -> 12 at H1; got ${L85.SAVE_VERSION})`);
   const fresh85 = L85.freshSave();
   assert(fresh85.flags.reedsUnlocked === false, 'R5: a fresh save has flags.reedsUnlocked false (the new biome is locked by default)');
   assert(fresh85.saveVersion === L85.SAVE_VERSION, 'R5: a fresh save is stamped the current saveVersion');
@@ -6512,7 +6512,7 @@ console.log('== stage 89: v1.6 W1 — GAMEPAD INPUT-ABSTRACTION LAYER (raw Gamep
   assert(W1.freshOptions().gamepad === 'auto', 'W1: freshOptions defaults gamepad to "auto"');
   assert(W1.migrateOptions({ volume: 0.5 }).gamepad === 'auto', 'W1: migrateOptions — a legacy options blob (no gamepad field) migrates to "auto"');
   assert(W1.migrateOptions({ gamepad: 'off' }).gamepad === 'off', 'W1: migrateOptions — an explicit persisted "off" is honored');
-  assert(W1.SAVE_VERSION === 11, 'W1: the gamepad option is an OPTIONS-blob migration, not a save-schema bump (the schema is at 11 now, bumped 10 -> 11 by D1 for wanderSeed — W1 itself adds no save field)');
+  assert(W1.SAVE_VERSION === 12, 'W1: the gamepad option is an OPTIONS-blob migration, not a save-schema bump (the schema is at 12 now, bumped 10 -> 11 by D1 and 11 -> 12 by H1 — W1 itself adds no save field)');
 
   // ---- (b) no-pad regression: in-run key state is byte-identical to baseline ----
   // Run a real expedition with NO pad connected and assert the feed is dormant
@@ -7222,7 +7222,7 @@ console.log('== stage 94: v1.6 Q3 — SAVE EXPORT/IMPORT (Export->clipboard + Im
   // (wanderSeed), not Q3's. Q3's invariant: export/import introduced no field
   // and no version of its own, so Q3 still round-trips cleanly through the
   // CURRENT schema (11) via the existing migration chain.
-  assert(L.SAVE_VERSION === 11, 'Q3: the current SAVE_VERSION is 11 (D1 bumped 10 -> 11 for wanderSeed; Q3 itself added no field)');
+  assert(L.SAVE_VERSION === 12, 'Q3: the current SAVE_VERSION is 12 (D1 bumped 10 -> 11, H1 bumped 11 -> 12; Q3 itself added no field)');
   const svKeys = new Set(Object.keys(L.freshSave()));
   assert(!svKeys.has('runWaypoints') && !svKeys.has('runEnemies'), 'Q3: no run-local field leaked into the save schema');
   // Q3's own claim: export/import round-trips the CURRENT schema without
@@ -7567,7 +7567,7 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
   assert(typeof g98._lastExportBlob === 'string' && g98._lastExportBlob.length > 0, 'D4: Export produces a non-empty save blob');
   const exported = JSON.parse(exportedBlob);
   assert(exported.wanderSeed === 12345678, `D4: the exported blob carries wanderSeed (got ${exported.wanderSeed})`);
-  assert(exported.saveVersion === L98.SAVE_VERSION, 'D4: the exported blob carries the current saveVersion (11)');
+  assert(exported.saveVersion === L98.SAVE_VERSION, 'D4: the exported blob carries the current saveVersion (12)');
   // the blob validates through the EXISTING validateSaveBlob chain + round-trips.
   const v98 = L98.validateSaveBlob(g98._lastExportBlob);
   assert(v98.ok === true && v98.save.wanderSeed === 12345678, 'D4: the exported blob round-trips through validateSaveBlob with wanderSeed intact');
@@ -7961,7 +7961,7 @@ console.log('== stage 102: G1 (v1.8) — the BLACK REEDS NG+ variant (REEDS_DARK
   const rt = LG.freshSave(); rt.ngCycle = 1; rt.flags.reedsVictory = true; rt.stats.victories = 1;
   const mig = LG.migrateSave(JSON.parse(JSON.stringify(rt)));
   assert(mig.flags.reedsVictory === true, 'G1: the reedsVictory flag survives a save migrate/round-trip (it is a flags field; SAVE_VERSION stays 11)');
-  assert(LG.SAVE_VERSION === 11, 'G1: SAVE_VERSION stays 11 (the 11->12 bump with galleryComplete comes in H1, not this session)');
+  assert(LG.SAVE_VERSION === 12, 'G1: the G1-G3 items kept SAVE_VERSION at 11; H1 (this session) bumped it 11 -> 12 for the galleryComplete latch + bossDefeats');
 
   // ---- (c) a CYCLE-0 Reeds WORLD is byte-identical (the v1.6 layout, untouched) ----
   const wC0a = new World(mulberry32(4321), 4321, { reeds: true });
@@ -8151,7 +8151,125 @@ console.log('== stage 103: G3 (v1.8) — the end-of-Reeds boss SELECTION (Umbral
   assert(LG3.blackReedsUnlocked({ ngCycle: 3, flags: { reedsVictory: true } }) === true, 'G3: the gate stays OPEN on higher NG+ cycles');
   assert(LG3.blackReedsUnlocked(null) === false && LG3.blackReedsUnlocked(LG3.freshSave()) === false, 'G3: the gate is CLOSED for a fresh (no-NG+, no-victory) save');
 
-  console.log('ok — G3: the SELECTION WIRING + the Umbral Wyrm mechanics. The end-of-Reeds-descent boss is the UMBRAL WYRM (a hand-tuned NG+ Reeds run with a Reeds victory) vs the SILT WYRM (cycle-0 Reeds / NG+ without a Reeds victory) vs the WARDEN (Wander × Reeds — the Wander apex). cycle-0 Reeds is byte-identical (the v1.6 6000px/3-pocket/Silt-Wyrm content, deterministic per seed). The Umbral Wyrm is only-in-Black-Reeds. The mechanics verified: ~60k HP, the 3-hue awaken (the same latch), the DUAL-maw telegraph (both points marked), the "deep dark" final phase (cadence escalation + a HARDER fuel-siphon), and the lantern-MANDATORY paint rule (umbraPaintable). The pure blackReedsUnlocked gate fires only at NG+ + a Reeds victory. SAVE_VERSION stays 11.');
+  console.log('ok — G3: the SELECTION WIRING + the Umbral Wyrm mechanics. The end-of-Reeds-descent boss is the UMBRAL WYRM (a hand-tuned NG+ Reeds run with a Reeds victory) vs the SILT WYRM (cycle-0 Reeds / NG+ without a Reeds victory) vs the WARDEN (Wander × Reeds — the Wander apex). cycle-0 Reeds is byte-identical (the v1.6 6000px/3-pocket/Silt-Wyrm content, deterministic per seed). The mechanics verified: ~60k HP, the 3-hue awaken (the same latch), the DUAL-maw telegraph (both points marked), the "deep dark" final phase (cadence escalation + a HARDER fuel-siphon), and the lantern-MANDATORY paint rule (umbraPaintable). The pure blackReedsUnlocked gate fires only at NG+ + a Reeds victory. SAVE_VERSION stays 11.');
+}
+
+// ====================================================================
+// Stage 104: H1 (v1.8) — the "Full Collection" ledger (the pure check +
+// the capstone + the one-time cinematic latch + the SAVE_VERSION 11->12
+// migration). Proves: (1) the check is pure + deterministic, (2) a fresh
+// save is incomplete, (3) a synthetic all-complete save qualifies EXACTLY
+// once (idempotent — the latch flips once, the capstone mints once), (4) a
+// legacy v11 save migrates to v12 with the new fields DEFAULTED OFF (no
+// behavior change — makeTuning byte-identical when galleryComplete is false).
+// ====================================================================
+console.log('== stage 104: H1 (v1.8) — the "Full Collection" ledger (the pure galleryCompletion check + the capstone + the one-time latch + the v11->v12 migration) ==');
+{
+  const LH = await import('../src/logic.js');
+
+  // (0) schema: SAVE_VERSION bumped 11 -> 12 for the new fields.
+  assert(LH.SAVE_VERSION === 12, 'H1: SAVE_VERSION is 12 (the Full Collection ledger, 11 -> 12)');
+
+  // (1) the check is PURE + deterministic: a save missing ANY ingredient is incomplete.
+  const allPaintings = LH.PAINTINGS.map(p => p.id);                 // all 10
+  const mkComplete = () => {
+    const s = LH.freshSave();
+    s.owned = allPaintings.slice();
+    s.flags.bossDefeats = LH.BOSS_IDS.slice();                        // all 6
+    s.flags.heronDefeated = true;                                     // a first-time victory
+    s.flags.reedsVictory = true;                                      // a Reeds victory
+    s.stats.victories = 2;
+    return s;
+  };
+  assert(LH.galleryCompletion(mkComplete()) === true, 'H1: an all-complete save (10 paintings + 6 bosses + first + Reeds victory) qualifies');
+  // missing one boss
+  let sMissingBoss = mkComplete(); sMissingBoss.flags.bossDefeats = LH.BOSS_IDS.slice(0, 5);
+  assert(LH.galleryCompletion(sMissingBoss) === false, 'H1: missing ONE boss defeat keeps the collection incomplete');
+  // missing a painting
+  let sMissingPaint = mkComplete(); sMissingPaint.owned = allPaintings.slice(0, 9);
+  assert(LH.galleryCompletion(sMissingPaint) === false, 'H1: missing ONE painting keeps the collection incomplete');
+  // missing the Reeds victory
+  let sNoReeds = mkComplete(); sNoReeds.flags.reedsVictory = false;
+  assert(LH.galleryCompletion(sNoReeds) === false, 'H1: missing a Reeds victory keeps the collection incomplete');
+  // missing the first-time victory flag
+  let sNoFirst = mkComplete(); sNoFirst.flags.heronDefeated = false;
+  assert(LH.galleryCompletion(sNoFirst) === false, 'H1: missing a first-time victory (heronDefeated) keeps the collection incomplete');
+
+  // (2) a fresh save is incomplete (and the progress readout reads 0/10 + 0/6).
+  const fresh = LH.freshSave();
+  assert(LH.galleryCompletion(fresh) === false, 'H1: a fresh save is NOT complete');
+  const pf = LH.galleryCompletionProgress(fresh);
+  assert(pf.paintingsOwned === 0 && pf.paintingsTotal === 10 && pf.bossesDefeated === 0 && pf.bossesTotal === 6 && pf.complete === false,
+    'H1: the fresh-save progress readout reads 0/10 paintings + 0/6 bosses + complete:false');
+  assert(LH.capstoneLevel(fresh) === 0 && LH.galleryBonusTotal(fresh) === 0, 'H1: a fresh save carries no capstone level');
+
+  // (3) the capstone is a PERMANENT saved galleryBonus level ("the museum keeps
+  //     you better") — a completed save's makeTuning is STRICTLY better than an
+  //     otherwise-identical non-completed save, via the existing Rehung Frame
+  //     path (the capstone rides on galleryBonus, so makeTuning is untouched).
+  const sCap = mkComplete(); sCap.galleryComplete = true; sCap.galleryBonus = 0;
+  const sNoCap = mkComplete(); sNoCap.galleryComplete = false; sNoCap.galleryBonus = 0;
+  // galleryBonusTotal folds in the capstone (1 level) for the completed save.
+  assert(LH.galleryBonusTotal(sCap) === 1 && LH.galleryBonusTotal(sNoCap) === 0, 'H1: the completed save reads +1 effective gallery-bonus level; the non-completed save reads 0');
+  const tCap = LH.makeTuning({}, [], 'normal', LH.galleryBonusTotal(sCap), sCap.owned, false);
+  const tNoCap = LH.makeTuning({}, [], 'normal', LH.galleryBonusTotal(sNoCap), sNoCap.owned, false);
+  assert(tCap.galleryInkBonus > tNoCap.galleryInkBonus && tCap.pickupValue > tNoCap.pickupValue,
+    'H1: the capstone makes the completed save\'s run tuning STRICTLY better (more start ink + higher orb value)');
+
+  // (3b) THE INARIANT: when galleryComplete is false, makeTuning output is
+  //      byte-identical to the pre-H1 save (the capstone adds nothing).
+  const sLegacy = mkComplete(); sLegacy.galleryComplete = false; sLegacy.galleryBonus = 0;
+  const tA = LH.makeTuning(sLegacy.upgrades, sLegacy.loadout, 'normal', 0, sLegacy.owned, false); // old-style call (raw galleryBonus 0)
+  const tB = LH.makeTuning(sLegacy.upgrades, sLegacy.loadout, 'normal', LH.galleryBonusTotal(sLegacy), sLegacy.owned, false); // new-style (capstone 0)
+  assert(JSON.stringify(tA) === JSON.stringify(tB), 'H1: makeTuning output is byte-identical when galleryComplete is false (the invariant)');
+
+  // (4) THE LATCH is idempotent — it flips exactly once, the capstone mints once.
+  //     Drive a real Game._endRun('victory') with a synthetic complete save and
+  //     confirm the save latches + the capstone is minted; a second run does
+  //     NOT re-mint (the latch already flipped).
+  const gH1a = new Game(makeCanvas()); gH1a.start(); gH1a._quitToTitle();
+  const seedA = mkComplete(); seedA.galleryComplete = false; seedA.galleryBonus = 0;
+  gH1a.save = seedA; gH1a.tuning = LH.makeTuning(seedA.upgrades, seedA.loadout, gH1a.options.difficulty, LH.galleryBonusTotal(seedA), seedA.owned, false);
+  gH1a._endRun('victory');
+  assert(gH1a.save.galleryComplete === true, 'H1: a complete victory latches save.galleryComplete');
+  assert(gH1a.save.galleryBonus === 1, 'H1: the capstone mints exactly ONE permanent galleryBonus level at completion');
+  assert(gH1a._cine && gH1a._cine.collection === true, 'H1: the one-time completion cinematic beat opened (reusing the M1 machinery, tagged .collection)');
+  // a second run (a fresh Game, same now-complete save) does NOT re-mint: the
+  // latch is already true, so galleryCompletion is gated off by the latch check
+  // (the game only mints when !save.galleryComplete && galleryCompletion).
+  const gH1b = new Game(makeCanvas()); gH1b.start(); gH1b._quitToTitle();
+  const seedB = { ...gH1a.save, galleryBonus: gH1a.save.galleryBonus, flags: { ...gH1a.save.flags }, owned: gH1a.save.owned.slice() };
+  gH1b.save = seedB; gH1b.tuning = LH.makeTuning(seedB.upgrades, seedB.loadout, gH1b.options.difficulty, LH.galleryBonusTotal(seedB), seedB.owned, false);
+  const bonusBefore = gH1b.save.galleryBonus;
+  gH1b._endRun('victory');
+  assert(gH1b.save.galleryBonus === bonusBefore, 'H1: the capstone is IDEMPOTENT — a second victory after completion does NOT re-mint (the latch only flips once)');
+
+  // (5) A LEGACY v11 SAVE migrates to v12 with the new fields DEFAULTED OFF.
+  //     Build a v11-shaped save (no galleryComplete / no flags.bossDefeats),
+  //     migrate it, and confirm the defaults + byte-identical behavior.
+  const v11 = JSON.parse(JSON.stringify(LH.freshSave()));
+  v11.saveVersion = 11;
+  delete v11.galleryComplete;                       // no field yet (v11)
+  delete v11.flags.bossDefeats;                     // no field yet (v11)
+  v11.owned = allPaintings.slice(0, 3);
+  v11.stats.victories = 1; v11.flags.heronDefeated = true;
+  const mig = LH.migrateSave(JSON.parse(JSON.stringify(v11)));
+  assert(mig.saveVersion === 12, 'H1: a v11 save migrates to v12');
+  assert(mig.galleryComplete === false, 'H1: a migrated v11 save has galleryComplete DEFAULTED false');
+  assert(Array.isArray(mig.flags.bossDefeats) && mig.flags.bossDefeats.length === 0, 'H1: a migrated v11 save has flags.bossDefeats DEFAULTED []');
+  assert(LH.galleryCompletion(mig) === false, 'H1: a migrated v11 save is NOT complete (nobody backfills defeats)');
+  // byte-identical behavior: a migrated legacy save's makeTuning (capstone 0)
+  // equals the same save driven the old way.
+  const tMigA = LH.makeTuning(mig.upgrades, mig.loadout, 'normal', 0, mig.owned, false);
+  const tMigB = LH.makeTuning(mig.upgrades, mig.loadout, 'normal', LH.galleryBonusTotal(mig), mig.owned, false);
+  assert(JSON.stringify(tMigA) === JSON.stringify(tMigB), 'H1: a migrated v11 save plays byte-identically (makeTuning unchanged when galleryComplete is false)');
+
+  // (6) the round-trip preserves the latch + the boss-defeat list (a v12 save).
+  const v12 = mkComplete(); v12.galleryComplete = true;
+  const v12b = LH.migrateSave(JSON.parse(JSON.stringify(v12)));
+  assert(v12b.galleryComplete === true && v12b.flags.bossDefeats.length === 6, 'H1: a v12 complete save round-trips with the latch + all 6 defeats intact');
+
+  console.log('ok — H1: the "Full Collection" ledger. A NEW logic.js GALLERY_COMPLETE tuning + the pure galleryCompletion(save) check (all 10 paintings owned + all 6 bosses defeated [gray/green/gilded/Silt Wyrm/Warden/Umbral Wyrm] + a first-time victory + a Reeds victory) + a one-time completion cinematic (reusing the M1 first-victory beat machinery, tagged .collection) + a permanent saved capstone galleryBonus level ("the museum keeps you better"). A NEW save.galleryComplete boolean latch + save.flags.bossDefeats list (SAVE_VERSION 11 -> 12); a legacy v11 save migrates to v12 with the new fields DEFAULTED OFF and plays byte-identically (makeTuning unchanged when galleryComplete is false). The latch is idempotent (flips once).');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

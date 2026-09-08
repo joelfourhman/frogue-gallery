@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste, BOSS_IDS, galleryCompletion, capstoneLevel, galleryBonusTotal } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -258,7 +258,7 @@ export class Game {
     // ---------- persistence + tuning ----------
     this.save = SaveSys.load() || freshSave();
     this.options = SaveSys.loadOptions();
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
     // B5: persistent storage unavailable (privacy mode, quota, disabled)? We
     // still run on the in-memory save, but surface a one-time warning so the
     // player knows progress may not survive a reload. storageOK forces the
@@ -1690,7 +1690,7 @@ export class Game {
     this.save.gold -= pt.goldCost;
     this.save.owned.push(id);
     // rebuild live tuning so the bonus is active right away + next run
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus, this.save.owned, isGilded(this.save));
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
     this.sfx('awaken');
     this.addBanner(`${pt.name} is hung in gilded glass — its effect is yours forever.`, 4.2, this.ch * 0.34);
     SaveSys.save(this.save);
@@ -1704,7 +1704,7 @@ export class Game {
   // game-side wrapper: on success rebuild the live tuning, persist, banner.
   _buyGildedFrame() {
     if (!buyGildedFrame(this.save)) { this.sfx('hurt'); return; }
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus, this.save.owned, isGilded(this.save));
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
     this.sfx('awaken');
     this.addBanner('The Gilded Frame is hung — the gallery blazes with light.', 4.4, this.ch * 0.34);
     this.addBanner(`+${GILDED_FRAME.ink} pigment of each color at every run start · +${Math.round(GILDED_FRAME.orbMult * 100 - 100)}% orb value. Permanent.`, 4.4, this.ch * 0.34 + 34);
@@ -1768,7 +1768,7 @@ export class Game {
     SaveSys.save(this.save);
     // rebuild the live tuning so the bonus is active right away (also for the
     // next run) without needing a fresh expedition start.
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus, this.save.owned, isGilded(this.save));
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
     this.sfx('awaken');
     this.addBanner(`The frame is rehung — Gallery Bonus ${after} minted.`, 4.2, this.ch * 0.34);
     this.addBanner(`+${after * 2} pigment of each color at every run start · +${Math.round(after * 10)}% orb value.`, 4.2, this.ch * 0.34 + 34);
@@ -2862,7 +2862,7 @@ _drawAtelier(ctx) {
     // (world.reedsBestiary = REEDS_DARK_BESTIARY_DENSITY); cycle-0 Reeds is null
     // (the default REEDS_BESTIARY ladder). _spawnWave reads this._reedsBestiary.
     this._reedsBestiary = (this.world && this.world.reedsBestiary) || null;
-    this.tuning = makeTuning(this.save.upgrades, _loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
+    this.tuning = makeTuning(this.save.upgrades, _loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
     // N2 (v1.3 M14): NG+ per-cycle scaling — applied ONLY when ngCycle >= 1 so
     // a first-time (cycle 0) run's tuning stays byte-identical to pre-NG+.
     if (this.ngCycle >= 1 && !_chal) applyNGPlus(this.tuning, this.ngCycle);
@@ -4622,6 +4622,38 @@ _drawAtelier(ctx) {
       // the Reeds first. A legacy save with no flags.reedsVictory reads false,
       // so the gate never fires before the player has actually won a Reeds run.
       if (this.lanternReeds) this.save.flags.reedsVictory = true;
+      // H1 (v1.8): the "Full Collection" ledger — record that THIS boss type
+      // was defeated at least once (flags.bossDefeats is a de-duplicated list
+      // of BOSS_IDS). this.heron.kind maps straight onto a BOSS_ID (gray/green/
+      // gilded for the heron variants, 'wyrm' Silt Wyrm, 'warden', 'umbra'
+      // Umbral Wyrm). Pure bookkeeping on the save (no run time). A victory is
+      // a victory regardless of biome, so every end-of-run boss that is
+      // defeated here records its kind. The list is only ever appended to.
+      if (this.heron && typeof this.heron.kind === 'string'
+          && BOSS_IDS.includes(this.heron.kind)
+          && !(this.save.flags.bossDefeats || []).includes(this.heron.kind)) {
+        if (!Array.isArray(this.save.flags.bossDefeats)) this.save.flags.bossDefeats = [];
+        this.save.flags.bossDefeats.push(this.heron.kind);
+      }
+      // H1 (v1.8): the ONE-TIME "Full Collection" completion latch. The pure
+      // galleryCompletion check is true only when every painting is owned, every
+      // boss defeated at least once, AND there is a first-time + a Reeds
+      // victory. It latches save.galleryComplete exactly once (idempotent — the
+      // latch only flips once); on the flip it mints the permanent CAPSTONE
+      // galleryBonus level ("the museum keeps you better"), rebuilds the live
+      // tuning so it is active immediately, and opens the one-time completion
+      // cinematic (reusing the M1 first-victory beat machinery via _cine). No
+      // run time is added — it is meta + presentation, applied at run end.
+      if (!this.save.galleryComplete && galleryCompletion(this.save)) {
+        this.save.galleryComplete = true;
+        const cap = capstoneLevel(this.save);
+        this.save.galleryBonus = (Number(this.save.galleryBonus) || 0) + cap;
+        this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
+        this._cine = { t: 0, dur: 4, arpeggiated: false, collection: true };
+        this._cine.firstBeat = true;
+        if (this.audio && this.audio.cinematicArp) this.audio.cinematicArp();
+        this.addBanner('THE FULL COLLECTION — the museum keeps you better.', 4.6, this.ch * 0.34);
+      }
     }
     else this.save.stats.deaths += 1;
     // K7 (v1.5 M2): file the CURATOR CHALLENGE score. Only a victory files a
@@ -4698,7 +4730,12 @@ _drawAtelier(ctx) {
         // Defeat (and every non-first victory) uses the immediate stinger path.
         let playStingerNow = !victory;
         if (victory) {
-          if (!this.save.firstVictoryCinematic) {
+          // H1 (v1.8): if the Full Collection completion beat already opened
+          // this._cine (the collection latch fired earlier in this _endRun), do
+          // NOT overwrite it — the collection cinematic owns the screen. In
+          // practice a fresh save can't be complete, so this is a defensive
+          // no-op; the two beats fire on different runs.
+          if (!this._cine && !this.save.firstVictoryCinematic) {
             this.save.firstVictoryCinematic = true;
             this._cine = { t: 0, dur: 4, arpeggiated: false };
             this._cine.firstBeat = true;
@@ -6741,7 +6778,7 @@ _drawAtelier(ctx) {
     if (!DIFFICULTIES[id] || this.options.difficulty === id) return;
     this.options.difficulty = id;
     SaveSys.saveOptions(this.options);
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
     this._prevHp = this.tuning.maxHp;
     this.sfx('ui');
   }
@@ -6907,7 +6944,7 @@ _drawAtelier(ctx) {
     // Mirror the imported save into the live instance so a no-reload (test) path
     // sees it immediately.
     this.save = res.save;
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
+    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
     return true;
   }
   // Q3 (v1.6): focus the paste field and, in a real browser, pull the current
@@ -7703,9 +7740,18 @@ _drawAtelier(ctx) {
     // caption + sub, fading up just after the bars settle
     const capA = clamp((t - 0.35) / 0.7, 0, 1);
     if (capA > 0) {
-      outlineText(ctx, 'The Swamp Blooms!', this.cw / 2, this.ch * 0.42,
+      // H1 (v1.8): the Full Collection completion beat (this._cine.collection)
+      // carries its own caption + sub (the capstone payoff) — it reuses the
+      // M1 first-victory letterbox/bar/skip machinery but reads differently.
+      const cap = this._cine.collection
+        ? 'The Full Collection!'
+        : 'The Swamp Blooms!';
+      const sub = this._cine.collection
+        ? 'Every painting hung, every heron painted, every reed crossed. The museum keeps you better.'
+        : 'The Great Gray Heron takes flight, dripping in your colors. The swamp remembers.';
+      outlineText(ctx, cap, this.cw / 2, this.ch * 0.42,
         '700 46px Georgia, serif', '#eaf3e0', 'rgba(10,13,8,0.9)', 6);
-      centerText(ctx, 'The Great Gray Heron takes flight, dripping in your colors. The swamp remembers.',
+      centerText(ctx, sub,
         this.cw / 2, this.ch * 0.42 + 44, 'italic 17px Georgia, serif', '#eaf3e0', 0.85 * capA);
     }
     // "press any key to skip" hint — pulses, fades in late, never before 1.2s
