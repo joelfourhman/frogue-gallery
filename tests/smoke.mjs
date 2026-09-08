@@ -355,8 +355,8 @@ frames(1);
 assert(game.paused, 'P opened the pause menu');
 frames(30);
 assert(game.paused, 'pause survived 30 frames (draw pass clean)');
-// click the Resume button (geometry shared with _drawPause)
-fireMouse(canvas, game.cw / 2, game.ch / 2 - 130 + 108 + 22);
+// click the Resume button (geometry shared with _drawPause; Q1 grew the card 260->320 and shifted the buttons down to py+164)
+fireMouse(canvas, game.cw / 2, game.ch / 2 - 320 / 2 + 164 + 22);
 frames(1);
 assert(!game.paused, 'Resume button unpaused');
 fireKey('keydown', 'p');
@@ -6858,6 +6858,69 @@ console.log('== stage 91: v1.6 W3 — REEDS-MODE GAMEPAD PARITY + REGRESSION (th
   delete navigator.getGamepads;
 
   console.log('ok — W3: REEDS-MODE GAMEPAD PARITY — the pad drives THE LANTERN toggle (round-trips lit/unlit via LB), the leech HOP-OFF (one hop peels a clinging leech via RB), and the Silt Wyrm fight (all three pigments via A/X/Y + hop via RB) EXACTLY as the keyboard does (the feed writes the same keys). With the pad absent OR Off, the Reeds in-run key state is byte-identical to the no-gamepad baseline (the feed owns no key). P10 + the full suite stay green; the feed never alters run tuning/spawn (pace/humance re-verified in-band).');
+}
+
+// ============================================================
+// Q1 (v1.6 Module Q): PAUSE-MENU RUN SUMMARY — the pause card gains a compact
+// "this expedition" block (run time + zone + enemies painted + orbs), a live
+// read of the in-memory run. The enemies counter is IN-MEMORY ONLY (never on
+// the save). Pure display; ZERO tuning / save change.
+console.log('== stage 92: v1.6 Q1 — PAUSE-MENU RUN SUMMARY (the "this expedition" block: time + zone + enemies painted + orbs; enemies counter is in-memory only) ==');
+{
+  const { ZONES: ZQ1 } = await import('../src/game.js');
+
+  // a recording canvas + context (capture every fillText string) so we can
+  // assert the pause panel actually DRAWS the summary block with the right text.
+  const cvQ1 = makeCanvas();
+  const drawnQ1 = [];
+  const baseQ1 = cvQ1._ctx || (cvQ1._ctx = makeCtx(cvQ1));
+  const recQ1 = new Proxy(baseQ1, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawnQ1.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  cvQ1.getContext = () => recQ1;
+
+  const g1 = new Game(cvQ1); g1.start(); g1._quitToTitle();
+  const vSaveQ1 = await import('../src/logic.js');
+  const sv = vSaveQ1.freshSave(); sv.stats.victories = 1; sv.flags.heronDefeated = true; sv.flags.tutorialSkipped = true;
+  g1.save = sv;
+  g1._beginExpedition();
+  g1.player.iframes = 9999;
+
+  // ---- (a) the summary block renders with the correct live values mid-run ----
+  g1.runT = 75;                 // 1:15
+  g1._zoneI = 2;                // "Bramble Thicket"
+  g1.runEnemies = 12;
+  g1.runOrbs = 37;
+  g1.paused = true; g1._pauseOpenT = 0.5;   // the panel fully open (eased)
+  drawnQ1.length = 0;
+  g1._drawPause(cvQ1.getContext('2d'));
+  const j1 = drawnQ1.join('\u0001');
+  assert(j1.includes('this expedition'), 'Q1: the pause card renders the "this expedition" heading');
+  assert(j1.includes(`time ${g1._fmtClock(75)}  ·  ${ZQ1[2].name}`), `Q1: the summary renders run time + the current zone name (got a line: ${drawnQ1.find(s => s.startsWith('time ')) || 'NONE'})`);
+  assert(j1.includes(`enemies painted ${g1.runEnemies}  ·  orbs ${g1.runOrbs}`), `Q1: the summary renders the enemies-painted + orbs counts (live values)`);
+  // the values TRACK live: bump the counters and re-draw -> the text follows
+  g1.runT = 131; g1._zoneI = 3; g1.runEnemies = 5; g1.runOrbs = 9;
+  drawnQ1.length = 0; g1._drawPause(cvQ1.getContext('2d'));
+  const j1b = drawnQ1.join('\u0001');
+  assert(j1b.includes(`time ${g1._fmtClock(131)}  ·  ${ZQ1[3].name}`), 'Q1: the summary re-reads runT + zone live (a fresh draw reflects the new values)');
+  assert(j1b.includes('enemies painted 5  ·  orbs 9'), 'Q1: the summary re-reads the enemies/orbs counters live');
+
+  // ---- (b) the enemies counter increments on a kill and is IN-MEMORY ONLY ----
+  const enemiesBefore = g1.runEnemies;
+  g1._onEnemyDead(spawnEnemy('beetle', g1.player.x + 60, g1.player.y, g1.tuning));
+  g1._onEnemyDead(spawnEnemy('toad', g1.player.x + 90, g1.player.y, g1.tuning));
+  assert(g1.runEnemies === enemiesBefore + 2, `Q1: _onEnemyDead increments the in-run enemies counter (${enemiesBefore} -> ${g1.runEnemies})`);
+  // NEVER persisted: the save blob (as it would be serialized) carries NO
+  // runEnemies / runOrbs / runT field, and the in-memory save object does not.
+  assert(!('runEnemies' in g1.save) && !('runOrbs' in g1.save) && !('runT' in g1.save), 'Q1: the run counters live on the Game, NOT on the save object (in-memory only)');
+  const blobQ1 = JSON.stringify(g1.save);
+  assert(!blobQ1.includes('runEnemies') && !blobQ1.includes('runT'), 'Q1: serializing the save yields NO run-summary field (the counter is never written to the save blob)');
+  // a FRESH expedition resets the in-memory counter (a new run starts at 0)
+  g1._beginExpedition();
+  assert(g1.runEnemies === 0 && g1.runOrbs === 0, 'Q1: a new expedition resets the in-memory run counters (per-run, not persisted)');
+
+  console.log('ok — Q1: the pause card gains a compact "this expedition" block (run time + zone + enemies painted + orbs), a live read of the in-memory run that re-reads on every draw. The enemies-painted counter is incremented in _onEnemyDead and is IN-MEMORY ONLY (not on the save object or the serialized blob). Pure display; ZERO tuning/save change (SAVE_VERSION stays 10).');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');

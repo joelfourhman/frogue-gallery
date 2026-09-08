@@ -1001,11 +1001,11 @@ export class Game {
         } else {
           if (this.input.pressed('m')) this._muteToggle();
           if (this.input.mouse.lPressed) {
-            // geometry must match _drawPause (M5)
+            // geometry must match _drawPause (M5; Q1 kept the card + buttons in lock-step)
             const cx = this.cw / 2, cy = this.ch / 2;
-            const pw = 340, px = cx - pw / 2, py = cy - 130;
-            if (this._mouseIn(px, py + 108, pw, 44)) { this.paused = false; this.sfx('ui'); }
-            else if (this._mouseIn(px, py + 160, pw, 44)) { this.sfx('ui-back'); this._quitToTitle(); }
+            const pw = 340, ph = 320, px = cx - pw / 2, py = cy - ph / 2;
+            if (this._mouseIn(px, py + 164, pw, 44)) { this.paused = false; this.sfx('ui'); }
+            else if (this._mouseIn(px, py + 216, pw, 44)) { this.sfx('ui-back'); this._quitToTitle(); }
           }
         }
       }
@@ -2790,6 +2790,7 @@ _drawAtelier(ctx) {
     this.hazards = []; // E3: Bold-only environmental hazards (thorn reeds / mud pools)
     this.orbStreak = 0; // E4: clean-orb streak (resets on a hit) — in-run only, not persisted
     this.runOrbs = 0;   // G1 (v1.3 M15): this expedition's collected orbs (milestone is per-run)
+    this.runEnemies = 0; // Q1 (v1.6): enemies painted this expedition — IN-MEMORY ONLY (the pause "this expedition" block reads it; NEVER persisted)
     this.runGold = Math.max(0, Math.floor(this.save.gold) || 0); // C2 (v1.3 M16): the gold total at run start (delta at the end = "gold earned this expedition"; in-run only, not persisted)
     // N3 (v1.3 M14): on NG+ cycles (ngCycle >= 1) the final boss is the Great
     // GREEN Heron instead of the Great Gray Heron (the gray heron stays the
@@ -4242,6 +4243,7 @@ _drawAtelier(ctx) {
 
   _onEnemyDead(e) {
     this.score += e.score;
+    this.runEnemies += 1;  // Q1 (v1.6): this expedition's enemies painted (pause summary; in-memory only)
     this.sfx('enemy-die');
     // J2 (v1.4): a small hit-stop pop on a kill (60–90 ms @ ~0.3×). Gated by
     // options.shake (hitStop is a no-op when shake is OFF).
@@ -6485,17 +6487,44 @@ _drawAtelier(ctx) {
     ctx.fillRect(0, 0, this.cw, this.ch);
     ctx.restore();
     const cx = this.cw / 2, cy = this.ch / 2;
-    const pw = 340, ph = 260, px = cx - pw / 2, py = cy - 130 + slide;
+    // Q1 (v1.6): the card grows 260 -> 320 to carry a compact "this expedition"
+    // block (run time + zone + enemies painted + orbs). Pure display — every
+    // value read live at draw time, ZERO tuning/save change. The Resume / Quit
+    // buttons shift down with the card; the pause input routing (below) keeps
+    // the SAME offsets so the hit-rects stay in lock-step.
+    const pw = 340, ph = 320, px = cx - pw / 2, py = cy - ph / 2 + slide;
     const c = paperPanel(ctx, px, py, pw, ph, { seed: 21 });
-    centerText(c, 'Paused', cx, py + 44, '700 30px Georgia, serif');
-    centerText(c, 'P to resume - Esc quits to the pond', cx, py + 76, '13px Georgia, serif', INK, 0.7);
+    centerText(c, 'Paused', cx, py + 38, '700 30px Georgia, serif');
+    centerText(c, 'P to resume - Esc quits to the pond', cx, py + 66, '13px Georgia, serif', INK, 0.7);
+    // Q1: the "this expedition" block — a live read of the current run (time,
+    // zone, enemies painted, orbs). In-memory only; never touches the save.
+    if (this.state === 'expedition') {
+      const zi = this._zoneI || 0;
+      const zname = zi < ZONES.length ? ZONES[zi].name : 'the open water';
+      const by = py + 104;
+      ctx.save();
+      ctx.globalAlpha = op;
+      c.strokeStyle = 'rgba(43,35,32,0.28)';
+      c.lineWidth = 1;
+      c.beginPath(); c.moveTo(px + 44, by - 18); c.lineTo(px + pw - 44, by - 18); c.stroke();
+      centerText(c, 'this expedition', cx, by, '700 12px Georgia, serif', '#a3762a', 0.9);
+      centerText(c, `time ${this._fmtClock(this.runT || 0)}  ·  ${zname}`, cx, by + 20, '13px Georgia, serif', INK, 0.85);
+      centerText(c, `enemies painted ${this.runEnemies || 0}  ·  orbs ${this.runOrbs || 0}`, cx, by + 40, '13px Georgia, serif', INK, 0.85);
+      ctx.restore();
+    }
     ctx.save();
     ctx.globalAlpha = op;
-    uiButton(ctx, px, py + 108, pw, 44, 'Resume', this._mouseIn(px, cy - 130 + 108, pw, 44), false, { seed: 41, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-    uiButton(ctx, px, py + 160, pw, 44, 'Quit to the Pond', this._mouseIn(px, cy - 130 + 160, pw, 44), false, { seed: 42, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+    uiButton(ctx, px, py + 164, pw, 44, 'Resume', this._mouseIn(px, cy - ph / 2 + 164, pw, 44), false, { seed: 41, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+    uiButton(ctx, px, py + 216, pw, 44, 'Quit to the Pond', this._mouseIn(px, cy - ph / 2 + 216, pw, 44), false, { seed: 42, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
     ctx.restore();
-    centerText(c, 'M to mute', cx, py + 226, 'italic 12px Georgia, serif', INK, 0.6);
+    centerText(c, 'M to mute', cx, py + 286, 'italic 12px Georgia, serif', INK, 0.6);
     paperEnd(ctx);
+  }
+
+  // Q1 (v1.6): format a seconds count as M:SS for the pause/end summaries.
+  _fmtClock(sec) {
+    const s = Math.max(0, Math.floor(sec || 0));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
   // V4 (v1.2 M11): the end-card height — taller on a victory (it carries the
