@@ -6484,7 +6484,11 @@ console.log('== stage 89: v1.6 W1 — GAMEPAD INPUT-ABSTRACTION LAYER (raw Gamep
   // edge the way a real frame end would.
   const pad = { id: 'mock-pad', axes: [0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
   navigator.getGamepads = () => [pad];   // (restored after the stage)
-  const gW = new Game(makeCanvas()); gW.start();   // state === 'title'
+  const gW = new Game(makeCanvas()); gW.start();
+  // W2 scopes the W1 in-RUN feed to the expedition (menus route to the gamepad
+  // focus instead). _gpWrite only writes into input (no player/run touched), so
+  // driving it directly needs only the expedition gate flags.
+  gW.state = 'expedition';
   const inpW = gW.input;
   const poll = () => gW._pollGamepad();   // the feed, isolated from the frame loop
   const endF = () => inpW.endFrame();     // consume the kb/rPressed edge (frame-bottom)
@@ -6651,6 +6655,115 @@ console.log('== stage 89: v1.6 W1 — GAMEPAD INPUT-ABSTRACTION LAYER (raw Gamep
   gW._setGamepadMode();
   assert(gW.options.gamepad === 'off', 'W1: _setGamepadMode flips auto -> off and persists (options migration; SAVE_VERSION stays 10)');
   localStorageStub.removeItem(OPTIONS_KEY);
+}
+// restore the real navigator (no pad) so no later stage sees the mock.
+delete navigator.getGamepads;
+
+console.log('== stage 90: v1.6 W2 — CONNECTION STATE + FULL-SCREEN GAMEPAD FOCUS (title chip + one-time banner; D-pad/A/B menu focus routed through the same click machinery as the mouse) ==');
+{
+  // A controllable fake Gamepad (17 buttons: 0 A, 1 B, 12/13 D-pad up/down).
+  const pad2 = { id: 'mock2', axes: [0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  navigator.getGamepads = () => [pad2];   // (restored at the end)
+
+  // ---- (a) connect on the title: the chip + one-time banner + context split ----
+  const g2 = new Game(makeCanvas()); g2.start();   // state === 'title' (fresh save)
+  const poll = () => g2._pollGamepad();
+  const endF = () => g2.input.endFrame();
+  poll(); endF();
+  assert(g2._gp.connected === true && g2._gp.id === 'mock2', 'W2: the feed detects the connected pad on the title');
+  assert(g2._gpChipVisible() === true, 'W2: the title "pad connected" chip is visible with a pad (Auto)');
+  assert(g2.banners.some((b) => /gamepad was found/i.test(b.text)) && g2._gp.bannerShown === true, 'W2: the one-time "a gamepad was found" banner fires on the connect edge + latches');
+  poll(); endF();
+  assert(g2.banners.filter((b) => /gamepad was found/i.test(b.text)).length === 1, 'W2: the connect banner fires at most once (no repeat on later frames)');
+  // context split: on the title (a MENU), the in-RUN feed is OFF — the stick does
+  // NOT drive a move key; the pad is the menu focus, not the run feed.
+  pad2.axes = [1, 0];
+  poll(); endF();
+  assert(g2.input.down('d') === false, 'W2: in a MENU the in-run feed is off — the stick does NOT drive "d" (the pad is the menu focus, not the run feed)');
+  pad2.axes = [0, 0];
+  poll(); endF();
+  // B (the in-run splash button) on the title is a menu BACK (a no-op at the top
+  // level), NOT the splash charge — the mouse contract is untouched in menus.
+  pad2.buttons[1].pressed = true;
+  poll(); endF();
+  assert(g2.input.mouse.rDown === false, 'W2: the B button in a menu is BACK, not the in-run splash charge (rDown untouched)');
+  pad2.buttons[1].pressed = false;
+  poll(); endF();
+
+  // ---- (b) the full-screen focus cursor: D-pad up/down moves + wraps ----
+  assert(g2._gp.menu === 'title' && g2._gp.idx === 0, 'W2: the title focus list is active with the cursor on the first button (Start)');
+  const n0 = g2._gpMenuList().list.length;
+  assert(n0 >= 6, 'W2: the title focus list carries the full button set (Start, guided, 3 difficulties, Atelier, Options)');
+  // D-pad down (button 13) steps forward.
+  pad2.buttons[13].pressed = true; poll(); endF();
+  assert(g2._gp.idx === 1, 'W2: D-pad down moves the focus cursor forward one');
+  pad2.buttons[13].pressed = false; poll(); endF();
+  pad2.buttons[13].pressed = true; poll(); endF();
+  assert(g2._gp.idx === 2, 'W2: D-pad down again -> index 2 (moves in order)');
+  pad2.buttons[13].pressed = false; poll(); endF();
+  // D-pad up (button 12) steps back.
+  pad2.buttons[12].pressed = true; poll(); endF();
+  assert(g2._gp.idx === 1, 'W2: D-pad up moves the focus cursor back one');
+  pad2.buttons[12].pressed = false; poll(); endF();
+  pad2.buttons[12].pressed = true; poll(); endF();
+  assert(g2._gp.idx === 0, 'W2: D-pad up -> index 0');
+  // a HELD D-pad does NOT re-move the cursor (edge latched — no fighting).
+  pad2.buttons[12].pressed = true; poll(); endF();   // still held (same edge)
+  assert(g2._gp.idx === 0, 'W2: a held D-pad does not re-move the cursor (edge latched)');
+  pad2.buttons[12].pressed = false; poll(); endF();
+  // a FRESH up from the top WRAPS to the last button.
+  pad2.buttons[12].pressed = true; poll(); endF();
+  assert(g2._gp.idx === n0 - 1, 'W2: D-pad up from the top WRAPS to the last button');
+  pad2.buttons[12].pressed = false; poll(); endF();
+
+  // ---- (c) A confirms the focused action EXACTLY ONCE, via the same click path ----
+  // Position the cursor on the FIRST difficulty pill and confirm with A. The
+  // confirm parks the mouse on that rect + sets lPressed, so the EXISTING
+  // _updateTitle mouse handler fires _setDifficulty — the same machinery a mouse
+  // click uses. We wrap _setDifficulty to count how many times the action fires.
+  const t = g2._titleLayout();
+  const diff0 = t.diff[0];
+  const diffIdx = g2._gpMenuList().list.findIndex((r) => r.x === diff0.x && r.y === diff0.y);
+  assert(diffIdx >= 0, 'W2: the first difficulty pill is in the title focus list (a valid focusable target)');
+  g2._gp.idx = diffIdx; g2._gp.menu = 'title';
+  const diffBefore = g2.options.difficulty;
+  let calls = 0; const origDiff = g2._setDifficulty.bind(g2);
+  g2._setDifficulty = (id) => { calls++; return origDiff(id); };
+  pad2.buttons[0].pressed = true;   // A (fresh edge)
+  frames(1);                        // _frame: _pollGamepad (A edge) + _updateTitle (mouse handler)
+  assert(calls === 1 && g2.options.difficulty === diff0.id && diff0.id !== diffBefore, 'W2: A confirms the focused button through the SAME click machinery as the mouse (the difficulty pill sets the difficulty) — fired exactly once');
+  frames(1);                        // A still HELD -> edge latched -> no re-fire
+  assert(calls === 1, 'W2: a HELD A does not re-fire the confirm (edge latched) — the action fired exactly once');
+  pad2.buttons[0].pressed = false;
+  frames(1);                        // release A
+  pad2.buttons[0].pressed = true;   // A fresh press -> a new edge -> fires again
+  frames(1);
+  assert(calls === 2, 'W2: a fresh A press after release fires the confirm again (new edge) — the edge semantics are correct');
+  pad2.buttons[0].pressed = false;
+  frames(1);
+  g2._setDifficulty = origDiff;     // restore
+
+  // ---- (d) B backs out one level ----
+  g2.optionsOpen = true;            // open the options panel (a level above the title)
+  frames(1);
+  assert(g2._gp.menu === 'options', 'W2: opening the options switches the focus list to the options');
+  pad2.buttons[1].pressed = true;   // B
+  frames(1);
+  assert(g2.optionsOpen === false, 'W2: B backs out of the options (one level) back to the title');
+  pad2.buttons[1].pressed = false;
+  frames(1);
+  // B at the title (top level) is a no-op — there is no level above it.
+  pad2.buttons[1].pressed = true; frames(1);
+  assert(g2.state === 'title' && g2.optionsOpen === false, 'W2: B at the top level is a no-op (no level above the title to back out of)');
+  pad2.buttons[1].pressed = false; frames(1);
+
+  // ---- (e) no pad: chip absent + feed dormant ----
+  delete navigator.getGamepads;     // restore the real (absent) getGamepads
+  const gN = new Game(makeCanvas()); gN.start();   // title, no pad
+  frames(1);
+  assert(gN._gp.connected === false, 'W2: no pad -> the feed is disconnected');
+  assert(gN._gpChipVisible() === false, 'W2: no pad -> the title chip is absent');
+  assert(gN._gp.menu === null, 'W2: no pad -> no menu focus (feed dormant; the focus cursor never appears)');
 }
 // restore the real navigator (no pad) so no later stage sees the mock.
 delete navigator.getGamepads;

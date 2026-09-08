@@ -2329,10 +2329,17 @@ export function migrateOptions(raw) {
 export const GAMEPAD_MAP = {
   deadzone: 0.25,
   axes: { x: 0, y: 1 },
-  // discrete just-pressed buttons: index -> the input key the feed writes into kb
+  // In-RUN discrete just-pressed buttons (W1): index -> the input key the feed
+  // writes into kb. Context-scoped to the expedition so these never leak into
+  // the menus (space=Start, 1/2/3=atelier tabs, a=Atelier on the title).
   btn: { 0: '1', 2: '2', 3: '3', 4: 'l', 5: ' ' },
   // the splash-charge button (hold-to-charge / release-to-fire, mirrors mouse RMB)
   splash: 1,
+  // MENU (W2) full-screen focus: the same physical buttons re-purpose outside
+  // the expedition. A=confirm, B=back, D-pad up/down move the highlight (wraps)
+  // — standard Gamepad API indices (0 A, 1 B, 12/13 dpad up/down, 14/15 left/right).
+  // Routed through the SAME _mouseIn click machinery as a mouse click.
+  menu: { confirm: 0, back: 1, up: 12, down: 13, left: 14, right: 15 },
 };
 
 // W1: is the gamepad feed ENGAGED this frame? Pure. `pad` is the (possibly

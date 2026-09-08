@@ -278,7 +278,13 @@ export class Game {
     // no-pad run is byte-identical to the pre-gamepad baseline.
     this._gp = { connected: false, id: null, lastActiveMs: -1,
       was: { move: { a: false, d: false, w: false, s: false }, pig1: false, pig2: false, pig3: false, hop: false, lantern: false, splash: false },
-      bannerShown: false };
+      bannerShown: false,
+      // W2 (v1.6 Module W): menu focus state. `menu` is the active focus list
+      // id (null outside the menu focus lists); `idx` the focused row; `mi`
+      // remembers the last index per menu id so returning keeps the cursor.
+      // `_gpMenuEdges` is the per-frame edge latch for the confirm/back keys
+      // (a just-pressed A/B must fire exactly once).
+      menu: null, idx: 0, mi: {}, _gpMenuEdges: null };
     this.audio = new AudioSys();
     this.audio.setVolume(this.options.volume);
     this.audio.setMusicVolume(this.options.musicVol);
@@ -482,6 +488,7 @@ export class Game {
     if (this.options.gamepad === 'off') {
       gp.connected = false; gp.id = null; gp.lastActiveMs = -1;
       this._gpClearOwned();
+      if (gp.menu) { gp.menu = null; gp._gpMenuEdges = null; }
       return;
     }
     // Raw Gamepad API (zero deps). navigator/getGamepads may be absent
@@ -503,25 +510,210 @@ export class Game {
       let active = dxa > GAMEPAD_MAP.deadzone || dya > GAMEPAD_MAP.deadzone;
       if (!active) { const bs = pad.buttons || []; for (let i = 0; i < bs.length; i++) if (bs[i] && bs[i].pressed) { active = true; break; } }
       if (active || !wasConnected) gp.lastActiveMs = now; // fresh connect counts
-      // (W2 adds the one-time "a gamepad was found" banner on this connect
-      // edge, gated by gp.bannerShown — W1's feed is input-only.)
+      // W2: the one-time "a gamepad was found" banner on the connect edge (Auto
+      // legibility). Latched by gp.bannerShown so it fires at most once.
+      if (!wasConnected && !gp.bannerShown && this.state === 'title') {
+        gp.bannerShown = true;
+        this.addBanner('A gamepad was found', 3.2);
+      }
     } else {
       gp.connected = false; gp.id = null;
-      // Lost the pad: disengage + clear any keys we own (keyboard unaffected).
+      // Lost the pad: disengage + clear any keys we own (keyboard unaffected),
+      // and drop the menu focus (a focus cursor with no pad is meaningless).
       this._gpClearOwned();
+      if (gp.menu) { gp.menu = null; gp._gpMenuEdges = null; }
       return;
     }
-    // Engagement: fresh connect engages immediately; otherwise the pad must
-    // have been active within GAMEPAD_INACTIVITY_MS. Off handled above.
-    if (!gamepadActive(this.options, pad, now, gp.lastActiveMs, GAMEPAD_INACTIVITY_MS)) {
-      // Disengaged (idle timeout): don't fight the player — release our keys.
-      this._gpClearOwned();
-      return;
+    // W2: context routing. The in-RUN feed (movement/pigment/splash/lantern)
+    // only makes sense mid-expedition and is gated by the RECENCY rule
+    // (gamepadActive) — a stale idle pad can't fight the keyboard/mouse. In
+    // every OTHER state the same physical buttons become the full-screen MENU
+    // focus (D-pad nav, A confirm, B back); the menu stays responsive for as
+    // long as the pad is CONNECTED (no recency timeout — a player navigating
+    // a menu shouldn't be dropped mid-choice). This split is what keeps W1's
+    // in-run keys from leaking into the menus (space would Start the game,
+    // 1/2/3 would switch atelier tabs, a would open the Atelier from the title).
+    const inRun = this.state === 'expedition' && !this.dying && !this.paused && !this.help;
+    if (inRun) {
+      // Recency gate: a stale in-run pad disengages + releases its keys.
+      if (!gamepadActive(this.options, pad, now, gp.lastActiveMs, GAMEPAD_INACTIVITY_MS)) {
+        this._gpClearOwned();
+        return;
+      }
+      this._gpWrite(pad, now);
+    } else {
+      // Menu focus: responsive for as long as the pad is connected (above).
+      this._gpMenuWrite(pad, now);
     }
-    this._gpWrite(pad, now);
   }
 
-  // W1: the frame's pad -> input write. Reads axes/buttons once, computes the
+  // W2: the MENU focus write. Runs in every non-expedition state. D-pad up/down
+  // move a focus cursor over the current screen's button list (wraps); A
+  // synthesizes a mouse click AT the focused rect (the SAME _mouseIn + lPressed
+  // machinery a mouse uses — so gamepad and mouse can't diverge); B backs out
+  // one level. The focused list is computed fresh each frame from the current
+  // state (so it tracks options/pause/help/end/atelier/title automatically).
+  _gpMenuWrite(pad, now) {
+    const gp = this._gp, inp = this.input;
+    const focus = this._gpMenuList();
+    const list = focus ? focus.list : null;
+    if (!list || list.length === 0) { gp.menu = null; return; }
+    const id = focus.id;
+    // (Re)enter the menu: restore the remembered index (clamped) or start at 0.
+    if (gp.menu !== id) {
+      gp.menu = id;
+      const saved = (id in gp.mi) ? gp.mi[id] : 0;
+      gp.idx = Math.max(0, Math.min(saved, list.length - 1));
+    } else {
+      gp.idx = Math.max(0, Math.min(gp.idx, list.length - 1));
+    }
+    const bs = pad.buttons || [];
+    const bdown = (i) => !!(bs[i] && bs[i].pressed);
+    const M = GAMEPAD_MAP.menu;
+    // per-frame edge latch (a just-pressed A/B fires exactly once).
+    if (!gp._gpMenuEdges) gp._gpMenuEdges = { up: false, down: false, confirm: false, back: false };
+    const e = gp._gpMenuEdges;
+    const upNow = bdown(M.up), downNow = bdown(M.down), confirmNow = bdown(M.confirm), backNow = bdown(M.back);
+    const upEdge = upNow && !e.up, downEdge = downNow && !e.down, confirmEdge = confirmNow && !e.confirm, backEdge = backNow && !e.back;
+    // D-pad up/down move the highlight (wraps); keyboard up/down do the same
+    // (so the cursor is also reachable with the arrows).
+    const kbUp = inp.pressed('arrowup'), kbDown = inp.pressed('arrowdown');
+    if (upEdge || kbUp) { gp.idx = (gp.idx - 1 + list.length) % list.length; gp.mi[id] = gp.idx; this.sfx('ui'); }
+    if (downEdge || kbDown) { gp.idx = (gp.idx + 1) % list.length; gp.mi[id] = gp.idx; this.sfx('ui'); }
+    // A confirms: synthesize a click at the focused rect's CENTER. The frame's
+    // state update (which runs AFTER _pollGamepad) reads input.mouse + _mouseIn
+    // and fires the same action a mouse click would — the SAME click machinery
+    // (one call site, the existing mouse handler), so gamepad + mouse can't diverge.
+    if (confirmEdge && !inp.mouse.lPressed) {
+      const r = list[gp.idx];
+      if (r && r.w > 0) {
+        inp.mouse.x = r.x + r.w / 2;
+        inp.mouse.y = r.y + r.h / 2;
+        inp.mouse.lPressed = true;      // the same "just clicked" edge the mouse sets
+        this.sfx('ui');
+      }
+    }
+    // B backs out one level (per state).
+    if (backEdge) { this._gpMenuBack(); }
+    // advance the edge latch.
+    e.up = upNow; e.down = downNow; e.confirm = confirmNow; e.back = backNow;
+  }
+
+  // W2: the current menu focus list. Returns { id, [rects] } where each rect is
+  // { x, y, w, h } and matches the EXACT rect the mouse-click handler tests
+  // (_mouseIn), so a synthesized A-click hits the same button. Computed from
+  // the current state — options > pause > help > end > atelier > title order
+  // of precedence (an open overlay owns the focus).
+  _gpMenuList() {
+    const g = this;
+    if (g.state === 'title') {
+      if (g.optionsOpen) {
+        const o = g._optionsLayout();
+        // the options focus list: the gamepad-mode toggle + the visual toggles
+        // + back (the sliders are drag-only, not focus-steppable — a gamepad
+        // can't scrub a slider without a horizontal cursor).
+        return { id: 'options', list: [o.gpad, o.shake, o.vignette, o.grain, o.back] };
+      }
+      const t = g._titleLayout();
+      const items = [ { rect: { x: t.bx, y: t.by, w: t.bw, h: t.bh } } ];        // Start
+      // T1: the guided first expedition (fresh-save only) — it has its own
+      // mouse-click handler, so it's a focusable item when visible.
+      if (tutorialEligible(g.save)) items.push({ rect: { x: t.tx, y: t.ty, w: t.tw, h: t.th } });
+      if (t.ng) items.push({ rect: t.ng });                                     // NG+ / guided slot
+      t.diff.forEach((d) => items.push({ rect: d }));                           // difficulty pills
+      if (t.chall) items.push({ rect: t.chall });                                // Curator Challenge
+      items.push({ rect: { x: t.abx, y: t.aby, w: t.abw, h: t.abh } });          // Atelier
+      items.push({ rect: { x: t.ox, y: t.oy, w: t.ow, h: t.oh } });              // Options
+      if (t.reeds) items.push({ rect: t.reeds });                                // Beneath the Reeds
+      return { id: 'title', list: items.map((i) => i.rect) };
+    }
+    if (g.state === 'expedition') {
+      if (g.help) {
+        const h = g._helpGeom();
+        const items = [ h.close ];
+        if (h.retrain && h.retrain.enabled) h.retrain.buttons.forEach((b) => items.push(b));
+        return { id: 'help', list: items };
+      }
+      if (g.paused) {
+        const cx = g.cw / 2, cy = g.ch / 2, pw = 340, px = cx - pw / 2, py0 = cy - 130;
+        return { id: 'pause', list: [
+          { x: px, y: py0 + 108, w: pw, h: 44 },   // Resume
+          { x: px, y: py0 + 160, w: pw, h: 44 },   // Quit to the Pond
+        ] };
+      }
+      return null;   // active in-run: no menu focus (W1 feed is active)
+    }
+    if (g.state === 'end') {
+      const b = g._endButtons();
+      const items = [ b.primary ];
+      if (b.ng) items.push(b.ng);
+      items.push(b.ret);
+      return { id: 'end', list: items };
+    }
+    if (g.state === 'atelier') {
+      if (g._encoreOpen) return { id: 'atelier', list: [] };   // Encore owns input
+      const rows = g._atelierRows();
+      const focus = rows.filter((r) => r.enabled !== false && r.focus !== false);
+      return { id: 'atelier', list: focus };
+    }
+    return null;
+  }
+
+  // W2: B backs out one level, per the current state.
+  _gpMenuBack() {
+    const g = this;
+    if (g.state === 'title' && g.optionsOpen) { g._closeOptions(); g.sfx('ui-back'); return; }
+    if (g.state === 'expedition' && g.help) { g.help = false; g.sfx('ui-back'); return; }
+    if (g.state === 'expedition' && g.paused) { g.paused = false; g.sfx('ui'); return; }   // B resumes
+    if (g.state === 'end') { g.sfx('ui-back'); g._quitToTitle(); return; }
+    if (g.state === 'atelier') { g.sfx('ui-back'); g._quitToTitle(); return; }
+    if (g.state === 'title') { g.sfx('ui-back'); }   // top level: nothing to back out of
+  }
+
+  // W2: the title "pad connected / pad gone" paper chip. A small pill in the
+  // top-right that appears ONLY when a pad is connected (Auto) — the legibility
+  // cue for the one-time "a gamepad was found" banner. Drawn on the title only
+  // (the menu focus lists are what a pad drives on other screens).
+  _gpChipVisible() {
+    return this.state === 'title' && this._gp.connected && this.options.gamepad !== 'off';
+  }
+  _drawGpChip(ctx) {
+    if (!this._gpChipVisible()) return;
+    const x = this.cw - 152, y = 18, w = 134, h = 26, r = 13;
+    ctx.save();
+    roundRectPath(ctx, x, y, w, h, r);
+    ctx.fillStyle = 'rgba(253,246,233,0.92)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(60,52,42,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+    // a small pad glyph + label
+    ctx.fillStyle = 'rgba(60,52,42,0.85)';
+    ctx.font = '600 13px Georgia, serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('\u2726  pad connected', x + 12, y + h / 2 + 1);
+    ctx.restore();
+  }
+  // W2: the full-screen gamepad focus highlight — a wobbly paper outline around
+  // the focused button (the same rect the mouse-click handler tests). Drawn over
+  // the focused rect in every menu state that has a focus list (a menu is open).
+  _drawGpFocus(ctx) {
+    if (this.options.gamepad === 'off') return;
+    const gp = this._gp;
+    if (!gp.menu) return;
+    const focus = this._gpMenuList();
+    const list = focus ? focus.list : null;
+    if (!list || list.length === 0) return;
+    const idx = Math.max(0, Math.min(gp.idx, list.length - 1));
+    const r = list[idx];
+    if (!r || r.w <= 0) return;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(212,168,60,0.95)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([7, 5]);
+    roundRectPath(ctx, r.x - 4, r.y - 4, r.w + 8, r.h + 8, 8);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
   // deadzone-thresholded move, and drives kb (just-pressed) + keys (held) for
   // the move/pigment/hop/lantern, and mouse.rDown for the splash charge.
   // KEYBOARD WINS: a key the player physically holds (input._phys) is never
@@ -5095,6 +5287,11 @@ _drawAtelier(ctx) {
     // where the erase-save confirm banner appears)
     this._drawZoneTint(ctx);
     this._drawBanners(ctx);
+    // W2 (v1.6): the gamepad UI overlays — the title "pad connected" chip + the
+    // focus-cursor highlight over the focused menu button. Drawn above the
+    // screens so the cursor is visible on the highlighted button.
+    this._drawGpFocus(ctx);
+    this._drawGpChip(ctx);
 
     // ---- L3 (v1.4): lighting polish — a soft warm radial glow around the frog
     // (in-expedition) + a subtle always-on warm vignette. The warm vignette is
