@@ -7113,6 +7113,20 @@ _drawAtelier(ctx) {
     if (this.heron && this.heron.kind === 'warden') return 'the warden sleeps on';
     return (this.world && this.world.reedsVariant) ? 'the wyrm sleeps on' : 'the heron bloomed';
   }
+  // O2 (v1.7): the Wander run-recap line. Tells the story of a UNIQUE run — the
+  // "Wandering expedition" tag + the generated seed + the taste's name + its
+  // one-line flavor (e.g. "Feast Season — a swarm of mosquitos rides the warm
+  // current"). Run-local read only (wanderActive / wanderSeedRun / wanderTaste
+  // are set in _beginExpedition and never persisted); a hand-tuned (Wander-OFF)
+  // run's recap is UNCHANGED — this returns null for them so the strip draws
+  // exactly as before.
+  _recapWanderLine() {
+    if (!this.wanderActive || this.wanderSeedRun == null) return null;
+    const t = this.wanderTaste;
+    const tag = 'Wandering expedition · seed ' + this.wanderSeedRun;
+    if (!t) return tag;
+    return t.name + ' — ' + t.note + '   ·   ' + tag;
+  }
   _drawRecap(ctx) {
     const cx = this.cw / 2;
     const py = this.ch / 2 - this._endCardH() / 2, H = this._endCardH();
@@ -7180,6 +7194,13 @@ _drawAtelier(ctx) {
     }
     // the recap line: run time + zones crossed + the boss outcome
     centerText(ctx, `the last expedition — ${this._fmtClock(this.runT || 0)} · ${crossed} zone${crossed === 1 ? '' : 's'} crossed · ${this._recapBossLine()}`, cx, stripY + stripH + 14, '700 12px Georgia, serif', '#5a5a52', 0.92);
+    // O2 (v1.7): a SECOND line for a WANDER run only — the "Wandering expedition
+    // · seed N" tag + the taste's name + its flavor. Guarded by _recapWanderLine
+    // (null for hand-tuned runs), so a default-OFF run's recap strip is
+    // byte-identical to before. It sits 14px below the recap line and 14px above
+    // the card's top — in the same empty band, so nothing existing moves.
+    const wl = this._recapWanderLine();
+    if (wl) centerText(ctx, wl, cx, stripY + stripH + 30, 'italic 11px Georgia, serif', '#8a6a3a', 0.9);
     ctx.restore();
   }
 

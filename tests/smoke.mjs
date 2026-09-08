@@ -7755,5 +7755,106 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
   console.log('ok — F1: THE HOLLOW WARDEN — the 5th boss ARCHETYPE (the deferred "5th boss / more Reeds depth" item, the Wander-apex). It spawns ONLY at the end of a WANDER expedition (a hand-tuned cycle-0 / NG+ / Reeds run never meets it — byte-identical when Wander OFF, the Warden branch is a pure additive). A PALE, lantern-eating creature: while the lantern is LIT it SIPHONS candle fuel (a full wick in ~60s base, taste-scaled to 45s feast / 75s quiet; it STOPS when unlit or empty, and the wick auto-extinguishes); it is INVULNERABLE except while its MAW is OPEN (a telegraphed window reusing the Silt-Wyrm ripple-ring language). The 3-hue awaken STILL applies through the EXISTING paintBoss/bossStep path (the same awaken latch fires; the awaken speeds the cadence 0.62×). Its aggression is SEED-BIASED by the Wander taste (Feast > Quiet: the feast maw opens more often + siphons faster). HP in the ~52k class (the Wander apex, above the Silt Wyrm 48k); a distinct pale palette + a low rumble SFX; defeat ends the Wander run in victory like a heron / wyrm defeat.');
 }
 
+// ====================================================================
+// stage 100: O2 (v1.7) — the WANDER run-recap line. The end-screen recap
+//     (the Q2 "the last expedition" strip) gains a SECOND line for a WANDER
+//     run ONLY: the "Wandering expedition · seed N" tag + the taste's name +
+//     its one-line flavor — so the end screen tells the story of a UNIQUE
+//     run. Run-local read only (wanderActive / wanderSeedRun / wanderTaste
+//     are set in _beginExpedition, never persisted); a hand-tuned (Wander-
+//     OFF) run's recap is UNCHANGED (the second line is absent). P10 (60fps /
+//     culling) is a separate probe; this stage proves the presentation +
+//     byte-identity.
+// ====================================================================
+console.log('== stage 100: O2 (v1.7) — the WANDER run-recap line (seed + taste + "Wandering expedition" tag on the end screen; absent for hand-tuned; nothing persisted) ==');
+{
+  const L = await import('../src/logic.js');
+  const G = await import('../src/game.js');
+
+  // Reset the options blob (stage 99 may have persisted wander: true; a
+  // default-OFF run below must NOT inherit it — so the "absent for
+  // hand-tuned" leg is clean).
+  try { (globalThis.localStorage || {}).setItem('frogue_gallery_options', JSON.stringify(L.freshOptions())); } catch {}
+
+  // ---- (0) the _recapWanderLine helper: exact string for a known seed, null
+  //      for a hand-tuned (Wander-OFF) run. A recording canvas so the render
+  //      leg can capture fillText.
+  const recCanvas = makeCanvas();
+  const drawn = [];
+  const baseCtx = makeCtx(recCanvas);
+  const recCtx = new Proxy(baseCtx, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas.getContext = () => recCtx;
+  const g = new G.Game(recCanvas); g.start();
+
+  const seed = 987654321;
+  const taste = L.wanderTaste(seed);
+  // a WANDER run (helper level): set the run-local fields _beginExpedition sets.
+  g.wanderActive = true; g.wanderSeedRun = seed; g.wanderTaste = taste;
+  const wantLine = taste.name + ' \u2014 ' + taste.note + '   \u00b7   Wandering expedition \u00b7 seed ' + seed;
+  assert(g._recapWanderLine() === wantLine, `O2: a Wander run's recap line is the taste name + flavor + the "Wandering expedition · seed N" tag (got: ${JSON.stringify(g._recapWanderLine())})`);
+  assert(g._recapWanderLine().includes(taste.name) && g._recapWanderLine().includes(taste.note), 'O2: the recap line carries the taste NAME + its one-line FLAVOR (the run\'s story)');
+  assert(g._recapWanderLine().includes('Wandering expedition \u00b7 seed ' + seed), 'O2: the recap line carries the "Wandering expedition · seed N" TAG');
+  // a hand-tuned (Wander-OFF) run: the helper returns null (no second line).
+  g.wanderActive = false; g.wanderSeedRun = null; g.wanderTaste = null;
+  assert(g._recapWanderLine() === null, 'O2: a hand-tuned (Wander-OFF) run has NO wander recap line (the helper returns null — the recap strip is unchanged)');
+
+  // ---- (1) the CARD renders the line for a real WANDER run (headless
+  //      fillText-recording): drive a full Wander expedition end-to-end, reach
+  //      the end screen (victory), and confirm the strip's second line is
+  //      painted with this run's own seed + taste.
+  const vSave = L.freshSave(); vSave.stats.victories = 1; vSave.flags.heronDefeated = true; vSave.flags.reedsUnlocked = true;
+  const gW = new G.Game(recCanvas); gW.start(); gW._quitToTitle();
+  gW.save = vSave; gW.options.wander = true; gW._beginExpedition();
+  assert(gW.wanderActive === true && typeof gW.wanderSeedRun === 'number' && gW.wanderTaste, 'O2 (setup): a real Wander expedition carries the run-local seed + taste');
+  // reach the end screen (victory) and render just the recap strip.
+  gW.runT = 330; gW._zoneI = 3; gW.runWaypoints = []; gW._lastWpT = 0;
+  const wWorld = (gW.world && gW.world.w) || 1;
+  for (let i = 0; i < 12; i++) gW.runWaypoints.push({ x: wWorld * (0.1 + (i / 11) * 0.6), y: 750 });
+  const saveBlobBefore = JSON.stringify(gW.save);
+  gW.endKind = 'victory'; gW.endT = 5; gW.endGains = { red: 3, blue: 2, green: 4 }; gW.state = 'end';
+  drawn.length = 0;
+  gW._drawRecap(gW.ctx);
+  const drawnW = drawn.join('\u0001');
+  assert(drawnW.includes('the last expedition'), 'O2: the Wander victory end screen renders the "the last expedition" recap strip (the Q2 line is still there)');
+  assert(drawnW.includes('Wandering expedition \u00b7 seed ' + gW.wanderSeedRun), `O2: the Wander victory recap RENDERS the "Wandering expedition · seed N" tag with this run's own seed (${gW.wanderSeedRun})`);
+  assert(drawnW.includes(gW.wanderTaste.name) && drawnW.includes(gW.wanderTaste.note), `O2: the Wander victory recap RENDERS the taste's name + flavor (${gW.wanderTaste.name})`);
+
+  // ---- (2) the same line is present on a Wander DEFEAT (it is run-local, not
+  //      outcome-gated — a unique run's story is told whether it won or not).
+  gW.endKind = 'defeat';
+  drawn.length = 0;
+  gW._drawRecap(gW.ctx);
+  const drawnWD = drawn.join('\u0001');
+  assert(drawnWD.includes('the last expedition') && drawnWD.includes('it buried you'), 'O2: the Wander defeat recap still shows the Q2 boss-outcome line ("it buried you")');
+  assert(drawnWD.includes('Wandering expedition \u00b7 seed ' + gW.wanderSeedRun), 'O2: the Wander DEFEAT recap also renders the "Wandering expedition · seed N" tag (the story is told on a defeat too)');
+
+  // ---- (3) ABSENT for a hand-tuned (Wander-OFF) run: the end screen renders
+  //      the Q2 recap strip but NOT the second line — the hand-tuned recap is
+  //      byte-identical to before O2.
+  const gS = new G.Game(recCanvas); gS.start(); gS._quitToTitle();
+  gS.save = L.freshSave(); gS.options.wander = false; gS._beginExpedition();
+  assert(gS.wanderActive === false, 'O2 (setup): the hand-tuned run is NOT a Wander expedition');
+  gS.runT = 330; gS._zoneI = 3; gS.runWaypoints = [];
+  const sW = (gS.world && gS.world.w) || 1;
+  for (let i = 0; i < 12; i++) gS.runWaypoints.push({ x: sW * (0.1 + (i / 11) * 0.6), y: 750 });
+  gS.endKind = 'victory'; gS.endT = 5; gS.endGains = { red: 3, blue: 2, green: 4 }; gS.state = 'end';
+  drawn.length = 0;
+  gS._drawRecap(gS.ctx);
+  const drawnS = drawn.join('\u0001');
+  assert(drawnS.includes('the last expedition'), 'O2: the hand-tuned victory end screen renders the "the last expedition" recap strip (unchanged)');
+  assert(!drawnS.includes('Wandering expedition'), 'O2: a hand-tuned (Wander-OFF) run\'s recap does NOT render the "Wandering expedition" line (absent for hand-tuned — byte-identical to pre-O2)');
+
+  // ---- (4) nothing is persisted: the save blob is BYTE-IDENTICAL before/after
+  //      the end screen (the recap is a run-local read — in-memory only).
+  const saveBlobAfter = JSON.stringify(gW.save);
+  assert(saveBlobBefore === saveBlobAfter, 'O2: the save is BYTE-IDENTICAL before and after the end screen (no new persistence — the wander recap is in-memory only; SAVE_VERSION unchanged)');
+  assert(!('wanderSeedRun' in gW.save) && !('wanderTaste' in gW.save), 'O2: the run-local wander recap fields are NOT on the save object (in-memory only)');
+
+  console.log('ok — O2: the end-screen run recap (the Q2 "the last expedition" strip) gains a SECOND line for a WANDER run ONLY — the taste\'s name + its one-line flavor + the "Wandering expedition · seed N" tag — so the end screen tells the story of a UNIQUE run (e.g. "Feast Season — a swarm of mosquitos rides the warm current · Wandering expedition · seed 987654321"). It is a run-local read (wanderActive / wanderSeedRun / wanderTaste from _beginExpedition, IN-MEMORY ONLY); a hand-tuned (Wander-OFF) run\'s recap is UNCHANGED (the second line is absent); the save is BYTE-IDENTICAL before/after the end screen (no new persistence; SAVE_VERSION stays 11). It shows on BOTH a Wander victory AND a defeat (a unique run\'s story is told either way).');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
