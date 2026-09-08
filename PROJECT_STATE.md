@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.8 "The Full Collection" — NEXT ACTION: R1 (session v18-h, 2026-09-08; G1–G3 + H1–H2 LANDED — the Black Reeds NG+ variant + the Umbral Wyrm 6th boss + the selection wiring + the two new probes + the gallery Full-Collection capstone + the Gallery Wall completion beat)
+### v1.8 "The Full Collection" — NEXT ACTION: A1 (session v18-r, 2026-09-08; G1–G3 + H1–H2 + **R1 + R2 LANDED** — the Black Reeds NG+ variant + the Umbral Wyrm 6th boss + the selection wiring + the two new probes + the gallery Full-Collection capstone + the Gallery Wall completion beat + the release surface [README + 1.0.0 version string + changelog + DECISIONS close-out])
 
 **v1.7 is COMPLETE** (all 9 items D1–D4 / F1 / O1 / O2 / I1 committed, 101/101
 smoke green, all 7 probes in band, hand-tuned runs byte-identical with Wander
@@ -147,9 +147,60 @@ re-verified IN band UNCHANGED.**
 - Zero new dependencies; no new assets; loopback-only; pure rules in `logic.js`;
   the `144fb1c` flake-pin stays green; no `http.server` 8765 left running.
 
-**NEXT ACTION: R1** — the release surface (README + the 1.0.0 version string +
-the PROJECT_STATUS "v1.8 = 1.0.0 release" marker). See the plan-of-record §v1.8
-item **R1**. Do NOT start R2 / A1 until R1 is signed off.
+**Batch 3 (session v18-r): R1 → R2 LANDED** (2 commits, each smoke-green) —
+the **release surface** (README + the 1.0.0 version string) + the **changelog +
+DECISIONS close-out**. The load-bearing invariant held end-to-end: **R1 is
+presentation + docs only** — no tuning, no run-time change; every pacing probe
+stays in band UNCHANGED and hand-tuned runs are byte-identical.
+
+**Landed this session (R1 + R2, all green, 106/106 smoke):**
+- **R1** `119a0f1` `feat(v1.8 R1)` — the release surface. A **README.md** (the
+  game's first): the one-liner + the "painting is the game" pillar, how to run
+  (loopback-only `python -m http.server 8765` or open `index.html`), the full
+  control set (keyboard + the v1.6 gamepad map — every claim re-verified
+  against `input.js` + the `GAMEPAD_MAP` in logic.js, including the title
+  hotkeys Enter/Space/A/G/N/B/O/C/R and the 2-slot loadout / 10 paintings /
+  6 bosses), the expedition loop, the meta loop (gallery bonus → Full
+  Collection capstone), and the architecture note (vanilla JS + Canvas 2D +
+  WebAudio, zero deps, no build step, loopback-only). The **1.0.0 version
+  string**: a single display-only source of truth (`GAME_VERSION = '1.0.0'`
+  in `logic.js`, beside `SAVE_VERSION`) rendered by the title corner stamp
+  ("Frogue Gallery · v1.0.0") + the Options header line. Not in the save
+  schema; never feeds a run. Smoke **stage 106** asserts `GAME_VERSION ===
+  '1.0.0'` and is REFERENCED (a fillText spy over real `_drawTitle` /
+  `_drawOptions` draws proves both renders fire and mutate no state).
+- **R2** `docs(v1.8 R2)` — the changelog + DECISIONS close-out.
+  **docs/CHANGELOG.md** (NEW): the full release history, newest first
+  (1.0.0/v1.8 → v1.1 → the tutorial-era milestone line), one block per
+  version with accurate representative SHAs + the per-version
+  `SAVE_VERSION` history (1 → 12). **docs/DECISIONS.md**: four v1.8 rows
+  (15–18) in the existing table format — the Black Reeds gating (a
+  victory-gated NG+ variant, not a bypass; the end-of-Reeds boss selection),
+  the Umbral Wyrm's 2.5–4 min band + the deep-dark lantern mandate, the Full
+  Collection criteria + the capstone-over-bonus choice + the 11→12 migration
+  defaulting the new fields OFF, and the 1.0.0 versioning choice (a
+  display-only const, never in the save schema).
+
+**R1–R2 invariant evidence (measured this session, session v18-r):**
+- `node tests/smoke.mjs` → **106/106 ALL SMOKE TESTS PASSED** (deterministic;
+  3 consecutive runs; the `144fb1c` flake-pin stays green; 105 pre-existing
+  stages + stage 106 (R1 version string)).
+- **All 9 pacing probes IN band UNCHANGED** (R1/R2 are presentation + docs,
+  no run-time change): `pace.mjs` ~17.2 / `humance.mjs` ~18.9 (IN 15–20,
+  hand-tuned Wander OFF) / `ngpace.mjs` 19.5 (IN band) / `bosspace.mjs` ~0.62
+  min / `reedspace.mjs` 17.5 min waves + Silt Wyrm 3.9 min (IN 20–25) /
+  `wandpace.mjs` both legs in band (16.9–17.8 + 21.6–22.7) / `wardpace.mjs`
+  3.9–4.1 min / `blackpace.mjs` 21.0 min waves + Umbral 4.0 min (IN 22–26) /
+  `umbrapace.mjs` ~3.9 min (IN 2.5–4).
+- Zero new dependencies; no new assets; loopback-only; pure rules in
+  `logic.js`; the `144fb1c` flake-pin stays green; no `http.server` 8765 left
+  running.
+
+**NEXT ACTION: A1 — the v1.8 / 1.0.0 season audit (K10/C4/A1-style, the final
+gate).** A1 must run in a **FRESH session** (it is the independent audit of
+the whole v1.8 diff since v1.7-complete `34eeda2`; the R1/R2 implementer
+should not sign its own work). Do NOT start A1 in this session. See the
+plan-of-record §v1.8 item **A1**.
 
 **Full item list (per the plan-of-record):**
 - **G1** `feat(v1.8 G1)` — the "Black Reeds" NG+ Reeds variant: a NEW
@@ -185,14 +236,16 @@ item **R1**. Do NOT start R2 / A1 until R1 is signed off.
   bosses) so a player can *see* what they are missing; at Full Collection a
   title-screen "collection complete" badge + the capstone cinematic. Pure
   presentation over `galleryCompletion(save)`.
-- **R1** `feat(v1.8 R1)` — the README + version string: a `README.md` (what it
+- **R1** ✅ **DONE `119a0f1` (2026-09-08, session v18-r)** — the README +
+  version string: a `README.md` (what it
   is, how to play [open `index.html` in a browser, loopback-only], the controls
   [keyboard + gamepad, from the v1.6 W1 map], the meta [build → expedition →
   gallery], the NG+ / Reeds / Wander modes, a short changelog); `index.html` +
   the title screen carry a **`1.0.0`** version string; `docs/PROJECT_STATUS.md`
   gets the "v1.8 = 1.0.0 release" marker.
-- **R2** `docs(v1.8 R2)` — the changelog + DECISIONS.md close-out:
-  `docs/DECISIONS.md` records the 1.0 call + the v1.8 scope decisions;
+- **R2** ✅ **DONE (2026-09-08, session v18-r)** — the changelog + DECISIONS.md
+  close-out: `docs/DECISIONS.md` records the 1.0 call + the v1.8 scope
+  decisions;
   `docs/ROADMAP.md` gets the post-v1.8 deferred list.
 - **A1** `docs(v1.8)` — the v1.8 / 1.0.0 season audit (K10/C4/A1-style, the
   final gate): smoke ×3 green; `pace.mjs` + `humance.mjs` first-time IN the

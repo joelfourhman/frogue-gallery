@@ -909,7 +909,7 @@ with Wander OFF) holds. The season is signed off.
   procedural (math.js shapes, canvas, WebAudio synth).
 ---
 
-## v1.8 — "The Full Collection" (PLANNED; the 1.0 release version)
+## v1.8 — "The Full Collection" (IN PROGRESS — G1–G3 + H1–H2 + R1–R2 LANDED; A1 season audit next, in a FRESH session; the 1.0 release version)
 
 **Theme:** the gallery is *full*. Every version so far has added a *way to
 play* (the tutorial, gold/NG+, Reeds, the gamepad, QoL, Wander procgen + the
@@ -986,17 +986,24 @@ v1.8 gives the gallery a **completion state**.
 
 ### C. Release surface (productization)
 
-- **R1 — the README + version string.** A `README.md` (the game's public face):
-  what it is, how to play (open `index.html` in a browser — the loopback-only
-  note), the controls (keyboard + gamepad, from the v1.6 W1 map), the meta
-  (build → expedition → gallery), the NG+ / Reeds / Wander modes, and a short
-  changelog. `index.html` + the title screen carry a **`1.0.0`** version
-  string (replacing the dev-marker). `docs/PROJECT_STATUS.md` gets the
-  "v1.8 = 1.0.0 release" marker.
-- **R2 — the changelog + DECISIONS.md close-out.** `docs/DECISIONS.md`
-  records the 1.0 call + the v1.8 scope decisions (the NG+ Reeds variant
-  choice, the Full Collection capstone, the version bump). `docs/ROADMAP.md`
-  gets the post-v1.8 deferred list.
+- **R1 — the README + version string.** ✅ **DONE `119a0f1` (2026-09-08, session
+  v18-r).** A `README.md` (the game's public face): what it is, how to play
+  (open `index.html` in a browser — the loopback-only note), the controls
+  (keyboard + gamepad, from the v1.6 W1 map — every claim re-verified against
+  `input.js` + the `GAMEPAD_MAP`), the meta (build → expedition → gallery),
+  the NG+ / Reeds / Wander modes, and the architecture note. The title screen +
+  the Options header carry a **`1.0.0`** version string from a single
+  display-only source of truth (`GAME_VERSION = '1.0.0'` in `logic.js`, beside
+  `SAVE_VERSION`); a smoke stage asserts the value + that it is referenced.
+  `docs/PROJECT_STATUS.md` gets the "v1.8 = 1.0.0 release" marker.
+- **R2 — the changelog + DECISIONS.md close-out.** ✅ **DONE (2026-09-08,
+  session v18-r).** `docs/CHANGELOG.md` (NEW) records the full release history
+  (1.0.0/v1.8 → v1.1 → the tutorial-era milestone line) with representative
+  SHAs + the `SAVE_VERSION` history; `docs/DECISIONS.md` rows 15–18 record the
+  1.0 call + the v1.8 scope decisions (the Black Reeds gating, the Umbral Wyrm
+  band + lantern mandate, the Full Collection criteria + capstone choice + the
+  11→12 migration, the 1.0.0 versioning choice). `docs/ROADMAP.md` already
+  carries the post-v1.8 deferred list below.
 
 ### D. Season audit (the final gate)
 
