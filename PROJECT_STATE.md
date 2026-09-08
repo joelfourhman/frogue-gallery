@@ -5,7 +5,40 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 7 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
+### v1.9 "The Living Swamp" — NEXT ACTION (orchestrator handoff, 2026-09-08)
+
+**v1.8 is COMPLETE** (all 8 items G1–G3 / H1–H2 / R1–R2 / A1 committed,
+106/106 smoke green, all 9 probes in band, 1.0.0 release signed off at
+`6c9e09e`). v1.9 is **the quality pass** — the plan-of-record is in
+`docs/ROADMAP.md` §v1.9: T0 (frame-evidence harness), S1–S3 (sound design),
+J1–J4 (juice on the core action), L1–L4 (a living world + visual identity),
+A1 (the quality audit). ~13 items, ~5 sessions.
+
+**Why v1.9:** content is deep but the feel layers are the thinnest part —
+the whole game runs on ~6 synthesized SFX functions, and every visual
+judgment so far has been text-eyeballing; nobody has actually SEEN the game
+frames. T0 fixes the process (real frames as evidence); S/J/L raise the
+perceived quality of sound, the paint verb, and the world.
+
+**The load-bearing invariant (pin this):** every S/J/L item is
+**presentation-only** — zero tuning changes. All 9 pacing probes stay in band
+UNCHANGED, makeTuning byte-identical to v1.8-complete (`6c9e09e`), smoke green
+after every commit, SAVE_VERSION stays 12. Feel work must never move a number.
+**New process rule:** no polish item ships without its before/after frames
+(dev-only screenshot harness, playwright-core gitignored, runs on a free port
+NOT 8765).
+
+**First session: T0** — the frame harness + the v1.9-BASELINE frame set
+(20+ keyframes), then **S1** (the SFX bank — highest single-impact lever).
+Housekeeping for T0: ALSO refresh the stale `AGENTS.md` (it still says
+"16-stage suite / 3 archetypes + heron boss / 5400px swamp / only pace +
+bosspace probes" — bring the layout, commands, and test list current with the
+v1.8 reality: 106-stage smoke, 9 probes, Reeds/Black Reeds/Wander, 6 bosses,
+SAVE_VERSION 12, GAME_VERSION 1.0.0) as a small separate `docs:` commit.
+Batch plan: T0 → S1 + S2 → S3 + J1 → J2 + J3 → J4 + L1 → L2 + L3 → L4 + A1
+(fresh session).
+
+### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 8 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
 
 **v1.7 is COMPLETE** (all 9 items D1–D4 / F1 / O1 / O2 / I1 committed, 101/101
 smoke green, all 7 probes in band, hand-tuned runs byte-identical with Wander

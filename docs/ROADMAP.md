@@ -1077,4 +1077,97 @@ release — the game's Full Collection.**
   of Reeds, not a net-new biome); a genuinely new biome (e.g. a "Gallery
   Underground" / "the Atelier at night") is a future-version item.
 - **Image/audio/font assets** — invariant, unchanged: everything is
-  procedural (math.js shapes, canvas, WebAudio synth).
+  procedural (math.js shapes, canvas, WebAudio synth).---
+
+## v1.9 — "The Living Swamp" (PLANNED; the quality pass)
+
+**Theme:** the game is *complete* in content (9 pacing probes, 6 bosses, 106-stage
+deterministic suite) but its **feel layers are the thinnest part**: the whole
+game runs on ~6 synthesized SFX functions, and every visual judgment so far
+has been agent text-eyeballing — **nobody has actually SEEN the game frames**.
+v1.9 is the quality pass: sound design, juice on the core action (painting),
+a living world, and a frame-evidence process so polish is judged on real
+pixels. Theme: a swamp that *feels* alive.
+
+**The single load-bearing invariant (pin this):** every S/J/L item below is
+**presentation-only** — zero tuning changes. All 9 pacing probes stay in band
+UNCHANGED, the byte-identity invariant holds (makeTuning identical), and the
+smoke suite stays green after every commit. Feel work must never move a number
+a player experiences in time.
+
+**Process fix (NEW for v1.9):** a **frame-evidence harness** — a small
+dev-only screenshot tool (playwright-core is the sanctioned dev tooling;
+gitignored, no runtime dep) that drives the real page over loopback and
+captures ~20 keyframes: title, atelier, mid-swamp with paint in flight, each
+enemy, heron phases, Reeds lantern + flood, Black Reeds, Warden maw, Umbral
+deep-dark, gallery wall, full-collection glow. Every S/J/L item ships with its
+before/after frames saved under a gitignored `frames/` dir (recorded in the
+commit message), and the A1 audit is a before/after review of the frame set.
+No polish item ships without its frames.
+
+**Invariants (unchanged):** zero runtime dependencies (playwright-core stays
+dev-only/gitignored) · loopback-only · pure rules in `logic.js` · no
+per-frame hot-path allocations (the environmental-life items MUST respect the
+≤ 220 particle cap and object pools — verify with P10) · smoke suite green
+after every commit (deterministic) · one conventional commit per item ·
+SAVE_VERSION stays 12 · all 9 pacing probes in band unchanged · no
+`http.server` 8765 left running.
+
+### T0 — the eyes (process; FIRST)
+| ID | Item | Acceptance |
+|---|---|---|
+| T0 | **The frame harness** — `tools/frames.mjs` (dev-only, gitignored with its deps): boots the game on 127.0.0.1 (a free port, NOT 8765), drives it headless (seeded save states via the existing save-import/`localStorage` path — no manual clicking), and captures the ~20 keyframes above as PNGs under `frames/` (gitignored). A `frames:baseline` run produces the v1.9-BASELINE set every later item diffs against. Smoke-adjacent: a node check that the harness runs + emits all frames (dev tooling, not a game test). | `node tools/frames.mjs` → 20+ PNGs, baseline set committed to the session record; harness is dev-only (no runtime import, gitignored); no 8765 server left running. |
+
+### T1 — sound design (the thinnest layer)
+| ID | Item | Acceptance |
+|---|---|---|
+| S1 | **The SFX bank** — the ~6 SFX functions become a ~20-function synthesized bank (all WebAudio-synthesized, pooled, no assets): paint swish / splat / charge (pitch varies with stroke speed + charge), per-enemy hit + death (beetle clang vs mosquito buzz vs toad splat vs wisp hiss vs serpent slither), burn/freeze/root status on/off, pickup, boss phase stings (3), UI confirm/back, heal, lantern light/extinguish, Full Collection fanfare. The existing buses (music/sfx under master, the S1-step machinery) are the home; volume slider + mute inherit for free. | A smoke/dev check enumerates the bank (each sfx id → a synth recipe); the sfxBus still inherits the master mute; no audio files; particle/audio budget unchanged (P10 green). |
+| S2 | **Music dynamics** — the ambient bed + step-sequencer melody gain INTENSITY LAYERS: a danger swell (zone entry, low HP, boss phase transitions layer in denser patterns), distinct Reeds (low, watery) and Black Reeds (darker) themes, the Full Collection moment's own chord. All synthesized on the existing sequencer (no assets, no deps). | The sequencer exposes a pure "theme/intensity" selector (testable in node: theme id + pattern density for each of swamp / Reeds / Black Reeds / boss / collection); the music slider still controls it; nothing allocates per-frame in the tick path. |
+| S3 | **Ambient life audio** — synthesized ambient loops on the ambient bus: insects (sparse chirps, seeded), water droplets, wind in the reeds (filtered noise), a distant heron call (rare, seeded). Seeded + sparse so it never becomes a wall of sound; inherits mute/volume. | Ambient events are seeded/deterministic in node (a pure "next ambient event" sampler); the ambient bus rides the music slider; no setInterval (rAF tick only). |
+
+### T2 — juice on the core action ("painting is the game")
+| ID | Item | Acceptance |
+|---|---|---|
+| J1 | **Hitstop** — a 40–70 ms freeze (+ 1-frame impact flash) on paint connect, longer (~110 ms) on charged splat and on enemy KILL. Implemented as a real-time `hitstopT` in the draw/update gate (presentation clock — the game clock keeps its own integrity; the existing J5 real-time pattern is the model). | Hitstop is a real-time presentation clock (a smoke check: it exists, is clamped, and never touches tuning or the seeded RNG stream); frame evidence: a connect frame shows the flash. |
+| J2 | **Paint arc upgrade** — the brush trail is the core verb: arc fidelity (the existing arc-trail + splatter gets curve interpolation), droplet physics (a few pooled droplets with gravity + fade), a charged-slate feel (slower, heavier, wetter), and ink that LANDS (painted soil darkens, painted water ripples) on the existing paint layer. | The paint layer + particle budget unchanged (P10 green; ≤ 220); the new droplets are pooled; frame evidence: a charged stroke vs a normal stroke read differently. |
+| J3 | **Kill quality** — every enemy death is an ink burst that takes the palette of the pigment that killed it (painted-body tint extended to the death), enemies dissolve into the palette (a few frames of the painted blob bleeding away), boss deaths get the full bloom (the existing victory bloom is the model). | Death bursts are pooled + seeded (deterministic); frame evidence: a red-kill vs a blue-kill vs a green-kill death each read in their hue. |
+| J4 | **The frog** — idle breathing (subtle scale oscillation), hop anticipation (pre-hop crouch before the stretch), a hurt stagger (brief wobble + ink spatter on the frog, not just the enemy), a low-HP tremble (tiny shake under 2 hp), a victory pose (the blooming moment: the frog rears, tail flick, a painted heart or splash). Draw-only; physics untouched (the J4-squash pattern from v1.4 is the model). | All draw-only (a smoke check: the frog's physics/hp/invuln timing are untouched by the new draw states); frame evidence: idle vs hurt vs victory frames. |
+
+### T3 — a living world
+| ID | Item | Acceptance |
+|---|---|---|
+| L1 | **Environmental life** — a parallax layer-0 of living elements: fireflies (Reeds/Black Reeds), drifting leaves/pollen (swamp), surface ripples on water bands, breathing mist (a slow alpha/offset oscillation on the existing parallax bands). All pooled, seeded, capped into the existing particle budget. | P10 green with the new layer active (cap respected); the layer is seeded (deterministic positions); frame evidence: two frames 2 s apart show the mist breathing. |
+| L2 | **Lighting pass** — glow from charged paint (a soft radial on the stroke while charged), awaken bloom (the boss's Awakened state gets a light halo), lantern light pools EXTENDED into the base swamp as pure light (the parked "lantern in the swamp" item, done as LIGHT — no fuel, no mechanics, the frog carries a faint glow trail; the balance version stays deferred). | Pure draw (no new state in the save, no tuning change); the swamp light is a faint trail only (frame evidence: a night-tone frame shows the glow pool); P10 green. |
+| L3 | **Enemy liveness** — telegraph variety (each enemy gets a distinct pre-attack tell beyond the current flash: beetle lowers, toad inflates, mosquito widens its weave), panic states (a painted-but-not-frozen enemy briefly flees), small behaviors (beetles dig a tell, a toad licks paint off its body between attacks, a wisp drifts away from the lantern when lit). Seeded; per-enemy AI stays within the existing hot-path budget. | Each new behavior is seeded (deterministic at a fixed seed — a smoke stage samples 3 enemies × 3 seeds); P10 AI-cull green; frame evidence: a tell frame per enemy. |
+| L4 | **Visual identity pass** — one color-grade discipline across every screen (a consistent paper/pigment palette mapping, the existing grain/vignette options as the grade), UI consistency (the paper theme end-to-end: every panel, the HUD, the title, the gallery wall, the seed card, the recap strip share one typeface/weight/spacing scale), and the frame-set review pass (the before/after review of the T0 baseline vs the v1.9 set). | A node check enumerates the shared UI constants (typeface/weight/spacing scale + palette map) referenced by the panels (no per-panel ad-hoc fonts); the frame review is recorded in the A1 audit. |
+
+### A1 — the quality audit (final gate)
+| ID | Item | Acceptance |
+|---|---|---|
+| A1 | **The v1.9 quality audit** (K10/C4/A1-style): smoke ×3 green (deterministic); all 9 pacing probes IN band UNCHANGED (byte-identity: makeTuning + applyNGPlus deep-equal the v1.8-complete `6c9e09e` values); the P10 culling stage green WITH the new environmental layer + hitstop + droplets active; zero new runtime deps (the frames harness is dev-only/gitignored — audit the diff for it); SAVE_VERSION stays 12; the frame-evidence set complete (every S/J/L item has its before/after); no 8765 server left running. | The commit itself + the audit table (probe bands + frame-set completeness list). |
+
+**Batch plan:** T0 (the harness + baseline frames) → S1 (the SFX bank — the
+highest single-impact lever) + S2 → S3 + J1 → J2 + J3 → J4 + L1 → L2 + L3 → L4
++ A1 (fresh session). ~13 items, ~5 sessions.
+
+### Explicitly deferred past v1.9 (not forgotten)
+- **The true "lantern in the swamp" BALANCE version** (a fuel loop in the base
+  swamp) — v1.9's L2 lands it as LIGHT only; the mechanics version stays a
+  balance item.
+- **Accessibility (X1 colorblind glyphs, X2 remappable keys, X3 text-size)** —
+  Joel's standing call; X2 is the natural companion to the gamepad.
+- **Gold as a 4th combat pigment** — still fights the 3-hue pillar; stays
+  meta-only.
+- **CRT scanlines / retro filters** — rejected; the painted world has no
+  retro mode.
+- **Co-op / multiplayer** — architecture mismatch with loopback-only,
+  single-session, localStorage.
+- **Unbounded / infinite procedural generation** — v1.7's Wander is bounded;
+  a true open-ended generator stays out until the envelope data proves it safe.
+- **A fourth hand-tuned biome** (Gallery Underground / the Atelier at night) —
+  a content item for a future version.
+- **60fps / high-refresh guarantee** — the game targets a stable frame budget
+  (P10); a hard 120Hz high-refresh mode is out of scope (the feel targets are
+  tuned at the current cadence).
+- **Image/audio/font assets** — invariant: everything stays procedural
+  (math.js shapes, canvas, WebAudio synth).
