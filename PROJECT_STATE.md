@@ -49,16 +49,57 @@ layer untouched. Evidence (audio can't be screenshotted): `tests/sfx.mjs`
 routing + the voice cap) — the full per-sfx trigger manifest is in the commit
 message. Invariant held: `makeTuning` byte-identical (logic.js untouched),
 SAVE_VERSION 12, smoke `ALL SMOKE TESTS PASSED`, all 9 probes in band unchanged
-(pace ~18.7 / humance 18.5 min; bosspace 37.0s).
+**(pace ~18.7 / humance 18.5 min; bosspace 37.0s).**
 
-**NEXT ACTION: S2** (the next session) — **Music dynamics**: the ambient bed +
-step-sequencer melody gain INTENSITY LAYERS (a danger swell on zone entry / low
-HP / boss phase transitions, distinct Reeds + Black Reeds themes, the Full
-Collection moment's own chord), all synthesized on the existing sequencer.
-Housekeeping for T0 (a separate `docs:` commit, if not already done): refresh
-the stale `AGENTS.md`.
-Batch plan: T0 → **S1 + S2** → S3 + J1 → J2 + J3 → J4 + L1 → L2 + L3 → L4 + A1
-(fresh session).
+**S2 LANDED** (session v19-s1; `9ad0618`) — **Music dynamics**: the ambient
+bed + step-sequencer melody gain INTENSITY LAYERS. Distinct per-biome zone
+themes (a REAL Reeds set — low/watery/slow wet-minor drone; a Black Reeds set
+— darker/lower/sparser; the swamp set stays byte-identical to the hand-tuned
+v1.7 baseline) + a PURE `themeSelector({ zone, bossEngaged, lowHp, collection })
+-> { themeId, patternDensity, extraVoices }` (patternDensity = the real
+active-step count, so "denser pattern = higher intensity" holds: boss > zone).
+The danger layer (a low boss off-beat pulse, a sparse high uneasy low-HP
+ostinato below ~30% HP that fades out above it, a brief zone-entry swell, and
+the Full-Collection chord swell) all rides `melodyMaster -> musicBus` so the
+music slider + mute inherit; `bossPhaseUp()` swaps the live boss loop to a
+denser/faster pre-built phase-2 variant. Evidence: `tests/music.mjs` (the S2
+section, ~40 assertions — the right theme + density for swamp/Reeds/Black
+Reeds/boss/lowHp/collection + the melodyMaster -> musicBus routing).
+Invariant held: `makeTuning` byte-identical (logic.js untouched), SAVE_VERSION
+12, smoke `ALL SMOKE TESTS PASSED`, all 9 probes in band unchanged (pace
+~17.2 min / bosspace 37.0s), P10 (nothing allocates per-frame in the tick —
+all danger voices pre-built lazily).
+
+**S3 LANDED** (session v19-s1; `7ec519c`) — **Ambient life audio**: the seeded
+sparse wet/swamp bed. A PURE `nextAmbientEvent({ biome, rng, t }) ->
+{ type, flavor, t } | null` sampler (no Math.random/browser/global state; the
+caller's seeded mulberry32 stream is the only source, advanced in a fixed
+per-slot draw order, so the same (biome, seed, t-cadence) yields the same
+event times — deterministic in node) + `AMBIENT_KINDS`/`AMBIENT_P` (insect /
+water / wind / heron + per-biome per-slot probabilities). SPARSE — most slots
+return null, a few events/min; WATER is a WET-BIOME-ONLY kind (reeds / black
+reeds), the heron RARE (~once per zone). The VOICES ride a new `_ambLifeMaster`
+bus -> musicBus (the music slider + mute inherit): `_ambChirp`/`_ambDrip`/
+`_ambWind`/`_ambHeronCall`, all a few-percent peak (a bed, never a wall of
+sound). The STEPPER `stepAmbientLife(dt)` is driven by the rAF expedition tick
+(NO setInterval), runs the pure sampler once per whole second; P10 (per-frame:
+a clock add + at most one voice/second). `startAmbientLife(biome, seed)` /
+`stopAmbientLife()` at run start/end, seeded by the run's world seed.
+Evidence: `tests/music.mjs` (the S3 section, ~20 assertions — sparsity,
+biome-gating, determinism, kind/flavor validity + the `_ambLifeMaster ->
+musicBus` routing). Invariant held: `makeTuning` byte-identical (logic.js
+untouched), SAVE_VERSION 12, smoke `ALL SMOKE TESTS PASSED`, all 9 probes in
+band unchanged (headless no-op — the sampler never feeds runT).
+
+**NEXT ACTION: J1** (the next session) — **Hitstop** (the T2 juice pass): a
+40–70 ms real-time freeze (+ 1-frame impact flash) on paint connect, longer
+(~110 ms) on a charged splat and on an enemy KILL. A real-time `hitstopT` in
+the draw/update gate (a presentation clock — the game clock keeps its own
+integrity; the existing J5 real-time pattern is the model). Acceptance: the
+hitstop exists, is clamped, and never touches tuning or the seeded RNG stream;
+frame evidence — a connect frame shows the flash.
+Batch plan: T0 → **S1 + S2 + S3 (all LANDED this session)** → J1 → J2 + J3 →
+J4 + L1 → L2 + L3 → L4 + A1 (fresh sessions).
 
 ### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 8 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
 
