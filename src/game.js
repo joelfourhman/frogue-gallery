@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -2834,8 +2834,34 @@ _drawAtelier(ctx) {
     // one, even on a cycle-0 save — the challenge is a scored mode, not NG+).
     if (_chal) { _loadout = _chal.loadout; _chal._modApplied = null; }
     const _chalModId = _chal ? _chal.modifier : null;
-    this.world = new World(mulberry32(seed), seed % 99991, { reeds: _isReeds });
+    // G1 (v1.8): the BLACK REEDS variant gate. It activates ONLY when ALL of:
+    //   (a) this is a Reeds expedition (`_isReeds`),
+    //   (b) it is an NG+ cycle (this.ngCycle >= 1) — the v1.6 cycle-0 Reeds
+    //       layout stays untouched (byte-identical),
+    //   (c) the player has WON the Reeds before (save.flags.reedsVictory — a
+    //       latch set on a Reeds-biome victory; false for a legacy save), and
+    //   (d) this is a HAND-TUNED run (Wander OFF). A WANDER × Reeds run keeps
+    //       its existing v1.7 WARDEN boss + cycle-0 Reeds world (the Warden is
+    //       the Wander apex; Black Reeds is the hand-tuned NG+ apex).
+    // The gate is read BEFORE the World is built so the whole world shares the
+    // variant. Every existing run (cycle-0 Reeds, Wander × Reeds, hand-tuned
+    // cycle-0 Reeds) evaluates this to false → byte-identical to v1.7.
+    this.blackReeds = _isReeds
+      && this.ngCycle >= 1
+      && !!(this.save.flags && this.save.flags.reedsVictory)
+      && this.options.wander !== true;
+    this.world = new World(mulberry32(seed), seed % 99991, { reeds: _isReeds, blackReeds: this.blackReeds });
     this.lanternReeds = _isReeds;               // R1: activate THE LANTERN (only in the Reeds variant)
+    // G1 (v1.8): the run's lantern-economy TUNING table. A Black Reeds run uses
+    // REEDS_DARK_LANTERN (a faster drain + shorter reach — the "deep dark"); every
+    // other run (cycle-0 Reeds, base swamp) uses the stock LANTERN (byte-identical).
+    // Cached here so _updateLantern / the Warden siphon / the enemy light key all
+    // read the SAME table (no per-frame allocation — a single const reference).
+    this._lanternTuning = (this.blackReeds) ? REEDS_DARK_LANTERN : LANTERN;
+    // G1 (v1.8): the run's Reeds bestiary PICK THRESHOLDS. Black Reeds is denser
+    // (world.reedsBestiary = REEDS_DARK_BESTIARY_DENSITY); cycle-0 Reeds is null
+    // (the default REEDS_BESTIARY ladder). _spawnWave reads this._reedsBestiary.
+    this._reedsBestiary = (this.world && this.world.reedsBestiary) || null;
     this.tuning = makeTuning(this.save.upgrades, _loadout, this.options.difficulty, this.save.galleryBonus || 0, this.save.owned, isGilded(this.save));
     // N2 (v1.3 M14): NG+ per-cycle scaling — applied ONLY when ngCycle >= 1 so
     // a first-time (cycle 0) run's tuning stays byte-identical to pre-NG+.
@@ -3927,9 +3953,15 @@ _drawAtelier(ctx) {
   // the frog, so the source is the frog). No save data. Presentation-only
   // radius easing — the fuel rules are the pure lanternTick.
   _updateLantern(dt, p) {
-    const nearRest = this._lanternNear(p.x, p.y, this.world.restSpots, LANTERN.restSpotRadius);
-    const nearFirefly = this._lanternNear(p.x, p.y, this.world.fireflies, LANTERN.fireflyRadius);
-    this.lantern = lanternTick(this.lantern, dt, this.lantern.lit, nearRest, nearFirefly);
+    // G1 (v1.8): read the run's lantern TUNING (this._lanternTuning, defaulting
+    // to LANTERN when unset — e.g. the pre-Black-Reeds title). A Black Reeds run
+    // passes REEDS_DARK_LANTERN (faster drain, shorter reach); every other run
+    // passes LANTERN (byte-identical — the *For wrappers fall back to LANTERN on
+    // missing fields, so even a partial table behaves exactly like R1).
+    const lt = this._lanternTuning || LANTERN;
+    const nearRest = this._lanternNear(p.x, p.y, this.world.restSpots, lt.restSpotRadius);
+    const nearFirefly = this._lanternNear(p.x, p.y, this.world.fireflies, lt.fireflyRadius);
+    this.lantern = lanternTickFor(this.lantern, dt, this.lantern.lit, nearRest, nearFirefly, lt);
     // A successful refill (fuel strictly up while at a source) gives a soft,
     // quiet "wick catching" blip — at most ONCE per source-entry (latched) so it
     // doesn't spam while the frog stands on a spot. The latch clears when the
@@ -3939,8 +3971,8 @@ _drawAtelier(ctx) {
     if (!refilling || this.lantern.fuel >= 1) this._wickLatch = false;
     // Refresh the eased render radius (the cached gradient is keyed to it) +
     // the frog's own lightFactor for R3.
-    this._lanternEasedR = lanternRadius(this.lantern);
-    this.lantern.lightFactor = lightFactor(this.lantern, p.x, p.y, p.x, p.y);
+    this._lanternEasedR = lanternRadiusFor(this.lantern, lt);
+    this.lantern.lightFactor = lanternLightFactor(this.lantern, p.x, p.y, p.x, p.y, lt);
   }
   // R1 (v1.6): does any source in `list` lie within `radius` of (x, y)? A
   // small pure-ish proximity helper (world-space, no browser APIs). Returns the
@@ -4259,9 +4291,18 @@ _drawAtelier(ctx) {
     // grow unbounded.
     if (this.world.reedsVariant && t > 15) {
       const rr = Math.random();
-      if (rr > 0.965) kind = 'wisp';
-      else if (rr > 0.935) kind = 'serpent';
-      else if (rr > 0.905) kind = 'leech';
+      // G1 (v1.8): the pick THRESHOLDS. A BLACK REEDS run uses this._reedsBestiary
+      // (REEDS_DARK_BESTIARY_DENSITY — denser: each light creature's pick band is
+      // WIDER, so the light-bestiary matters more in the darker descent). A
+      // cycle-0 Reeds run has this._reedsBestiary === null → the EXACT v1.6
+      // hardcoded ladder (0.965/0.935/0.905), byte-identical.
+      const b = this._reedsBestiary;
+      const wT = b ? b.wisp : 0.965;
+      const sT = b ? b.serpent : 0.935;
+      const lT = b ? b.leech : 0.905;
+      if (rr > wT) kind = 'wisp';
+      else if (rr > sT) kind = 'serpent';
+      else if (rr > lT) kind = 'leech';
     }
     this.enemies.push(spawnEnemy(kind, x, y, this.tuning));
     // K9 (v1.5 M4): one-shot first-sight callout for the new creatures (UI
@@ -4288,11 +4329,18 @@ _drawAtelier(ctx) {
   _bestiaryTick(dt, p) {
     const L = this.lantern;
     const cx = p.x, cy = p.y;   // the lantern is carried by the frog
+    // G1 (v1.8): thread the run's lantern TUNING into the wisp's light key.
+    // this._lanternTuning (set in _beginExpedition) is REEDS_DARK_LANTERN for a
+    // Black Reeds run (a shorter reach → the wisp "sees" less light) and LANTERN
+    // for a cycle-0 Reeds run (byte-identical — lanternLightFactor(state, x, y,
+    // cx, cy, LANTERN) === lightFactor(state, x, y, cx, cy)). Fallback LANTERN
+    // keeps any pre-run context identical.
+    const ltBest = this._lanternTuning || LANTERN;
     for (const e of this.enemies) {
       if (e.wisp) {
         // R3 (a): the wisp's lightFactor at ITS position (how much light it
         // actually gets) — drives its draw alpha + its lit-homing vs unlit-drift.
-        e._light = lightFactor(L, e.x, e.y, cx, cy);
+        e._light = lanternLightFactor(L, e.x, e.y, cx, cy, ltBest);
       }
       if (e.leech && !e.clinging) {
         // R3 (c): a detached leech that touches the frog CLINGS — but only if
@@ -4521,6 +4569,15 @@ _drawAtelier(ctx) {
       // after the run that earned it; a first-time save that never won stays
       // false (the entry is hidden, so the first-time run is byte-identical).
       this.save.flags.reedsUnlocked = true;
+      // G1 (v1.8): the BLACK REEDS gate latch (the "a Reeds victory" half). Set
+      // ONLY when this victory came from a REEDS expedition — this.lanternReeds
+      // (set =_isReeds in _beginExpedition) marks a Reeds-biome run, and it
+      // survives to _endRun. The OTHER half of the gate is ngCycle >= 1 (read at
+      // the next _beginExpedition). A base-swamp victory does NOT set it: the
+      // Black Reeds is a Reeds-biome NG+ apex, so the player must have beaten
+      // the Reeds first. A legacy save with no flags.reedsVictory reads false,
+      // so the gate never fires before the player has actually won a Reeds run.
+      if (this.lanternReeds) this.save.flags.reedsVictory = true;
     }
     else this.save.stats.deaths += 1;
     // K7 (v1.5 M2): file the CURATOR CHALLENGE score. Only a victory files a
@@ -4898,8 +4955,12 @@ _drawAtelier(ctx) {
       // Refresh the eased render radius + the frog's lightFactor from the
       // post-siphon state (the light dims as the Warden feeds — the player
       // SEES the lantern being eaten, the same render path as the Reeds drain).
-      this._lanternEasedR = lanternRadius(this.lantern);
-      this.lantern.lightFactor = lightFactor(this.lantern, p.x, p.y, p.x, p.y);
+      // G1 (v1.8): thread the run's lantern TUNING (this._lanternTuning || LANTERN)
+      // so a siphon-driven dim reads the run's radius (LANTERN for the Wander x
+      // Reeds Warden; the *For wrappers fall back to LANTERN on missing fields).
+      const ltSiphon = this._lanternTuning || LANTERN;
+      this._lanternEasedR = lanternRadiusFor(this.lantern, ltSiphon);
+      this.lantern.lightFactor = lanternLightFactor(this.lantern, p.x, p.y, p.x, p.y, ltSiphon);
     }
     if (ev === 'maw-open') {
       // the maw just SNAPPED open — the paint window opens (the tell is done).

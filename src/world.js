@@ -2,7 +2,7 @@
 'use strict';
 import { traceBlob, wobble, clamp, dist2, TAU, mulberry32 } from './math.js';
 import { INK, sat, mixColor } from './ui.js';
-import { REEDS_WIDTH, REEDS_POCKETS, REEDS_FLOOD_FLOOR } from './logic.js';
+import { REEDS_WIDTH, REEDS_DARK_WIDTH, REEDS_POCKETS, REEDS_FLOOD_FLOOR, REEDS_FLOOD_FACTOR, REEDS_DARK_POCKETS, REEDS_DARK_FLOOD_FLOOR, REEDS_DARK_FLOOD_FACTOR, REEDS_DARK_BESTIARY_DENSITY } from './logic.js';
 
 const WSCALE = 0.5; // paint layer resolution factor
 
@@ -85,7 +85,10 @@ export class World {
     // "the same painting, deeper." A base (non-Reeds) world stays the 5400px
     // first-time swamp (byte-identical; a victory-gated biome never changes the
     // first-time run's world or pacing).
-    this.w = (opts && opts.reeds) ? REEDS_WIDTH : 5400;
+    // G1 (v1.8): the BLACK REEDS variant is DEEPER STILL (REEDS_DARK_WIDTH
+    // 7200) — a darker, longer descent. A cycle-0 Reeds world (no blackReeds)
+    // keeps REEDS_WIDTH (6000), so a cycle-0 Reeds run's world is byte-identical.
+    this.w = (opts && opts.reeds) ? ((opts && opts.blackReeds) ? REEDS_DARK_WIDTH : REEDS_WIDTH) : 5400;
     this.h = 1500;   // P5: widened for 15–20 min run pacing (was 2400)
     this.seed = seed;
     this.rng = rng;
@@ -93,6 +96,14 @@ export class World {
     // build pass can populate the light economy. A base world (opts.reeds
     // falsy) stays exactly as before.
     this.reedsVariant = !!opts.reeds;
+    // G1 (v1.8): the BLACK REEDS variant flag (opts.blackReeds). Set on top of
+    // the Reeds flag (a Black Reeds run is ALWAYS a Reeds run — the world is
+    // Reeds-shape) — it selects the DARKER layout data: the extra gravity
+    // pocket, the deeper+faster flood band, and the denser light-economy. A
+    // cycle-0 Reeds world (opts.blackReeds falsy) keeps EXACTLY the v1.6 data
+    // (reedsPockets = REEDS_POCKETS, reedsWater floor = REEDS_FLOOD_FLOOR,
+    // 46 fireflies / 8 rest spots), so a cycle-0 Reeds run is byte-identical.
+    this.blackReeds = !!(opts && opts.blackReeds);
     this.grass = [];
     this.ripples = [];
     this.obstacles = [];      // rocks/bushes: {x,y,r,seed,kind}
@@ -139,24 +150,40 @@ export class World {
     // stream — a base (non-Reeds) world leaves these arrays empty and a
     // first-time run stays byte-identical.
     if (this.reedsVariant) {
-      // a dedicated, deterministic stream for the Reeds-only features. (seed is
-      // an int; +977 offsets it so the light-economy positions are independent
-      // of the terrain stream but still reproducible per seed.)
-      const lrng = mulberry32((this.seed + 977) | 0);
-      for (let i = 0; i < 46; i++) {
+      // G1 (v1.8): the BLACK REEDS variant is DENSER. It uses its OWN
+      // deterministic RNG stream (seed + 2977, distinct from the cycle-0
+      // Reeds' +977) so the two layouts are INDEPENDENT per seed but each is
+      // reproducible. CRITICAL: a cycle-0 Reeds world (this.blackReeds falsy)
+      // keeps the EXACT v1.6 stream (+977), 46 fireflies, 8 rest stones, and
+      // the REEDS_POCKETS / REEDS_FLOOD_FLOOR constants — so a cycle-0 Reeds
+      // run stays byte-identical (the new variant activates only at NG+).
+      const dark = this.blackReeds;
+      const lrng = mulberry32((this.seed + (dark ? 2977 : 977)) | 0);
+      const flyCount = dark ? 56 : 46;
+      for (let i = 0; i < flyCount; i++) {
         this.fireflies.push({ x: 150 + lrng() * (this.w - 300), y: 120 + lrng() * (this.h - 240), r: 9 + lrng() * 10, seed: (i * 37) % 991, ph: lrng() * TAU });
       }
-      // lantern-rest stones: ~8 spread along the (deeper) corridor so the fuel
-      // loop is winnable without backtracking (a rest roughly every 650 px).
-      const restXs = [700, 1400, 2100, 2850, 3600, 4350, 5050, 5650];
-      restXs.forEach((x, i) => this.restSpots.push({ x: x + wobble(this.seed + 977, i * 3, 60), y: (i % 2 ? 1150 : 430) + wobble(this.seed + 977, i * 7 + 2, 90), r: 34, seed: (i * 53) % 997 }));
-      // R2: the flooded lower banks (a horizontal band of open dark water) and
-      // the inverted-gravity pocket root-ceilings are DETERMINISTIC layout data
-      // (the pockets are the fixed REEDS_POCKETS AABBs; the flood is the fixed
-      // REEDS_FLOOD_FLOOR line) — stored here for the render + the player's
-      // speed/hop sign-flip. No RNG, no per-frame state (P10-safe).
-      this.reedsWater = { floor: REEDS_FLOOD_FLOOR, w: this.w, h: this.h };
-      this.reedsPockets = REEDS_POCKETS;
+      // lantern-rest stones: ~8 (cycle-0 Reeds) / ~10 (Black Reeds — the
+      // descent is longer and darker, so the fuel loop carries one more rest
+      // beat). A rest roughly every 600–650 px keeps it winnable.
+      const restXs = dark
+        ? [650, 1300, 1950, 2600, 3250, 3900, 4550, 5150, 5550, 5750]
+        : [700, 1400, 2100, 2850, 3600, 4350, 5050, 5650];
+      restXs.forEach((x, i) => this.restSpots.push({ x: x + wobble(this.seed + (dark ? 2977 : 977), i * 3, 60), y: (i % 2 ? 1150 : 430) + wobble(this.seed + (dark ? 2977 : 977), i * 7 + 2, 90), r: 34, seed: (i * 53) % 997 }));
+      // R2 (v1.6) / G1 (v1.8): the flooded lower banks + the inverted-gravity
+      // pocket root-ceilings are DETERMINISTIC layout data — stored here for
+      // the render + the player's speed/hop sign-flip. No RNG, no per-frame
+      // state (P10-safe). G1: the Black Reeds variant uses the DARK layout
+      // (REEDS_DARK_POCKETS = 4 pockets, a deeper + faster flood band); the
+      // cycle-0 Reeds keeps REEDS_POCKETS (3) + REEDS_FLOOD_FLOOR exactly.
+      this.reedsWater = { floor: dark ? REEDS_DARK_FLOOD_FLOOR : REEDS_FLOOD_FLOOR, factor: dark ? REEDS_DARK_FLOOD_FACTOR : REEDS_FLOOD_FACTOR, w: this.w, h: this.h };
+      this.reedsPockets = dark ? REEDS_DARK_POCKETS : REEDS_POCKETS;
+      // G1 (v1.8): the Black Reeds bestiary is DENSER — a higher Wisp/Serpent/
+      // Leech pick ratio (the world is darker → the light-bestiary matters
+      // more). `this.reedsBestiary` is read by _spawnWave; a cycle-0 Reeds run
+      // gets the DEFAULT v1.6 thresholds (REEDS_BESTIARY_DENSITY) and a base
+      // run never enters the branch at all (byte-identical).
+      this.reedsBestiary = dark ? REEDS_DARK_BESTIARY_DENSITY : null;
     }
     // grass tufts
     for (let i = 0; i < Math.round(260 * k); i++) {

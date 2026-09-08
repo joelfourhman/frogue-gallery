@@ -7918,5 +7918,121 @@ console.log('== stage 101: O1 (v1.7) — the pre-expedition WANDER seed card (se
   console.log('ok — O1: the pre-expedition WANDER seed card. Before a Wander expedition begins (from the title\'s "Begin Expedition"), a small paper card shows the generated seed + the taste\'s name + its one-line flavor, so the player knows what they are walking into (and can note / share the seed). "Set out" begins the run with THAT exact seed (deterministic: the seed shown is the seed played); "Back" returns to the title. It is ABSENT for a hand-tuned (Wander-OFF) run (whose start path is unchanged and whose save is byte-identical) and it is IN-MEMORY ONLY (nothing is persisted; SAVE_VERSION stays 11).');
 }
 
+// ====================================================================
+// Stage 102: G1 (v1.8) — the BLACK REEDS NG+ variant (REEDS_DARK layout).
+// The load-bearing invariant: every EXISTING run stays byte-identical. The
+// Black Reeds variant is gated behind ngCycle >= 1 AND a Reeds victory (the
+// pure blackReedsUnlocked gate), so: a cycle-0 Reeds run, a Wander x Reeds
+// run, and a hand-tuned (Wander-OFF) cycle-0 Reeds run must deep-equal their
+// v1.7 tuning/content. This stage proves: (a) the gate logic, (b) the
+// reedsVictory flag normalizes through migrateSave (a legacy save -> false),
+// (c) a cycle-0 Reeds WORLD is byte-identical (w=6000, 3 pockets, default
+// lantern/bestiary), (d) the Black Reeds WORLD uses the DARK layout
+// (w=7200, 4 pockets, denser bestiary, darker lantern), and (e) the
+// _beginExpedition gate activates Black Reeds ONLY for a hand-tuned NG+ Reeds
+// run with a Reeds victory (and never for cycle-0 / no-victory / Wander runs).
+// ====================================================================
+console.log('== stage 102: G1 (v1.8) — the BLACK REEDS NG+ variant (REEDS_DARK layout, gated ngCycle >= 1 AND a Reeds victory) ==');
+{
+  const LG = await import('../src/logic.js');
+  const WG = await import('../src/world.js');
+  const GGame = await import('../src/game.js');
+  const { mulberry32 } = await import('../src/math.js');
+  const { World } = WG;
+
+  // ---- (a) the pure GATE: blackReedsUnlocked(save) ----
+  const fresh = LG.freshSave();
+  assert(LG.blackReedsUnlocked(fresh) === false, 'G1: a fresh (cycle-0, no Reeds victory) save does NOT unlock the Black Reeds');
+  const c0v = LG.freshSave(); c0v.stats.victories = 1; c0v.flags.heronDefeated = true; c0v.flags.reedsVictory = true;
+  assert(LG.blackReedsUnlocked(c0v) === false, 'G1: a cycle-0 save WITH a Reeds victory does NOT unlock the Black Reeds (the ngCycle >= 1 half is required)');
+  const ng1no = LG.freshSave(); ng1no.ngCycle = 1; ng1no.stats.victories = 1; ng1no.flags.heronDefeated = true; // no reedsVictory
+  assert(LG.blackReedsUnlocked(ng1no) === false, 'G1: an NG+ save (ngCycle 1) WITHOUT a Reeds victory does NOT unlock the Black Reeds (the Reeds-victory half is required)');
+  const ng1yes = LG.freshSave(); ng1yes.ngCycle = 1; ng1yes.stats.victories = 1; ng1yes.flags.heronDefeated = true; ng1yes.flags.reedsVictory = true;
+  assert(LG.blackReedsUnlocked(ng1yes) === true, 'G1: an NG+ save (ngCycle 1) WITH a Reeds victory DOES unlock the Black Reeds (both halves met)');
+  const ng2yes = LG.freshSave(); ng2yes.ngCycle = 2; ng2yes.stats.victories = 2; ng2yes.flags.reedsVictory = true;
+  assert(LG.blackReedsUnlocked(ng2yes) === true, 'G1: a higher NG+ cycle (ngCycle 2) with a Reeds victory also unlocks the Black Reeds');
+
+  // ---- (b) the reedsVictory flag NORMALIZES through migrateSave (legacy save -> false) ----
+  assert(LG.normalizeReedsVictory(undefined) === false, 'G1: a legacy save with no flags.reedsVictory normalizes to false (the gate never fires before a real Reeds win)');
+  assert(LG.normalizeReedsVictory(true) === true, 'G1: a save with flags.reedsVictory true normalizes to true');
+  // round-trip: a save carrying the flag survives a migrate (a real round-trip,
+  // not a freshSave default) — the flag is in the flags object, so SAVE_VERSION
+  // stays 11 (no bump for G1-G3).
+  const rt = LG.freshSave(); rt.ngCycle = 1; rt.flags.reedsVictory = true; rt.stats.victories = 1;
+  const mig = LG.migrateSave(JSON.parse(JSON.stringify(rt)));
+  assert(mig.flags.reedsVictory === true, 'G1: the reedsVictory flag survives a save migrate/round-trip (it is a flags field; SAVE_VERSION stays 11)');
+  assert(LG.SAVE_VERSION === 11, 'G1: SAVE_VERSION stays 11 (the 11->12 bump with galleryComplete comes in H1, not this session)');
+
+  // ---- (c) a CYCLE-0 Reeds WORLD is byte-identical (the v1.6 layout, untouched) ----
+  const wC0a = new World(mulberry32(4321), 4321, { reeds: true });
+  const wC0b = new World(mulberry32(4321), 4321, { reeds: true });
+  assert(wC0a.w === 6000, `G1: a cycle-0 Reeds world is the v1.6 DEEPER 6000px layout (w=${wC0a.w}), NOT the Black Reeds 7200px`);
+  assert(wC0a.blackReeds === false, 'G1: a cycle-0 Reeds world is not flagged as Black Reeds');
+  assert(wC0a.reedsPockets.length === 3, `G1: a cycle-0 Reeds world has the v1.6 POCKETS (3, not the Black Reeds 4) (got ${wC0a.reedsPockets.length})`);
+  assert(wC0a.reedsWater.floor === 900 && wC0a.reedsWater.factor === 0.72, `G1: a cycle-0 Reeds world has the v1.6 flood band (floor=900, factor=0.72) (got floor=${wC0a.reedsWater.floor}, factor=${wC0a.reedsWater.factor})`);
+  assert(wC0a.reedsBestiary === null, 'G1: a cycle-0 Reeds world uses the DEFAULT v1.6 bestiary ladder (reedsBestiary null)');
+  // determinism per seed (the v1.6 acceptance, still holds for cycle-0):
+  const c0Same = wC0a.obstacles.length === wC0b.obstacles.length && wC0a.obstacles.every((o, i) => Math.abs(o.x - wC0b.obstacles[i].x) < 0.5 && Math.abs(o.y - wC0b.obstacles[i].y) < 0.5);
+  assert(c0Same, 'G1: a cycle-0 Reeds world build is DETERMINISTIC per seed (two at seed 4321 lay out identical terrain) — the v1.6 content is byte-identical');
+
+  // ---- (d) the BLACK REEDS WORLD uses the DARK layout (deeper, denser, darker) ----
+  const wDark = new World(mulberry32(4321), 4321, { reeds: true, blackReeds: true });
+  assert(wDark.blackReeds === true, 'G1: the Black Reeds world is flagged blackReeds');
+  assert(wDark.w === 7200, `G1: the Black Reeds world is the DEEPER 7200px descent (w=${wDark.w})`);
+  assert(wDark.reedsPockets.length === 4, `G1: the Black Reeds world has an EXTRA gravity pocket (4 vs cycle-0 3) (got ${wDark.reedsPockets.length})`);
+  assert(wDark.reedsWater.floor === 780 && wDark.reedsWater.factor === 0.62, `G1: the Black Reeds world has a DEEPER + SLOWER flood band (floor=780, factor=0.62) (got floor=${wDark.reedsWater.floor}, factor=${wDark.reedsWater.factor})`);
+  assert(wDark.reedsBestiary !== null && wDark.reedsBestiary.wisp > wDark.reedsBestiary.serpent && wDark.reedsBestiary.serpent > wDark.reedsBestiary.leech, 'G1: the Black Reeds world carries a DENSER bestiary threshold table (wisp > serpent > leech, wider light-bestiary band)');
+  // the darker lantern tuning is a DISTINCT table (shorter reach + faster drain):
+  assert(LG.REEDS_DARK_LANTERN.lightRadius < LG.LANTERN.lightRadius && LG.REEDS_DARK_LANTERN.fuelDrain > LG.LANTERN.fuelDrain, 'G1: the Black Reeds lantern tuning is a SHORTER reach + FASTER drain than the stock LANTERN (the "deep dark")');
+
+  // ---- (e) the pure *For wrappers are BYTE-IDENTICAL to R1 under LANTERN ----
+  const stF = { fuel: 0.7, lit: true };
+  assert(LG.lanternRadiusFor(stF, LG.LANTERN) === LG.lanternRadius(stF), 'G1: lanternRadiusFor(state, LANTERN) === lanternRadius(state) (a cycle-0 run is byte-identical)');
+  const tR1 = LG.lanternTick(stF, 0.016, true);
+  const tR1f = LG.lanternTickFor(stF, 0.016, true, false, false, LG.LANTERN);
+  assert(Math.abs(tR1.fuel - tR1f.fuel) < 1e-12 && tR1.lit === tR1f.lit, 'G1: lanternTickFor(state, dt, lit, false, false, LANTERN) === lanternTick(state, dt, lit) (byte-identical)');
+  assert(LG.lanternLightFactor(stF, 300, 100, 100, 100, LG.LANTERN) === LG.lightFactor(stF, 300, 100, 100, 100), 'G1: lanternLightFactor(state, x, y, cx, cy, LANTERN) === lightFactor(state, x, y, cx, cy) (byte-identical)');
+
+  // ---- (f) the _beginExpedition gate: Black Reeds activates ONLY for the right run ----
+  const gB = new GGame.Game(makeCanvas()); gB.start(); gB._quitToTitle();
+  gB.save = ng1yes; gB._beginExpedition(false, { reeds: true });   // hand-tuned (wander OFF by default) NG+ Reeds WITH victory
+  assert(gB.blackReeds === true && gB.world.blackReeds === true, 'G1: a HAND-TUNED NG+ Reeds run WITH a Reeds victory begins as the Black Reeds (world + gate flag)');
+  assert(gB._lanternTuning === LG.REEDS_DARK_LANTERN, 'G1: the Black Reeds run uses the DARK lantern tuning (REEDS_DARK_LANTERN)');
+  assert(gB._reedsBestiary !== null, 'G1: the Black Reeds run threads the denser bestiary thresholds');
+
+  // a hand-tuned NG+ Reeds run WITHOUT a Reeds victory stays the v1.6 layout:
+  const gN = new GGame.Game(makeCanvas()); gN.start(); gN._quitToTitle();
+  gN.save = ng1no; gN._beginExpedition(false, { reeds: true });
+  assert(gN.blackReeds === false && gN.world.blackReeds === false && gN.world.w === 6000, 'G1: a hand-tuned NG+ Reeds run WITHOUT a Reeds victory stays the v1.6 cycle-0 layout (w=6000, not Black Reeds)');
+  assert(gN._lanternTuning === LG.LANTERN, 'G1: a no-victory NG+ Reeds run keeps the stock LANTERN tuning (byte-identical)');
+
+  // a CYCLE-0 hand-tuned Reeds run (the v1.6 run) stays byte-identical:
+  const gC = new GGame.Game(makeCanvas()); gC.start(); gC._quitToTitle();
+  gC.save = c0v; gC._beginExpedition(false, { reeds: true });
+  assert(gC.blackReeds === false && gC.world.blackReeds === false && gC.world.w === 6000, 'G1: a CYCLE-0 hand-tuned Reeds run stays the v1.6 layout (the load-bearing invariant)');
+
+  // a WANDER x Reeds NG+ run (the Warden apex) does NOT go Black Reeds (the gate requires hand-tuned):
+  const gW = new GGame.Game(makeCanvas()); gW.start(); gW._quitToTitle();
+  gW.save = ng1yes; gW.options.wander = true; gW._beginExpedition(false, { reeds: true });
+  assert(gW.blackReeds === false, 'G1: a WANDER x Reeds NG+ run does NOT go Black Reeds (the gate requires a hand-tuned run; the Warden is the Wander apex)');
+
+  // a hand-tuned NG+ BASE-SWAMP run (non-Reeds) never goes Black Reeds:
+  const gBase = new GGame.Game(makeCanvas()); gBase.start(); gBase._quitToTitle();
+  gBase.save = ng1yes; gBase._beginExpedition(false, {});
+  assert(gBase.blackReeds === false, 'G1: a hand-tuned NG+ BASE-SWAMP run never goes Black Reeds (it is not a Reeds expedition)');
+
+  // ---- (g) the Reeds-victory LATCH: a Reeds victory sets flags.reedsVictory; a base-swap one does not ----
+  const gLv = new GGame.Game(makeCanvas()); gLv.start(); gLv._quitToTitle();
+  gLv.save = LG.freshSave(); gLv._beginExpedition(false, { reeds: true });
+  gLv.lanternReeds = true; gLv._endRun('victory');
+  assert(gLv.save.flags.reedsVictory === true, 'G1: a REEDS victory latches flags.reedsVictory (the gate half for the next NG+ run)');
+  const gLb = new GGame.Game(makeCanvas()); gLb.start(); gLb._quitToTitle();
+  gLb.save = LG.freshSave(); gLb._beginExpedition(false, {});   // a base-swamp run (lanternReeds false)
+  gLb._endRun('victory');
+  assert(gLb.save.flags.reedsVictory !== true, 'G1: a BASE-SWAMP victory does NOT latch flags.reedsVictory (only a Reeds victory does)');
+
+  console.log('ok — G1: the BLACK REEDS NG+ variant. A NEW REEDS_DARK layout (a deeper 7200px descent, a denser Wisp/Serpent/Leech bestiary, an extra gravity pocket, a deeper/slower flood band, its own darker lantern-economy tuning) gated behind ngCycle >= 1 AND a Reeds victory (the pure blackReedsUnlocked + a flags.reedsVictory latch set on a Reeds-biome victory). Every EXISTING run is byte-identical: a cycle-0 Reeds world stays the v1.6 6000px/3-pocket/LANTERN/default-bestiary content; the pure *For lantern wrappers equal R1 under LANTERN; and the gate fires ONLY for a hand-tuned NG+ Reeds run with a Reeds victory (never cycle-0, never no-victory, never Wander, never base-swamp). SAVE_VERSION stays 11 (the flag is a flags field).');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

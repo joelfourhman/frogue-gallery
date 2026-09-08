@@ -2,7 +2,7 @@
 'use strict';
 import { TAU, clamp, lerp, dist, traceBlob, wobble } from './math.js';
 import { INK, sat } from './ui.js';
-import { PIGMENTS, hopLift, inGravityPocket, floodedWaterFactor } from './logic.js';
+import { PIGMENTS, hopLift, inGravityPocket, floodedWaterFactor, REEDS_POCKETS, REEDS_FLOOD_FLOOR } from './logic.js';
 
 export class Player {
   constructor(x, y, tuning) {
@@ -97,7 +97,19 @@ export class Player {
     // water (low elevation) slows ground movement. A pure factor from
     // logic.js (1.0 outside a flood band, 0.72 inside). Gated by the world
     // variant so a cycle-0 swamp run's movement is byte-identical.
-    if (world && world.reedsVariant) spd *= floodedWaterFactor(this.x, this.y);
+    // G1 (v1.8): a BLACK REEDS run threads the world's OWN deeper/faster flood
+    // band (world.reedsWater — REEDS_DARK_FLOOD_FLOOR / _FACTOR); a cycle-0
+    // Reeds run (world.reedsWater.floor === REEDS_FLOOD_FLOOR) reads the SAME
+    // band as before (byte-identical). A base swamp (reedsVariant false) never
+    // enters here.
+    if (world && world.reedsVariant) {
+      const rw = world.reedsWater || { floor: REEDS_FLOOD_FLOOR };
+      spd *= floodedWaterFactor(this.x, this.y, rw.floor, rw.factor);
+      // G1: cache the variant pocket list for the cosmetic hop sign-flip in
+      // draw() (which has no world param). Reeds run = its pockets; otherwise
+      // null (a base swamp's hop uses the default REEDS_POCKETS = no-op).
+      this._reedsPockets = world.reedsPockets || null;
+    }
     if (this.rootT > 0) spd = 0;
     this.vx = lerp(this.vx, mv[0] * spd, 1 - Math.exp(-14 * dt));
     this.vy = lerp(this.vy, mv[1] * spd, 1 - Math.exp(-14 * dt));
@@ -155,7 +167,12 @@ export class Player {
     // lift outside a pocket, so there is no stuck state on exit. Outside the
     // Reeds biome (no pockets at a given x,y) this is byte-identical to the
     // pre-R2 expression.
-    const lift = hopLift(this.hopT, this.x, this.y);
+    // G1 (v1.8): a BLACK REEDS run flips the hop sign in its OWN (extra) pocket
+    // list (cached on the player by update() as _reedsPockets = the world's
+    // reedsPockets). A base swamp / cycle-0 Reeds run uses the DEFAULT
+    // REEDS_POCKETS (byte-identical — the first 3 of REEDS_DARK_POCKETS are
+    // identical, and a base swamp is never inside any pocket).
+    const lift = hopLift(this.hopT, this.x, this.y, this._reedsPockets || REEDS_POCKETS);
     const y = this.y - lift;
     const blink = this._blinkT < 0 ? 0.15 : 1;
     const hurt = this.hurtT > 0 ? Math.sin(this.hurtT * 40) * 0.5 + 0.5 : 0;

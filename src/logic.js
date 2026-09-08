@@ -736,6 +736,40 @@ export function normalizeReedsUnlocked(raw) {
   return !!raw;
 }
 
+// G1 (v1.8): THE BLACK REEDS — the NG+ (New Game+) REEDS VARIANT. The v1.6
+// Reeds biome is the CYCLE-0 (first-victory) place; this is its DEEPER,
+// DARKER, HARDER RE-ENTRY for a player who has ALREADY cleared it. It is
+// GATED behind BOTH (a) an NG+ cycle (ngCycle >= 1) AND (b) a REEDS VICTORY
+// (the player has actually BEATEN the Reeds biome, recorded in
+// save.flags.reedsVictory by the Reeds run that earned it). A first-time
+// player (no Reeds victory, ngCycle 0) NEVER sees it — the v1.6 Reeds
+// layout is untouched and its 20–25 min run-length is byte-identical.
+//
+// "A Reeds victory" is a REAL save fact (a victory recorded while IN the
+// Reeds biome), NOT a derived one — so it lives in its OWN latch flag
+// (`save.flags.reedsVictory`) and is set in the same victory path as
+// reedsUnlocked, but only when the run that won was a Reeds-biome run. The
+// flag is a new FIELD on the EXISTING save.flags object (already serialized
+// wholesale by the save round-trip), so it needs NO SAVE_VERSION bump — the
+// SAME way reedsUnlocked (R5) was added. A pre-v1.8 save (no field) loads
+// FALSE via normalizeReedsVictory, so nobody backfills access.
+export function normalizeReedsVictory(raw) {
+  return !!raw;
+}
+
+// G1 (v1.8): the pure BLACK REEDS gate. TRUE only when BOTH an NG+ cycle is
+// active (ngCycle >= 1) AND the player has a Reeds victory on record. The
+// pure predicate lives here (logic.js) so tests can import it without a
+// browser, and the title/atelier + the run-setup read the SAME gate. A
+// cycle-0 save (ngCycle 0) or a no-Reeds-victory save returns FALSE — the
+// Black Reeds entry is hidden and the Reeds entry stays the v1.6 layout.
+export function blackReedsUnlocked(save) {
+  const cycle = (save && Math.floor(Number(save.ngCycle)) || 0);
+  const ngOk = cycle >= 1;
+  const reedsWin = !!(save && save.flags && !!save.flags.reedsVictory);
+  return ngOk && reedsWin;
+}
+
 // D1 (v1.7): normalize THE WANDER's last-seed latch to a non-negative integer.
 // A pre-v1.7 save (no field, or a non-finite/garbled value) loads 0 — the
 // player has no Wander run yet, so nothing is backfilled. A real seed (a
@@ -821,6 +855,21 @@ export function lightFactor(state, x, y, cx, cy) {
   return t * t * (3 - 2 * t);   // smoothstep, 1 -> 0 across the radius
 }
 
+// G1 (v1.8): the Black Reeds' lightFactor — the SAME pure smoothstep falloff as
+// R1's lightFactor, but with the falloff extent (R) read from a tunable table
+// (defaulting to LANTERN, so a cycle-0 Reeds run is byte-identical). The Black
+// Reeds passes REEDS_DARK_LANTERN (a shorter reach) so the bestiary's light key
+// matches the darker, shorter radius. Pure.
+export function lanternLightFactor(state, x, y, cx, cy, tuning = LANTERN) {
+  const st = lanternState(state && state.fuel, state && state.lit);
+  const R = lanternRadiusFor(st, tuning);
+  if (!st.lit || R <= 0) return 0;
+  const d = Math.hypot(x - cx, y - cy);
+  if (d >= R) return 0;
+  const t = 1 - d / R;
+  return t * t * (3 - 2 * t);
+}
+
 // R1: advance the lantern one simulation step. `dt` seconds; `lit` is whether
 // the lantern is currently lit; `nearRest`/`nearFirefly` are the caller's
 // proximity booleans. Rules: drain (lit only), refill (rest spot + firefly,
@@ -849,6 +898,34 @@ export function lanternRadius(state) {
   const st = lanternState(state && state.fuel, state && state.lit);
   if (!st.lit) return 0;
   return LANTERN.minRadius + (LANTERN.lightRadius - LANTERN.minRadius) * st.fuel;
+}
+
+// G1 (v1.8): the BLACK REEDS' lantern-economy wrappers — the SAME pure rules as
+// R1's lanternTick / lanternRadius, but reading from a tunable table
+// (defaulting to LANTERN, so a cycle-0 Reeds run is byte-identical). The Black
+// Reeds run passes REEDS_DARK_LANTERN (a faster drain + shorter radius) so the
+// candle loop is a real layer and the "deep dark" is darker. Pure — no browser
+// APIs. (lightFactor is UNCHANGED: it reads the radius from the state's fuel,
+// which the dark tuning already shapes, so the bestiary's light key stays
+// consistent.)
+export function lanternRadiusFor(state, tuning = LANTERN) {
+  const st = lanternState(state && state.fuel, state && state.lit);
+  if (!st.lit) return 0;
+  const min = (tuning && tuning.minRadius) || LANTERN.minRadius;
+  const max = (tuning && tuning.lightRadius) || LANTERN.lightRadius;
+  return min + (max - min) * st.fuel;
+}
+export function lanternTickFor(state, dt, lit, nearRest = false, nearFirefly = false, tuning = LANTERN) {
+  const t = tuning || LANTERN;
+  const st = lanternState(state && state.fuel, state && state.lit);
+  let fuel = st.fuel;
+  const isLit = !!lit;
+  if (isLit) fuel -= (t.fuelDrain != null ? t.fuelDrain : LANTERN.fuelDrain) * dt;
+  if (nearRest) fuel += (t.refillRestSpot != null ? t.refillRestSpot : LANTERN.refillRestSpot) * dt;
+  if (nearFirefly) fuel += (t.refillFirefly != null ? t.refillFirefly : LANTERN.refillFirefly) * dt;
+  fuel = Math.max(0, Math.min(1, fuel));
+  const outLit = fuel <= 0 ? false : isLit;
+  return { fuel, lit: outLit };
 }
 
 // ----------------------------------------------------------------
@@ -891,10 +968,15 @@ export const REEDS_POCKETS = [
 ];
 
 // R2: is the world point (x, y) INSIDE an inverted-gravity pocket? A pure
-// AABB test over REEDS_POCKETS. Outside all pockets (or a base-world point)
-// it returns false, so the sign flip is a no-op there. Pure + deterministic.
-export function inGravityPocket(x, y) {
-  for (const pk of REEDS_POCKETS) {
+// AABB test over the pocket list (default REEDS_POCKETS). Outside all pockets
+// (or a base-world point) it returns false, so the sign flip is a no-op there.
+// Pure + deterministic.
+// G1 (v1.8): the `pockets` param (defaulting to REEDS_POCKETS) lets the BLACK
+// REEDS variant pass its OWN (extra) pocket list — a cycle-0 caller omits it and
+// reads EXACTLY REEDS_POCKETS, so a cycle-0 run's hop is byte-identical.
+export function inGravityPocket(x, y, pockets = REEDS_POCKETS) {
+  const list = pockets || REEDS_POCKETS;
+  for (const pk of list) {
     if (x >= pk.x && x <= pk.x + pk.w && y >= pk.y && y <= pk.y + pk.h) return true;
   }
   return false;
@@ -912,8 +994,11 @@ export const REEDS_FLOOD_FACTOR = 0.72; // ground speed multiplier in the flood
 // 1.0 above the flood floor (the banks / swim-lane ceiling), FLOOD_FACTOR in
 // the open water. Pure — no world data needed (the band is a horizontal line),
 // so it is cheap to call every frame and trivially testable.
-export function floodedWaterFactor(x, y) {
-  return (typeof y === 'number' && y >= REEDS_FLOOD_FLOOR) ? REEDS_FLOOD_FACTOR : 1;
+// G1 (v1.8): the (floor, factor) params default to the Reeds constants so a
+// cycle-0 caller (which omits them) is byte-identical; the BLACK REEDS variant
+// passes its own deeper/faster flood band.
+export function floodedWaterFactor(x, y, floor = REEDS_FLOOD_FLOOR, factor = REEDS_FLOOD_FACTOR) {
+  return (typeof y === 'number' && y >= floor) ? factor : 1;
 }
 
 // R2: the hop DISPLACEMENT (px) for a frog mid-hop, SIGN-FLIPPED while inside
@@ -923,13 +1008,94 @@ export function floodedWaterFactor(x, y) {
 // "clumps" DOWN onto the ceiling instead of lifting up. hopT <= 0 -> 0 (not
 // hopping). Outside a pocket the sign is + (normal upward hop), so the base
 // swamp behavior is byte-identical. Pure.
+// G1 (v1.8): the `pockets` param (defaulting to REEDS_POCKETS) threads the
+// world's pocket list through so the BLACK REEDS extra pocket applies. A
+// cycle-0 caller omits it and reads EXACTLY REEDS_POCKETS (byte-identical).
 export const REEDS_HOP_DUR = 0.22;
 export const REEDS_HOP_LIFT = 26;
-export function hopLift(hopT, x, y) {
+export function hopLift(hopT, x, y, pockets = REEDS_POCKETS) {
   if (!(hopT > 0)) return 0;
   const lift = Math.sin(Math.PI * (1 - hopT / REEDS_HOP_DUR)) * REEDS_HOP_LIFT;
-  return inGravityPocket(x, y) ? -lift : lift;
+  return inGravityPocket(x, y, pockets) ? -lift : lift;
 }
+
+// ----------------------------------------------------------------
+// G1 (v1.8): THE BLACK REEDS — the NG+ REEDS VARIANT's DETERMINISTIC layout
+// data. The v1.6 Reeds biome is the cycle-0 (first-victory) place; this is
+// its DEEPER, DARKER, HARDER re-entry for a player who has ALREADY beaten it.
+// It is GATED behind ngCycle >= 1 AND a Reeds victory (blackReedsUnlocked) and
+// NEVER touches the v1.6 Reeds layout (REEDS_WIDTH / REEDS_POCKETS /
+// REEDS_FLOOD_FLOOR stay untouched) — a cycle-0 Reeds run is byte-identical.
+//
+// The layout is PURE data (AABBs + a line + a multiplier), like REEDS_POCKETS:
+// reproducible, smoke-testable, zero per-frame allocation.
+//
+//   · DEEPER — a longer descent than the Reeds' 6000px (the "deep reeds, one
+//     tier above the Reeds").
+//   · DENSER BESTIARY — a higher Wisp/Serpent/Leech pick ratio (the world is
+//     darker → the light-bestiary matters more); the tuning lives in
+//     REEDS_DARK_BESTIARY (below), keyed off the SAME REEDS_BESTIARY numbers.
+//   · AN EXTRA FLOOD / GRAVITY POCKET — one more inverted-gravity pocket
+//     (REEDS_DARK_POCKETS = the 3 Reeds pockets + a 4th) and a DEEPER +
+//     FASTER flood band (REEDS_DARK_FLOOD_*), so the open water is bigger and
+//     the wade slower.
+//   · ITS OWN LANTERN-ECONOMY TUNING — a faster fuel drain + a shorter light
+//     radius (REEDS_DARK_LANTERN), so the candle loop is a real layer and the
+//     "deep dark" is darker. Kept a pure multiplier table so a balance pass is
+//     one file edit.
+export const REEDS_DARK_WIDTH = 7200;     // the Black Reeds descent (deeper than REEDS_WIDTH 6000)
+
+// G1 (v1.8): the FOUR inverted-gravity pockets of the Black Reeds — the three
+// Reeds pockets (same coords) PLUS a 4th, so the ceiling-clump traversal has
+// one more hazard. A SUPERSET of REEDS_POCKETS (the first three are identical),
+// so a pocket-pinned smoke assertion against the Reeds coords still holds.
+export const REEDS_DARK_POCKETS = [
+  { x: 1150, y: 120, w: 520, h: 360 },   // pocket 1 — Slick Hollow reach (Reeds)
+  { x: 2900, y: 90,  w: 560, h: 380 },   // pocket 2 — mid-swamp (Reeds)
+  { x: 4550, y: 130, w: 540, h: 350 },   // pocket 3 — the approach to the deep (Reeds)
+  { x: 5900, y: 100, w: 580, h: 370 },   // pocket 4 — the Black Reeds' extra ceiling (NEW)
+];
+
+// G1 (v1.8): the Black Reeds' DEEPER + FASTER flood band — the open dark water
+// begins higher (a bigger flood) and the wade is slower than the Reeds' 0.72.
+// A pure speed FACTOR for a world point: 1.0 on the banks, the factor in the
+// flood. Cheaper-to-call than the Reeds band (a horizontal line), so it stays
+// cheap per-frame.
+export const REEDS_DARK_FLOOD_FLOOR = 780;   // the open water begins higher (deeper flood)
+export const REEDS_DARK_FLOOD_FACTOR = 0.62; // a slower wade than the Reeds' 0.72
+
+// G1 (v1.8): the Black Reeds' OWN lantern-economy tuning — an ABSOLUTE tuning
+// table (the SAME shape as LANTERN) that REEDS_DARK_LANTERN's pure wrappers
+// (lanternRadiusFor / lanternTickFor) read. Every field is the v1.6 Reeds'
+// LANTERN value scaled: a faster drain (the candle burns ~35% faster) + a
+// shorter reach (the "deep dark" is darker) + a tighter low-fuel floor + a
+// tighter refill reach, while the refill RATES stay at LANTERN's. A pure table
+// (one file edit to rebalance); the v1.6 Reeds (cycle-0) keeps the stock
+// LANTERN constants untouched (byte-identical).
+export const REEDS_DARK_LANTERN = {
+  lightRadius: 213,        // ≈ LANTERN.lightRadius 260 × 0.82 — a shorter reach
+  minRadius: 74,           // ≈ LANTERN.minRadius 88 × 0.84 — the low-fuel floor dims too
+  fuelDrain: 0.054,        // ≈ LANTERN.fuelDrain 0.04 × 1.35 — the candle burns ~35% faster
+  refillRestSpot: 0.6,     // = LANTERN.refillRestSpot (unchanged refill rate)
+  refillFirefly: 0.45,     // = LANTERN.refillFirefly (unchanged refill rate)
+  restSpotRadius: 81,      // ≈ LANTERN.restSpotRadius 90 × 0.9 — a touch tighter refill reach
+  fireflyRadius: 64,       // = LANTERN.fireflyRadius (unchanged)
+};
+
+// G1 (v1.8): the Black Reeds' DENSER bestiary tuning — the Wisp/Serpent/Leech
+// PICK THRESHOLDS (the top-of-roll ladder in _spawnWave). A Reeds wave rolls
+// `rr = Math.random()` and picks a light-bestiary archetype when rr clears the
+// top of the ladder: rr > wisp -> Wisp, else rr > serpent -> Serpent, else
+// rr > leech -> Leech (each a RARE pick at the top of the roll, sharing the
+// existing spawn cap so the enemy count never grows unbounded). CYCLE-0 REEDS
+// uses REEDS_BESTIARY_DENSITY (the EXACT v1.6 thresholds — 0.965 / 0.935 /
+// 0.905 = a 3.5% / 3.0% / 3.0% pick); the BLACK REEDS variant uses
+// REEDS_DARK_BESTIARY_DENSITY (DENSER — 0.94 / 0.905 / 0.87 = a 6.0% / 3.5% /
+// 3.5% pick, the darker world calls MORE of the light-bestiary). A base
+// (non-Reeds) run never reads either (it skips the Reeds branch in _spawnWave
+// entirely), so a first-time run is byte-identical. Pure data — testable.
+export const REEDS_BESTIARY_DENSITY = { wisp: 0.965, serpent: 0.935, leech: 0.905 };
+export const REEDS_DARK_BESTIARY_DENSITY = { wisp: 0.94, serpent: 0.905, leech: 0.87 };
 
 // ----------------------------------------------------------------
 // K8 (v1.5 M2): the CHALLENGE REWARD — the Masterpiece "The Heron, Waking".
@@ -2262,7 +2428,7 @@ export function freshSave() {
     owned: [],            // painting ids
     loadout: [],          // up to 2 painting ids
     upgrades: { capacity: 0, power: 0, vitality: 0 },
-    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false, tutorialSkipped: false, reedsUnlocked: false },
+    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false, tutorialSkipped: false, reedsUnlocked: false, reedsVictory: false },
     stats: { expeditions: 0, victories: 0, deaths: 0, heronsPainted: 0, treasures: 0 },
     bestRun: null,        // {pigments, time, cleared}
     galleryBonus: 0,      // A4 (v1.2 M9): 'Rehung Frame' prestige-lite level
@@ -2452,6 +2618,12 @@ export function migrateSave(raw) {
   // (false for a legacy v9 save with no field, the real boolean for a
   // v10 save). The v9->v10 migration step re-normalizes defensively.
   out.flags.reedsUnlocked = normalizeReedsUnlocked(raw.flags && raw.flags.reedsUnlocked);
+  // G1 (v1.8): carry the BLACK REEDS gate flag forward (false for a legacy
+  // save with no field, the real boolean for a save that beat the Reeds). The
+  // generic flags loop above copies it too; this re-normalizes defensively
+  // (mirroring reedsUnlocked). No SAVE_VERSION bump — the field lives on the
+  // EXISTING save.flags object, which is already serialized wholesale.
+  out.flags.reedsVictory = normalizeReedsVictory(raw.flags && raw.flags.reedsVictory);
   // D1 (v1.7): carry THE WANDER's last-seed latch forward (0 for a legacy
   // v10 save with no field, the real seed for a v11 save). The v10->v11
   // migration step re-normalizes defensively on the way up.
