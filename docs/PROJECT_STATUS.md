@@ -69,13 +69,16 @@ and the final regression + season audit are all done. Final suite 94/94
 green ×3; first-time pace 17.3 / humance 18.1 min (IN 15–20); NG+ cycle-1
 19.5 min; Reeds run ~22.2 min (IN 20–25) + Silt Wyrm ~3.9 min (IN 2–4);
 zero new deps; SAVE_VERSION 10 migration end-to-end; cycle-0 tuning
-byte-identical. **No open scope for v1.6** — the next phase is whatever
-Joel approves after v1.6 review (the deferred list in ROADMAP §v1.6 is the
-boundary: accessibility X1–X3, gold pigment, gamepad, NG+, CRT filters).
+byte-identical. **v1.6 has no open scope.** The active phase is **v1.7 "The
+Ever-Shifting Swamp"** (D1–D4 + F1 + O1 + O2 all landed, committed, and green);
+the ONLY remaining item is **I1 — the v1.7 season audit** (the final gate:
+re-run every probe + the full regression in a clean fresh session). See the
+v1.7 status block below + `docs/ROADMAP.md` §v1.7 for the full plan-of-record.
 
 **v1.7 "The Ever-Shifting Swamp" — IN PROGRESS (session v17-f1, 2026-09-08;
-D1 + D2 + D3 + D4 + a hygiene commit + **F1** landed — the full D-item set is
-DONE and the 5th boss (the Hollow Warden) is in).**
+D1 + D2 + D3 + D4 + a hygiene commit + **F1** + **O1** + **O2** landed — the
+full D-item set is DONE, the 5th boss (the Hollow Warden) is in, and both QoL
+items are done. Only **I1** (the final season audit) remains).**
 v1.6 is COMPLETE and stays untouched;
 v1.7 adds **THE WANDER** — a bounded, OPT-IN (default OFF) procedural
 expedition variant. **D1 done: the PURE seeded wander content generator** —
@@ -132,7 +135,7 @@ a v1-era blob imports to v11 with wanderSeed 0, a malformed wanderSeed is
 refused). Smoke stage 98 proves the toggle (persists + re-reads +
 legacy-migrates-to-OFF) + the export/import parity + seed reproducibility
 across a save/load cycle. **All D-items (D1–D4) are DONE.** **F1 done: THE
-HOLLOW WARDEN, the 5th boss archetype (the Wander-apex, `086c05f`).** A pale,
+HOLLOW WARDEN, the 5th boss archetype (the Wander-apex, `f21dcab`).** A pale,
 lantern-eating creature that spawns ONLY as the end boss of a WANDER
 expedition (a hand-tuned cycle-0 / NG+ / Reeds run never meets it — the Warden
 branch is a pure additive, byte-identical when Wander OFF). New pure
@@ -155,14 +158,24 @@ measures the Warden at ~3.9–4.1 min human (god-mode ~98–104s) — in the 2�
 band, comparable to the Silt Wyrm's 3.9 min. NOTE: the spec's "~1.5 s maw
 window" is preserved as the TELEGRAPH duration; the PAINTABLE maw-open window
 was tuned to 10.5s (vs the wyrm's 7.0s surfaced) so the 52k HP lands in the
-human band — a deliberate, documented deviation. Suite **99 stages green**
-(deterministic); hand-tuned pace 17.3 / humance 17.8 / reedspace 22.2 /
-wandpace both legs UNCHANGED (Wander OFF by default); `wardpace.mjs` in-band;
-the D3 smoke assertion now expects the Warden (not the wyrm) as the Wander ×
-Reeds boss. Remaining v1.7: **O1** (pre-expedition seed card), **O2** (Wander
-run-recap line — the recap already has a minimal Warden line from F1; O2 adds
-the taste/seed flavor), **I1** (final season audit — reuses `wandpace.mjs` +
-`wardpace.mjs`, must be a clean fresh session). Next session picks up O1.
+human band — a deliberate, documented deviation. **O1 done: the pre-expedition
+WANDER seed card (`8033942`).** The title's "Begin Expedition" (Enter/Space +
+the big button) now routes through `_startExpeditionOrCard`, which opens a small
+paper card — the generated seed + the taste name + its one-line flavor — when
+`options.wander` is ON; "Set out" starts the run with THAT exact seed (via
+`opts.seed`, deterministic: the seed the player saw is the seed played), "Esc"
+backs out; in-memory only (the seed latches to `save.wanderSeed` only when the
+run actually begins); ABSENT for a hand-tuned (Wander-OFF) run — its start path
+is byte-identical to v1.6. Smoke **stage 101** (17 asserts). **O2 done: the
+Wander run-recap line (`237abfb`).** The v1.6 Q2 end-screen recap strip gains a
+second line for a WANDER run ONLY — the taste name + one-line flavor + the
+"Wandering expedition · seed N" tag (a run-local read, in-memory only; a
+hand-tuned run's recap is unchanged; shows on both a victory AND a defeat).
+Smoke **stage 100** (15 asserts). Suite **101 stages green** (deterministic);
+hand-tuned pace 17.2 / humance 19.0 / reedspace 22.2 / wandpace both legs
+UNCHANGED (Wander OFF by default); `wardpace.mjs` in-band. Remaining v1.7:
+**I1** (final season audit — the last item; reuses `wandpace.mjs` +
+`wardpace.mjs`, must be a clean fresh session). Next session picks up I1.
 
 ## Release readiness
 

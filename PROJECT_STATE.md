@@ -5,14 +5,14 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.7 "The Ever-Shifting Swamp" — NEXT ACTION (session v17-f1, 2026-09-08; D1 + D2 + D3 + D4 + **F1** landed)
+### v1.7 "The Ever-Shifting Swamp" — NEXT ACTION (session v17-f1, 2026-09-08; D1 + D2 + D3 + D4 + **F1** + **O1** + **O2** landed — only **I1** (the season audit) remains)
 
 **v1.6 is COMPLETE** (all 13 items R1–R6 / W1–W3 / Q1–Q3 / A1 committed, 94/94
 green, all pacing in band, 114 commits since v1.5). The full **v1.7
 plan-of-record is written in `docs/ROADMAP.md` §v1.7** — read it first. Theme:
 the swamp that is never the same twice.
 
-**Landed this session (5 commits, all green):**
+**Landed this session (8 commits, all green):**
 - **D1** `22c5d85` — the PURE seeded Wander content generator (`wanderContent` /
   `pickWanderSeed` / `WANDER_BUDGET` envelope / `normalizeWanderSeed` /
   `options.wander` default-OFF / `SAVE_VERSION 10→11` + v10→v11 migration).
@@ -96,46 +96,84 @@ the swamp that is never the same twice.
   as the TELEGRAPH duration; the PAINTABLE maw-open window was tuned to 10.5s
   (vs the wyrm's 7.0s surfaced) so the 52k HP lands in the human band — a
   deliberate deviation from a literal 1.5s paint window, documented here.
+  (Committed as `f21dcab` — the entry was first authored as `086c05f`, then the
+  F1 doc updates were folded in via an amend, so the landed SHA is `f21dcab`.)
+- **O2** `237abfb` — **the WANDER run-recap line.** The v1.6 Q2 end-screen run
+  recap (the "the last expedition" strip: a 6-zone minimap of the route + run
+  time + boss outcome) gains a SECOND line for a WANDER run ONLY — the taste's
+  name + its one-line flavor + the "Wandering expedition · seed N" tag — so the
+  end screen tells the story of a UNIQUE run (e.g. "Feast Season — a swarm of
+  mosquitos rides the warm current · Wandering expedition · seed 987654321").
+  A run-local read (`wanderActive` / `wanderSeedRun` / `wanderTaste` from
+  `_beginExpedition`, IN-MEMORY ONLY) — nothing is persisted. A hand-tuned
+  (Wander-OFF) run's recap is UNCHANGED (the line is absent — `_recapWanderLine`
+  returns null for them); the save is BYTE-IDENTICAL before/after the end
+  screen; it shows on BOTH a Wander victory AND a defeat. Reuses the Q2
+  `routeTrail` / recap machinery (no new layout — the line sits in the empty
+  band above the end card, so the card height + button rects are unchanged).
+  Smoke **stage 100** proves it (15 asserts: a Wander run's line = taste +
+  flavor + tag, rendered via headless fillText-recording on BOTH a victory AND
+  a defeat with the run's OWN seed; a hand-tuned run's line is absent; the save
+  is byte-identical; the run-local fields are not on the save object).
+- **O1** `8033942` — **the pre-expedition WANDER seed card.** Before a Wander
+  expedition begins (from the title's "Begin Expedition"), a small paper card
+  shows the generated seed + the taste's name + its one-line flavor (e.g.
+  "Feast Season — a swarm of mosquitos rides the warm current"), so the player
+  knows what they are walking into (and can note / share the seed). "Set out"
+  begins the run with THAT EXACT seed (deterministic: the seed the player saw
+  is the seed the run plays — `_beginExpedition` accepts `opts.seed`); "Esc /
+  Back" returns to the title. It is ABSENT for a hand-tuned (Wander-OFF) run —
+  the title's "Begin Expedition" routes through `_startExpeditionOrCard`, which
+  opens the card ONLY when `options.wander` is ON, so a default-OFF run's start
+  path is byte-identical to v1.6. IN-MEMORY ONLY: the card itself persists
+  nothing (`_openSeedCard` only sets the in-memory `this._seedCard = { seed }`;
+  the seed latches to `save.wanderSeed` only when "Set out" actually begins the
+  run); `SAVE_VERSION` stays 11. Smoke **stage 101** proves it (17 asserts: a
+  hand-tuned run shows NO card + goes straight to the expedition + the save is
+  byte-identical; a Wander-ON "Begin Expedition" OPENS the card and stays on the
+  title; the card RENDERS the seed + taste name + flavor + "Set Out" via
+  headless fillText-recording; opening it persists NOTHING; "Set out" begins the
+  run with the EXACT seed shown; the taste matches the card's taste (same seed
+  -> same taste)).
 
-**Invariants held after D1–D4 + F1:** smoke x3 ALL PASSED (**99 stages**;
-deterministic — the same run produces the same result every time, and the
-orchestrator's 10-run flakecheck stays green). Hand-tuned pacing **UNCHANGED**
-(Wander is OFF by default so those probes measure the hand-tuned runs):
-`pace.mjs` ~17.3 min, `humance.mjs` ~18.7 min (15–20 band), `reedspace.mjs`
-~22.2 min (20–25 band), `bosspace.mjs` ~1.8 min (heron). NEW `wandpace.mjs`
-both legs in-band (first-time 16.9–17.8; Wander × Reeds 21.6–22.7) +
-deterministic. NEW `tests/wardpace.mjs` (F1) measures the Warden at ~3.9–4.1 min
-human (in the 2–4 min band, comparable to the Silt Wyrm's 3.9 min).
-`SAVE_VERSION = 11` (F1 adds no save field — the Warden is a pure boss-variant
-additive, Wander-only, so the save schema is unchanged).
+**Invariants held after D1–D4 + F1 + O1 + O2:** smoke x3 ALL PASSED
+(**101 stages**; deterministic — the same run produces the same result every
+time, and the orchestrator's 10-run flakecheck stays green). Hand-tuned pacing
+**UNCHANGED** (Wander is OFF by default so those probes measure the hand-tuned
+runs): `pace.mjs` ~17.2 min, `humance.mjs` ~19.0 min (15–20 band),
+`reedspace.mjs` ~22.2 min (20–25 band), `bosspace.mjs` ~1.8 min (heron). NEW
+`wandpace.mjs` both legs in-band (first-time 16.9–17.8; Wander × Reeds
+21.6–22.7) + deterministic. NEW `tests/wardpace.mjs` (F1) measures the Warden at
+~3.9–4.1 min human (in the 2–4 min band, comparable to the Silt Wyrm's 3.9
+min). O1/O2 add NO timed-run time (O1 is a pre-run title sub-state; O2 is a
+post-run end-screen line — neither changes any run's pacing), so all six probes
+are re-measured and in-band on the committed tree. `SAVE_VERSION = 11` (F1, O1
+and O2 each add NO save field — the Warden is a pure boss-variant additive and
+O1/O2 are in-memory-only presentation, so the save schema is unchanged).
 
-**NEXT ACTION (next re-kick): O1, then O2, then I1** — F1 (the 5th boss: the
-Hollow Warden) is DONE. The next items are the QoL items **O1 + O2**, then the
-I1 season audit (the final gate). The `docs/ROADMAP.md` §v1.7 plan-of-record is
-the authoritative list; D1–D4 + F1 are checked off below and O1/O2/I1 remain:
-- **O1**: the pre-expedition seed card (a paper card shown before a Wander run
-  begins: the seed, the taste name + its one-line flavor, the zone count /
-  enemy-count envelope — so a player knows what they're walking into + can note
-  the seed to replay it). Pure presentation over `pickWanderSeed` / `wanderTaste`
-  / `wanderContent` (NO new save field). Show it when the player enters a Wander
-  run (the `options.wander` toggle is ON + a new expedition begins).
-- **O2**: the Wander run-recap line on the end screen (the existing v1.6 Q2
-  recap strip gains a "Wandering · seed N · <taste>" line when a Wander run
-  ends — pure presentation over `wanderSeedRun` / `wanderTaste`). NOTE: F1
-  already made `_recapBossLine` Warden-aware ("the warden sleeps on") — O2 adds
-  the seed/taste flavor line on top of that.
+**NEXT ACTION (next re-kick): I1 — the v1.7 season audit (the final gate).**
+F1 (the 5th boss: the Hollow Warden), O1 (the pre-expedition seed card) and
+O2 (the Wander run-recap line) are ALL DONE and committed. The ONLY remaining
+v1.7 item is **I1**, the K10 / C4 / A1-style season audit — and it MUST be a
+clean, FRESH session (it runs every probe + the full regression, so a session
+that has already carried F1/O1/O2 context should not be the one to sign it off).
+The `docs/ROADMAP.md` §v1.7 plan-of-record is the authoritative list; D1–D4 +
+F1 + O1 + O2 are checked off and **I1 is the sole remaining item**:
 - **I1**: the K10 / C4 / A1-style season audit (the final gate, a clean fresh
-  session): smoke x3 green; `pace.mjs` + `humance.mjs` first-time IN the 15–20
-  band (hand-tuned, Wander OFF); `ngpace.mjs` cycle-1 in band; `bosspace.mjs` +
-  `reedspace.mjs` in their documented ranges; the NEW `wandpace.mjs` (D3) in its
-  documented bands (first-time 15–20 + Wander × Reeds 20–25); the NEW
-  `wardpace.mjs` (F1) in the 2–4 min band; P10 culling green.
+  session). In the next session: run smoke x3 (green, **101 stages**,
+  deterministic — and the orchestrator's 10-run flakecheck on the v1.7 stage);
+  `pace.mjs` + `humance.mjs` first-time IN the 15–20 band (hand-tuned, Wander
+  OFF); `ngpace.mjs` cycle-1 in band; `bosspace.mjs` + `reedspace.mjs` in their
+  documented ranges; the NEW `wandpace.mjs` (D3) in its documented bands
+  (first-time 15–20 + Wander × Reeds 20–25); the NEW `wardpace.mjs` (F1) in the
+  2–4 min band; P10 culling green. All six probes were re-measured in-session
+  and are in-band (see the invariants block above) — I1 re-verifies them in a
+  fresh session and signs the v1.7 season off.
 
-**Batch 4 plan (for the next re-kick session):** land O1 (the pre-expedition
-seed card) as `feat(v1.7 O1)` + O2 (the Wander run-recap line) as
-`feat(v1.7 O2)`, then I1 (the season audit) as the final gate (a clean fresh
-session). Stop at a clean committed chunk + update this NEXT ACTION if the
-budget runs out mid-chunk. Never discard uncommitted user work (there is none
+**Batch 4 (DONE this session):** landed O1 (the pre-expedition seed card) as
+`feat(v1.7 O1)` (`8033942`) + O2 (the Wander run-recap line) as `feat(v1.7 O2)`
+(`237abfb`), on top of F1 (`f21dcab`). I1 (the season audit) is the final gate
+(a clean fresh session). Never discard uncommitted user work (there is none
 now — only the orchestrator's `.before-logic.mjs` snapshot is untracked; leave
 it).
 
