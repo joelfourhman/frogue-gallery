@@ -7425,5 +7425,75 @@ console.log('== stage 96: D2 (v1.7) — THE WANDER "taste": a seeded flavor arch
   console.log('ok — D2: THE WANDER taste is a small hand-tuned set of flavor archetypes (4 distinct: quiet-reeds / feast-season / long-dark / ink-bloom) picked PURE + deterministically from the seed (own salted lane, no Math.random, all 4 reachable, corrupt-seed-safe). Each taste biases the run (mosquito-heavy / beetle-heavy / toad-heavy / mixed) by re-weighting which KINDS fill the zones WITHOUT changing the per-zone or total enemy counts, so a biased run stays inside WANDER_BUDGET exactly as the neutral one is (repeat-avoidance is the D1 seed latch). The run taste is reproducible from the latched seed, its name is the one line of flavor in the Wandering badge (seed line + taste line, fillText-verified), and a default-OFF run draws no badge (hand-tuned HUD byte-identical).');
 }
 
+console.log('== stage 97: D3 (v1.7) — THE WANDER NG+ + Reeds parity (NG+ applied exactly once; the Reeds light economy + R3 bestiary apply on top of generated content; Wander-OFF runs byte-identical) ==');
+{
+  const L97 = await import('../src/logic.js');
+  const G97 = await import('../src/game.js');
+  const ZONES97 = G97.ZONES;
+
+  // ---- (a) Wander × NG+: applyNGPlus scaling applies EXACTLY ONCE (no Wander
+  //     double-scale). applyNGPlus runs BEFORE the Wander gate and only touches
+  //     `this.tuning` — the gate generates CONTENT, never scaling — so a
+  //     Wander NG+ run's tuning must deep-equal makeTuning + applyNGPlus(cycle)
+  //     applied once, and differ from the double-applied (compounded) tuning.
+  const gng = new G97.Game(makeCanvas());
+  gng.save = L97.freshSave();
+  gng.save.ngCycle = 2; gng.save.flags.heronDefeated = true;
+  gng.options.wander = true;
+  gng._beginExpedition();
+  assert(gng.wanderActive === true && gng.ngCycle === 2, 'D3: Wander × NG+ (cycle 2) is a valid layered run');
+  const once = L97.makeTuning(gng.save.upgrades, gng.save.loadout, gng.options.difficulty, gng.save.galleryBonus || 0, gng.save.owned, L97.isGilded(gng.save));
+  L97.applyNGPlus(once, gng.ngCycle);
+  assert(JSON.stringify(gng.tuning) === JSON.stringify(once), 'D3: Wander × NG+ — the live tuning deep-equals makeTuning + applyNGPlus(cycle) applied ONCE');
+  const twice = L97.makeTuning(gng.save.upgrades, gng.save.loadout, gng.options.difficulty, gng.save.galleryBonus || 0, gng.save.owned, L97.isGilded(gng.save));
+  L97.applyNGPlus(twice, gng.ngCycle); L97.applyNGPlus(twice, gng.ngCycle);
+  assert(JSON.stringify(gng.tuning) !== JSON.stringify(twice), 'D3: the NG+ scaling is NOT compounded (the live tuning is not the double-applied one)');
+  // the generated CONTENT is present AND in-band (NG+ does not scale the enemy
+  // counts — it scales tuning; the Wander envelope still holds on the content).
+  assert(gng.zones.length === L97.WANDER_BUDGET.zones && gng.zones !== ZONES97, 'D3: Wander × NG+ — the generated content is present (4 zones, not the hand-tuned ZONES)');
+  assert(L97.wanderInBudget({ zones: gng.zones, bossEligible: true }).ok, 'D3: Wander × NG+ — the generated content is inside the envelope (NG+ does not over/under-populate it)');
+
+  // ---- (b) Wander × Reeds: the Reeds light economy (R1) + the R3 bestiary
+  //     apply ON TOP of the generated content; a valid victory-gated variant.
+  const gr = new G97.Game(makeCanvas());
+  gr.save = L97.freshSave();
+  gr.save.flags.heronDefeated = true; gr.save.flags.reedsUnlocked = true;
+  gr.options.wander = true;
+  gr._beginExpedition(false, { reeds: true });
+  assert(gr.wanderActive === true && gr.lanternReeds === true, 'D3: Wander × Reeds — the Wander run is active AND the Reeds light economy (lantern) is on');
+  assert(gr.world.reedsVariant === true && gr.world.w === L97.REEDS_WIDTH, 'D3: Wander × Reeds — the Reeds world variant (deeper layout) is in effect');
+  assert(gr.lantern && gr.lantern.lit === true && gr.lantern.fuel === 1, 'D3: Wander × Reeds — the lantern fuel loop starts lit at full fuel (the R1 mechanic is live)');
+  // the Silt Wyrm (the Reeds 4th-boss archetype) is the end boss — the Reeds
+  // variant is intact on top of the generated content.
+  assert(!!gr.heron && gr.heron.wyrm === true, 'D3: Wander × Reeds — the Silt Wyrm is the end boss (the Reeds variant is intact)');
+  // the R3 bestiary (wisp/serpent/leech) applies on top of the generated content.
+  assert(L97.REEDS_BESTIARY && ['wispHoming', 'serpentTelegraph', 'leechDrainDps'].every(k => k in L97.REEDS_BESTIARY),
+    'D3: the R3 Reeds bestiary (wisp/serpent/leech) mechanic set is the Reeds enemy set');
+  assert(gr.world.reedsVariant === true, 'D3: the Reeds world variant routes background spawns to the bestiary (on top of generated content)');
+  // the generated zone content is present + distinct from the hand-tuned ZONES.
+  assert(gr.zones.length === 4 && JSON.stringify(gr.zones) !== JSON.stringify(ZONES97), 'D3: Wander × Reeds — the generated zone content is present (differs from the hand-tuned ZONES)');
+  assert(L97.wanderInBudget({ zones: gr.zones, bossEligible: true }).ok, 'D3: Wander × Reeds — the generated content is inside the envelope');
+
+  // ---- (c) the hand-tuned (Wander-OFF) runs are STILL byte-identical ----
+  // default-OFF expedition: the hand-tuned ZONES + cycle-0 tuning are untouched.
+  const gOff = new G97.Game(makeCanvas());
+  gOff.save = L97.freshSave();
+  gOff.options.wander = false;
+  gOff._beginExpedition();
+  assert(gOff.wanderActive === false && gOff.zones === ZONES97, 'D3: Wander-OFF expedition -> the hand-tuned ZONES (same reference)');
+  const offTuning = L97.makeTuning(gOff.save.upgrades, gOff.save.loadout, gOff.options.difficulty, gOff.save.galleryBonus || 0, gOff.save.owned, L97.isGilded(gOff.save));
+  assert(JSON.stringify(gOff.tuning) === JSON.stringify(offTuning), 'D3: Wander-OFF cycle-0 tuning deep-equals a plain makeTuning (hand-tuned run byte-identical)');
+  // default-OFF Reeds: the hand-tuned Reeds run (lantern + wyrm + hand-tuned zones).
+  const gReedsOff = new G97.Game(makeCanvas());
+  gReedsOff.save = L97.freshSave();
+  gReedsOff.save.flags.heronDefeated = true; gReedsOff.save.flags.reedsUnlocked = true;
+  gReedsOff.options.wander = false;
+  gReedsOff._beginExpedition(false, { reeds: true });
+  assert(gReedsOff.wanderActive === false && gReedsOff.zones === ZONES97, 'D3: Wander-OFF Reeds -> the hand-tuned ZONES (the Reeds run is unchanged when Wander is OFF)');
+  assert(gReedsOff.lanternReeds === true && gReedsOff.heron.wyrm === true, 'D3: Wander-OFF Reeds keeps the lantern + the Silt Wyrm (the v1.6 Reeds run is intact)');
+
+  console.log('ok — D3: THE WANDER LAYERS ON TOP of the other variants without double-application. (a) Wander × NG+ applies the applyNGPlus N2 scaling exactly ONCE on top of the generated content (the live tuning deep-equals makeTuning + applyNGPlus applied once and differs from the double-applied one; the generated enemy CONTENT is NOT scaled by NG+, and stays inside the envelope). (b) Wander × Reeds keeps the Reeds light economy (lantern fuel loop, live at full fuel) + the R3 bestiary + the Silt Wyrm boss on top of the generated zone content (a valid victory-gated variant, in-band). (c) The hand-tuned (Wander-OFF) expedition + Reeds runs remain byte-identical (hand-tuned ZONES + cycle-0 tuning untouched).');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

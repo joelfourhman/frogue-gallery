@@ -2808,22 +2808,31 @@ _drawAtelier(ctx) {
     this.runWaypoints = []; this._lastWpT = 0;
     this.runGold = Math.max(0, Math.floor(this.save.gold) || 0); // C2 (v1.3 M16): the gold total at run start (delta at the end = "gold earned this expedition"; in-run only, not persisted)
     // D1 (v1.7): THE WANDER — the bounded procedural expedition variant. OPT-IN
-    // (options.wander, default OFF) and NEVER active for a guided (tutorial) or
-    // Reeds run. When ON, the run's encounter CONTENT (per-zone enemy archetype
-    // mix + orb/checkpoint drop) is generated from the seeded RNG stream
-    // (mulberry32(wanderSeed + WANDER_SALT), a SEPARATE stream from the terrain
-    // pass) sampled within a hand-tuned difficulty envelope, so the run is
-    // reproducible from save.wanderSeed while each run differs. The
-    // TERRAIN/WORLD pass is UNCHANGED (same seeded world -> same painting,
-    // 60fps, P10 culling safe). When OFF (the default) this block never runs,
-    // this.zones stays the hand-tuned ZONES, and the run is byte-identical to
-    // v1.6. A fresh seed is picked from the impure layer (Date.now) so successive
-    // Wander runs differ; the layout itself is PURE (wanderContent).
+    // (options.wander, default OFF) and NEVER active for a guided (tutorial) run.
+    // When ON, the run's encounter CONTENT (per-zone enemy archetype mix + orb/
+    // checkpoint drop) is generated from the seeded RNG stream (mulberry32(seed +
+    // WANDER_SALT), a SEPARATE stream from the terrain pass) sampled within a
+    // hand-tuned difficulty envelope, so the run is reproducible from
+    // save.wanderSeed while each run differs. The TERRAIN/WORLD pass is UNCHANGED
+    // (same seeded world -> same painting, 60fps, P10 culling safe). When OFF (the
+    // default) this block never runs, this.zones stays the hand-tuned ZONES, and
+    // the run is byte-identical to v1.6. A fresh seed is picked from the impure
+    // layer (Date.now) so successive Wander runs differ; the layout itself is PURE
+    // (wanderContent).
+    // D3 (v1.7): the Wander LAYERS ON TOP of the other variants. It is NOT
+    // excluded by NG+ (applyNGPlus N2 scaling runs BEFORE this gate and only
+    // touches `this.tuning` — it never touches the generated content, so the NG+
+    // HP/dmg/spawn multipliers apply exactly ONCE, no compounding with any Wander
+    // scale) and it is NOT excluded by Reeds (the Reeds light economy R1 + the R3
+    // bestiary + the Silt Wyrm boss run through _spawnWave / the world variant,
+    // INDEPENDENT of the z.mix zone content — so a Wander × Reeds run has generated
+    // zone content + the Reeds bestiary/light-economy on top, a valid victory-
+    // gated variant measured by the Reeds leg of tests/wandpace.mjs).
     this.zones = ZONES;
     this.wanderActive = false;
     this.wanderSeedRun = null;
     this.wanderTaste = null;                 // D2: the run's flavor archetype (null unless wandering)
-    if (this.options.wander === true && !guided && !_isReeds) {
+    if (this.options.wander === true && !guided) {
       const prev = Math.max(0, Math.floor(this.save.wanderSeed) || 0);
       const freshSeed = pickWanderSeed(prev, Date.now() | 0);
       this.wanderSeedRun = freshSeed;
