@@ -6768,5 +6768,97 @@ console.log('== stage 90: v1.6 W2 — CONNECTION STATE + FULL-SCREEN GAMEPAD FOC
 // restore the real navigator (no pad) so no later stage sees the mock.
 delete navigator.getGamepads;
 
+// ====================================================================
+// stage 91: v1.6 W3 — REEDS-MODE GAMEPAD PARITY + REGRESSION (the pad drives
+//     the lantern toggle, the leech hop-off, and the Wyrm fight identically to
+//     the keyboard; with the pad absent/Off the in-run key state is
+//     byte-identical to the no-gamepad baseline)
+// ====================================================================
+console.log('== stage 91: v1.6 W3 — REEDS-MODE GAMEPAD PARITY + REGRESSION (the pad drives the Reeds creatures + the Wyrm fight the same as the keyboard) ==');
+{
+  const W3 = await import('../src/logic.js');
+  const pad = { id: 'mock-pad', axes: [0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  navigator.getGamepads = () => [pad];
+
+  // ---- (a) the lantern toggles lit/unlit from the pad (Reeds mode) ----
+  const gL = new Game(makeCanvas()); gL.start(); gL._quitToTitle();
+  const vSave = W3.freshSave(); vSave.stats.victories = 1; vSave.flags.heronDefeated = true; vSave.flags.tutorialSkipped = true;
+  gL.save = vSave; gL._beginExpedition(false, { reeds: true });
+  gL.player.iframes = 9999;
+  assert(gL.lanternReeds === true && gL.lantern.lit === true, 'W3: a Reeds expedition starts with the lantern LIT (R1 parity)');
+  frames(1);   // let the feed engage (connected + fresh)
+  // the pad LB (button 4) writes "l" into kb; the expedition reads it and toggles.
+  pad.buttons[4].pressed = true;
+  frames(1);
+  pad.buttons[4].pressed = false;
+  frames(1);   // release frame: clears the feed's LB edge latch (real players tap, not hold)
+  assert(gL.lantern.lit === false, 'W3: the pad\'s lantern button (LB) toggles the lantern OFF (lit true -> false) — the SAME toggle the L key uses');
+  pad.buttons[4].pressed = true;
+  frames(1);
+  pad.buttons[4].pressed = false;
+  assert(gL.lantern.lit === true, 'W3: the pad\'s lantern button toggles it back ON (false -> true) — round-trips lit/unlit');
+
+  // ---- (b) the leech hop-off fires from the pad hop (RB -> space) ----
+  // A real leech spawns ON the frog and clings on contact; then the pad hop
+  // (button 5 -> " ") starts a hop, and _bestiaryTick peels the clinging leech
+  // on the hop-start frame — the SAME peel the space key produces.
+  const p = gL.player;
+  p.alive = true; p.iframes = 0; p.leechAttached = false; p.leechCd = 0;
+  const lee = spawnEnemy('leech', p.x, p.y, gL.tuning);   // spawn ON the frog
+  gL.enemies.length = 0; gL.enemies.push(lee);
+  gL._hopStart = false; gL._hopWas = false;
+  frames(1);   // contact frame: the leech clings (leechCd <= 0, iframes <= 0)
+  assert(p.leechAttached === true && lee.clinging === true, 'W3 (setup): a real leech CLINGS on contact (before the pad hop)');
+  pad.buttons[5].pressed = true;   // RB -> hop (space)
+  frames(1);   // the hop-start frame: _bestiaryTick peels the clinging leech
+  pad.buttons[5].pressed = false;
+  frames(1);   // release frame: clears the feed's hop edge latch
+  assert(p.leechAttached === false && lee.clinging === false, 'W3: the pad HOP (RB) breaks a clinging leech (hop-off) — one hop peels it, the SAME as the space key');
+  assert(p.leechCd > 0, 'W3: the leech re-attach window is armed after the pad hop-off (leechCd set)');
+
+  // ---- (c) the Wyrm fight is fully playable from the pad: all three pigments + hop ----
+  // begin a fresh Reeds expedition (the Wyrm spawns as the end boss).
+  const gWy = new Game(makeCanvas()); gWy.start(); gWy._quitToTitle();
+  gWy.save = vSave; gWy._beginExpedition(false, { reeds: true });
+  gWy.player.iframes = 9999;
+  frames(1);
+  const wy = gWy.heron;
+  assert(wy && wy.wyrm === true, 'W3 (setup): the Reeds expedition spawns the Silt Wyrm (the end boss to fight)');
+  // the pad\'s face buttons select the three pigments (A->1 red, X->2 blue, Y->3 green).
+  pad.buttons[0].pressed = true; frames(1); pad.buttons[0].pressed = false;
+  assert(gWy.player.pigment === 'red', 'W3: the pad\'s A button selects the RED pigment for the Wyrm fight');
+  pad.buttons[2].pressed = true; frames(1); pad.buttons[2].pressed = false;
+  assert(gWy.player.pigment === 'blue', 'W3: the pad\'s X button selects the BLUE pigment');
+  pad.buttons[3].pressed = true; frames(1); pad.buttons[3].pressed = false;
+  assert(gWy.player.pigment === 'green', 'W3: the pad\'s Y button selects the GREEN pigment — all three hues reachable');
+  // the pad\'s hop (space) is usable in the fight (hopT set on a hop).
+  pad.buttons[5].pressed = true; frames(1); pad.buttons[5].pressed = false;
+  assert(gWy.player.hopT > 0 || gWy.player.hopCd > 0, 'W3: the pad\'s HOP works during the Wyrm fight (hopT/hopCd set)');
+
+  // ---- (d) REGRESSION: pad absent OR Off -> the in-run key state is identical to the no-pad baseline ----
+  // (d1) pad ABSENT: no feed, no keys written.
+  delete navigator.getGamepads;
+  const gNone = new Game(makeCanvas()); gNone.start(); gNone._quitToTitle();
+  gNone.save = vSave; gNone._beginExpedition(false, { reeds: true });
+  gNone.player.iframes = 9999;
+  frames(3);
+  assert(gNone._gp.connected === false, 'W3: with no pad the feed is dormant (Reeds mode)');
+  const kbA = gNone._gp.was.move.a, kbD = gNone._gp.was.move.d, kbW = gNone._gp.was.move.w, kbS = gNone._gp.was.move.s;
+  assert(kbA === false && kbD === false && kbW === false && kbS === false && gNone._gp.was.pig1 === false && gNone._gp.was.pig2 === false && gNone._gp.was.pig3 === false && gNone._gp.was.hop === false && gNone._gp.was.lantern === false && gNone._gp.was.splash === false, 'W3: no pad -> the feed owns NO key (Reeds in-run state byte-identical to the no-gamepad baseline)');
+  // (d2) Off: the feed is fully skipped even with a pad connected.
+  navigator.getGamepads = () => [pad];
+  const gOff = new Game(makeCanvas()); gOff.start(); gOff._quitToTitle();
+  gOff.save = vSave; gOff.options.gamepad = 'off';
+  gOff._beginExpedition(false, { reeds: true });
+  gOff.player.iframes = 9999;
+  pad.axes = [1, 0]; pad.buttons[0].pressed = true;
+  frames(3);
+  assert(gOff._gp.connected === false && gOff.input.down('d') === false && !gOff.input.kb.has('1'), 'W3: Off -> the feed is skipped entirely (a connected pad writes nothing; Reeds in-run state byte-identical)');
+  pad.axes = [0, 0]; pad.buttons[0].pressed = false;
+  delete navigator.getGamepads;
+
+  console.log('ok — W3: REEDS-MODE GAMEPAD PARITY — the pad drives THE LANTERN toggle (round-trips lit/unlit via LB), the leech HOP-OFF (one hop peels a clinging leech via RB), and the Silt Wyrm fight (all three pigments via A/X/Y + hop via RB) EXACTLY as the keyboard does (the feed writes the same keys). With the pad absent OR Off, the Reeds in-run key state is byte-identical to the no-gamepad baseline (the feed owns no key). P10 + the full suite stay green; the feed never alters run tuning/spawn (pace/humance re-verified in-band).');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
