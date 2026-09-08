@@ -16,7 +16,7 @@ consequential decisions in `docs/DECISIONS.md`.
 - **v1.3 "The Second Expedition" COMPLETE** (2026-09-06): NG+ loop M14 (N1–N4), gold meta economy M15 (G1–G4), season wrap M16 (C1–C4).
 - **v1.4 "Make It Amazing" COMPLETE** (2026-09-07): all 14 items (J1–J5 juice, L1–L3 presence, S1–S3 audio, M1–M3 moments) + the Joel color rework (`012ce0b`: red big-dmg+burn / blue freeze / green light-dmg+heal / dry cleanse+world-restorer / mosquito nerf). Smoke 71/71; pacing 17.3/18.3/19.5 min.
 - **v1.5 "The Living Swamp" COMPLETE** (2026-09-07 — all 10 items K1–K10 done; Joel, 2026-09-06: "Don't even pitch me v1.5. Just make it") — K1–K10 in `docs/ROADMAP.md` (new enemy archetypes, zone-5 Storm Surge set-piece, 3rd NG+ boss The Gilded Heron, 3 new modifiers + Master tier, seeded daily Curator Challenge + Masterpiece reward, Field Guide updates, full audit). Batch order (one commit per item) in `PROJECT_STATE.md` → Immediate Next Action: 1) K1→K2→K3 ✅, 2) K4 ✅ (Gilded Heron) → K5 ✅ → K6 ✅, 3) K7 ✅ (Curator Challenge) → K8 ✅ (Masterpiece reward), 4) K9→K10. First-time Normal run stays 15–20 min — new creatures scale into zones 3+ and NG+ (re-verify on any in-run change).
-- **v1.8 "The Full Collection" — Batch 1 (G1+G2+G3) + Batch 2 (H1+H2) + Batch 3 (R1+R2) LANDED** (2026-09-08; the 1.0 release version): the BLACK REEDS NG+ Reeds variant + the UMBRAL WYRM 6th boss + the selection wiring (G1 `4ec7d07` / G2 `49f74a8` / G3 `3b5949d`) + the gallery FULL-COMPLETION capstone (H1 `7be0d5f` `GALLERY_COMPLETE` + `galleryCompletion(save)` + the capstone `galleryBonus` level + SAVE_VERSION 11→12 / H2 `c57b4d0` Gallery Wall progress readout + full-collection glow + title badge) + the release surface (R1 `119a0f1` `README.md` + the `1.0.0` version string from a single display-only `GAME_VERSION` in `logic.js`, rendered on the title corner + the Options header + smoke stage 106; R2 `docs/CHANGELOG.md` (NEW) + DECISIONS rows 15–18). smoke **106 stages green**; every probe IN band UNCHANGED (presentation/docs only). **Remaining v1.8: A1** (the 1.0.0 season audit — the final gate, must run in a FRESH session).
+- **v1.8 "The Full Collection" — COMPLETE (2026-09-08; the 1.0.0 release):** G1–G3 (Black Reeds + Umbral Wyrm: `4ec7d07`/`49f74a8`/`3b5949d`) + H1–H2 (Full-Collection capstone + Gallery Wall completion beat: `7be0d5f`/`c57b4d0`) + R1–R2 (README + `1.0.0` version string + changelog + DECISIONS close-out: `119a0f1` + the R2 docs commit) + **A1 — the 1.0.0 season audit (fresh session v18-a, on the committed tree `6e87cd8`)** — every gate green: smoke **106/106 ×3 + a 10-run flakecheck** (144fb1c pin) / every probe IN band UNCHANGED (pace ~17.4 / humance 16.7 / ngpace 19.5 / bosspace 37.1s god / reedspace ~22.2 + 97.7s / wandpace 16.9–17.8 + 21.6–22.7 / wardpace 3.9–4.1 / blackpace ~25.9 + 105.5s / umbrapace ~3.89) / **byte-identity proven across 216 arg combos** (`makeTuning` + `applyNGPlus(1)` deep-equal v1.7-complete `34eeda2`) / SAVE_VERSION 11→12 migration verified (v11 + v1-era → v12, play-identical) / zero new deps since `34eeda2` / P10 green / GAME_VERSION 1.0.0 in logic.js referenced by title + Options / README spot-checked / no 8765 left. **v1.8 = the 1.0.0 release — the game's Full Collection.** No open v1.8 scope; the post-v1.8 deferred list lives in `docs/ROADMAP.md`.
 - Git: v1.1–v1.4 fully committed (v1.4 complete at `dddbcaf`); v1.5 COMPLETE — **v1.5 Batch 1 COMPLETE (K1 Mud Turtle + K2 Blind Crag Frog + K3 Storm Surge; smoke 74/74) + Batch 2 COMPLETE (K4 The Gilded Heron + K5 3 new modifiers + K6 NG+ Master tier; smoke 77/77) + Batch 3 COMPLETE (K7 Curator Challenge + K8 Challenge Reward/Masterpiece; smoke 79/79) + Batch 4 COMPLETE (K9 Field Guide + first-sight callouts; smoke 80/80 + K10 full regression + season audit + docs-only commit).**
 
 ## Active work
@@ -81,10 +81,11 @@ session) — every probe re-run on the committed tree and IN band (pace
 ~17.3 / humance 18.7 / ngpace 19.5 / reedspace 22.2 / wandpace both legs /
 wardpace 3.9–4.1 min), byte-identity confirmed (`makeTuning` deep-equals
 v1.6-complete `f746938`), zero new deps, SAVE_VERSION 11, no 8765 server
-left running. **v1.7 has no open scope.** The active phase is **v1.8 "The
-Full Collection" — Batches 1+2+3 (G1–G3 + H1–H2 + R1–R2) LANDED** — the only
-remaining v1.8 item is **A1**, the 1.0.0 season audit (the final gate), which
-must run in a FRESH session. See `docs/ROADMAP.md` for the plan-of-record.
+left running. **v1.7 has no open scope.** **v1.8 "The Full Collection" is now
+COMPLETE** (2026-09-08 — the 1.0.0 release; G1–G3 + H1–H2 + R1–R2 + **A1 the
+1.0.0 season audit** all committed; every gate green — see the v1.8 current-
+state line above + the §v1.8 audit table in `docs/ROADMAP.md`). See
+`docs/ROADMAP.md` for the plan-of-record + the post-v1.8 deferred list.
 
 **v1.8 "The Full Collection" — Batch 3 (R1 + R2) LANDED (session v18-r,
 2026-09-08; 2 commits `119a0f1` + the R2 docs commit).** The **release
@@ -102,8 +103,9 @@ gating, the Umbral Wyrm band + deep-dark lantern mandate, the Full Collection
 criteria + capstone-over-bonus + 11→12 migration, the 1.0.0 versioning
 choice). R1/R2 are presentation + docs only — **smoke 106 stages green
 (105 + stage 106), every pacing probe re-run IN band UNCHANGED**, zero new
-deps, no 8765 server left running. **Next: A1** (the 1.0.0 season audit — the
-final gate, in a FRESH session).
+deps, no 8765 server left running. **A1 then signed off (session v18-a, fresh
+session, on the committed tree `6e87cd8` — the 1.0.0 season audit — v1.8
+COMPLETE).**
 
 **v1.8 "The Full Collection" — Batch 1 (G1 + G2 + G3) COMPLETE (session
 v18-g, 2026-09-08; 3 commits `4ec7d07` / `49f74a8` / `3b5949d`).** The last

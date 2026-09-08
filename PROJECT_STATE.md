@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.8 "The Full Collection" — NEXT ACTION: A1 (session v18-r, 2026-09-08; G1–G3 + H1–H2 + **R1 + R2 LANDED** — the Black Reeds NG+ variant + the Umbral Wyrm 6th boss + the selection wiring + the two new probes + the gallery Full-Collection capstone + the Gallery Wall completion beat + the release surface [README + 1.0.0 version string + changelog + DECISIONS close-out])
+### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 7 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
 
 **v1.7 is COMPLETE** (all 9 items D1–D4 / F1 / O1 / O2 / I1 committed, 101/101
 smoke green, all 7 probes in band, hand-tuned runs byte-identical with Wander
@@ -196,11 +196,42 @@ stays in band UNCHANGED and hand-tuned runs are byte-identical.
   `logic.js`; the `144fb1c` flake-pin stays green; no `http.server` 8765 left
   running.
 
-**NEXT ACTION: A1 — the v1.8 / 1.0.0 season audit (K10/C4/A1-style, the final
-gate).** A1 must run in a **FRESH session** (it is the independent audit of
-the whole v1.8 diff since v1.7-complete `34eeda2`; the R1/R2 implementer
-should not sign its own work). Do NOT start A1 in this session. See the
-plan-of-record §v1.8 item **A1**.
+**A1 — the v1.8 / 1.0.0 season audit (K10/C4/A1-style, the final gate) — ✅ DONE
+(2026-09-08, session v18-a, FRESH session; every gate GREEN).** A1 ran in a
+fresh session (the independent audit of the whole v1.8 diff since
+v1.7-complete `34eeda2`, on the committed tree `6e87cd8`). Every line item in
+the §v1.8 A1 spec was run and recorded — all in band, none forced:
+
+| Gate | Result | Band / expectation | Verdict |
+|---|---|---|---|
+| `smoke.mjs` ×3 (consecutive) | 3/3 `ALL SMOKE TESTS PASSED` (106 stages) | green, deterministic | ✅ |
+| `smoke.mjs` 10-run flakecheck (144fb1c pin) | 10/10 green | the `144fb1c` determinism pin stays green | ✅ |
+| `pace.mjs` (hand-tuned, Wander OFF, first-time) | ~17.4 min | 15–20 min | ✅ IN (UNCHANGED) |
+| `humance.mjs` (full-run sim, first-time) | 16.7 min | 15–20 min | ✅ IN (UNCHANGED) |
+| `ngpace.mjs` (NG+ cycle-1) | 19.5 min | 15–20 min | ✅ IN (prints IN BAND) |
+| `bosspace.mjs` (heron 30k, 3-hue) | 37.1 s god-mode (~1.0 min human) | the heron lower-bound probe | ✅ (UNCHANGED) |
+| `reedspace.mjs` (cycle-0 Reeds + Silt Wyrm) | ~22.2 min / 97.7 s Wyrm god (~3.9 min human) | 20–25 min / 2–4 min | ✅ IN (byte-identical to v1.7) |
+| `wandpace.mjs` — LEG 1 (first-time Wander, 8 seeds) | [16.9, 17.8] min (8/8) | 15–20 min | ✅ IN |
+| `wandpace.mjs` — LEG 2 (Wander × Reeds, 8 seeds) | [21.6, 22.7] min (8/8) | 20–25 min | ✅ IN |
+| `wardpace.mjs` (the Hollow Warden, 52k) | god 98–104 s (mean 103 s) → ~3.9–4.1 min human | ~2–4 min class | ✅ IN |
+| `blackpace.mjs` (Black Reeds + Umbral Wyrm) | ~25.9 min / 105.5 s Umbral god (~4.2 min human) | 22–26 min | ✅ IN |
+| `umbrapace.mjs` (the Umbral Wyrm, 60k) | ~3.89 min human (98.1 s god) | 2.5–4 min | ✅ IN |
+| **Byte-identity (v1.7 `34eeda2` baseline)** | `makeTuning` + `applyNGPlus(1)` **deep-equal v1.7-complete across all 216 arg combos** (headless import of both versions; JSON-compare across the whole v1.8 diff); cycle-0 NG+ step a no-op; a cycle-0 (Wander-OFF, no-NG+) first-time swamp tuning byte-identical to v1.7 | hand-tuned / cycle-0 runs byte-identical to v1.7 | ✅ IDENTICAL |
+| Save-schema delta vs v1.7 | `freshSave` differs ONLY in `saveVersion` (11→12), added top-level `galleryComplete: false`, and `flags` gaining `bossDefeats: []` | the intended v1.8 migration, nothing else | ✅ |
+| `SAVE_VERSION` 11→12 migration | v11-era save → `saveVersion 12` with `galleryComplete false` + `bossDefeats []` (defaulted OFF) and **plays byte-identically** (makeTuning-feeding fields unchanged); v1-era save migrates end-to-end to v12 (`_case: 'migrated'`, all 19 top-level fields present) | the v1.8 migration chain + legacy walk | ✅ |
+| `GAME_VERSION` | `'1.0.0'` in `logic.js` (single source of truth), referenced in the title corner ("Frogue Gallery · v1.0.0") + the Options header line (`v${GAME_VERSION}`) | the 1.0.0 release string rendered, not dead | ✅ |
+| Zero new dependencies (git-diff since `34eeda2`) | only `src/` (game/logic/player/world) + `tests/` (smoke + new blackpace/umbrapace) + `docs/` + `PROJECT_STATE.md` + the new `README.md`; **no** package.json / lockfile / asset / node_modules | no new deps | ✅ |
+| P10 culling (smoke stage 24) + green across Reeds / Black Reeds worlds | green (view-cull 0.15 localized/full + enemy AI-cull) | no per-frame hot-path alloc | ✅ |
+| `README.md` accuracy spot-check | run command (`python -m http.server 8765 --bind 127.0.0.1`), the 6 named bosses, 5400px/4 zones/10 paintings/2 slots, the controls (title enter/space+a/o/g/n/b/c/r; run 1/2/3/4→pigment, space hop, WASD/arrows, H/?/P/M) — all re-verified against the actual `input.js`/`game.js` code | README matches the code | ✅ |
+| No `http.server` 8765 left running | none found (checked via `netstat` BEFORE + AFTER the audit) | loopback-only, nothing left running | ✅ |
+
+**v1.8 COMPLETE** — all 7 items (G1–G3, H1–H2, R1–R2, A1) committed; every gate
+green on the committed tree; the load-bearing invariant (a cycle-0 / Wander-OFF
+/ no-NG+ hand-tuned run is byte-identical to v1.7-complete `34eeda2`) holds;
+the 1.0.0 release is signed off. **v1.8 = the 1.0.0 release — the game's Full
+Collection.** Active scope now lives in `docs/ROADMAP.md` (the post-v1.8
+deferred list); no open v1.8 work. Housekeeping: the untracked `.before-logic.mjs`
+left as-is; no `http.server` left running.
 
 **Full item list (per the plan-of-record):**
 - **G1** `feat(v1.8 G1)` — the "Black Reeds" NG+ Reeds variant: a NEW

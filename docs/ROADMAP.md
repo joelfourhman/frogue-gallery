@@ -909,7 +909,7 @@ with Wander OFF) holds. The season is signed off.
   procedural (math.js shapes, canvas, WebAudio synth).
 ---
 
-## v1.8 — "The Full Collection" (IN PROGRESS — G1–G3 + H1–H2 + R1–R2 LANDED; A1 season audit next, in a FRESH session; the 1.0 release version)
+## v1.8 — "The Full Collection" (COMPLETE — 1.0.0 season audit signed off 2026-09-08; the 1.0 release version)
 
 **Theme:** the gallery is *full*. Every version so far has added a *way to
 play* (the tutorial, gold/NG+, Reeds, the gamepad, QoL, Wander procgen + the
@@ -1021,7 +1021,39 @@ v1.8 gives the gallery a **completion state**.
   `src/` + `tests/` + `docs/` + `PROJECT_STATE.md` + the new `README.md`);
   **SAVE_VERSION 12** migration chain loads a v1-era save end-to-end; tree
   clean; PROJECT_STATE.md + docs/PROJECT_STATUS.md marked v1.8 / **1.0.0
-  COMPLETE** with the audit table. Acceptance: the commit itself.
+  COMPLETE** with the audit table. Acceptance: the commit itself. ✅ **A1
+  (done 2026-09-08, FRESH-session audit — full audit table below)**
+
+**A1 — the v1.8 season-audit table (fresh session, 2026-09-08, all on the committed tree `6e87cd8`; the 1.0.0 gate):**
+
+| Gate | Result | Band / expectation | Verdict |
+|---|---|---|---|
+| `smoke.mjs` ×3 (consecutive) | 3/3 `ALL SMOKE TESTS PASSED` (106 stages) | green, deterministic | ✅ |
+| `smoke.mjs` 10-run flakecheck (144fb1c pin) | 10/10 green | the `144fb1c` determinism pin stays green | ✅ |
+| `pace.mjs` (hand-tuned, Wander OFF, first-time) | ~17.4 min | 15–20 min | ✅ IN (UNCHANGED vs v1.7) |
+| `humance.mjs` (full-run sim, first-time) | 16.7 min | 15–20 min | ✅ IN (UNCHANGED vs v1.7) |
+| `ngpace.mjs` (NG+ cycle-1) | 19.5 min | 15–20 min | ✅ IN (probe prints IN BAND) |
+| `bosspace.mjs` (heron 30k, 3-hue) | 37.1 s god-mode (~1.0 min human) | the heron lower-bound probe | ✅ (UNCHANGED) |
+| `reedspace.mjs` (cycle-0 Reeds + Silt Wyrm) | ~22.2 min run / 97.7 s Wyrm god (~3.9 min human) | 20–25 min / 2–4 min | ✅ IN (byte-identical to v1.7) |
+| `wandpace.mjs` — LEG 1 (first-time Wander, 8 seeds) | band [16.9, 17.8] min (8/8) | 15–20 min | ✅ IN |
+| `wandpace.mjs` — LEG 2 (Wander × Reeds, 8 seeds) | band [21.6, 22.7] min (8/8) | 20–25 min | ✅ IN |
+| `wardpace.mjs` (the Hollow Warden, 52k) | god 98–104 s (mean 103 s) → ~3.9–4.1 min human | ~2–4 min class (comparable to the Silt Wyrm) | ✅ IN |
+| `blackpace.mjs` (Black Reeds + Umbral Wyrm) | ~25.9 min run / 105.5 s Umbral god (~4.2 min human) | 22–26 min | ✅ IN (new v1.8 probe) |
+| `umbrapace.mjs` (the Umbral Wyrm, 60k) | ~3.89 min human (98.1 s god) | 2.5–4 min | ✅ IN (new v1.8 probe) |
+| **Byte-identity (v1.7 `34eeda2` baseline)** | `makeTuning` + `applyNGPlus(1)` **deep-equal v1.7-complete across all 216 arg combos** (JSON-compare across the whole v1.8 diff); cycle-0 NG+ step a no-op; a cycle-0 (Wander-OFF, no-NG+) first-time swamp tuning is byte-identical to v1.7 | hand-tuned / cycle-0 runs byte-identical to v1.7 | ✅ IDENTICAL |
+| Save-schema delta vs v1.7 | `freshSave` differs ONLY in `saveVersion` (11→12), the added top-level `galleryComplete: false`, and `flags` gaining `bossDefeats: []` | the intended v1.8 Full-Collection migration, nothing else | ✅ |
+| `SAVE_VERSION` 11→12 migration | a v11-era save migrates to `saveVersion 12` with `galleryComplete false` + `flags.bossDefeats []` (both defaulted OFF) and **plays byte-identically** (makeTuning-feeding fields unchanged); a v1-era save migrates end-to-end to v12 (`_case: 'migrated'`, all 19 top-level fields present) | the v1.8 migration chain + legacy walk | ✅ |
+| `GAME_VERSION` | `'1.0.0'` in `logic.js` (single source of truth), referenced in the title corner ("Frogue Gallery · v1.0.0") + the Options header line (`v${GAME_VERSION}`) | the 1.0.0 release string rendered, not dead | ✅ |
+| Zero new dependencies (git-diff since `34eeda2`) | only `src/` (game/logic/player/world) + `tests/` (smoke + new blackpace/umbrapace) + `docs/` (CHANGELOG/DECISIONS/PROJECT_STATUS/ROADMAP) + `PROJECT_STATE.md` + the new `README.md`; **no** package.json / lockfile / asset / node_modules | no new deps (zero-dep invariant holds) | ✅ |
+| P10 culling (smoke stage 24) + green across the Reeds / Black Reeds worlds | green (view-cull 0.15 localized/full + enemy AI-cull; re-asserted on the Reeds + Black Reeds worlds) | no per-frame hot-path alloc | ✅ |
+| `README.md` accuracy spot-check | run command (`python -m http.server 8765 --bind 127.0.0.1`), the 6 named bosses, 5400px/4 zones/10 paintings/2 slots, the controls (title enter/space+a/o/g/n/b/c/r; run 1/2/3/4→pigment, space hop, WASD/arrows, H/?/P/M) — all re-verified against the actual `input.js`/`game.js` code | README matches the code | ✅ |
+| No `http.server` 8765 left running | none found (checked via `netstat` BEFORE + AFTER the audit) | loopback-only, nothing left running | ✅ |
+
+**v1.8 COMPLETE** — all 7 items (G1–G3, H1–H2, R1–R2, A1) committed; every
+gate green on the committed tree; the load-bearing invariant (a cycle-0 /
+Wander-OFF / no-NG+ hand-tuned run is byte-identical to v1.7-complete
+`34eeda2`) holds; the 1.0.0 release is signed off. **v1.8 = the 1.0.0
+release — the game's Full Collection.**
 
 ### Explicitly deferred past v1.8 (not forgotten)
 
