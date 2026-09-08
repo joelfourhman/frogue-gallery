@@ -73,8 +73,9 @@ byte-identical. **No open scope for v1.6** — the next phase is whatever
 Joel approves after v1.6 review (the deferred list in ROADMAP §v1.6 is the
 boundary: accessibility X1–X3, gold pigment, gamepad, NG+, CRT filters).
 
-**v1.7 "The Ever-Shifting Swamp" — IN PROGRESS (session v17-2, 2026-09-07;
-D1 + D2 + a hygiene commit landed).** v1.6 is COMPLETE and stays untouched;
+**v1.7 "The Ever-Shifting Swamp" — IN PROGRESS (session v17-3, 2026-09-07;
+D1 + D2 + D3 + D4 + a hygiene commit landed — the full D-item set is DONE).**
+v1.6 is COMPLETE and stays untouched;
 v1.7 adds **THE WANDER** — a bounded, OPT-IN (default OFF) procedural
 expedition variant. **D1 done: the PURE seeded wander content generator** —
 `wanderContent(seed, zones, bias)` in `logic.js` builds a reproducible
@@ -106,11 +107,35 @@ stream). The bias only re-weights WHICH KINDS fill each zone's slots — it
 NEVER changes the per-zone or total counts — so a biased run stays in-band
 exactly as the neutral one (repeat-avoidance is the D1 seed latch). The
 taste name is one line of flavor in the Wandering badge. Smoke stage 96
-(40 asserts). Suite 96 stages green ×3; hand-tuned pace 17.3 / humance 18.2
-min UNCHANGED (Wander OFF by default). Remaining v1.7: **D3** (the new
-`wandpace.mjs` probe + envelope audit), **D4** (Wander Options toggle + save
-export/import parity), **F1** (the Hollow Warden 5th boss), **O1–O2** (QoL),
-**I1** (final season audit). Next session picks up D3.
+(40 asserts). **D3 done: NG+ + Reeds parity for the Wander** (BOTH legs, per
+the plan-of-record) — (a) Wander × NG+: `applyNGPlus` N2 scaling applies
+exactly ONCE on top of the generated content (the gate generates content,
+never tuning, so no compounding — asserted by deep-equality against the
+double-applied variant); (b) Wander × Reeds: the gate no longer excludes
+Reeds, so a Wander × Reeds run layers generated zone content + the Reeds
+light economy (lantern fuel) + R3 bestiary + the Silt Wyrm boss on top (a
+valid victory-gated variant); (c) the hand-tuned (Wander-OFF) expedition +
+Reeds runs remain byte-identical. **`tests/wandpace.mjs` landed in D3 (early,
+so I1 reuses it)** — a generated first-time Wander run in 15–20 min across
+8 seeds (band 16.9–17.8) + a Wander × Reeds leg in 20–25 min (band
+21.6–22.7), both in-band and deterministic; the WANDER changes only the
+z.mix-driven zone-beat (background waves come from `_spawnWave`, not
+`z.mix`), so the probe scales only that against the documented anchors.
+Smoke stage 97 proves the parity + byte-identity. **D4 done: the Wander
+options toggle + save export/import parity** — a FIFTH "Wandering
+Expeditions" toggle (default OFF) in the Options panel (P9 machinery; the
+panel grows 560→598, the gamepad + Save rows shift down), and the existing
+save export/import round-trips the `wanderSeed` field (the exported blob
+carries wanderSeed + saveVersion 11, validates through `validateSaveBlob`,
+a v1-era blob imports to v11 with wanderSeed 0, a malformed wanderSeed is
+refused). Smoke stage 98 proves the toggle (persists + re-reads +
+legacy-migrates-to-OFF) + the export/import parity + seed reproducibility
+across a save/load cycle. **All D-items (D1–D4) are DONE.** Suite 98
+stages green ×3 (deterministic); hand-tuned pace 17.3 / humance 18.7 /
+reedspace 22.2 min UNCHANGED (Wander OFF by default); `wandpace.mjs` both
+legs in-band; flakecheck 10/10. Remaining v1.7: **F1** (the Hollow Warden
+5th boss), **O1–O2** (QoL), **I1** (final season audit — reuses the
+`wandpace.mjs` probe). Next session picks up F1.
 
 ## Release readiness
 
