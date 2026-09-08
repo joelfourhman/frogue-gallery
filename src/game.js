@@ -342,6 +342,7 @@ export class Game {
     this.endT = 0;
     this.endGains = null;
     this._modPrompt = null;   // N4 (v1.3 M14): { sel } — the open expedition-modifier picker
+    this._seedCard = null;    // O1 (v1.7): { seed } — the pre-expedition WANDER seed card
     this._bloom = null;      // V2 (v1.2 M11): { x, y, t, dur } — heron awaken bloom
     this._bloomSurge = 0;    // V2: timed saturation surge (0..~0.14), decays to 0
     // M1 (v1.4): the first-victory cinematic beat — { t, dur, arpeggiated }.
@@ -1388,6 +1389,75 @@ export class Game {
       const ro = this._goldReadout();
       centerText(c, `◆ ${ro.text}`, g.cx, g.cont.y + g.cont.h + 20, '700 12.5px Georgia, serif', '#c9922a', 0.95);
     }
+    ctx.restore();
+  }
+
+  // O1 (v1.7): the pre-expedition WANDER seed card. Before a Wander expedition
+  // begins (from the title's "Begin Expedition"), a small paper card shows the
+  // generated SEED + the taste NAME + its one-line FLAVOR — so the player knows
+  // what they are walking into (and can note / share the seed). It is a NEW
+  // pre-expedition sub-state on top of the title (modeled on the _modPrompt
+  // modal: input intercept + draw-on-top). It is IN-MEMORY ONLY — nothing is
+  // persisted (the seed is latched into save.wanderSeed only when the run
+  // actually begins, in _beginExpedition). It is ONLY offered when Wander is ON
+  // (options.wander) and the player is starting a normal expedition — hand-tuned
+  // (Wander-OFF), Reeds, challenge, guided and NG+ runs never show it.
+  _openSeedCard() {
+    if (this.options.wander !== true) return;
+    const prev = Math.max(0, Math.floor(this.save.wanderSeed) || 0);
+    this._seedCard = { seed: pickWanderSeed(prev, Date.now() | 0) };
+  }
+  _closeSeedCard() { this._seedCard = null; }
+  // O1 (v1.7): the title's main "Begin Expedition" entry (Enter/Space + the big
+  // button). If THE WANDER is on, show the pre-expedition seed card first (the
+  // player chooses the expedition they are walking into); otherwise begin
+  // directly — exactly the pre-O1 behavior. Hand-tuned (Wander-OFF, the
+  // default) runs NEVER see the card, so their start path is byte-identical.
+  _startExpeditionOrCard() {
+    if (this.options.wander === true) { this._openSeedCard(); return; }
+    this._beginExpedition();
+  }
+  _seedCardGeom() {
+    const cx = this.cw / 2, cy = this.ch / 2;
+    const pw = Math.min(520, this.cw - 40), ph = 208;
+    const px = cx - pw / 2, py = cy - ph / 2;
+    return { cx, cy, pw, ph, px, py, set: { x: cx - 110, y: py + ph - 56, w: 220, h: 42 } };
+  }
+  _updateSeedCard() {
+    if (!this._seedCard) return;
+    // Esc / Backspace: back out to the title (no run started).
+    if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._closeSeedCard(); return; }
+    // Enter / Space: set out with the EXACT seed shown on the card.
+    if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); const seed = this._seedCard.seed; this._closeSeedCard(); this._beginExpedition(false, { seed }); return; }
+    // mouse: the "Set Out" button sets out; anything else closes back to the title.
+    const g = this._seedCardGeom();
+    if (this.input.mouse.lPressed) {
+      if (this._mouseIn(g.set.x, g.set.y, g.set.w, g.set.h)) { this.sfx('ui'); const seed = this._seedCard.seed; this._closeSeedCard(); this._beginExpedition(false, { seed }); return; }
+      this.sfx('ui-back'); this._closeSeedCard();
+    }
+  }
+  _drawSeedCard(ctx) {
+    if (!this._seedCard) return;
+    const seed = this._seedCard.seed;
+    const taste = wanderTaste(seed);
+    ctx.save();
+    ctx.fillStyle = 'rgba(20,18,16,0.55)';
+    ctx.fillRect(0, 0, this.cw, this.ch);
+    const g = this._seedCardGeom();
+    const c = paperPanel(ctx, g.px, g.py, g.pw, g.ph, { seed: 77 });
+    outlineText(c, 'The Wander — tonight\u2019s seed', g.cx, g.py + 38, '700 23px Georgia, serif', '#5a9e3d', INK, 4);
+    centerText(c, 'a single expedition, drawn from the swamp\u2019s own current', g.cx, g.py + 62, 'italic 12.5px Georgia, serif', INK, 0.66);
+    // the seed — large, monospaced-feel, noteable / shareable
+    centerText(c, 'seed ' + seed, g.cx, g.py + 104, '700 30px Georgia, serif', '#c9922a', 1);
+    // the taste name + its one-line flavor (reproducible from the seed)
+    if (taste) {
+      centerText(c, taste.name, g.cx, g.py + 134, '700 15px Georgia, serif', '#8a6a3a', 0.95);
+      centerText(c, taste.note, g.cx, g.py + 152, 'italic 12px Georgia, serif', INK, 0.62);
+    }
+    // the "Set Out" button
+    uiButton(ctx, g.set.x, g.set.y, g.set.w, g.set.h, 'Set Out', this._mouseIn(g.set.x, g.set.y, g.set.w, g.set.h), false, { seed: 78, size: 16 });
+    centerText(ctx, 'Esc — back to the pond', g.cx, g.py + g.ph + 14, 'italic 11px Georgia, serif', '#fdf6e9', 0.5);
+    paperEnd(ctx);
     ctx.restore();
   }
 
@@ -2605,9 +2675,12 @@ _drawAtelier(ctx) {
     // "Next Expedition" button) owns input while it is open — intercept BEFORE
     // the title's own Enter/Space/A/O/M/difficulty hotkeys so they don't leak.
     if (this._modPrompt) { this._updateModPrompt(); return; }
+    // O1 (v1.7): the pre-expedition WANDER seed card owns input while open —
+    // intercept BEFORE the title's own hotkeys so Enter/Esc don't leak.
+    if (this._seedCard) { this._updateSeedCard(); return; }
     if (this.input.pressed('enter') || this.input.pressed(' ')) {
       this.sfx('ui');
-      this._beginExpedition();
+      this._startExpeditionOrCard();
       return;
     }
     if (this.input.pressed('a')) { this.sfx('ui'); this._beginAtelier(); return; }
@@ -2661,7 +2734,7 @@ _drawAtelier(ctx) {
       // VARIANT (darker, deeper swamp + THE LANTERN). A first-time save never
       // sees or reaches this button.
       if (g.reeds && this._mouseIn(g.reeds.x, g.reeds.y, g.reeds.w, g.reeds.h)) { this.sfx('ui'); this._beginExpedition(false, { reeds: true }); return; }
-      if (this._mouseIn(g.bx, g.by, g.bw, g.bh)) { this.sfx('ui'); this._beginExpedition(); }
+      if (this._mouseIn(g.bx, g.by, g.bw, g.bh)) { this.sfx('ui'); this._startExpeditionOrCard(); }
       else if (this._mouseIn(g.abx, g.aby, g.abw, g.abh)) { this.sfx('ui'); this._beginAtelier(); }
       else if (this._mouseIn(g.ox, g.oy, g.ow, g.oh)) { this.sfx('ui'); this.optionsOpen = true; }
     }
@@ -2834,7 +2907,13 @@ _drawAtelier(ctx) {
     this.wanderTaste = null;                 // D2: the run's flavor archetype (null unless wandering)
     if (this.options.wander === true && !guided) {
       const prev = Math.max(0, Math.floor(this.save.wanderSeed) || 0);
-      const freshSeed = pickWanderSeed(prev, Date.now() | 0);
+      // O1 (v1.7): if the pre-expedition seed card already picked this run's seed
+      // (opts.seed — the value it displayed to the player), USE it (deterministic:
+      // the player sees the same seed the run then plays). Otherwise pick a fresh
+      // one from the impure Date.now layer (the direct-Start path, no card).
+      const freshSeed = (opts && typeof opts.seed === 'number' && opts.seed > 0)
+        ? opts.seed
+        : pickWanderSeed(prev, Date.now() | 0);
       this.wanderSeedRun = freshSeed;
       this.save.wanderSeed = freshSeed;       // latch the seed so the next run differs
       // D2 (v1.7): pick this run's TASTE (a flavor archetype) from the seed —
@@ -5635,6 +5714,7 @@ _drawAtelier(ctx) {
     if (this.state === 'title') this._drawTitle(ctx);
     if (this.state === 'title' && this.optionsOpen) this._drawOptions(ctx);
     if (this.state === 'title' && this._modPrompt) this._drawModPrompt(ctx);  // N4
+    if (this.state === 'title' && this._seedCard) this._drawSeedCard(ctx);    // O1 (v1.7)
     if (this.state === 'atelier') this._drawAtelier(ctx);
     // M2: the Encore viewing screen overlays the atelier (drawn on top).
     if (this.state === 'atelier' && this._encoreOpen) this._drawEncore(ctx);

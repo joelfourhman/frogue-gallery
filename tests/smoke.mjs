@@ -7856,5 +7856,67 @@ console.log('== stage 100: O2 (v1.7) — the WANDER run-recap line (seed + taste
   console.log('ok — O2: the end-screen run recap (the Q2 "the last expedition" strip) gains a SECOND line for a WANDER run ONLY — the taste\'s name + its one-line flavor + the "Wandering expedition · seed N" tag — so the end screen tells the story of a UNIQUE run (e.g. "Feast Season — a swarm of mosquitos rides the warm current · Wandering expedition · seed 987654321"). It is a run-local read (wanderActive / wanderSeedRun / wanderTaste from _beginExpedition, IN-MEMORY ONLY); a hand-tuned (Wander-OFF) run\'s recap is UNCHANGED (the second line is absent); the save is BYTE-IDENTICAL before/after the end screen (no new persistence; SAVE_VERSION stays 11). It shows on BOTH a Wander victory AND a defeat (a unique run\'s story is told either way).');
 }
 
+// ====================================================================
+// stage 101: O1 (v1.7) — the pre-expedition WANDER seed card. Before a
+//     Wander expedition begins (from the title's "Begin Expedition"), a small
+//     paper card shows the generated seed + taste name + one-line flavor. The
+//     player "sets out" with THAT exact seed (deterministic: the seed shown is
+//     the seed played). Absent for hand-tuned (Wander-OFF) runs; in-memory only
+//     (nothing persisted; SAVE_VERSION unchanged).
+// ====================================================================
+console.log('== stage 101: O1 (v1.7) — the pre-expedition WANDER seed card (seed + taste + flavor shown before a Wander run; absent for hand-tuned; nothing persisted) ==');
+{
+  const L1 = await import('../src/logic.js');
+  const G1 = await import('../src/game.js');
+  const recCanvas1 = makeCanvas();
+  const drawn1 = [];
+  const baseCtx1 = makeCtx(recCanvas1);
+  const recCtx1 = new Proxy(baseCtx1, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn1.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas1.getContext = () => recCtx1;
+
+  // ---- (1) ABSENT for a hand-tuned (Wander-OFF) run: the card never opens; the
+  //          start path is unchanged (the save is byte-identical before/after).
+  const gS = new G1.Game(recCanvas1); gS.start(); gS._quitToTitle();
+  gS.save = L1.freshSave(); gS.options.wander = false;
+  gS._startExpeditionOrCard();           // Wander OFF -> begins directly (no card)
+  assert(gS._seedCard === null, 'O1: a hand-tuned (Wander-OFF) run shows NO seed card (_startExpeditionOrCard begins directly)');
+  assert(gS.state === 'expedition', 'O1: a hand-tuned run goes STRAIGHT to the expedition (no card sub-state)');
+  assert(!('wanderSeedRun' in gS) || gS.wanderActive === false, 'O1: a hand-tuned run is not a Wander expedition (no run seed / taste)');
+
+  // ---- (2) PRESENT for a Wander-ON run: the card opens with a valid seed; it
+  //          RENDERS the seed + taste name + flavor; and "set out" uses THAT seed.
+  const gW = new G1.Game(recCanvas1); gW.start(); gW._quitToTitle();
+  gW.save = L1.freshSave(); gW.options.wander = true; gW.state = 'title';
+  const wSaveBefore = JSON.stringify(gW.save);
+  gW._startExpeditionOrCard();
+  assert(gW._seedCard && typeof gW._seedCard.seed === 'number' && gW._seedCard.seed > 0, 'O1: a Wander-ON "Begin Expedition" OPENS the seed card (a positive seed is chosen)');
+  const shownSeed = gW._seedCard.seed;
+  const taste = L1.wanderTaste(shownSeed);
+  assert(gW.state === 'title', 'O1: opening the card stays on the title (it is a pre-expedition sub-state)');
+  // render the card through the recording canvas: it shows seed + taste name + flavor.
+  drawn1.length = 0; gW._drawSeedCard(gW.ctx);
+  const joined = drawn1.join('\u0001');
+  assert(joined.includes('tonight\u2019s seed'), 'O1: the card renders its Wander seed-card header');
+  assert(joined.includes(String(shownSeed)), `O1: the card renders the generated seed (${shownSeed})`);
+  assert(joined.includes(taste.name), `O1: the card renders the taste name (${taste.name})`);
+  assert(joined.includes(taste.note), `O1: the card renders the taste one-line flavor ("${taste.note}")`);
+  assert(joined.includes('Set Out'), 'O1: the card renders the "Set Out" button');
+  assert(joined.includes('back to the pond'), 'O1: the card renders the "Esc — back to the pond" hint');
+  assert(JSON.stringify(gW.save) === wSaveBefore, 'O1: opening the card persists NOTHING (in-memory only; the run has not started)');
+  // "set out" begins the expedition with the EXACT seed shown (deterministic):
+  gW.input.kb.add('enter');              // the card's Enter handler reads input.pressed('enter')
+  gW._updateSeedCard();
+  assert(gW._seedCard === null, 'O1: pressing Enter on the card closes it and begins the expedition');
+  assert(gW.state === 'expedition', 'O1: "set out" from the card starts the expedition');
+  assert(gW.wanderActive === true && gW.wanderSeedRun === shownSeed, 'O1: the run uses the EXACT seed shown on the card (deterministic: the seed the player saw is the seed played)');
+  assert(gW.save.wanderSeed === shownSeed, 'O1: the seed latches to the save only when the run BEGINS (the card itself persisted nothing)');
+  assert(gW.wanderTaste && gW.wanderTaste.name === taste.name, 'O1: the run\'s taste matches the card\'s taste (same seed -> same taste)');
+
+  console.log('ok — O1: the pre-expedition WANDER seed card. Before a Wander expedition begins (from the title\'s "Begin Expedition"), a small paper card shows the generated seed + the taste\'s name + its one-line flavor, so the player knows what they are walking into (and can note / share the seed). "Set out" begins the run with THAT exact seed (deterministic: the seed shown is the seed played); "Back" returns to the title. It is ABSENT for a hand-tuned (Wander-OFF) run (whose start path is unchanged and whose save is byte-identical) and it is IN-MEMORY ONLY (nothing is persisted; SAVE_VERSION stays 11).');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
