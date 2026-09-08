@@ -968,7 +968,7 @@ in band unchanged** (20–25 min); only the NEW `blackpace.mjs` /
 The game is called *Frogue Gallery* but a player can never be *finished* on it.
 v1.8 gives the gallery a **completion state**.
 
-- **H1 — the "Full Collection" ledger.** A NEW `logic.js` `GALLERY_COMPLETE`
+- **H1 — the "Full Collection" ledger.** ✅ **DONE `7be0d5f` (2026-09-08).** A NEW `logic.js` `GALLERY_COMPLETE`
   tuning + a `galleryCompletion(save)` pure check: the catalog of 10 paintings
   **all owned** + every boss defeated at least once (gray / green / gilded /
   Silt Wyrm / Warden / Umbral Wyrm) + a first-time victory + a Reeds victory.
@@ -978,7 +978,7 @@ v1.8 gives the gallery a **completion state**.
   a one-time cinematic (reusing the v1.5 first-victory cinematic machinery,
   the "full gallery blooms" beat). A NEW `save.galleryComplete` boolean latch
   (SAVE_VERSION 11 → 12, migration defaults `false` for legacy saves).
-- **H2 — the ledger UI + the completion beat.** The existing gallery / ledger
+- **H2 — the ledger UI + the completion beat.** ✅ **DONE `c57b4d0` (2026-09-08).** The existing gallery / ledger
   frame (the G2 gilded-frame presentation) gains a **progress readout**
   (X / 10 paintings, Y / 6 bosses) so a player can *see* what they are missing.
   At Full Collection, a title-screen "collection complete" badge + the capstone

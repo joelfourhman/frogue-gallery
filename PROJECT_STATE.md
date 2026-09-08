@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.8 "The Full Collection" — NEXT ACTION: H1 (session v18-g, 2026-09-08; G1–G3 LANDED — the Black Reeds NG+ variant + the Umbral Wyrm 6th boss + the selection wiring + the two new probes)
+### v1.8 "The Full Collection" — NEXT ACTION: R1 (session v18-h, 2026-09-08; G1–G3 + H1–H2 LANDED — the Black Reeds NG+ variant + the Umbral Wyrm 6th boss + the selection wiring + the two new probes + the gallery Full-Collection capstone + the Gallery Wall completion beat)
 
 **v1.7 is COMPLETE** (all 9 items D1–D4 / F1 / O1 / O2 / I1 committed, 101/101
 smoke green, all 7 probes in band, hand-tuned runs byte-identical with Wander
@@ -86,9 +86,70 @@ and a hand-tuned run all deep-equal their v1.7 tuning / content;
   field; the 11→12 bump with `galleryCompletion` comes in H1, NOT here).
 - Zero new dependencies; no new assets; the `144fb1c` flake-pin stays green.
 
-**NEXT ACTION: H1** — the gallery COMPLETION state (the namesake payoff) + the
-SAVE_VERSION 11→12 bump. See the plan-of-record §v1.8 item **H1** below. Do
-NOT start H1 until this session is signed off.
+**Batch 2 (session v18-h): H1 → H2 LANDED** (2 commits, each smoke-green) — the
+gallery **Full-Collection capstone** (the release headline) + the Gallery Wall
+completion beat. The load-bearing invariant held end-to-end: **H1/H2 are meta +
+presentation, they add no timed-run time** — a v11 save migrates to v12 and
+plays byte-identically (`makeTuning` output unchanged when `galleryComplete` is
+false); every existing run stays byte-identical; **all 8 pacing probes
+re-verified IN band UNCHANGED.**
+
+**Landed this session (H1 + H2, all green, 105/105 smoke):**
+- **H1** `7be0d5f` `feat(v1.8 H1)` — the "Full Collection" ledger (the
+  namesake payoff). A NEW `logic.js` `GALLERY_COMPLETE` tuning (capstoneLevel 1,
+  inkPerLevel +4, orbPerLevel +0.20) + a pure `galleryCompletion(save)` check:
+  all **10 PAINTINGS owned** (8 base + 2 gold-tier) + **every boss defeated at
+  least once** (gray / green / gilded / Silt Wyrm / Warden / Umbral Wyrm — the
+  `save.flags.bossDefeats` list, populated on each victory via `this.heron.kind`)
+  + a **first-time victory** (`flags.heronDefeated`) + a **Reeds victory**
+  (`flags.reedsVictory`). The existing `galleryBonus` "Rehung Frame" meta (A4)
+  becomes the CAPSTONE: at Full Collection a **permanent saved `galleryBonus`
+  level** is minted once ("the museum keeps you better"), riding the existing
+  `applyGalleryBonus` path via a NEW `galleryBonusTotal(save)` = saved level +
+  one-time `capstoneLevel(save)` (0 while incomplete → `makeTuning` byte-
+  identical). A **one-time completion cinematic** reuses the v1.5 first-victory
+  beat machinery (`this._cine = { …, collection: true }`, a distinct "The Full
+  Collection!" caption). A NEW `save.galleryComplete` boolean latch +
+  `save.flags.bossDefeats` array — **SAVE_VERSION 11 → 12** (a v11→v12
+  migration + `normalizeGalleryComplete` / `normalizeBossDefeats` default the
+  new fields `false` / `[]` for every legacy save; `migrateSave` carries both
+  per-field so a completed save keeps its latch on reload). Pure + deterministic;
+  the latch is **idempotent** (flips once — a second victory after completion does
+  not re-mint). Smoke **stage 104** proves: the pure check (fresh incomplete,
+  synthetic all-complete qualifies), the capstone strict-better tuning, the
+  byte-identity invariant, the idempotent one-time latch, and the v11→v12
+  migration (fields defaulted OFF, byte-identical play).
+- **H2** `c57b4d0` `feat(v1.8 H2)` — the Gallery Wall screen + the completion
+  beat. The existing Atelier **Gallery tab (tab 2)** gains a **progress readout**
+  ("Paintings X / 10 · Bosses Y / 6" — the pure `galleryCompletionProgress(save)`)
+  so a player can SEE what they are missing, + a **full-collection gold glow**
+  behind the 10-frame wall (a soft radial bloom, procedural art only, gated on
+  `galleryCompletion`) + a **title-screen "collection complete" badge** (a gilded
+  plaque, gated on `save.galleryComplete`). Pure presentation over the H1 state;
+  no timed-run time; no new assets; both a non-complete and a complete save draw
+  cleanly (no JS errors). Smoke **stage 105** proves the wall data + the glow
+  gating + the title badge + the no-mutation presentation.
+
+**H1–H2 invariant evidence (measured this session, session v18-h):**
+- `node tests/smoke.mjs` → **105/105 ALL SMOKE TESTS PASSED** (deterministic; the
+  `144fb1c` flake-pin stays green; 103 pre-existing stages + stages 104 (H1) +
+  105 (H2)).
+- `SAVE_VERSION` **11 → 12** (the ONLY schema change this session). A v11 save
+  migrates to v12 with `galleryComplete` false + `bossDefeats` [] and plays
+  byte-identically (`makeTuning` output unchanged when `galleryComplete` false —
+  asserted in stage 104).
+- **All 8 pacing probes IN band UNCHANGED** (H1/H2 are meta + presentation, no
+  timed-run time): `pace.mjs` ~17.2 / `humance.mjs` 19.2 (IN 15–20, hand-tuned
+  Wander OFF) / `ngpace.mjs` 19.4 (IN band) / `bosspace.mjs` ~0.62 min /
+  `reedspace.mjs` ~21 min (IN 20–25) + Silt Wyrm 3.9 min / `wandpace.mjs` both
+  legs in band / `wardpace.mjs` 3.9–4.1 min / `blackpace.mjs` ~25.8 min (IN
+  22–26) / `umbrapace.mjs` ~3.9 min (IN 2.5–4).
+- Zero new dependencies; no new assets; loopback-only; pure rules in `logic.js`;
+  the `144fb1c` flake-pin stays green; no `http.server` 8765 left running.
+
+**NEXT ACTION: R1** — the release surface (README + the 1.0.0 version string +
+the PROJECT_STATUS "v1.8 = 1.0.0 release" marker). See the plan-of-record §v1.8
+item **R1**. Do NOT start R2 / A1 until R1 is signed off.
 
 **Full item list (per the plan-of-record):**
 - **G1** `feat(v1.8 G1)` — the "Black Reeds" NG+ Reeds variant: a NEW
