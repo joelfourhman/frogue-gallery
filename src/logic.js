@@ -736,6 +736,18 @@ export function normalizeReedsUnlocked(raw) {
   return !!raw;
 }
 
+// D1 (v1.7): normalize THE WANDER's last-seed latch to a non-negative integer.
+// A pre-v1.7 save (no field, or a non-finite/garbled value) loads 0 — the
+// player has no Wander run yet, so nothing is backfilled. A real seed (a
+// non-negative integer) survives. The seed is the reproducibility key for the
+// generated layout; 0 is a valid seed too, but a FRESH Wander run always picks
+// a non-zero seed (see pickWanderSeed) so the very first Wander expedition is
+// never the degenerate all-zeros layout.
+export function normalizeWanderSeed(raw) {
+  const n = Math.floor(Number(raw));
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
 // R5 (v1.6 Module R): the four BENEATH-THE-REEDS creatures as placeholder
 // Field Guide cards (the creatures land in R3/R4 — these entries may reference
 // them by name and must render even before they exist). Pure display data.
@@ -1908,7 +1920,13 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // saved best-score file (top 5, each {seed,date,score}); old saves (no such
 // field) migrate forward with an empty list.)
 // R5 (v1.6 Module R): bumped 9 -> 10 for the BENEATH-THE-REEDS gate flag (save.flags.reedsUnlocked) + the four Reeds Field Guide entries. A pre-v1.6 save loads reedsUnlocked FALSE (nobody backfills access) via the v9->v10 migration + normalizeReedsUnlocked.
-export const SAVE_VERSION = 10;
+// D1 (v1.7): bumped 10 -> 11 for THE WANDER's `save.wanderSeed` (integer; the
+// last-seen seed of the bounded Wander procgen, so successive Wander runs differ
+// while each is reproducible from it). A pre-v1.7 (v10) save migrates forward
+// with wanderSeed 0 (no seed yet) via the v10->v11 migration + normalizeWanderSeed.
+// Wander is OFF by default (options.wander, see migrateOptions) so a default-OFF
+// save NEVER runs the generated-layout path and stays byte-identical to v1.6.
+export const SAVE_VERSION = 11;
 
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
@@ -2005,6 +2023,17 @@ const SAVE_MIGRATIONS = [
       out.flags.reedsUnlocked = normalizeReedsUnlocked(out.flags.reedsUnlocked);
     },
   },
+  {
+    from: 10, to: 11,
+    fn: (out) => {
+      // D1 (v1.7): THE WANDER's last-seed latch. Every pre-v1.7 save (no
+      // field) migrates forward with wanderSeed DEFAULTED TO 0 — the player
+      // has no Wander run yet, so nothing is backfilled. Wander is OFF by
+      // default (options.wander), so a migrating save keeps loading unchanged
+      // and the generated-layout path never runs.
+      out.wanderSeed = normalizeWanderSeed(out.wanderSeed);
+    },
+  },
 ];
 
 // N1 (v1.3 M14): normalize the New Game+ cycle index — a non-negative integer
@@ -2098,6 +2127,7 @@ export function freshSave() {
     gildedFrame: false,   // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier (bought once, permanent)
     firstVictoryCinematic: false, // M1 (v1.4): the first-victory cinematic beat has been SEEN (a fresh + every migrating-old save = false → they get it once)
     challengeScores: [],  // K7 (v1.5 M2): the CURATOR CHALLENGE best-score file — top 5, each {seed,date,score}, ordered desc by score
+    wanderSeed: 0,        // D1 (v1.7): THE WANDER's last-seen seed (integer; 0 = no Wander run yet). Off by default (options.wander), so a default-OFF save never runs the generated-layout path.
   };
 }
 
@@ -2203,7 +2233,7 @@ export function routeTrail(waypoints, worldW, cap = ROUTE_WAYPOINT_CAP) {
 //                (string/number/array/null); fresh save, nothing preserved
 // (The unparseable-JSON and missing-key cases are handled one level up in
 // SaveSys.load(), which returns null so the caller starts a fresh game.)
-const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned', 'gildedFrame', 'firstVictoryCinematic', 'challengeScores'];
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned', 'gildedFrame', 'firstVictoryCinematic', 'challengeScores', 'wanderSeed'];
 
 function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
 
@@ -2275,6 +2305,10 @@ export function migrateSave(raw) {
   // (false for a legacy v9 save with no field, the real boolean for a
   // v10 save). The v9->v10 migration step re-normalizes defensively.
   out.flags.reedsUnlocked = normalizeReedsUnlocked(raw.flags && raw.flags.reedsUnlocked);
+  // D1 (v1.7): carry THE WANDER's last-seed latch forward (0 for a legacy
+  // v10 save with no field, the real seed for a v11 save). The v10->v11
+  // migration step re-normalizes defensively on the way up.
+  out.wanderSeed = normalizeWanderSeed(raw.wanderSeed);
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks
@@ -2353,6 +2387,15 @@ export function validateSaveBlob(json) {
   if (raw.reedsUnlocked !== undefined && typeof raw.reedsUnlocked !== 'boolean') {
     return { ok: false, error: 'the reedsUnlocked flag was malformed (expected true/false)' };
   }
+  // D1 (v1.7): wanderSeed must be a whole number if present (the Wander
+  // last-seed latch). A non-integer/garbled value is refused (the migration
+  // would otherwise normalize it silently — refuse loudly on a bad paste).
+  if (raw.wanderSeed !== undefined && raw.wanderSeed !== null) {
+    const w = raw.wanderSeed;
+    if (typeof w !== 'number' || !Number.isInteger(w) || w < 0) {
+      return { ok: false, error: 'the wanderSeed field was malformed (expected a whole number)' };
+    }
+  }
   // (e) run the EXISTING migration chain; refuse on any throw or a 'fresh' result.
   let save;
   try {
@@ -2375,7 +2418,7 @@ export function validateSaveBlob(json) {
 // (see game.js _buildGrain/_drawGrain). Presentation-only; an old options blob
 // (no `grain` field) migrates forward to OFF so returning players see no change.
 export function freshOptions() {
-  return { volume: 0.8, muted: false, difficulty: 'normal', musicVol: 0.6, sfxVol: 0.7, shake: true, vignette: true, grain: false, gamepad: 'auto' };
+  return { volume: 0.8, muted: false, difficulty: 'normal', musicVol: 0.6, sfxVol: 0.7, shake: true, vignette: true, grain: false, gamepad: 'auto', wander: false };
 }
 export function migrateOptions(raw) {
   const o = freshOptions();
@@ -2399,6 +2442,11 @@ export function migrateOptions(raw) {
     // absent) migrates forward to 'auto'. Presentation/input routing only —
     // never feeds runT, tuning, or the pacing probes.
     if (raw && (raw.gamepad === 'off' || raw.gamepad === 'auto')) o.gamepad = raw.gamepad;
+    // D1 (v1.7): THE WANDER toggle (default OFF). Only an explicit true turns it
+    // on; a legacy options blob (field absent) migrates forward to OFF so
+    // returning players keep the hand-tuned path byte-identical and the
+    // generated-layout path never runs.
+    o.wander = raw.wander === true;
   }
   return o;
 }
@@ -2452,4 +2500,208 @@ export function gamepadActive(save, pad, nowMs, lastActiveMs, inactivityMs = GAM
   if (lastActiveMs === -1) return true;        // fresh connect: engage immediately
   if (lastActiveMs === undefined || lastActiveMs === null) return false;
   return (nowMs - lastActiveMs) <= inactivityMs; // connected + recently active
+}
+
+// ----------------------------------------------------------------
+// D1 (v1.7): THE WANDER — a bounded procedural expedition variant.
+// ----------------------------------------------------------------
+// A new expedition *mode*, OPT-IN (default OFF). When the `options.wander`
+// flag is on, `_beginExpedition` builds the per-zone ENCOUNTER CONTENT (enemy
+// archetype mix + the elite signature) from a SEEDED RNG stream sampled within
+// a hand-tuned pacing envelope. The TERRAIN / layout pass is UNCHANGED (the
+// same 4 zones at the same x-anchors / names / accents — the same painting),
+// so 60fps + P10 culling hold and the world reads identically. When the flag
+// is OFF (the default) the existing hand-tuned ZONES path runs and
+// `wanderContent` is NEVER called → first-time / NG+ / Reeds runs stay
+// byte-identical to v1.6.
+//
+// INVARIANTS (v1.7):
+//   * PURE + DETERMINISTIC: `wanderContent`/`pickWanderSeed` take NO
+//     Math.random. The only impure source (the frame clock) is passed in by
+//     game.js (`Date.now()`), the v1.6 R2 "seed + SALT" pattern. The generated
+//     stream is `mulberry32(seed + WANDER_SALT)` — a SEPARATE stream from the
+//     terrain pass (which seeds `World` off `runSeed`), so it can never
+//     perturb the terrain RNG.
+//   * BOUNDED: every generated layout sits inside WANDER_BUDGET (per-zone +
+//     run-wide enemy min/max, elite min/max, guaranteed rest orbs, no empty
+//     zone, boss-eligible). The envelope is tight enough that a generated
+//     run lands 15–20 min (first-time) without ever BEATING the hand-tuned
+//     best.
+
+// The salt that puts the Wander content stream on its OWN RNG lane, separate
+// from the terrain pass (World is seeded off runSeed). A non-zero constant so
+// seed + WANDER_SALT is never the degenerate all-zeros stream.
+export const WANDER_SALT = 7331;
+
+// The hand-tuned pacing envelope. Calibrated against the hand-tuned ZONES
+// baseline: per-zone normal 4/6/5/8 (total 23), per-zone elite 1/2/1/2
+// (total 6). The bounds allow a little per-zone swing but keep the RUN-WIDE
+// total in-band (so a generated run is the same ~15-20 min shape, never
+// faster). 4 zones = the unchanged hand-tuned structure.
+export const WANDER_BUDGET = {
+  zones: 4,
+  normal: { perMin: 3, perMax: 9, totalMin: 18, totalMax: 30 }, // hand-tuned 4-8 / 23
+  elite:  { perMin: 1, perMax: 2, totalMin: 4, totalMax: 7 },   // hand-tuned 1-2 / 6
+  restOrbsPer: 2,                 // the guaranteed rest-checkpoint orbs (hand-tuned 2/zone)
+};
+
+// The three Expedition enemy archetypes (Reeds archetypes are a separate
+// biome and never enter a Wander Expedition layout).
+const WANDER_KINDS = ['beetle', 'mosquito', 'toad'];
+
+// D1: a fresh Wander seed. PURE given (prevSeed, nowMs) — game.js feeds
+// nowMs = Date.now() (the impure layer), so every Wander run gets a fresh
+// seed and a repeat is impossible without deliberately re-entering the same
+// (prevSeed, nowMs) pair. The result is always >= 1 (never the degenerate 0)
+// and always differs from prevSeed (repeat-avoidance seed for D2).
+export function pickWanderSeed(prevSeed, nowMs) {
+  const prev = Math.floor(Number(prevSeed) || 0);
+  const t = Math.floor(Number(nowMs) || 0);
+  // mix both sources with the gold hash constant; fold to a 31-bit positive
+  // integer. No Math.random — the ONLY entropy is the nowMs argument.
+  let h = (Math.imul(t, 2654435761) + Math.imul(prev + 1, 40503)) >>> 0;
+  h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d) >>> 0; h ^= h >>> 12; h >>>= 0;
+  let seed = (h % 2147483647) + 1;                    // in [1, 2147483647]
+  if (seed === prev) seed = (seed % 2147483647) + 1;  // never equal the last seed
+  return seed;
+}
+
+// Internal: distribute a total `T` across `n` buckets, each in [min, max],
+// using `rng`. Feasibility is guaranteed by the caller (T in
+// [n*min, n*max]). Greedy: seed each bucket at `min`, then hand out the
+// remainder one unit at a time to a random bucket still under `max`. O(T) —
+// tiny (T <= 30). Returns an array of `n` integers.
+function _distribute(rng, T, n, min, max) {
+  const out = new Array(n).fill(min);
+  let remaining = T - n * min;
+  while (remaining > 0) {
+    // pick a random bucket still under its cap (rejection-free: the count of
+    // eligible buckets is >= 1 while remaining > 0 by the feasibility bound)
+    const eligible = out.map((v, i) => (v < max ? i : -1)).filter(i => i >= 0);
+    const pick = eligible[Math.floor(rng() * eligible.length)];
+    out[pick] += 1;
+    remaining -= 1;
+  }
+  return out;
+}
+
+// D1: THE WANDER layout. PURE + deterministic per `seed`.
+//
+//   wanderContent(seed, zones, bias = null) -> layout
+//
+// `zones` is the hand-tuned ZONES array (for the per-zone x-anchor / name /
+// accent / tip — the terrain is UNCHANGED, so Wander reuses those and only
+// regenerates the ENCOUNTER CONTENT). `bias` is a D2 taste object
+// ({id,name,bias}); D1 ignores it (a null / missing bias is the neutral
+// "base wander"), so the D1 layout is fully determined by (seed, zones).
+//
+// Returns a FRESH object (never mutates `zones`):
+//   { seed, zones: [{x,name,accent,tip,mix:{beetle,mosquito,toad},
+//                    sig:{kind,count}} x zones.length],
+//     totals: { normal, elite, orbs }, bossEligible, restOrbsPer }
+//
+// Every field honors WANDER_BUDGET: per-zone + run-wide normal/elite within
+// the band, >= restOrbsPer guaranteed per rest checkpoint, no empty zone
+// (perMin >= 1), bossEligible always true. Same seed => identical layout.
+export function wanderContent(seed, zones, bias = null) {
+  const base = Array.isArray(zones) && zones.length ? zones : null;
+  const n = WANDER_BUDGET.zones;
+  // (bias is reserved for D2's taste; D1 is neutral — but accept the arg so
+  // the signature is stable for the D2 build.)
+  void bias;
+  if (!base) {
+    // degenerate: no zones supplied — return a structurally valid empty-ish
+    // layout (should not happen; game.js always passes ZONES).
+    return {
+      seed: Math.floor(Number(seed) || 0),
+      zones: [], totals: { normal: 0, elite: 0, orbs: 0 },
+      bossEligible: true, restOrbsPer: WANDER_BUDGET.restOrbsPer,
+    };
+  }
+  const s = Math.floor(Number(seed) || 0);
+  // THE Wander content stream — its OWN lane (seed + WANDER_SALT), separate
+  // from the terrain pass. Deterministic per seed.
+  const rng = mulberry32((s + WANDER_SALT) >>> 0);
+
+  // ---- (1) distribute the run-wide NORMAL enemy total across the zones ----
+  // A total in [totalMin, totalMax] (hand-tuned 23 sits mid-band). Because
+  // n*perMin (12) <= totalMin (18) and totalMax (30) <= n*perMax (36), any
+  // such total is distributable with each zone in [perMin, perMax].
+  const Nmin = WANDER_BUDGET.normal.totalMin, Nmax = WANDER_BUDGET.normal.totalMax;
+  const totalNormal = Nmin + Math.floor(rng() * (Nmax - Nmin + 1));
+  const perNormal = _distribute(rng, totalNormal, n, WANDER_BUDGET.normal.perMin, WANDER_BUDGET.normal.perMax);
+
+  // ---- (2) distribute the run-wide ELITE total across the zones ----
+  const Emin = WANDER_BUDGET.elite.totalMin, Emax = WANDER_BUDGET.elite.totalMax;
+  const totalElite = Emin + Math.floor(rng() * (Emax - Emin + 1));
+  const perElite = _distribute(rng, totalElite, n, WANDER_BUDGET.elite.perMin, WANDER_BUDGET.elite.perMax);
+
+  // ---- (3) build each zone: keep the terrain identity, regenerate content ----
+  const outZones = [];
+  for (let i = 0; i < n; i++) {
+    const src = base[i] || {};
+    // split this zone's normal count across the 3 archetypes. Weighted so a
+    // zone leans one archetype but never all-in on it (keeps the mix lively);
+    // the split always sums to perNormal[i] and each zone has >= perMin >= 1
+    // (no empty zone).
+    const zn = perNormal[i];
+    const w = [1 + Math.floor(rng() * 4), 1 + Math.floor(rng() * 4), 1 + Math.floor(rng() * 4)];
+    const wSum = w[0] + w[1] + w[2];
+    const mix = { beetle: 0, mosquito: 0, toad: 0 };
+    // apportion zn by the weights, remainder round-robin (keeps the sum exact)
+    const keys = WANDER_KINDS;
+    let rem = zn;
+    for (let k = 0; k < keys.length; k++) {
+      const share = Math.floor((zn * w[k]) / wSum);
+      mix[keys[k]] = share; rem -= share;
+    }
+    for (let k = 0; rem > 0; k = (k + 1) % keys.length) { mix[keys[k]] += 1; rem -= 1; }
+    // guarantee the zone is non-empty even in the (impossible) all-zero split
+    if (mix.beetle + mix.mosquito + mix.toad < 1) mix.beetle = 1;
+
+    // the elite signature: a kind + count within the per-zone elite band.
+    const sigKind = WANDER_KINDS[Math.floor(rng() * WANDER_KINDS.length)];
+    const sig = { kind: sigKind, count: perElite[i] };
+
+    outZones.push({
+      x: src.x, name: src.name, accent: src.accent, tip: src.tip,
+      mix, sig,
+    });
+  }
+
+  const totalOrbs = n * WANDER_BUDGET.restOrbsPer;
+  return {
+    seed: s,
+    zones: outZones,
+    totals: { normal: totalNormal, elite: totalElite, orbs: totalOrbs },
+    bossEligible: true,
+    restOrbsPer: WANDER_BUDGET.restOrbsPer,
+  };
+}
+
+// D1: is a Wander layout within its pacing envelope? PURE. Returns { ok,
+// reasons[] }. The smoke stage asserts ok === true across a seed sweep. This
+// is the testable guarantee that the procgen cannot run away from the 15-20
+// min band (it neither over- nor under-populates a run).
+export function wanderInBudget(layout) {
+  const reasons = [];
+  if (!layout || !Array.isArray(layout.zones)) { reasons.push('no zones'); return { ok: false, reasons }; }
+  const B = WANDER_BUDGET;
+  const n = layout.zones.length;
+  if (n !== B.zones) reasons.push(`zone count ${n} != ${B.zones}`);
+  let normal = 0, elite = 0, empty = 0;
+  layout.zones.forEach((z, i) => {
+    const zn = (z.mix && (z.mix.beetle + z.mix.mosquito + z.mix.toad)) || 0;
+    const ze = (z.sig && z.sig.count) || 0;
+    if (zn < B.normal.perMin || zn > B.normal.perMax) reasons.push(`zone ${i} normal ${zn} out of [${B.normal.perMin},${B.normal.perMax}]`);
+    if (ze < B.elite.perMin || ze > B.elite.perMax) reasons.push(`zone ${i} elite ${ze} out of [${B.elite.perMin},${B.elite.perMax}]`);
+    if (zn < 1) empty++;
+    if (!z.sig || !WANDER_KINDS.includes(z.sig.kind)) reasons.push(`zone ${i} bad sig kind`);
+    normal += zn; elite += ze;
+  });
+  if (normal < B.normal.totalMin || normal > B.normal.totalMax) reasons.push(`run normal ${normal} out of [${B.normal.totalMin},${B.normal.totalMax}]`);
+  if (elite < B.elite.totalMin || elite > B.elite.totalMax) reasons.push(`run elite ${elite} out of [${B.elite.totalMin},${B.elite.totalMax}]`);
+  if (empty > 0) reasons.push(`${empty} empty zone(s)`);
+  if (!layout.bossEligible) reasons.push('not boss-eligible');
+  return { ok: reasons.length === 0, reasons };
 }

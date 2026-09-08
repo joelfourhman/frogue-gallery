@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -2807,6 +2807,30 @@ _drawAtelier(ctx) {
     // end screen is pure presentation over this + runT + the boss outcome.
     this.runWaypoints = []; this._lastWpT = 0;
     this.runGold = Math.max(0, Math.floor(this.save.gold) || 0); // C2 (v1.3 M16): the gold total at run start (delta at the end = "gold earned this expedition"; in-run only, not persisted)
+    // D1 (v1.7): THE WANDER — the bounded procedural expedition variant. OPT-IN
+    // (options.wander, default OFF) and NEVER active for a guided (tutorial) or
+    // Reeds run. When ON, the run's encounter CONTENT (per-zone enemy archetype
+    // mix + orb/checkpoint drop) is generated from the seeded RNG stream
+    // (mulberry32(wanderSeed + WANDER_SALT), a SEPARATE stream from the terrain
+    // pass) sampled within a hand-tuned difficulty envelope, so the run is
+    // reproducible from save.wanderSeed while each run differs. The
+    // TERRAIN/WORLD pass is UNCHANGED (same seeded world -> same painting,
+    // 60fps, P10 culling safe). When OFF (the default) this block never runs,
+    // this.zones stays the hand-tuned ZONES, and the run is byte-identical to
+    // v1.6. A fresh seed is picked from the impure layer (Date.now) so successive
+    // Wander runs differ; the layout itself is PURE (wanderContent).
+    this.zones = ZONES;
+    this.wanderActive = false;
+    this.wanderSeedRun = null;
+    if (this.options.wander === true && !guided && !_isReeds) {
+      const prev = Math.max(0, Math.floor(this.save.wanderSeed) || 0);
+      const freshSeed = pickWanderSeed(prev, Date.now() | 0);
+      this.wanderSeedRun = freshSeed;
+      this.save.wanderSeed = freshSeed;       // latch the seed so the next run differs
+      const lay = wanderContent(freshSeed, ZONES);
+      this.zones = lay.zones.map(z => ({ ...z, mix: { ...z.mix }, sig: { kind: z.sig.kind, count: z.sig.count } }));
+      this.wanderActive = true;
+    }
     // N3 (v1.3 M14): on NG+ cycles (ngCycle >= 1) the final boss is the Great
     // GREEN Heron instead of the Great Gray Heron (the gray heron stays the
     // first-time boss). The green heron reuses the same bossStep AI / 3-hue
@@ -3367,15 +3391,16 @@ _drawAtelier(ctx) {
 
     // ----- named expedition zones (P5): banner + staged spawn + rest checkpoint -----
     if (p.alive) {
-      while (this._zoneI < ZONES.length && p.x >= this.world.w * ZONES[this._zoneI].x) {
-        const z = ZONES[this._zoneI++];
+      const _zones = this.zones || ZONES;   // D1 (v1.7): the run's zone CONTENT (hand-tuned ZONES by default; the Wander layout when options.wander)
+      while (this._zoneI < _zones.length && p.x >= this.world.w * _zones[this._zoneI].x) {
+        const z = _zones[this._zoneI++];
         this._zoneBeat(z);
       }
       // K3 (v1.5 M3): once past the last NAMED zone (into the final stretch —
       // "zone 5"), arm the Storm Surge set-piece. It is a one-shot, seeded beat;
       // _updateSurge drives it (banner + stinger + bounded mosquito burst + rain
       // buff + bonus orb burst on clear). Non-blocking: the frog pushes through.
-      if (this._zoneI >= ZONES.length && !this.surge && this.heron && this.heron.x) {
+      if (this._zoneI >= _zones.length && !this.surge && this.heron && this.heron.x) {
         this.surge = stormSurgeFor(this.runSeed || 0);
       }
     }
@@ -5618,6 +5643,31 @@ _drawAtelier(ctx) {
       'italic 10px Georgia, serif', INK, 0.75);
     ctx.restore();
 
+    // ---- D1 (v1.7): THE WANDER badge (top-left, under the reveal bar) ----
+    // A small "Wandering · seed N" chip that appears ONLY when a Wander run is
+    // active (options.wander ON + a generated layout). It tells the player the
+    // expedition was generated and lets them note the seed (the reproducibility
+    // key). Guarded by this.wanderActive so a default-OFF / hand-tuned run's
+    // HUD is byte-identical (never drawn).
+    if (this.wanderActive) {
+      const bw = 150, bh = 24, bx = 14, by = barH + 16;
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      this._paperChip(ctx, bx, by, bw, bh, 8);
+      ctx.globalAlpha = 1;
+      // a tiny wobbly ink compass-glyph (procedural, no asset) marks "generated"
+      ctx.strokeStyle = '#7a5a2a'; ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      const gx = bx + 13, gy = by + bh / 2;
+      ctx.moveTo(gx - 5, gy + 4); ctx.lineTo(gx + 5, gy - 4);
+      ctx.moveTo(gx + 5, gy - 4); ctx.lineTo(gx + 2, gy - 4);
+      ctx.moveTo(gx + 5, gy - 4); ctx.lineTo(gx + 5, gy - 1);
+      ctx.stroke();
+      centerText(ctx, `Wandering · ${this.wanderSeedRun}`, bx + 18 + (bw - 22) / 2, by + bh / 2 + 1,
+        '700 11px Georgia, serif', '#7a5a2a', 0.95);
+      ctx.restore();
+    }
+
     // ---- heart pips (top-left) ----
     ctx.save();
     ctx.globalAlpha = 0.92;
@@ -6695,7 +6745,8 @@ _drawAtelier(ctx) {
     // zone, enemies painted, orbs). In-memory only; never touches the save.
     if (this.state === 'expedition') {
       const zi = this._zoneI || 0;
-      const zname = zi < ZONES.length ? ZONES[zi].name : 'the open water';
+      const _zref = this.zones || ZONES; // D1 (v1.7): the run's zones (wander-aware)
+      const zname = zi < _zref.length ? _zref[zi].name : 'the open water';
       const by = py + 104;
       ctx.save();
       ctx.globalAlpha = op;

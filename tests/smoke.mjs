@@ -3149,9 +3149,9 @@ console.log('== stage 52: v1.3 M15 G3 — Gilded Frame (NG+ prestige tier) ==');
   const S52 = await import('../src/save.js');
   const KEY = 'frogue_gallery_save';
 
-  // (0) schema: a fresh save is NOT gilded, SAVE_VERSION is now 10 (R5: 9 -> 10
-  // adds the reedsUnlocked gate flag; the v10 era supersedes the v9 one).
-  assert(L52.SAVE_VERSION === 10, `G3: SAVE_VERSION is now 10 (R5 reeds era; got ${L52.SAVE_VERSION})`);
+  // (0) schema: a fresh save is NOT gilded, SAVE_VERSION is now 11 (D1: 10 -> 11
+  // adds the wanderSeed latch; the reedsUnlocked gate at 9 -> 10 is unchanged).
+  assert(L52.SAVE_VERSION === 11, `G3: SAVE_VERSION is now 11 (D1 wander era, 10 -> 11; got ${L52.SAVE_VERSION})`);
   const fresh = L52.freshSave();
   assert(fresh.gildedFrame === false, 'G3: a fresh save has gildedFrame false');
   assert(L52.isGilded(fresh) === false, 'G3: isGilded is false on a fresh save');
@@ -4514,7 +4514,7 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
 {
   console.log('== stage 69: v1.4 M1 — first-victory cinematic beat (headless) ==');
   const L = await import('../src/logic.js');
-  assert(L.SAVE_VERSION === 10, 'M1: SAVE_VERSION is 10 (R5 bumped 9 -> 10 for the reedsUnlocked flag; the cinematic seen-flag from 7 -> 8 is unchanged)');
+  assert(L.SAVE_VERSION === 11, 'M1: SAVE_VERSION is 11 (D1 bumped 10 -> 11 for the wanderSeed latch; the cinematic seen-flag from 7 -> 8 is unchanged)');
   // Headless AudioContext that RECORDS every tone scheduled, so we can assert
   // the arpeggio shape (a soft RISING sequence) + that it rides the melody
   // layer (musicBus), not the sfx bus. Mirrors the S1/S2 stage pattern.
@@ -5774,7 +5774,7 @@ console.log('== stage 79: v1.5 K8 — Challenge Reward (Masterpiece + rank gold)
   // K9 itself introduced no save field (the first-sight flags are a plain
   // in-memory object on the Game, absent from the save). R5 (later) bumped the
   // schema 9 -> 10 for the reedsUnlocked gate flag — the current version is 10.
-  assert(L80.SAVE_VERSION === 10, 'K9: SAVE_VERSION is 10 (R5 bumped 9 -> 10 for the reedsUnlocked flag; K9 first-sight flags remain in-memory, not persisted)');
+  assert(L80.SAVE_VERSION === 11, 'K9: SAVE_VERSION is 11 (chain: 9 -> 10 at R5, 10 -> 11 at D1; K9 first-sight flags remain in-memory, not persisted)');
   assert(g81.save._firstSight === undefined, 'K9: the first-sight flags live on the Game (in-memory), not the save');
 
   console.log('ok — K9: the field guide\'s "Know your quarry" renders the four v1.5 residents (Mud Turtle / Blind Crag Frog / Storm Surge + the Gilded Heron\'s plume line on NG+ c3+ saves), and each new creature fires a ONE-SHOT first-sight banner (one in-memory flag per creature — A1/M3-style, no new save field, SAVE_VERSION 9) that never repeats');
@@ -6058,21 +6058,26 @@ console.log('== stage 85: v1.6 R5 — REEDS SAVE GATE (save.flags.reedsUnlocked,
 {
   const L85 = await import('../src/logic.js');
 
-  // ---- (a) SAVE_VERSION 9 -> 10 + the v9 -> v10 migration + normalizer ----
-  assert(L85.SAVE_VERSION === 10, `R5: SAVE_VERSION is 10 (bumped 9 -> 10 for the reedsUnlocked flag; got ${L85.SAVE_VERSION})`);
+  // ---- (a) SAVE_VERSION 9 -> 10 (R5 reeds era) + the v9 -> v10 migration +
+  // normalizer. The chain has since grown to v11 (D1 wanderSeed); migrateSave
+  // stamps the CURRENT version (11) after walking the full chain, so the
+  // version asserts below check the current stamp, and the reedsUnlocked
+  // v9->v10 step is still exercised through the walk.
+  assert(L85.SAVE_VERSION === 11, `R5: SAVE_VERSION is 11 (chain grew 9 -> 10 at R5, 10 -> 11 at D1; got ${L85.SAVE_VERSION})`);
   const fresh85 = L85.freshSave();
   assert(fresh85.flags.reedsUnlocked === false, 'R5: a fresh save has flags.reedsUnlocked false (the new biome is locked by default)');
-  assert(fresh85.saveVersion === 10, 'R5: a fresh save is stamped saveVersion 10');
+  assert(fresh85.saveVersion === L85.SAVE_VERSION, 'R5: a fresh save is stamped the current saveVersion');
   // the normalizer: a missing / garbled field loads false (nobody backfills access).
   assert(L85.normalizeReedsUnlocked(undefined) === false, 'R5: normalizeReedsUnlocked(undefined) is false (no field = locked)');
   assert(L85.normalizeReedsUnlocked(true) === true, 'R5: normalizeReedsUnlocked(true) is true');
   // v9 -> v10 migration: a legacy v9 save (no field) loads reedsUnlocked FALSE.
+  // The full chain (v9 -> ... -> v11) stamps the current version at the end.
   const mig9 = L85.migrateSave({ saveVersion: 9, stats: { victories: 0 }, flags: { heronDefeated: false } });
-  assert(mig9.saveVersion === 10, `R5: a v9 save migrates to the current version (got ${mig9.saveVersion})`);
+  assert(mig9.saveVersion === L85.SAVE_VERSION, `R5: a v9 save migrates to the current version (got ${mig9.saveVersion})`);
   assert(mig9.flags.reedsUnlocked === false, 'R5: a v9 -> v10 migration loads reedsUnlocked FALSE (nobody backfills access)');
   // a v10 save that already has the flag keeps it (idempotent round-trip).
   const mig10 = L85.migrateSave({ saveVersion: 10, flags: { reedsUnlocked: true } });
-  assert(mig10.flags.reedsUnlocked === true && mig10.saveVersion === 10, 'R5: a v10 save with the flag set round-trips reedsUnlocked true');
+  assert(mig10.flags.reedsUnlocked === true && mig10.saveVersion === L85.SAVE_VERSION, 'R5: a v10 save with the flag set round-trips reedsUnlocked true at the current version');
 
   // ---- (b) the GATE reads the flag (with a victory fallback for legacy saves) ----
   assert(L85.reedsUnlocked(fresh85) === false, 'R5: a fresh (no-victory, no-flag) save does NOT unlock the Reeds');
@@ -6453,7 +6458,7 @@ console.log('== stage 89: v1.6 W1 — GAMEPAD INPUT-ABSTRACTION LAYER (raw Gamep
   assert(W1.freshOptions().gamepad === 'auto', 'W1: freshOptions defaults gamepad to "auto"');
   assert(W1.migrateOptions({ volume: 0.5 }).gamepad === 'auto', 'W1: migrateOptions — a legacy options blob (no gamepad field) migrates to "auto"');
   assert(W1.migrateOptions({ gamepad: 'off' }).gamepad === 'off', 'W1: migrateOptions — an explicit persisted "off" is honored');
-  assert(W1.SAVE_VERSION === 10, 'W1: SAVE_VERSION stays 10 (the gamepad option is an OPTIONS-blob migration, not a save-schema bump)');
+  assert(W1.SAVE_VERSION === 11, 'W1: the gamepad option is an OPTIONS-blob migration, not a save-schema bump (the schema is at 11 now, bumped 10 -> 11 by D1 for wanderSeed — W1 itself adds no save field)');
 
   // ---- (b) no-pad regression: in-run key state is byte-identical to baseline ----
   // Run a real expedition with NO pad connected and assert the feed is dormant
@@ -7158,12 +7163,102 @@ console.log('== stage 94: v1.6 Q3 — SAVE EXPORT/IMPORT (Export->clipboard + Im
   assert(rCommit === true, 'Q3: the Import button commits the field text');
   assert(JSON.parse(store.get(KEY)).stats.victories === 9, 'Q3: the field-text import replaced the save (victories now 9)');
 
-  // ---- (f) SAVE_VERSION is unchanged + no save-schema field was added ----
-  assert(L.SAVE_VERSION === 10, 'Q3: SAVE_VERSION is still 10 (export/import is presentation + migration only)');
+  // ---- (f) Q3 adds NO save-schema field (export/import is presentation +
+  // migration only). The schema version is 11 today — but that bump is D1's
+  // (wanderSeed), not Q3's. Q3's invariant: export/import introduced no field
+  // and no version of its own, so Q3 still round-trips cleanly through the
+  // CURRENT schema (11) via the existing migration chain.
+  assert(L.SAVE_VERSION === 11, 'Q3: the current SAVE_VERSION is 11 (D1 bumped 10 -> 11 for wanderSeed; Q3 itself added no field)');
   const svKeys = new Set(Object.keys(L.freshSave()));
   assert(!svKeys.has('runWaypoints') && !svKeys.has('runEnemies'), 'Q3: no run-local field leaked into the save schema');
+  // Q3's own claim: export/import round-trips the CURRENT schema without
+  // needing a Q3-specific field — a fresh v11 save survives a paste round-trip.
+  const q3round = L.validateSaveBlob(JSON.stringify(L.freshSave()));
+  assert(q3round.ok === true && q3round.save.saveVersion === L.SAVE_VERSION, 'Q3: a fresh v11 save round-trips through validateSaveBlob at the current version');
 
-  console.log('ok — Q3: the Options panel gains a paste-based Save section — Export copies a JSON blob of the save to the clipboard (navigator.clipboard.writeText, loopback-safe, no file APIs); Import reads a pasted blob through the paper-styled field and validates it via the pure logic.validateSaveBlob (schema version check + the EXISTING migration chain + a hard refuse on anything that does not parse/normalize). A valid blob round-trips; a corrupt paste (garbage JSON / wrong version / dropped field / wrong kind) is REFUSED with the current save untouched and a one-line "that save did not look right — nothing was changed" banner; a valid-but-old v1-era blob imports through the migration chain to the current schema. This is the sanctioned escape hatch for the loopback-only localStorage architecture (no file downloads, no server); SAVE_VERSION stays 10.');
+  console.log('ok — Q3: the Options panel gains a paste-based Save section — Export copies a JSON blob of the save to the clipboard (navigator.clipboard.writeText, loopback-safe, no file APIs); Import reads a pasted blob through the paper-styled field and validates it via the pure logic.validateSaveBlob (schema version check + the EXISTING migration chain + a hard refuse on anything that does not parse/normalize). A valid blob round-trips; a corrupt paste (garbage JSON / wrong version / dropped field / wrong kind) is REFUSED with the current save untouched and a one-line "that save did not look right — nothing was changed" banner; a valid-but-old v1-era blob imports through the migration chain to the current schema. This is the sanctioned escape hatch for the loopback-only localStorage architecture (no file downloads, no server); Q3 adds no field (the schema is at 11 via the D1 wanderSeed bump, not Q3).');
+}
+
+console.log('== stage 95: D1 (v1.7) — THE WANDER bounded procedural expedition variant (pure seeded content; default-OFF byte-identical) ==');
+{
+  const L95 = await import('../src/logic.js');
+  const G95 = await import('../src/game.js');       // the hand-tuned ZONES table
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const ZONES95 = G95.ZONES;
+  const B = L95.WANDER_BUDGET;
+
+  // ---- (a) SOURCE PURITY: the pure wander path has no Math.random / Date.now ----
+  const logicSrc = readFileSync(fileURLToPath(new URL('../src/logic.js', import.meta.url)), 'utf8');
+  const wStart = logicSrc.indexOf('export const WANDER_SALT');
+  const wEnd = logicSrc.indexOf('return { ok: reasons.length === 0', wStart);
+  // strip comments first (the doc prose mentions Date.now in game.js; only CODE counts)
+  const wanderCode = logicSrc.slice(wStart, wEnd + 60)
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert(!/Math\.random/.test(wanderCode), 'D1: the pure wander path has NO Math.random (a seeded mulberry32 stream only)');
+  assert(!/Date\.now/.test(wanderCode), 'D1: the pure wander path has NO Date.now (the fresh-seed pick is the impure game.js layer)');
+
+  // ---- (b) wanderContent is PURE: same seed -> identical layout; different seed -> different ----
+  const layA = L95.wanderContent(12345, ZONES95);
+  const layA2 = L95.wanderContent(12345, ZONES95);
+  assert(JSON.stringify(layA) === JSON.stringify(layA2), 'D1: wanderContent is pure — same seed -> byte-identical layout');
+  const layB = L95.wanderContent(12346, ZONES95);
+  assert(JSON.stringify(layA) !== JSON.stringify(layB), 'D1: a different seed yields a different layout');
+  assert(Number.isInteger(L95.WANDER_SALT) && L95.WANDER_SALT > 0, 'D1: WANDER_SALT isolates the wander stream from the terrain seed (the v1.6 R2 pattern)');
+
+  // ---- (c) every generated layout sits inside WANDER_BUDGET (a seed sweep) ----
+  let allIn = true, worst = '';
+  for (let s = 1; s <= 40; s++) {
+    const r = L95.wanderInBudget(L95.wanderContent(s, ZONES95));
+    if (!r.ok) { allIn = false; worst = `seed ${s}: ${r.reasons.join('; ')}`; break; }
+  }
+  assert(allIn, `D1: every generated layout (40-seed sweep) is inside WANDER_BUDGET (per-zone + total boss-eligible envelope)${allIn ? '' : ' — ' + worst}`);
+  const chk = L95.wanderInBudget(layA);
+  assert(chk.ok && layA.zones.length === B.zones && layA.bossEligible === true, 'D1: a layout has the zone count, is boss-eligible, and passes the envelope');
+  assert(layA.zones.every(z => (z.mix.beetle + z.mix.mosquito + z.mix.toad) >= 1), 'D1: no generated zone is empty (each carries at least one encounter)');
+  // per-zone band + run totals explicitly on one layout
+  const totN = layA.zones.reduce((a, z) => a + z.mix.beetle + z.mix.mosquito + z.mix.toad, 0);
+  const totE = layA.zones.reduce((a, z) => a + z.sig.count, 0);
+  assert(totN >= B.normal.totalMin && totN <= B.normal.totalMax && totE >= B.elite.totalMin && totE <= B.elite.totalMax, `D1: run totals inside the band (normal ${totN} in [${B.normal.totalMin},${B.normal.totalMax}], elite ${totE} in [${B.elite.totalMin},${B.elite.totalMax}])`);
+
+  // ---- (d) pickWanderSeed: non-zero, distinct per pick, deterministic (no Math.random) ----
+  const p1 = L95.pickWanderSeed(0, 1000);
+  const p2 = L95.pickWanderSeed(1, 1000);
+  const p1b = L95.pickWanderSeed(0, 1000);
+  assert(Number.isInteger(p1) && p1 >= 1, 'D1: pickWanderSeed returns a positive integer seed (never 0)');
+  assert(p1 !== p2, 'D1: a distinct previous seed -> a distinct fresh seed');
+  assert(p1 === p1b, 'D1: pickWanderSeed is deterministic (same (prev, now) -> same seed; no Math.random)');
+  let distinct = true; const seen = new Set([p1]);
+  for (let t = 0; t < 25; t++) { const s = L95.pickWanderSeed([...seen][0] || 0, 1000 + t * 37); if (s < 1) { distinct = false; break; } seen.add(s); }
+  assert(distinct, 'D1: 25 successive fresh picks all stay >= 1 (the seed never degenerates to 0)');
+
+  // ---- (e) default-OFF save never runs the generated path (byte-identical hand-tuned) ----
+  const goff = new G95.Game(makeCanvas());
+  goff.save = L95.freshSave();
+  goff.options.wander = false;                 // the default (freshOptions.wander is false)
+  goff._beginExpedition();
+  assert(goff.wanderActive === false, 'D1: default-OFF -> wanderActive is false (no generated run)');
+  assert(goff.wanderSeedRun === null, 'D1: default-OFF -> no wander seed was picked');
+  assert(goff.zones === ZONES95, 'D1: default-OFF -> the run uses the hand-tuned ZONES (same reference, NOT a generated copy)');
+  assert(goff.save.wanderSeed === 0, 'D1: default-OFF -> save.wanderSeed stays 0 (the latch never fires)');
+  assert(JSON.stringify(goff.zones) === JSON.stringify(ZONES95), 'D1: default-OFF zone content is byte-identical to the hand-tuned ZONES');
+  // and cycle-0 swamp tuning is untouched (makeTuning was not routed through wander).
+  const plainTuning = L95.makeTuning(goff.save.upgrades, goff.save.loadout, goff.options.difficulty, goff.save.galleryBonus || 0, goff.save.owned, L95.isGilded(goff.save));
+  assert(JSON.stringify(goff.tuning) === JSON.stringify(plainTuning), 'D1: default-OFF cycle-0 tuning deep-equals a plain makeTuning (wander never touched tuning)');
+
+  // ---- (f) flag ON: a real run latches a non-zero seed + generated zones (deterministic) ----
+  const g2 = new G95.Game(makeCanvas());
+  g2.save = L95.freshSave();
+  g2.options.wander = true;
+  g2._beginExpedition();
+  assert(g2.wanderActive === true, 'D1: options.wander ON -> a generated run is active');
+  assert(Number.isInteger(g2.wanderSeedRun) && g2.wanderSeedRun >= 1, 'D1: ON -> a positive wander seed is latched');
+  assert(g2.save.wanderSeed === g2.wanderSeedRun, 'D1: ON -> save.wanderSeed is latched to the run seed (so the next run differs)');
+  const re = L95.wanderContent(g2.wanderSeedRun, ZONES95);
+  assert(JSON.stringify(g2.zones.map(z => ({ mix: z.mix, sig: z.sig }))) === JSON.stringify(re.zones.map(z => ({ mix: z.mix, sig: z.sig }))), 'D1: ON -> the run zones are reproduced by wanderContent(latchedSeed) (reproducible from the seed)');
+  assert(L95.wanderInBudget({ zones: g2.zones, bossEligible: true }).ok, 'D1: ON -> the live run layout is inside the envelope');
+
+  console.log('ok — D1: THE WANDER ships a PURE seeded bounded-procgen content generator (no Math.random/Date.now in the pure path; same seed -> identical layout; 40-seed sweep inside WANDER_BUDGET; non-zero distinct pickWanderSeed), is OFF by default so a default-OFF save never builds a generated layout (hand-tuned ZONES + cycle-0 tuning byte-identical), and a real ON run latches a reproducible non-zero seed that reproduces its own zones.');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');
