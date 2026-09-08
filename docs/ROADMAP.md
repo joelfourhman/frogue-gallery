@@ -784,9 +784,9 @@ ranges of earlier versions.
 
 ---
 
-## v1.7 — "The Ever-Shifting Swamp" (IN PROGRESS; plan-of-record authored by the
-orchestrator, 2026-09-07 — the PM executes + refines batch sizing / "as built"
-notes in its own voice as it goes)
+## v1.7 — "The Ever-Shifting Swamp" (COMPLETE — season audit signed off 2026-09-08;
+plan-of-record authored by the orchestrator, 2026-09-07 — the PM executes +
+refines batch sizing / "as built" notes in its own voice as it goes)
 
 **Theme: the swamp that is never the same twice.** v1.6 proved the world is
 built by a **deterministic seeded pass** (the Reeds is the *same* painting,
@@ -856,7 +856,32 @@ A/B/C/E/G/H/J/K/L/M/N/P/Q/R/S/T/V/W letter ranges of earlier versions.
 
 | ID | Item | Notes | Status |
 |---|---|---|---|
-| I1 | **Full regression + season audit** (K10 / C4 / A1-style — the final gate) — smoke ×3 green; `pace.mjs` + `humance.mjs` first-time IN the 15–20 band (hand-tuned, Wander OFF); `ngpace.mjs` cycle-1 in band; `bosspace.mjs` + `reedspace.mjs` in their documented ranges; **NEW `wandpace.mjs`** — a generated first-time Wander run IN the 15–20 band across ≥ 5 seeds AND a Wander × Reeds run IN the 20–25 band (the procgen envelope is tight); P10 culling stage green (view-cull + enemy AI-cull hold **across a generated world**); **zero new dependencies** (git-diff audit since v1.6-complete: no package.json/lockfile/asset changes); **SAVE_VERSION 11** migration chain loads a v1-era save end-to-end (`migrateSave` → v11 with `wanderSeed: 0`, `_case: 'migrated'`, all current-schema fields present); **cycle-0 swamp + cycle-0 Reeds tuning byte-identical** (the default-OFF Wander path deep-equals v1.6 `makeTuning` — JSON-compare `makeTuning` across the whole v1.7 diff); tree clean; PROJECT_STATE.md + docs/PROJECT_STATUS.md marked v1.7 COMPLETE with the audit table. Acceptance: the commit itself. | ☐ I1 (plan) |
+| I1 | **Full regression + season audit** (K10 / C4 / A1-style — the final gate) — smoke ×3 green; `pace.mjs` + `humance.mjs` first-time IN the 15–20 band (hand-tuned, Wander OFF); `ngpace.mjs` cycle-1 in band; `bosspace.mjs` + `reedspace.mjs` in their documented ranges; **NEW `wandpace.mjs`** — a generated first-time Wander run IN the 15–20 band across ≥ 5 seeds AND a Wander × Reeds run IN the 20–25 band (the procgen envelope is tight); P10 culling stage green (view-cull + enemy AI-cull hold **across a generated world**); **zero new dependencies** (git-diff audit since v1.6-complete: no package.json/lockfile/asset changes); **SAVE_VERSION 11** migration chain loads a v1-era save end-to-end (`migrateSave` → v11 with `wanderSeed: 0`, `_case: 'migrated'`, all current-schema fields present); **cycle-0 swamp + cycle-0 Reeds tuning byte-identical** (the default-OFF Wander path deep-equals v1.6 `makeTuning` — JSON-compare `makeTuning` across the whole v1.7 diff); tree clean; PROJECT_STATE.md + docs/PROJECT_STATUS.md marked v1.7 COMPLETE with the audit table. Acceptance: the commit itself. | ✅ I1 (done 2026-09-08, fresh-session audit — full audit table below) |
+
+**I1 — the v1.7 season-audit table (fresh session, 2026-09-08, all on the committed tree):**
+
+| Gate | Result | Band / expectation | Verdict |
+|---|---|---|---|
+| `smoke.mjs` ×3 (consecutive) | 3/3 `ALL SMOKE TESTS PASSED` | green, deterministic | ✅ |
+| `smoke.mjs` 10-run flakecheck (on the v1.7 stage) | 10/10 green | the `144fb1c` flake-pin stays green (suite deterministic) | ✅ |
+| `pace.mjs` (hand-tuned, Wander OFF) | ~17.3 min | 15–20 min | ✅ IN |
+| `humance.mjs` (full-run sim, first-time) | 18.7 min | 15–20 min | ✅ IN |
+| `ngpace.mjs` (NG+ cycle-1) | 19.5 min | 15–20 min | ✅ IN (probe prints IN BAND) |
+| `bosspace.mjs` (heron 30k, 3-hue) | 37.0 s god-mode (~1.0 min human) | the heron lower-bound probe | ✅ |
+| `reedspace.mjs` (Reeds run + Silt Wyrm) | ~22.2 min run / 97.7 s Wyrm god (~3.9 min human) | 20–25 min / 2–4 min | ✅ IN |
+| `wandpace.mjs` — LEG 1 (first-time Wander, 8 seeds) | band [16.9, 17.8] min (8/8) | 15–20 min | ✅ IN |
+| `wandpace.mjs` — LEG 2 (Wander × Reeds, 8 seeds) | band [21.6, 22.7] min (8/8) | 20–25 min | ✅ IN |
+| `wardpace.mjs` (the Hollow Warden, 52k, 6 seed/taste runs) | god 98–104 s (mean 103 s) → ~3.9–4.1 min human | ~2–4 min class (comparable to the Silt Wyrm's 3.9 min) | ✅ IN (the documented `f21dcab` tuning: maw-open 10.5 s) |
+| **Byte-identity (Wander OFF = default)** | `makeTuning` + `applyNGPlus(1)` (normal/gentle/hard) **deep-equal the v1.6-complete (`f746938`) values** (JSON-compare across the whole v1.7 diff) | hand-tuned runs byte-identical to v1.6 | ✅ IDENTICAL |
+| Save-schema delta vs v1.6 | `freshSave` differs ONLY in `saveVersion` (10→11) + the added `wanderSeed: 0` field | the intended v1.7 migration, nothing else | ✅ |
+| Zero new dependencies (git-diff since `f746938`) | only `src/` (audio/game/logic) + `tests/` (smoke + new wandpace/wardpace) + `docs/` + `PROJECT_STATE.md`; **no** package.json / lockfile / asset / node_modules | no new deps | ✅ |
+| `SAVE_VERSION` | 11 (unchanged by F1/O1/O2 — each adds no save field) | stays 11 | ✅ |
+| P10 culling (smoke stage 24) + green across a generated world | green (asserted in stages 24 / 95 / 99) | ≤ 220 particles, no per-frame hot-path alloc | ✅ |
+| No `http.server` 8765 left running | none found (checked via `netstat`) | loopback-only, nothing left running | ✅ |
+
+**v1.7 COMPLETE** — all 9 items (D1–D4, F1, O1, O2, I1) committed; every gate green
+on the committed tree; the load-bearing invariant (hand-tuned runs byte-identical
+with Wander OFF) holds. The season is signed off.
 
 ### Explicitly deferred past v1.7 (not forgotten)
 

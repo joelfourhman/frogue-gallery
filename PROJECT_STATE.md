@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.7 "The Ever-Shifting Swamp" — NEXT ACTION (session v17-f1, 2026-09-08; D1 + D2 + D3 + D4 + **F1** + **O1** + **O2** landed — only **I1** (the season audit) remains)
+### v1.7 "The Ever-Shifting Swamp" — COMPLETE (session v17-f1, 2026-09-08; all 9 items landed — D1 + D2 + D3 + D4 + **F1** + **O1** + **O2** + **I1** — the I1 season audit signed the season off)
 
 **v1.6 is COMPLETE** (all 13 items R1–R6 / W1–W3 / Q1–Q3 / A1 committed, 94/94
 green, all pacing in band, 114 commits since v1.5). The full **v1.7
@@ -151,31 +151,41 @@ are re-measured and in-band on the committed tree. `SAVE_VERSION = 11` (F1, O1
 and O2 each add NO save field — the Warden is a pure boss-variant additive and
 O1/O2 are in-memory-only presentation, so the save schema is unchanged).
 
-**NEXT ACTION (next re-kick): I1 — the v1.7 season audit (the final gate).**
-F1 (the 5th boss: the Hollow Warden), O1 (the pre-expedition seed card) and
-O2 (the Wander run-recap line) are ALL DONE and committed. The ONLY remaining
-v1.7 item is **I1**, the K10 / C4 / A1-style season audit — and it MUST be a
-clean, FRESH session (it runs every probe + the full regression, so a session
-that has already carried F1/O1/O2 context should not be the one to sign it off).
-The `docs/ROADMAP.md` §v1.7 plan-of-record is the authoritative list; D1–D4 +
-F1 + O1 + O2 are checked off and **I1 is the sole remaining item**:
-- **I1**: the K10 / C4 / A1-style season audit (the final gate, a clean fresh
-  session). In the next session: run smoke x3 (green, **101 stages**,
-  deterministic — and the orchestrator's 10-run flakecheck on the v1.7 stage);
-  `pace.mjs` + `humance.mjs` first-time IN the 15–20 band (hand-tuned, Wander
-  OFF); `ngpace.mjs` cycle-1 in band; `bosspace.mjs` + `reedspace.mjs` in their
-  documented ranges; the NEW `wandpace.mjs` (D3) in its documented bands
-  (first-time 15–20 + Wander × Reeds 20–25); the NEW `wardpace.mjs` (F1) in the
-  2–4 min band; P10 culling green. All six probes were re-measured in-session
-  and are in-band (see the invariants block above) — I1 re-verifies them in a
-  fresh session and signs the v1.7 season off.
+**NEXT ACTION: v1.7 is COMPLETE — awaiting direction for v1.8.** The I1
+season audit (the final gate, run in a clean FRESH session on the committed
+tree) is GREEN. All 9 items — D1–D4 + F1 + O1 + O2 + I1 — are landed and
+committed. The `docs/ROADMAP.md` §v1.7 plan-of-record is fully checked off
+with the audit table. **v1.7 has no open scope.**
+
+**I1 — the v1.7 SEASON AUDIT (fresh session, 2026-09-08, all on the committed
+tree):**
+
+| # | Gate | Result | Band / expectation | Status |
+|---|---|---|---|---|
+| 1 | smoke ×3 | `ALL SMOKE TESTS PASSED` ×3 (101 stages, 1817 asserts) | green, deterministic | ✅ |
+| 1b | smoke flakecheck ×10 | 10/10 green (the `144fb1c` flake-pin stays green) | deterministic | ✅ |
+| 2 | pace.mjs + humance.mjs (first-time, hand-tuned, Wander OFF) | pace ~17.3 min / humance 18.7 min | IN 15–20 | ✅ |
+| 3 | ngpace.mjs (cycle-1) | 19.5 min | IN 15–20 | ✅ |
+| 4 | bosspace.mjs + reedspace.mjs | heron 37.0 s god-mode (lower-bound probe); Reeds run ~22.2 min + Silt Wyrm 97.7 s god (~3.9 min human) | bosspace = documented lower-bound probe; Reeds IN 20–25 + Wyrm IN 2–4 | ✅ |
+| 5 | wandpace.mjs (≥ 5 seeds) | first-time 16.9–17.8 min over 8 seeds; Wander × Reeds 21.6–22.7 min over 8 seeds | first-time IN 15–20; W×R IN 20–25 | ✅ |
+| 6 | wardpace.mjs | Warden god 98–104 s → ~3.9–4.1 min human (comparable to the Wyrm's 3.9 min) | the documented 2–4 min class (52k-HP Wander apex, via the `f21dcab` maw-open 10.5 s tuning) | ✅ |
+| 7 | byte-identity invariants | `makeTuning` (+ `applyNGPlus(1)`, normal/gentle/hard) **deep-equal the v1.6-complete (`f746938`) values** (JSON-compare across the whole v1.7 diff); the `freshSave` delta is EXACTLY `{saveVersion 10→11, wanderSeed: 0}` (the intended migration — no other field, no hand-tuning drift) | hand-tuned + cycle-0 swamp byte-identical with Wander OFF | ✅ |
+| 8 | zero new dependencies | git-diff `f746938..HEAD` touches only `src/audio.js`, `src/game.js`, `src/logic.js`, `tests/smoke.mjs`, `tests/wandpace.mjs`, `tests/wardpace.mjs`, `docs/PROJECT_STATUS.md`, `docs/ROADMAP.md`, `PROJECT_STATE.md` — NO package.json/lockfile/asset/node_modules; `SAVE_VERSION` stays 11 | zero deps, SAVE_VERSION 11 | ✅ |
+| 9 | no `http.server` 8765 left running | `netstat -ano | grep 8765` → no listener | none running | ✅ |
+| — | P10 culling | green (stages 24 / 95 / 99 — view-cull + enemy AI-cull hold across the generated world) | in-band / no regression | ✅ |
+
+**Load-bearing invariant CONFIRMED:** every hand-tuned run (cycle-0 swamp,
+cycle-0 Reeds, NG+ cycle-1) stays byte-identical with Wander OFF (the
+default) — `makeTuning` + `applyNGPlus` deep-equal their v1.6 values, and the
+only save delta is the intended `SAVE_VERSION 10→11` + `wanderSeed: 0`
+migration. Every probe is IN band. **v1.7 COMPLETE — the season is signed
+off.** NEXT ACTION for v1.8: **awaiting direction** (no open v1.7 scope).
 
 **Batch 4 (DONE this session):** landed O1 (the pre-expedition seed card) as
 `feat(v1.7 O1)` (`8033942`) + O2 (the Wander run-recap line) as `feat(v1.7 O2)`
-(`237abfb`), on top of F1 (`f21dcab`). I1 (the season audit) is the final gate
-(a clean fresh session). Never discard uncommitted user work (there is none
-now — only the orchestrator's `.before-logic.mjs` snapshot is untracked; leave
-it).
+(`237abfb`), on top of F1 (`f21dcab`), and I1 (the season audit) as the final
+`docs(v1.7)` gate. Never discard uncommitted user work (there is none now —
+only the orchestrator's `.before-logic.mjs` snapshot is untracked; leave it).
 
 **Headline (D1–D4): "The Wander"** — a **bounded, pacing-safe procedural
 expedition** (the deferred procgen item revisited with the two-biome data).

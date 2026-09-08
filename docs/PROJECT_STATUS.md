@@ -4,7 +4,7 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM audit: 2026-09-07 (v1.1 + v1.2 + v1.3 + v1.4 "Make It Amazing" COMPLETE; v1.5 "The Living Swamp" COMPLETE — all 10 items K1–K10 done and committed (smoke 80/80; first-time pace 17.4 / humance 18.0 IN the 15–20 band; NG+ cycle-1 19.5; SAVE_VERSION 9). **v1.6 "Beneath the Reeds" COMPLETE (2026-09-07; Joel: "Plan and execute 1.6" — execution pre-approved; all 13 items done and committed): 13 items, 4 modules (R1–R6 biome / W1–W3 gamepad / Q1–Q3 QoL / A1 audit) in `docs/ROADMAP.md` §v1.6 — victory-gated new biome + THE LANTERN mechanic, 3 light-keyed creatures, the 4th boss archetype (The Silt Wyrm), raw-Gamepad-API gamepad support, 3 QoL items, final regression audit. Deferred items folded in: gamepad + 4th boss archetype. **ALL FOUR BATCHES COMPLETE** — BATCH 1 (R1+R2+R5, smoke 85/85), BATCH 2 (R3+R4+R6, smoke stages 86/87/88), BATCH 3 (W1+W2+W3 gamepad, smoke stages 89–91), BATCH 4 (Q1+Q2+Q3 QoL + A1 audit, smoke stages 92–94). Final suite **94/94 green ×3**; first-time **pace 17.3 / humance 18.1 min (IN 15–20)**; NG+ cycle-1 **19.5 min (IN band)**; Reeds run **~22.2 min (IN 20–25)** + Silt Wyrm **~3.9 min human (IN 2–4)**; P10 culling green; zero new deps; SAVE_VERSION 10 migration end-to-end; cycle-0 tuning byte-identical (630-byte blob). **v1.6 COMPLETE — no open scope.** Batch order + full audit table in PROJECT_STATE.md → Immediate Next Action + ROADMAP §v1.6.
+**Last PM audit: 2026-09-08 (v1.7 "The Ever-Shifting Swamp" COMPLETE — all 9 items D1–D4 + F1 + O1 + O2 + I1 done and committed; the I1 season audit (final gate, clean fresh session) re-ran every probe on the committed tree and all are IN band — smoke 101 stages green ×3 + 10/10 flakecheck; pace 17.3 / humance 18.7 min (IN 15–20, hand-tuned Wander OFF); ngpace 19.5 (IN band); reedspace 22.2 (IN 20–25) + Silt Wyrm 3.9 min (IN 2–4); wandpace both legs (16.9–17.8 IN 15–20 / 21.6–22.7 IN 20–25, 8 seeds); wardpace the Hollow Warden 3.9–4.1 min human (IN the documented 2–4 min class, comparable to the Wyrm); byte-identity confirmed (`makeTuning` deep-equals v1.6-complete `f746938`); zero new deps; SAVE_VERSION 11; no 8765 server left running. **v1.7 COMPLETE — no open scope. Batch order + full I1 audit table in PROJECT_STATE.md → Next Action + ROADMAP §v1.7.** Earlier: v1.1 + v1.2 + v1.3 + v1.4 "Make It Amazing" COMPLETE; v1.5 "The Living Swamp" COMPLETE — all 10 items K1–K10 done and committed (smoke 80/80; first-time pace 17.4 / humance 18.0 IN the 15–20 band; NG+ cycle-1 19.5; SAVE_VERSION 9). **v1.6 "Beneath the Reeds" COMPLETE (2026-09-07; Joel: "Plan and execute 1.6" — execution pre-approved; all 13 items done and committed): 13 items, 4 modules (R1–R6 biome / W1–W3 gamepad / Q1–Q3 QoL / A1 audit) in `docs/ROADMAP.md` §v1.6 — victory-gated new biome + THE LANTERN mechanic, 3 light-keyed creatures, the 4th boss archetype (The Silt Wyrm), raw-Gamepad-API gamepad support, 3 QoL items, final regression audit. Deferred items folded in: gamepad + 4th boss archetype. **ALL FOUR BATCHES COMPLETE** — BATCH 1 (R1+R2+R5, smoke 85/85), BATCH 2 (R3+R4+R6, smoke stages 86/87/88), BATCH 3 (W1+W2+W3 gamepad, smoke stages 89–91), BATCH 4 (Q1+Q2+Q3 QoL + A1 audit, smoke stages 92–94). Final suite **94/94 green ×3**; first-time **pace 17.3 / humance 18.1 min (IN 15–20)**; NG+ cycle-1 **19.5 min (IN band)**; Reeds run **~22.2 min (IN 20–25)** + Silt Wyrm **~3.9 min human (IN 2–4)**; P10 culling green; zero new deps; SAVE_VERSION 10 migration end-to-end; cycle-0 tuning byte-identical (630-byte blob). **v1.6 COMPLETE — no open scope.** Batch order + full audit table in PROJECT_STATE.md → Immediate Next Action + ROADMAP §v1.6.
 
 ## Current state
 
@@ -69,16 +69,24 @@ and the final regression + season audit are all done. Final suite 94/94
 green ×3; first-time pace 17.3 / humance 18.1 min (IN 15–20); NG+ cycle-1
 19.5 min; Reeds run ~22.2 min (IN 20–25) + Silt Wyrm ~3.9 min (IN 2–4);
 zero new deps; SAVE_VERSION 10 migration end-to-end; cycle-0 tuning
-byte-identical. **v1.6 has no open scope.** The active phase is **v1.7 "The
-Ever-Shifting Swamp"** (D1–D4 + F1 + O1 + O2 all landed, committed, and green);
-the ONLY remaining item is **I1 — the v1.7 season audit** (the final gate:
-re-run every probe + the full regression in a clean fresh session). See the
-v1.7 status block below + `docs/ROADMAP.md` §v1.7 for the full plan-of-record.
+byte-identical. **v1.6 has no open scope.** **v1.7 "The Ever-Shifting Swamp"
+is COMPLETE (2026-09-08; all 9 items D1–D4 + F1 + O1 + O2 + I1 done and
+committed):** THE WANDER — a bounded, OPT-IN (default OFF) procedural
+expedition variant (seeded encounter content within a hand-tuned pacing
+envelope), the deferred **5th boss archetype** (the **Hollow Warden**,
+Wander-apex), 2 QoL items (the pre-expedition seed card + the Wander
+run-recap line), and the **I1 season audit** (final gate, clean fresh
+session) — every probe re-run on the committed tree and IN band (pace
+~17.3 / humance 18.7 / ngpace 19.5 / reedspace 22.2 / wandpace both legs /
+wardpace 3.9–4.1 min), byte-identity confirmed (`makeTuning` deep-equals
+v1.6-complete `f746938`), zero new deps, SAVE_VERSION 11, no 8765 server
+left running. **v1.7 has no open scope.** The active phase is **v1.8
+(awaiting direction)** — see `docs/ROADMAP.md` for the next plan-of-record.
 
-**v1.7 "The Ever-Shifting Swamp" — IN PROGRESS (session v17-f1, 2026-09-08;
-D1 + D2 + D3 + D4 + a hygiene commit + **F1** + **O1** + **O2** landed — the
-full D-item set is DONE, the 5th boss (the Hollow Warden) is in, and both QoL
-items are done. Only **I1** (the final season audit) remains).**
+**v1.7 "The Ever-Shifting Swamp" — COMPLETE (session v17-f1, 2026-09-08;
+D1 + D2 + D3 + D4 + a hygiene commit + **F1** + **O1** + **O2** + **I1**
+landed — all 9 items done and committed; the I1 season audit signed the
+v1.7 season off in a clean fresh session).**
 v1.6 is COMPLETE and stays untouched;
 v1.7 adds **THE WANDER** — a bounded, OPT-IN (default OFF) procedural
 expedition variant. **D1 done: the PURE seeded wander content generator** —
@@ -173,9 +181,27 @@ second line for a WANDER run ONLY — the taste name + one-line flavor + the
 hand-tuned run's recap is unchanged; shows on both a victory AND a defeat).
 Smoke **stage 100** (15 asserts). Suite **101 stages green** (deterministic);
 hand-tuned pace 17.2 / humance 19.0 / reedspace 22.2 / wandpace both legs
-UNCHANGED (Wander OFF by default); `wardpace.mjs` in-band. Remaining v1.7:
-**I1** (final season audit — the last item; reuses `wandpace.mjs` +
-`wardpace.mjs`, must be a clean fresh session). Next session picks up I1.
+UNCHANGED (Wander OFF by default); `wardpace.mjs` in-band. **I1 done: the v1.7
+SEASON AUDIT (the final gate, clean fresh session, all on the committed tree)**
+— smoke **×3** consecutive `ALL SMOKE TESTS PASSED` + a **10-run flakecheck**
+10/10 green (the `144fb1c` flake-pin stays green; the suite is deterministic);
+**pace ~17.3 / humance 18.7 min (IN the 15–20 band, hand-tuned, Wander OFF)**;
+**ngpace 19.5 min (IN band)**; **bosspace** heron 37.0 s god-mode (the
+documented lower-bound probe); **reedspace ~22.2 min (IN 20–25) + Silt Wyrm
+97.7 s god (~3.9 min human, IN 2–4)**; **wandpace BOTH legs in band** (first-time
+16.9–17.8 min over 8 seeds, IN 15–20; Wander × Reeds 21.6–22.7 min over 8 seeds,
+IN 20–25); **wardpace** the Hollow Warden at god 98–104 s → **~3.9–4.1 min
+human** (comparable to the Silt Wyrm's 3.9 min, in the documented 2–4 min class
+via the `f21dcab` maw-open 10.5 s tuning); **byte-identity** — `makeTuning` +
+`applyNGPlus(1)` (normal/gentle/hard) **deep-equal the v1.6-complete
+(`f746938`) values** (JSON-compare across the whole v1.7 diff) and the `freshSave`
+delta is EXACTLY `{saveVersion 10→11, wanderSeed: 0}`; **zero new dependencies**
+(git-diff since `f746938` touches only `src/` + `tests/` + `docs/` +
+`PROJECT_STATE.md` — no package.json/lockfile/asset/node_modules); **SAVE_VERSION
+stays 11**; P10 culling green (stages 24 / 95 / 99); no `http.server` 8765 left
+running. **v1.7 COMPLETE — every gate green; the load-bearing invariant
+(hand-tuned runs byte-identical with Wander OFF) holds.** Full audit table in
+`docs/ROADMAP.md` §v1.7. Next: v1.8 (awaiting direction).
 
 ## Release readiness
 
