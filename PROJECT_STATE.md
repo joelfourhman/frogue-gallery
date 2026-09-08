@@ -28,14 +28,36 @@ after every commit, SAVE_VERSION stays 12. Feel work must never move a number.
 (dev-only screenshot harness, playwright-core gitignored, runs on a free port
 NOT 8765).
 
-**First session: T0** — the frame harness + the v1.9-BASELINE frame set
-(20+ keyframes), then **S1** (the SFX bank — highest single-impact lever).
-Housekeeping for T0: ALSO refresh the stale `AGENTS.md` (it still says
-"16-stage suite / 3 archetypes + heron boss / 5400px swamp / only pace +
-bosspace probes" — bring the layout, commands, and test list current with the
-v1.8 reality: 106-stage smoke, 9 probes, Reeds/Black Reeds/Wander, 6 bosses,
-SAVE_VERSION 12, GAME_VERSION 1.0.0) as a small separate `docs:` commit.
-Batch plan: T0 → S1 + S2 → S3 + J1 → J2 + J3 → J4 + L1 → L2 + L3 → L4 + A1
+**T0 LANDED** (session v19-t0; `6eb246d`) — the frame-evidence harness
+(`node tests/frames.mjs`, dev-only playwright-core) + the v1.9-BASELINE frame
+set (36/36 non-trivial frames in `tests/frames/`). The before/after-frame
+process is live.
+
+**S1 LANDED** (session v19-s1; `f765b61`) — **the SFX bank**: the core paint
+verb (surface-aware `paint-swipe`/`paint-splat` + the `charge-splash`),
+per-creature hit/death stings (6 archetypes; turtle/cragfrog fall back to the
+generic `enemy-hit`/`enemy-die`), status on/off (`burn-ignite`/`freeze-tick`/
+`root-thud` + `burn-out`/`freeze-release`/`root-crackle` + the dry-scrub
+status-off + the `heal` chime), pickup + UI (`ui-hover`, `pause-open`/
+`pause-close`; `pickup`/`ui`/`ui-back` reused), and the boss stings
+(`boss-phase` shared across all 4 archetypes + `boss-kill` + `collection-
+fanfare`). **62 total sfx cases** (40 pre-existing + 14 the dead v19-t0 session
+had written-but-never-wired + 8 new), all on the sfxBus through the existing
+`_tone`/`_noise` helpers + the `_sfxCanStart` voice cap; music bus + music
+layer untouched. Evidence (audio can't be screenshotted): `tests/sfx.mjs`
+(standalone, `node tests/sfx.mjs` → `SFX TESTS PASSED`, 44 bank names + sfxBus
+routing + the voice cap) — the full per-sfx trigger manifest is in the commit
+message. Invariant held: `makeTuning` byte-identical (logic.js untouched),
+SAVE_VERSION 12, smoke `ALL SMOKE TESTS PASSED`, all 9 probes in band unchanged
+(pace ~18.7 / humance 18.5 min; bosspace 37.0s).
+
+**NEXT ACTION: S2** (the next session) — **Music dynamics**: the ambient bed +
+step-sequencer melody gain INTENSITY LAYERS (a danger swell on zone entry / low
+HP / boss phase transitions, distinct Reeds + Black Reeds themes, the Full
+Collection moment's own chord), all synthesized on the existing sequencer.
+Housekeeping for T0 (a separate `docs:` commit, if not already done): refresh
+the stale `AGENTS.md`.
+Batch plan: T0 → **S1 + S2** → S3 + J1 → J2 + J3 → J4 + L1 → L2 + L3 → L4 + A1
 (fresh session).
 
 ### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 8 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
