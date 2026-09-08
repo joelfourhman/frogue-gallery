@@ -5,6 +5,48 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
+### v1.7 "The Ever-Shifting Swamp" — NEXT ACTION (orchestrator handoff, 2026-09-07)
+
+**v1.6 is COMPLETE** (all 13 items R1–R6 / W1–W3 / Q1–Q3 / A1 committed, 94/94
+green, all pacing in band, SAVE_VERSION 10, tree clean, 114 commits since v1.5).
+The full **v1.7 plan-of-record is written in `docs/ROADMAP.md` §v1.7** — read
+it first. Theme: the swamp that is never the same twice.
+
+**Headline (D1–D4): "The Wander"** — a **bounded, pacing-safe procedural
+expedition** (the deferred procgen item revisited with the two-biome data).
+Generate the *encounter content* (zone composition, enemy mix, orb/jar/checkpoint
+placement) from a **seeded RNG stream** (`mulberry32(seed + WANDER_SALT)`, a
+SEPARATE stream from the terrain pass — the v1.6 R2 pattern) sampled within a
+**hand-tuned pacing envelope**. The terrain/layout pass is UNCHANGED (same
+painted world, 60fps, P10 safe). **Default OFF (opt-in)** so the hand-tuned
+first-time / NG+ / Reeds runs are byte-identical to v1.6; a NEW
+`tests/wandpace.mjs` (modeled on `humance.mjs`) proves the generated envelope
+is tight (≥ 5 seeds in the 15–20 band; a Reeds leg in 20–25).
+
+**Second (F1): the 5th boss — the Hollow Warden**, a pale lantern-eating
+Wander-apex predator (spawns only at the end of a Wander expedition; siphons
+candle fuel while the lantern is lit; vulnerable only in a telegraphed maw
+window reusing the Silt-Wyrm telegraph; 3-hue awaken via the EXISTING
+`paintBoss`/`bossStep` path; taste-seeded aggression; ~52k HP; Wander-mode only).
+
+**QoL (O1–O2):** pre-expedition seed card + Wander run-recap line. **Audit
+(I1):** the K10/C4/A1-style season gate.
+
+**The load-bearing invariant (pin this):** every hand-tuned run stays
+byte-identical. Wander is default-OFF; cycle-0 swamp + cycle-0 Reeds + NG+
+cycle-1 with Wander OFF must deep-equal v1.6 tuning/content. The four existing
+probes re-run IN BAND UNCHANGED; only `wandpace.mjs` exercises generated
+content. `SAVE_VERSION 10→11` (`wanderSeed`). Zero new dependencies. One
+conventional commit per item.
+
+**Batch 1:** D1 (wander content engine + flag + `wanderSeed` + SAVE_VERSION 11
++ `tests/wandpace.mjs` + smoke stage). Then D2 → D3 → D4 → F1 → O1 → O2 → I1.
+Re-plan / re-pick batch sizing in your own voice; the items above are the
+scope, not a rigid order. Continue the project; milestone v1.7 = the I1 audit
+commit. Never discard uncommitted user work (there is none now — tree clean).
+
+---
+
 Last verified: 2026-09-07. **v1.6 "Beneath the Reeds" COMPLETE — all 13 items (R1–R6 / W1–W3 / Q1–Q3 / A1) done and committed.** `node tests/smoke.mjs` = **ALL 94 STAGES PASSED** (stages 92–94 added by v1.6 BATCH 4: 92 = v1.6 Q1 **PAUSE-MENU RUN SUMMARY** — the J5 pause card (now 320px) carries a compact "this expedition" block: run time via the existing `runT` read, current zone name, enemies painted so far (a run-local `runEnemies` counter incremented in `_onEnemyDead`, in-memory only, NEVER persisted), and orbs collected; zero tuning change, SAVE_VERSION stays 10. 93 = v1.6 Q2 **END-SCREEN RUN RECAP** — a "the last expedition" strip ABOVE the end card on BOTH the victory AND defeat screens: a 6-zone minimap with the run's route as a wobbly ink line (a run-local `runWaypoints` list sampled ~500 ms, cap 40 oldest-dropped, via the pure `routeTrail`/`ROUTE_WAYPOINT_CAP` helper in `logic.js`), the run time, and the boss result line; pure presentation, NO new persistence — the save is byte-identical before/after the end screen. 94 = v1.6 Q3 **SAVE EXPORT/IMPORT (paste-based)** — the Options panel gains a "Save" section: Export copies the save JSON to the clipboard (`navigator.clipboard.writeText`, loopback-safe, no file APIs; stashed on `_lastExportBlob` for the headless path), Import reads a pasted blob via a paper-styled field (input.js gains a guarded `_fieldFocus` char capture, inert when unfocused) and validates it through the new PURE `logic.validateSaveBlob` (schema version + the EXISTING migration chain + a hard refuse on anything that does not parse/normalize) → replaces the save and reloads; a corrupt paste is REFUSED with the current save untouched + a one-line banner, and a valid-but-old v1-era blob imports through the migration chain to v10; SAVE_VERSION stays 10). Stages 89–91 = v1.6 W1–W3 (gamepad: raw-Gamepad feed, connection state + full-screen focus, Reeds-mode parity). Stage 88 = v1.6 R6 the Reeds run probe, stages 83–87 = v1.6 R1–R5 (THE LANTERN + Reeds biome shell, flooded banks + inverted-gravity, R5 save gate, R3 bestiary, R4 the Silt Wyrm). Stage 80 = v1.5 K9 Field Guide + first-sight callouts, and every earlier stage (P10 culling stage 24, the main-flow stages, save/migration, NG+ scaling, gold economy, Curator Challenge, SFX/music, presentation, and micro-polish) remains green.
 
 **v1.3 M14 N1 (NG+ unlock + Next Expedition flow) — implemented + tested (2026-09-06, Batch 7, item 1).** `SAVE_VERSION` 3→4 with a `SAVE_MIGRATIONS` v3→v4 step + `normalizeNGCycle` (a v3 save with no `ngCycle` loads as `ngCycle: 0`, unchanged, no NG+ UI visible). A flat `save.ngCycle` field (0 = first-time player) persists the New Game+ cycle. `ngUnlocked(save)` (pure, `stats.victories > 0`) gates all NG+ UI. A "Next Expedition (New Game+)" button appears on the **title** (shared slot with the fresh-save-only guided button — they never coexist) and the **end screen** (slotted between "Rest at the Atelier" and "Return to the Pond") **only when a victory is recorded**; a returning first-time player (ngCycle 0) sees ZERO new UI. Choosing it (`_beginNextExpedition()`) advances `save.ngCycle` by 1, persists it, and starts a run that carries `ngCycle` (drives NG+ scaling N2 + boss selection N3). Smoke stage 46 (fresh save shows no NG+ UI; a completed-victory save shows the button; choosing it starts a run with `ngCycle 1`, persisted on disk at saveVersion 4 + round-trips through the loader; a first-time save cannot accidentally advance). **Suite now 48/48 (with N2+N3). First-time pacing unchanged (N1 adds no timed-run time — NG+ is gated behind a victory).**

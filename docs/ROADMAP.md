@@ -781,3 +781,103 @@ ranges of earlier versions.
   scope item.
 - **Image/audio/font assets** — invariant, unchanged: everything is
   procedural (math.js shapes, canvas, WebAudio synth).
+
+---
+
+## v1.7 — "The Ever-Shifting Swamp" (PLANNED; plan-of-record authored by the
+orchestrator, 2026-09-07 — the PM executes + refines batch sizing / "as built"
+notes in its own voice as it goes)
+
+**Theme: the swamp that is never the same twice.** v1.6 proved the world is
+built by a **deterministic seeded pass** (the Reeds is the *same* painting,
+deeper) and landed the light economy on a **SEPARATE seeded RNG stream**
+(`mulberry32(seed + 977)`) so it never perturbs the terrain stream. v1.7
+follows the natural consequence of that design: the deferred **procgen**
+item is revisited **with the two-biome data as input** — not by generating
+terrain (that risks both pacing targets), but by **sampling the *encounter
+content* of an expedition** (zone composition, enemy archetype mix, orb /
+pigment-jar / checkpoint placement) from a seeded stream **within a
+hand-tuned pacing envelope**. The terrain/layout pass stays the SAME
+deterministic seeded world (same painting, 60fps, P10 culling safe); only the
+*what lives in it* varies per seed. It ships **opt-in** (default OFF) so the
+hand-tuned first-time / NG+ / Reeds runs are **structurally byte-identical** —
+the exact move v1.6 used to keep the first-time 15–20 min gate untouched by
+gating the Reeds behind a victory — and a NEW pacing probe proves the
+generated envelope is tight (a generated run lands in the SAME band as the
+hand-tuned one). The version also lands the deferred **5th boss archetype** as
+the **Wander-apex predator** so a generated expedition has a real finale, and
+rounds it with QoL + the season audit.
+
+**The single load-bearing invariant (pin this):** every hand-tuned run stays
+byte-identical. Wander is default-OFF; a cycle-0 swamp run, a cycle-0 Reeds
+run, and a NG+ cycle-1 run with Wander OFF must deep-equal their v1.6
+tuning / content. `pace.mjs` / `humance.mjs` / `ngpace.mjs` / `reedspace.mjs`
+measure those hand-tuned runs (Wander OFF) and are **re-verified in band
+unchanged** — the generated content is only exercised by the NEW
+`wandpace.mjs` probe. The seed for a Wander run rides a **SEPARATE RNG
+stream** from the terrain pass (the v1.6 R2 `seed + SALT` pattern) so it can
+never move the painted world.
+
+**Invariants (unchanged):** zero dependencies · loopback-only · pure rules in
+`logic.js` · 15–20 min per applicable hand-tuned run (first-time + NG+
+cycle-1 + Reeds) · ≤ 220 particles · no per-frame hot-path allocations ·
+smoke suite green after every commit · one conventional commit per item · save
+schema migrated (v10 → v11, no data loss) · the painted world has no retro /
+CRT mode.
+
+**ID note:** D = the Wander (procedural expedition), F = the fifth boss /
+fauna, O = options / QoL, I = invariants / season audit. No IDs reuse the
+A/B/C/E/G/H/J/K/L/M/N/P/Q/R/S/T/V/W letter ranges of earlier versions.
+
+### Module D — "The Wander": a bounded, pacing-safe procedural expedition
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| D1 | **THE WANDER — bounded procedural expedition variant** — a new expedition *mode*, **opt-in (default OFF)**, entered from the same title/atelier flows the other variants use. Two persisted pieces: (a) an **options flag** `options.wander` (default `false`, P9 machinery — the same pattern as the v1.4 paper-grain toggle C3; a legacy options blob migrates to OFF without error), and (b) a **save field** `save.wanderSeed` (integer; `SAVE_VERSION 10→11` with a `SAVE_MIGRATIONS` step + `normalizeWanderSeed` — a v10 save → `wanderSeed: 0`, unchanged). When `options.wander` is ON, `_beginExpedition` builds the **encounter content** — per-zone enemy archetype mix, orb / pigment-jar / checkpoint placement, zone encounter composition — from a **seeded RNG stream** (`mulberry32(seed + WANDER_SALT)`, a **SEPARATE** stream from the terrain pass, the v1.6 R2 pattern) sampled within a **hand-tuned pacing envelope** — a pure `wanderContent(seed, zones) -> layout` in `logic.js` with explicit bounds (min/max enemies per zone, ≥ N pigment jars guaranteed, encounter/boss caps, no empty zone, deterministic per seed). The **terrain/layout pass is UNCHANGED** (the SAME deterministic seeded world → same painting, 60fps, P10 culling safe). When `options.wander` is OFF (the default) the existing hand-tuned path runs and **`wanderContent` is never called** → first-time / NG+ / Reeds runs are byte-identical to v1.6. `game.js` stays thin: a `save.wanderSeed` read + one `wanderContent` call in `_beginExpedition` gated on the flag; all rules in `logic.js`. A small **"Wandering" badge** (seed shown) appears on the expedition HUD only when a Wander run is active (so a player knows the expedition is generated + can note the seed). Acceptance: smoke stage — default OFF → the hand-tuned path is taken, `wanderContent` never runs, the save is byte-identical (cycle-0 tuning deep-equals a plain `makeTuning`); flag ON → deterministic per seed (same seed ⇒ identical content), the envelope bounds hold (assert min/max enemies, ≥ N pigment jars, no empty zone across a seed sweep), the badge renders (fillText/arc), P10 passes; **a NEW `tests/wandpace.mjs`** (modeled on `humance.mjs`) measures a generated first-time run and **lands in the 15–20 band across ≥ 5 seeds** (the envelope is tight); `pace` / `humance` / `ngpace` / `reedspace` re-run **in band unchanged** (they measure the hand-tuned, Wander-OFF runs — structurally untouched). | ☐ D1 (plan) |
+| D2 | **Seeded expedition "taste" + repeat-avoidance** — the generated run samples a **flavor archetype** from a small hand-tuned set (e.g. **"The Quiet Reeds," "Feast Season," "The Long Dark," "Ink Bloom"**) that biases the envelope (more mosquitoes / more beetles / more orbs / a darker palette accent) **while staying in-band** — so successive generated runs *feel different* but always land 15–20 min. Pure `wanderTaste(seed) -> {id, name, bias}` in `logic.js`; the bias feeds `wanderContent`. **Repeat-avoidance:** the seed advances each time the player starts a new Wander run (`save.wanderSeed += 1` on Wander-run start, persisted — so two consecutive Wander runs differ), but a **specific seed is reproducible** (the seed is shown on the D1 badge — a screenshot / share moment). The title/atelier shows the chosen taste's name as one line of flavor. Acceptance: smoke stage — different seeds ⇒ different-but-in-envelope content; the same seed ⇒ identical content; repeat-avoidance advances `save.wanderSeed` and persists it; the taste name renders; `wandpace.mjs` still in-band across seeds (the bias never breaks the envelope); the migration (v10 → v11) loads a legacy save to `wanderSeed: 0` without error. | ☐ D2 (plan) |
+| D3 | **NG+ + Reeds parity for the Wander** — the Wander envelope respects the SAME gating the other variants have: a Wander run can layer onto **NG+** (it generates the encounter content; `applyNGPlus` N2 scaling still applies on top — no double-application) and it works in **Reeds mode** (the Reeds light economy R1 + bestiary R3 still apply on top of generated content). A **Wander × Reeds** run is measured to land in the **20–25 band** (extend `wandpace.mjs` with a Reeds-mode leg, or a small `wanderreedspace` probe). Crucially, Wander + any other variant stays in-band and the hand-tuned (Wander-OFF) runs are still byte-identical. Acceptance: smoke stage — Wander × NG+ applies both (assert NG+ HP/dmg/spawn multipliers are applied exactly once, not compounded with a Wander double-scale); Wander × Reeds keeps the lantern fuel loop + the R3 bestiary on top of generated content; no double-application of any scaling; cycle-0 hand-tuned runs still byte-identical (Wander OFF). `wandpace.mjs` (first-time leg 15–20 + Reeds leg 20–25) in band. | ☐ D3 (plan) |
+| D4 | **Wander options + save export/import parity** — the **Wander toggle** lives in the existing **Options** panel (P9 machinery, a fourth/fifth row like paper-grain): "Wandering Expeditions" (default OFF). The Options save migrates the new field without error (legacy blob → OFF). The existing **save export/import** (v1.6 Q3) round-trips the `wanderSeed` save field (it is in the save schema, so `logic.validateSaveBlob` handles it; a valid-but-old v1-era blob imports through the migration chain to v11 with `wanderSeed: 0`). Acceptance: smoke stage — the toggle persists to the options blob; a legacy options blob (no `wander` field) migrates to OFF without error (presentation unchanged for returning players); export → import round-trips `wanderSeed`; a generated run is byte-identical for the same seed across a save/load cycle; P10 passes. | ☐ D4 (plan) |
+
+### Module F — The fifth boss: the Wander-apex predator
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| F1 | **The Hollow Warden — 5th boss ARCHETYPE, the Wander-apex** (the deferred "5th boss / more Reeds depth" item) — a new end-of-run boss that appears **only as the finale of a Wander expedition** (the hand-tuned first-time / NG+ / Reeds apexes keep their herons / Silt Wyrm — Wander-OFF runs never meet it). A **pale, lantern-eating** creature: while the player's lantern is **lit** it **siphons candle fuel** (a new pure `wardenFuelSiphon(warden, lantern, dt)` tick in `logic.js` — drains fuel at a documented rate, stops when the lantern is unlit or empty); when **unlit** it is slower / evasive. It is only vulnerable while its **maw is open** — a telegraphed ~1.5 s window reusing the Silt-Wyrm ripple-ring telegraph language; between openings it is invulnerable. Its aggression is **seeded by the Wander taste** (D2): a "Feast Season" Warden is more aggressive / faster siphon; a "Quiet Reeds" Warden is more evasive — the same boss feels different per run, tying F to D (the Wander has its own apex predator). The **3-hue awaken still applies** through the EXISTING `paintBoss` / `bossStep` path (a new `kind:'warden'` variant + a distinct pale palette in `_drawBoss`); a single hue's repeated coats AWAKEN it (full-damage window) exactly as the herons / wyrm do. **Reeds parity:** in a Wander × Reeds run the siphon INTERACTS with the lantern economy (the Warden siphons your fuel, which in the Reeds also shrinks your vision radius — a genuine synergy, not a bolt-on). HP in the **~52k class** (above the Silt Wyrm's 48k — the Wander apex). Wander-mode only. Acceptance: smoke stage — spawns only at the end of a Wander expedition (a hand-tuned apex run never meets it); invulnerable except maw windows (reusing the wyrm telegraph); the siphon drains fuel while lit + stops when unlit / empty; the 3 hues + awaken work through the EXISTING `paintBoss` / `bossStep` path (assert the same awaken latch fires); the taste shifts aggression (Feast > Quiet siphon/aggression, asserted via the taste bias); defeated → the Wander run ends in victory like a heron / wyrm defeat; a Wander × Reeds run keeps the lantern economy + the siphon interplay; a bosspace-style timing probe in band; P10 passes. | ☐ F1 (plan) |
+
+### Module O — Options / quality of life
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| O1 | **Pre-expedition "seed card" + taste preview** — before starting a **Wander** run, a small pre-expedition card (reusing the paper-panel / journey-map machinery) shows the **generated seed + taste name + a one-line flavor** (e.g. *"Feast Season — the swarms are hungry tonight"*), so the player knows what they are walking into (and can note / share the seed). Pure presentation, **in-memory only** (no new persistence). Absent for hand-tuned (Wander-OFF) runs. Acceptance: smoke stage — the card renders with seed + taste + flavor for a Wander run (headless fillText-recording); absent for hand-tuned runs; nothing is persisted; P10 passes. | ☐ O1 (plan) |
+| O2 | **Wander run recap line** — extend the v1.6 Q2 **end-screen run recap** to include, for a **Wander** run, the **seed + taste + a "Wandering expedition" tag**, so the end screen tells the story of a unique run. Pure presentation, reuses the Q2 `routeTrail` / recap machinery (a run-local read — never persisted). A hand-tuned run's recap is byte-identical. Acceptance: smoke stage — a Wander victory AND defeat recap shows the seed + taste + tag; a hand-tuned run's recap is unchanged; nothing is persisted; P10 passes. | ☐ O2 (plan) |
+
+### Module I — Invariants / season audit
+
+| ID | Item | Notes | Status |
+|---|---|---|---|
+| I1 | **Full regression + season audit** (K10 / C4 / A1-style — the final gate) — smoke ×3 green; `pace.mjs` + `humance.mjs` first-time IN the 15–20 band (hand-tuned, Wander OFF); `ngpace.mjs` cycle-1 in band; `bosspace.mjs` + `reedspace.mjs` in their documented ranges; **NEW `wandpace.mjs`** — a generated first-time Wander run IN the 15–20 band across ≥ 5 seeds AND a Wander × Reeds run IN the 20–25 band (the procgen envelope is tight); P10 culling stage green (view-cull + enemy AI-cull hold **across a generated world**); **zero new dependencies** (git-diff audit since v1.6-complete: no package.json/lockfile/asset changes); **SAVE_VERSION 11** migration chain loads a v1-era save end-to-end (`migrateSave` → v11 with `wanderSeed: 0`, `_case: 'migrated'`, all current-schema fields present); **cycle-0 swamp + cycle-0 Reeds tuning byte-identical** (the default-OFF Wander path deep-equals v1.6 `makeTuning` — JSON-compare `makeTuning` across the whole v1.7 diff); tree clean; PROJECT_STATE.md + docs/PROJECT_STATUS.md marked v1.7 COMPLETE with the audit table. Acceptance: the commit itself. | ☐ I1 (plan) |
+
+### Explicitly deferred past v1.7 (not forgotten)
+
+- **A "true" NG+ Reeds variant / a second Reeds biome** — v1.7 lands the
+  Wander-apex 5th boss (F1) as the new depth; a dedicated NG+ Reeds *layout*
+  variant (a deeper lower-bank / denser bestiary / Silt Wyrm "twin") is the
+  next depth item and stays parked (the Wander × Reeds parity in D3 already
+  gives NG+ players generated Reeds content, so the need is reduced).
+- **Accessibility (X1 colorblind glyphs, X2 remappable keys, X3 text-size
+  toggle)** — Joel's standing call; X2 (key remapping) is the natural
+  companion to the v1.6 gamepad and stays parked with it.
+- **Gold as a 4th combat pigment** — still fights the 3-hue pillar; stays
+  meta-only.
+- **CRT scanlines / retro filters** — rejected three times; the painted world
+  has no retro mode.
+- **Co-op / multiplayer** — still an architecture mismatch with loopback-only,
+  single-session, localStorage; no near-term plan.
+- **Lantern in the swamp** — deliberately Reeds-only for v1.6; a balance item,
+  not a scope item.
+- **Unbounded / infinite procedural generation** — v1.7's Wander is a
+  **bounded, pacing-envelope** variant, not an infinite generator; a true
+  open-ended generator still risks both pacing targets and stays out until the
+  envelope data from `wandpace.mjs` proves a wider generation is safe.
+- **Image/audio/font assets** — invariant, unchanged: everything is
+  procedural (math.js shapes, canvas, WebAudio synth).
