@@ -2566,6 +2566,56 @@ export function pickWanderSeed(prevSeed, nowMs) {
   return seed;
 }
 
+// --------------------------------------------------------------------------
+// D2 (v1.7): THE WANDER "taste" — a small hand-tuned set of flavor archetypes
+// that bias the generated run (mosquito-heavy / beetle-heavy / toad-heavy /
+// orb-rich) so SUCCESSIVE generated runs FEEL different while each still lands
+// in the 15-20 min band (the bias only re-weights which kinds fill the slots;
+// it never changes the per-zone / total COUNTS, so the envelope always holds —
+// wanderInBudget is green for a biased run exactly as for the neutral one).
+//
+// PURE: wanderTaste(seed) samples a taste from the set via mulberry32 on its OWN
+// salted lane (seed + TASTE_SALT), separate from the content stream (seed +
+// WANDER_SALT) and the terrain pass. Deterministic per seed — the same seed
+// always yields the same {id, name, tag, bias}.
+export const WANDER_TASTE_SALT = 4271;
+// Each taste: id (stable), name (the in-run flavor line the player sees), tag
+// (a short descriptor for the test), and bias.kindWeights (the per-archetype
+// weights wanderContent folds into each zone's mix; >= 1 so a favored kind is
+// boosted, not zeroed — a run is always a mix of all three).
+export const WANDER_TASTES = [
+  {
+    id: 'quiet-reeds', name: 'The Quiet Reeds', tag: 'calm',
+    bias: { kindWeights: { beetle: 2, mosquito: 1, toad: 1 } },
+    note: 'the water is still and the beetles are bolder',
+  },
+  {
+    id: 'feast-season', name: 'Feast Season', tag: 'swarm',
+    bias: { kindWeights: { beetle: 1, mosquito: 2, toad: 1 } },
+    note: 'a swarm of mosquitos rides the warm current',
+  },
+  {
+    id: 'long-dark', name: 'The Long Dark', tag: 'grump',
+    bias: { kindWeights: { beetle: 1, mosquito: 1, toad: 2 } },
+    note: 'grumpy toads sit heavy in the murk',
+  },
+  {
+    id: 'ink-bloom', name: 'Ink Bloom', tag: 'mixed',
+    bias: { kindWeights: { beetle: 1, mosquito: 2, toad: 2 } },
+    note: 'everything the swamp kept, at once',
+  },
+];
+// PURE: pick the taste for a Wander seed. Deterministic on the seed's own
+// salted lane (distinct from the content stream). Returns a reference to one
+// of WANDER_TASTES (never a mutated copy — callers read, not write). Non-finite
+// seeds normalize to 0 (the quiet-reeds default) so a corrupt seed never
+// throws.
+export function wanderTaste(seed) {
+  const s = Math.floor(Number(seed) || 0);
+  const r = mulberry32((s + WANDER_TASTE_SALT) >>> 0);
+  return WANDER_TASTES[Math.floor(r() * WANDER_TASTES.length) % WANDER_TASTES.length];
+}
+
 // Internal: distribute a total `T` across `n` buckets, each in [min, max],
 // using `rng`. Feasibility is guaranteed by the caller (T in
 // [n*min, n*max]). Greedy: seed each bucket at `min`, then hand out the
@@ -2606,9 +2656,15 @@ function _distribute(rng, T, n, min, max) {
 export function wanderContent(seed, zones, bias = null) {
   const base = Array.isArray(zones) && zones.length ? zones : null;
   const n = WANDER_BUDGET.zones;
-  // (bias is reserved for D2's taste; D1 is neutral — but accept the arg so
-  // the signature is stable for the D2 build.)
-  void bias;
+  // D2 (v1.7): the taste BIAS (see wanderTaste) only re-weights WHICH KINDS
+  // fill each zone's already-bounded enemy slots (mosquito-heavy / beetle-heavy
+  // / toad-heavy / orb-rich). It NEVER touches the per-zone or total COUNTS, so
+  // a biased run is always in-band exactly as the neutral one is (wanderInBudget
+  // holds for both). A null bias (or an unknown kind) is the D1 neutral mix.
+  const kw = { beetle: 1, mosquito: 1, toad: 1 };
+  if (bias && bias.kindWeights) {
+    for (const k of WANDER_KINDS) if (bias.kindWeights[k] > 0) kw[k] = bias.kindWeights[k];
+  }
   if (!base) {
     // degenerate: no zones supplied — return a structurally valid empty-ish
     // layout (should not happen; game.js always passes ZONES).
@@ -2643,9 +2699,16 @@ export function wanderContent(seed, zones, bias = null) {
     // split this zone's normal count across the 3 archetypes. Weighted so a
     // zone leans one archetype but never all-in on it (keeps the mix lively);
     // the split always sums to perNormal[i] and each zone has >= perMin >= 1
-    // (no empty zone).
+    // (no empty zone). D2 (v1.7): the taste bias scales each kind's weight so a
+    // mosquito-heavy / beetle-heavy / toad-heavy run shifts the MIX within the
+    // SAME per-zone count (the envelope is unchanged — only which kinds fill the
+    // slots changes).
     const zn = perNormal[i];
-    const w = [1 + Math.floor(rng() * 4), 1 + Math.floor(rng() * 4), 1 + Math.floor(rng() * 4)];
+    const w = [
+      (1 + Math.floor(rng() * 4)) * kw.beetle,
+      (1 + Math.floor(rng() * 4)) * kw.mosquito,
+      (1 + Math.floor(rng() * 4)) * kw.toad,
+    ];
     const wSum = w[0] + w[1] + w[2];
     const mix = { beetle: 0, mosquito: 0, toad: 0 };
     // apportion zn by the weights, remainder round-robin (keeps the sum exact)

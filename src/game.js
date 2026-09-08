@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -2822,12 +2822,19 @@ _drawAtelier(ctx) {
     this.zones = ZONES;
     this.wanderActive = false;
     this.wanderSeedRun = null;
+    this.wanderTaste = null;                 // D2: the run's flavor archetype (null unless wandering)
     if (this.options.wander === true && !guided && !_isReeds) {
       const prev = Math.max(0, Math.floor(this.save.wanderSeed) || 0);
       const freshSeed = pickWanderSeed(prev, Date.now() | 0);
       this.wanderSeedRun = freshSeed;
       this.save.wanderSeed = freshSeed;       // latch the seed so the next run differs
-      const lay = wanderContent(freshSeed, ZONES);
+      // D2 (v1.7): pick this run's TASTE (a flavor archetype) from the seed —
+      // deterministic on the seed's own salted lane, separate from the content
+      // stream. Its bias only re-weights which KINDS fill the zones (never the
+      // counts), so a biased run is always in-band AND the run's taste is
+      // reproducible from save.wanderSeed (wanderTaste(wanderSeed)).
+      this.wanderTaste = wanderTaste(freshSeed);
+      const lay = wanderContent(freshSeed, ZONES, this.wanderTaste.bias);
       this.zones = lay.zones.map(z => ({ ...z, mix: { ...z.mix }, sig: { kind: z.sig.kind, count: z.sig.count } }));
       this.wanderActive = true;
     }
@@ -5650,7 +5657,7 @@ _drawAtelier(ctx) {
     // key). Guarded by this.wanderActive so a default-OFF / hand-tuned run's
     // HUD is byte-identical (never drawn).
     if (this.wanderActive) {
-      const bw = 150, bh = 24, bx = 14, by = barH + 16;
+      const bw = 150, bh = 40, bx = 14, by = barH + 16;
       ctx.save();
       ctx.globalAlpha = 0.9;
       this._paperChip(ctx, bx, by, bw, bh, 8);
@@ -5658,13 +5665,22 @@ _drawAtelier(ctx) {
       // a tiny wobbly ink compass-glyph (procedural, no asset) marks "generated"
       ctx.strokeStyle = '#7a5a2a'; ctx.lineWidth = 1.4;
       ctx.beginPath();
-      const gx = bx + 13, gy = by + bh / 2;
+      const gx = bx + 13, gy = by + 14;
       ctx.moveTo(gx - 5, gy + 4); ctx.lineTo(gx + 5, gy - 4);
       ctx.moveTo(gx + 5, gy - 4); ctx.lineTo(gx + 2, gy - 4);
       ctx.moveTo(gx + 5, gy - 4); ctx.lineTo(gx + 5, gy - 1);
       ctx.stroke();
-      centerText(ctx, `Wandering · ${this.wanderSeedRun}`, bx + 18 + (bw - 22) / 2, by + bh / 2 + 1,
+      // line 1: the reproducibility seed (a player can note it to replay the run)
+      centerText(ctx, `Wandering · ${this.wanderSeedRun}`, bx + 18 + (bw - 22) / 2, by + 13,
         '700 11px Georgia, serif', '#7a5a2a', 0.95);
+      // line 2 (D2): the run's TASTE — one line of flavor that tells the player
+      // which archetype this generated run leans (mosquito-heavy / toad-heavy /
+      // ...). Pure presentation over wanderTaste (reproducible from the seed);
+      // a default-OFF run never reaches here (wanderActive false).
+      if (this.wanderTaste) {
+        centerText(ctx, this.wanderTaste.name, bx + 18 + (bw - 22) / 2, by + 29,
+          'italic 10px Georgia, serif', '#8a6a3a', 0.9);
+      }
       ctx.restore();
     }
 

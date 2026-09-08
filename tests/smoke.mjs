@@ -7308,11 +7308,121 @@ console.log('== stage 95: D1 (v1.7) — THE WANDER bounded procedural expedition
   assert(g2.wanderActive === true, 'D1: options.wander ON -> a generated run is active');
   assert(Number.isInteger(g2.wanderSeedRun) && g2.wanderSeedRun >= 1, 'D1: ON -> a positive wander seed is latched');
   assert(g2.save.wanderSeed === g2.wanderSeedRun, 'D1: ON -> save.wanderSeed is latched to the run seed (so the next run differs)');
-  const re = L95.wanderContent(g2.wanderSeedRun, ZONES95);
+  // the run's zones are reproduced by wanderContent(seed, ZONES, the run's TASTE bias) —
+  // D2 routes the bias through wanderTaste(seed), so the reproducible seed is
+  // still the key (same seed -> same taste -> same biased layout).
+  const re = L95.wanderContent(g2.wanderSeedRun, ZONES95, L95.wanderTaste(g2.wanderSeedRun).bias);
   assert(JSON.stringify(g2.zones.map(z => ({ mix: z.mix, sig: z.sig }))) === JSON.stringify(re.zones.map(z => ({ mix: z.mix, sig: z.sig }))), 'D1: ON -> the run zones are reproduced by wanderContent(latchedSeed) (reproducible from the seed)');
   assert(L95.wanderInBudget({ zones: g2.zones, bossEligible: true }).ok, 'D1: ON -> the live run layout is inside the envelope');
 
   console.log('ok — D1: THE WANDER ships a PURE seeded bounded-procgen content generator (no Math.random/Date.now in the pure path; same seed -> identical layout; 40-seed sweep inside WANDER_BUDGET; non-zero distinct pickWanderSeed), is OFF by default so a default-OFF save never builds a generated layout (hand-tuned ZONES + cycle-0 tuning byte-identical), and a real ON run latches a reproducible non-zero seed that reproduces its own zones.');
+}
+
+console.log('== stage 96: D2 (v1.7) — THE WANDER "taste": a seeded flavor archetype that biases the envelope in-band (deterministic; the bias never changes counts) ==');
+{
+  const L96 = await import('../src/logic.js');
+  const G96 = await import('../src/game.js');
+  const ZONES96 = G96.ZONES;
+
+  // ---- (a) the hand-tuned taste set: 4 distinct archetypes, each a valid kind-weights bias ----
+  assert(L96.WANDER_TASTES.length === 4, 'D2: there are 4 hand-tuned taste archetypes');
+  const ids = new Set(L96.WANDER_TASTES.map(t => t.id));
+  assert(ids.size === 4, 'D2: the taste ids are distinct');
+  for (const t of L96.WANDER_TASTES) {
+    const kw = t.bias.kindWeights;
+    assert(typeof t.name === 'string' && t.name.length > 0, `D2: taste ${t.id} has a name (the in-run flavor line)`);
+    assert(kw.beetle >= 1 && kw.mosquito >= 1 && kw.toad >= 1, `D2: taste ${t.id} keeps every archetype >= 1 (a run is always a mix of all three, never zeroed)`);
+  }
+  // the four biases are genuinely DIFFERENT weight profiles (not all uniform)
+  const profiles = L96.WANDER_TASTES.map(t => `${t.bias.kindWeights.beetle},${t.bias.kindWeights.mosquito},${t.bias.kindWeights.toad}`);
+  assert(new Set(profiles).size === 4, 'D2: the four tastes carry four distinct weight profiles (successive runs feel different)');
+
+  // ---- (b) wanderTaste(seed) is PURE + deterministic (own salted lane, no Math.random) ----
+  const t1 = L96.wanderTaste(12345);
+  const t1b = L96.wanderTaste(12345);
+  assert(t1.id === t1b.id, 'D2: wanderTaste is pure — the same seed always yields the same taste');
+  // across a seed sweep every one of the 4 tastes is reachable (not a degenerate constant)
+  const seenTaste = new Set();
+  for (let s = 1; s <= 200; s++) seenTaste.add(L96.wanderTaste(s).id);
+  assert(seenTaste.size === 4, `D2: all 4 tastes are reachable across 200 seeds (got ${[...seenTaste].join(',')})`);
+  // a non-finite seed normalizes (never throws, always a valid taste)
+  assert(L96.wanderTaste('garbage').id === L96.wanderTaste(0).id, 'D2: a corrupt seed normalizes to the seed-0 taste (never throws)');
+
+  // ---- (c) the bias shifts the MIX within the SAME per-zone counts (envelope unchanged) ----
+  // For a fixed seed: the NEUTRAL layout and each TASTED layout have identical
+  // per-zone + total enemy counts (the bias only re-weights which kinds fill the slots),
+  // so a biased run is ALWAYS in-band exactly as the neutral one is.
+  const SEED = 9;
+  const neutral = L96.wanderContent(SEED, ZONES96);
+  for (const taste of L96.WANDER_TASTES) {
+    const biased = L96.wanderContent(SEED, ZONES96, taste.bias);
+    const sameCounts = JSON.stringify(biased.zones.map(z => z.mix.beetle + z.mix.mosquito + z.mix.toad)) ===
+      JSON.stringify(neutral.zones.map(z => z.mix.beetle + z.mix.mosquito + z.mix.toad));
+    assert(sameCounts, `D2: taste ${taste.id} keeps the SAME per-zone enemy counts as neutral (only the kind mix shifts)`);
+    assert(biased.totals.normal === neutral.totals.normal && biased.totals.elite === neutral.totals.elite,
+      `D2: taste ${taste.id} keeps the SAME run-wide totals (normal ${neutral.totals.normal}, elite ${neutral.totals.elite})`);
+    assert(L96.wanderInBudget(biased).ok, `D2: taste ${taste.id} layout is inside WANDER_BUDGET (the envelope holds for a biased run)`);
+  }
+  // ...and the bias ACTUALLY changes the mix for at least one taste (it is not a no-op).
+  let mixShifts = false;
+  for (const taste of L96.WANDER_TASTES) {
+    const biased = L96.wanderContent(SEED, ZONES96, taste.bias);
+    const differs = JSON.stringify(biased.zones.map(z => z.mix)) !== JSON.stringify(neutral.zones.map(z => z.mix));
+    if (differs) mixShifts = true;
+  }
+  assert(mixShifts, 'D2: at least one taste changes the enemy kind mix vs neutral (the bias is not a no-op)');
+
+  // ---- (d) a real ON run picks a taste, renders its flavor line, and reproduces it from the seed ----
+  const gon = new G96.Game(makeCanvas());
+  gon.save = L96.freshSave();
+  gon.options.wander = true;
+  gon._beginExpedition();
+  assert(gon.wanderActive === true && gon.wanderTaste && typeof gon.wanderTaste.name === 'string',
+    'D2: a real ON run picks a taste (with a flavor name)');
+  assert(gon.wanderTaste.id === L96.wanderTaste(gon.wanderSeedRun).id,
+    'D2: the run taste is reproducible from the latched seed (wanderTaste(wanderSeed))');
+  // the live run layout (with the taste bias) reproduces + is in-band.
+  const liveRepro = L96.wanderContent(gon.wanderSeedRun, ZONES96, gon.wanderTaste.bias);
+  assert(JSON.stringify(gon.zones.map(z => ({ mix: z.mix, sig: z.sig }))) === JSON.stringify(liveRepro.zones.map(z => ({ mix: z.mix, sig: z.sig }))),
+    'D2: the live ON run zones reproduce via wanderContent(seed, ZONES, tasteBias)');
+  assert(L96.wanderInBudget({ zones: gon.zones, bossEligible: true }).ok, 'D2: the live biased ON run layout is inside the envelope');
+  // default-OFF: no taste (null) — the hand-tuned path is untouched.
+  const goff2 = new G96.Game(makeCanvas());
+  goff2.save = L96.freshSave();
+  goff2.options.wander = false;
+  goff2._beginExpedition();
+  assert(goff2.wanderTaste === null, 'D2: default-OFF -> no taste (the hand-tuned run carries none)');
+
+  // ---- (e) the WANDER badge draws: the seed line + the TASTE flavor line (fillText) ----
+  // A recording canvas captures every fillText so we can assert the badge renders.
+  const recCanvas = makeCanvas();
+  const drawnD2 = [];
+  const baseCtxD2 = makeCtx(recCanvas);
+  const recCtxD2 = new Proxy(baseCtxD2, {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawnD2.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  recCanvas.getContext = () => recCtxD2;
+  const g96r = new G96.Game(recCanvas);
+  g96r.start();
+  g96r.save = L96.freshSave();
+  g96r.options.wander = true;
+  g96r._beginExpedition();
+  g96r._drawHud(recCtxD2); // draw the expedition HUD (the badge + taste live here)
+  assert(drawnD2.some(s => s.startsWith(`Wandering · ${g96r.wanderSeedRun}`)), 'D2: the badge draws the reproducibility seed line');
+  assert(drawnD2.some(s => s === g96r.wanderTaste.name), 'D2: the badge draws the run taste name (one line of flavor)');
+  // default-OFF run: the badge is NOT drawn (wanderActive false) -> no taste line.
+  drawnD2.length = 0;
+  const recCanvas2 = makeCanvas();
+  const drawnOff = [];
+  const recCtxOff = new Proxy(makeCtx(recCanvas2), {
+    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawnOff.push(String(str)); return undefined; }; return t[prop]; },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+  goff2._drawHud(recCtxOff);
+  assert(!drawnOff.some(s => /Wandering ·/.test(s)), 'D2: a default-OFF run draws NO Wandering badge (the hand-tuned HUD is byte-identical)');
+
+  console.log('ok — D2: THE WANDER taste is a small hand-tuned set of flavor archetypes (4 distinct: quiet-reeds / feast-season / long-dark / ink-bloom) picked PURE + deterministically from the seed (own salted lane, no Math.random, all 4 reachable, corrupt-seed-safe). Each taste biases the run (mosquito-heavy / beetle-heavy / toad-heavy / mixed) by re-weighting which KINDS fill the zones WITHOUT changing the per-zone or total enemy counts, so a biased run stays inside WANDER_BUDGET exactly as the neutral one is (repeat-avoidance is the D1 seed latch). The run taste is reproducible from the latched seed, its name is the one line of flavor in the Wandering badge (seed line + taste line, fillText-verified), and a default-OFF run draws no badge (hand-tuned HUD byte-identical).');
 }
 
 console.log('\nALL SMOKE TESTS PASSED');
