@@ -1,6 +1,10 @@
 // audio.js — Web Audio SFX + procedural ambient bed. All synthesized, no assets.
 // P9: two buses under the master — musicBus (ambient) and sfxBus (effects) —
 // so the user can adjust them independently.
+// S3 (v1.9): the seeded RNG for deterministic ambient-life event timing (the
+// sampler itself is pure + node-tested; this is only used to BUILD the seeded
+// stream the rAF stepper feeds it). math.js is pure (no browser APIs).
+import { mulberry32 } from './math.js';
 'use strict';
 
 // ==================== S2 (v1.9): PURE music-dynamics data + selector ====================
@@ -127,6 +131,45 @@ export function themeSelector(state) {
   return { themeId, patternDensity: _countActive(pattern), extraVoices };
 }
 
+// ==================== S3 (v1.9): PURE ambient-life sampler ====================
+// S3 (v1.9) PURE ACCEPTANCE: the ambient-life sampler. Given the run's current
+// BIOME, a seeded RNG (mulberry32), and the run's ambient clock t (whole-second
+// slot index), return the ambient-life event due in this slot (if any) + its
+// random `flavor` (pitch/variant), or null. PURE + node-testable (no Math.random,
+// no browser, no global state — only the caller's seeded `rng` is advanced, in a
+// fixed per-slot draw order, so the same (biome, seed, t-cadence) always yields
+// the same event times: deterministic in node).
+//
+// SPARSE — a quiet bed, never a wall of sound. Most slots return null; each
+// event kind has a small per-slot probability (a few per minute), and the wet
+// kinds (water) ONLY occur in the reeds biomes. `flavor` (0..1) is one extra
+// seeded draw so a test can confirm determinism + the caller can vary pitch.
+const AMBIENT_KINDS = ['insect', 'water', 'wind', 'heron'];   // the S3 event kinds
+// per-slot probabilities (slot = 1 second): insect ~ a few/min, water (reeds
+// only) ~ a few/min, wind a slow swell, heron RARE (~ once per zone).
+const AMBIENT_P = {
+  swamp:      { insect: 0.030, water: 0.000, wind: 0.010, heron: 0.0015 },
+  reeds:      { insect: 0.026, water: 0.035, wind: 0.016, heron: 0.0020 },
+  blackReeds: { insect: 0.018, water: 0.040, wind: 0.020, heron: 0.0020 },
+};
+
+// The pure S3 sampler. See the header comment above for the contract.
+function nextAmbientEvent({ biome, rng, t }) {
+  const p = AMBIENT_P[biome] || AMBIENT_P.swamp;   // unknown biome -> swamp set
+  // Draw in a FIXED order (insect, water, wind, heron) so the rng stream is
+  // deterministic for a given (biome, seed, t sequence). Return the FIRST kind
+  // whose slot roll succeeds (at most one event per slot keeps it sparse).
+  const kinds = ['insect', 'water', 'wind', 'heron'];
+  for (let i = 0; i < kinds.length; i++) {
+    const r = rng();                    // the gate draw (advance the stream)
+    if (r < p[kinds[i]]) {
+      const flavor = rng();             // one extra draw = the event's variant
+      return { type: kinds[i], flavor, t };
+    }
+  }
+  return null;
+}
+
 export class AudioSys {
   constructor() {
     this.ctx = null;
@@ -145,7 +188,24 @@ export class AudioSys {
     // is kept at a modest fraction of the music level. All synthesized from
     // the existing oscillator / noise-buffer nodes — no new assets.
     this._ambMaster = null;   // persistent gain -> musicBus (the ambient fraction)
-    this._ambFrac = 0.5;      // ambient bed = a fraction of music volume
+    // S3 (v1.9): the AMBIENT LIFE bus — a persistent gain -> musicBus, so the
+    // music slider + mute inherit (same shape as _ambMaster). The sparse
+    // ambient-life events (insect chirps / water drips / wind / distant heron
+    // call) route here. Their SCHEDULING is the pure nextAmbientEvent sampler
+    // (module top, node-tested) driven by the rAF tick — no setInterval.
+    // Presentation-only (logic.js untouched; makeTuning byte-identical).
+    this._ambLifeMaster = null;
+    // S3 (v1.9): the ambient-life STEPPER state (driven by the rAF tick via
+    // stepAmbientLife, NOT setInterval). _ambLifeT is the run clock (seconds);
+    // _lastSlot tracks the last whole-second slot already sampled (so each slot
+    // is sampled exactly once); _ambLifeRng is the run's seeded mulberry32 (so
+    // event timing is deterministic for a given seed). All lazy — start/stop by
+    // startAmbientLife/stopAmbientLife (called from game.js on run start/end).
+    this._ambLifeOn = false;
+    this._ambLifeBiome = 'swamp';
+    this._ambLifeT = 0;
+    this._lastSlot = -1;
+    this._ambLifeRng = null;
     this._crossFade = 1.6;    // seconds to crossfade between zones
     this._amb = null;         // { zone, voices: [{ node, gain }] } — current zone bed
     // ---- S1 (v1.4): melodic per-zone themes (a step-sequencer layer ABOVE the ambient bed) ----
@@ -228,6 +288,11 @@ export class AudioSys {
       this._melodyMaster = this.ctx.createGain();
       this._melodyMaster.gain.value = this._melodyLevel;
       this._melodyMaster.connect(this.musicBus);
+      // S3 (v1.9): the ambient-life bus — same shape as _melodyMaster/_ambMaster
+      // (a persistent gain under musicBus so the music slider + mute inherit).
+      this._ambLifeMaster = this.ctx.createGain();
+      this._ambLifeMaster.gain.value = 0.9;   // the events carry their own low peaks
+      this._ambLifeMaster.connect(this.musicBus);
       this.musicBus.connect(this.master);
       this.sfxBus.connect(this.master);
       const comp = this.ctx.createDynamicsCompressor();
@@ -633,6 +698,123 @@ export class AudioSys {
       try { this._tone(t + 0.5, 'sine', 130.81, 130.81, 2.6, 0.12, 0, g); } catch (e) { /* headless */ }
     } catch (e) { /* headless */ }
   }
+
+  // ==================== S3 (v1.9): AMBIENT LIFE voices + rAF stepper ====================
+  // The sparse ambient-life voices. Each routes to the _ambLifeMaster bus
+  // (-> musicBus) so the music slider + mute inherit; each is QUIET (a
+  // few-percent peak) — "a quiet bed, not a soundscape". The SCHEDULING is the
+  // pure nextAmbientEvent sampler (module top) driven by stepAmbientLife below
+  // from the game's rAF expedition tick — NO setInterval. P10: nothing
+  // allocates per-frame — stepAmbientLife only accumulates a clock and calls
+  // the sampler + one voice per slot.
+
+  // A quiet tone routed to the ambient-life bus (exempt from the sfx cap — it
+  // is a music-bus layer, like the melody notes).
+  _ambTone(t0, type, f0, f1, dur, peak, detune = 0) {
+    if (!this.ctx || !this._ambLifeMaster) return;
+    try { this._tone(t0, type, f0, f1, dur, peak, detune, this._ambLifeMaster); } catch (e) { /* headless */ }
+  }
+
+  // A quiet filtered-noise burst routed to the ambient-life bus.
+  _ambNoise(t0, dur, filterType, freq, q, peak) {
+    if (!this.ctx || !this._ambLifeMaster) return;
+    try {
+      const src = this.ctx.createBufferSource(); src.buffer = this._noiseBuf;
+      const f = this.ctx.createBiquadFilter(); f.type = filterType; f.frequency.value = freq; f.Q.value = q;
+      const g = this.ctx.createGain(); this._env(g, t0, peak, 0.005, dur);
+      src.connect(f); f.connect(g); g.connect(this._ambLifeMaster);
+      src.start(t0); src.stop(t0 + dur + 0.05);
+    } catch (e) { /* headless */ }
+  }
+
+  // S3 voice: a sparse INSECT CHIRP (a few short high clicks, a faint flutter).
+  _ambChirp(f) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const base = 2800 + f * 1400;   // a faint high flutter (2800–4200 Hz)
+    const clicks = 2 + Math.floor(f * 3);   // 2–4 short clicks
+    for (let i = 0; i < clicks; i++) {
+      this._ambTone(t + i * 0.055, 'triangle', base * (1 - i * 0.04), base * 0.9, 0.05, 0.028);
+    }
+  }
+
+  // S3 voice: a WATER DRIP (a short falling "plop" + a tiny surface plink) —
+  // only ever scheduled in the Reeds / Black Reeds (the wet biomes).
+  _ambDrip(f) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const top = 1500 + f * 700;   // the droplet's high start
+    this._ambTone(t, 'sine', top, 380, 0.16, 0.05);            // the falling plop
+    this._ambTone(t + 0.16, 'sine', 2200, 1800, 0.05, 0.02);   // the surface plink
+  }
+
+  // S3 voice: WIND IN THE REEDS (a slow filtered-noise swell — a long bandpass
+  // whoosh that rises and falls). The one S3 voice with a custom slow envelope.
+  _ambWind(f) {
+    if (!this.ctx || !this._ambLifeMaster) return;
+    try {
+      const t = this.ctx.currentTime;
+      const src = this.ctx.createBufferSource(); src.buffer = this._noiseBuf;
+      src.loop = true;
+      const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.7;
+      bp.frequency.setValueAtTime(300, t);
+      bp.frequency.linearRampToValueAtTime(650 + f * 250, t + 3.0);   // the swell crests
+      bp.frequency.linearRampToValueAtTime(280, t + 6.5);            // ...then eases off
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.03, t + 2.8);                 // a VERY quiet bed
+      g.gain.linearRampToValueAtTime(0.0001, t + 6.5);
+      src.connect(bp); bp.connect(g); g.connect(this._ambLifeMaster);
+      src.start(t); src.stop(t + 6.6);
+    } catch (e) { /* headless */ }
+  }
+
+  // S3 voice: a DISTANT HERON CALL (a rare, far, two-note "hrrr-oh" — a low
+  // filtered call with a soft high harmonic, very quiet = distant).
+  _ambHeronCall(f) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const low = 300 + f * 60;
+    this._ambTone(t, 'sine', low, low * 0.85, 0.5, 0.05);
+    this._ambTone(t + 0.55, 'sine', low * 0.7, low * 0.5, 0.7, 0.045);
+    this._ambTone(t, 'triangle', low * 2.6, low * 2.2, 0.55, 0.012);   // a faint far harmonic
+    this._ambNoise(t + 0.05, 0.4, 'bandpass', 1400, 3.5, 0.015);
+  }
+
+  // S3 stepper: drive the ambient-life events from the game's rAF expedition
+  // tick (NO setInterval). Accumulates a run clock, and on each whole-second
+  // slot calls the PURE nextAmbientEvent sampler with the run's seeded rng +
+  // the run's biome, then plays the one event it returns (or nothing). P10:
+  // per-frame this only adds to a clock + (once per second) runs the pure
+  // sampler and schedules one short voice — no per-frame allocation.
+  stepAmbientLife(dt) {
+    if (!this.ctx || !this._ambLifeMaster || !this._ambLifeOn) return;
+    this._ambLifeT += dt;
+    const slot = Math.floor(this._ambLifeT);
+    if (slot === this._lastSlot) return;   // already sampled this slot
+    this._lastSlot = slot;
+    if (!this._ambLifeRng) return;
+    const ev = nextAmbientEvent({ biome: this._ambLifeBiome, rng: this._ambLifeRng, t: slot });
+    if (!ev) return;
+    if (ev.type === 'insect')      this._ambChirp(ev.flavor);
+    else if (ev.type === 'water')  this._ambDrip(ev.flavor);
+    else if (ev.type === 'wind')   this._ambWind(ev.flavor);
+    else if (ev.type === 'heron')  this._ambHeronCall(ev.flavor);
+  }
+
+  // S3 lifecycle: start the sparse ambient-life events for a run (seeded by the
+  // run's biome + seed so timing is deterministic; the game passes the run's
+  // seed). Idempotent — a second call (a zone change) just re-points the biome.
+  startAmbientLife(biome, seed) {
+    if (!this.ctx || !this._ambLifeMaster) return;
+    this._ambLifeOn = true;
+    this._ambLifeBiome = (biome === 'reeds' || biome === 'blackReeds') ? biome : 'swamp';
+    this._ambLifeT = 0;
+    this._lastSlot = -1;
+    try { this._ambLifeRng = mulberry32((seed >>> 0) ^ 0x9e3779b9); } catch (e) { this._ambLifeRng = null; }
+  }
+  // S3 lifecycle: stop the ambient-life events (run end).
+  stopAmbientLife() { this._ambLifeOn = false; }
 
   // Stinger: a short one-shot melodic phrase, scheduled on the melody layer
   // (melodyMaster -> musicBus) so it inherits the music slider + mute. Used
@@ -1387,4 +1569,4 @@ export class AudioSys {
 // assert the right theme + density for swamp / Reeds / Black Reeds / boss /
 // lowHp / collection WITHOUT a browser or an AudioContext. Presentation-only
 // (logic.js untouched; makeTuning byte-identical).
-export { ZONE_THEMES, BOSS_THEMES, LOWHP_THEME, COLLECTION_THEME };
+export { ZONE_THEMES, BOSS_THEMES, LOWHP_THEME, COLLECTION_THEME, nextAmbientEvent, AMBIENT_KINDS, AMBIENT_P };

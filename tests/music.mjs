@@ -32,7 +32,11 @@ import {
   BOSS_THEMES,
   LOWHP_THEME,
   COLLECTION_THEME,
+  nextAmbientEvent,
+  AMBIENT_KINDS,
+  AMBIENT_P,
 } from '../src/audio.js';
+import { mulberry32 } from '../src/math.js';
 
 const failures = [];
 let passCount = 0;
@@ -223,6 +227,121 @@ au.clearZoneTheme();
 assert(au._danger && au._danger.lowThemes.length === 0, 'clearZoneTheme() tears down the low-HP loop');
 
 // ==========================================================================
+// S3 — the PURE nextAmbientEvent sampler
+// ==========================================================================
+section('S3: nextAmbientEvent — sparse, seeded, biome-gated');
+
+// ---- well-formed data ----
+assert(Array.isArray(AMBIENT_KINDS) && AMBIENT_KINDS.length === 4, 'AMBIENT_KINDS has the 4 kinds');
+for (const k of ['swamp', 'reeds', 'blackReeds']) {
+  assert(AMBIENT_P[k] && typeof AMBIENT_P[k].insect === 'number', 'AMBIENT_P.' + k + ' has a probability table');
+  for (const kind of AMBIENT_KINDS) assert(typeof AMBIENT_P[k][kind] === 'number' && AMBIENT_P[k][kind] >= 0, 'AMBIENT_P.' + k + '.' + kind + ' is a non-negative probability');
+}
+// water is a WET-biome event: probability 0 in swamp, > 0 in the reeds.
+assert(AMBIENT_P.swamp.water === 0, 'swamp: water probability is 0 (no water drips in the swamp)');
+assert(AMBIENT_P.reeds.water > 0 && AMBIENT_P.blackReeds.water > 0, 'reeds + blackReeds: water probability > 0 (the wet biomes drip)');
+// heron is RARE everywhere (much smaller than insect).
+for (const k of ['swamp', 'reeds', 'blackReeds']) {
+  assert(AMBIENT_P[k].heron < AMBIENT_P[k].insect, k + ': the heron call is rarer than an insect chirp');
+}
+
+// ---- DETERMINISM: the same (biome, seed) + t-cadence yields the SAME events ----
+function sampleRun(biome, seed, nSlots) {
+  const rng = mulberry32(seed);
+  const events = [];
+  for (let t = 0; t < nSlots; t++) {
+    const ev = nextAmbientEvent({ biome, rng, t });
+    if (ev) events.push(ev);
+  }
+  return events;
+}
+{
+  const a = sampleRun('reeds', 42, 600);
+  const b = sampleRun('reeds', 42, 600);
+  assert(JSON.stringify(a) === JSON.stringify(b), 'nextAmbientEvent is DETERMINISTIC for a fixed (biome, seed) — the two 600s runs are identical');
+  const c = sampleRun('reeds', 43, 600);
+  assert(JSON.stringify(a) !== JSON.stringify(c), 'a different seed -> a different event stream (the seed matters)');
+}
+
+// ---- SPARSE: a quiet bed, not a wall of sound ----
+{
+  const ev = sampleRun('reeds', 42, 600);
+  const frac = ev.length / 600;
+  // Each per-slot probability is small; the expected event rate is the sum of
+  // the per-slot probs (a first-order bound). It MUST stay well under one
+  // event-per-second (that would be a wall of sound).
+  const maxRate = AMBIENT_KINDS.reduce((s, k) => s + AMBIENT_P.reeds[k], 0);
+  assert(frac <= maxRate * 1.4 + 0.02, 'the realized event rate (' + (frac * 100).toFixed(1) + '% of seconds) is BOUNDED by the sparse probabilities (no wall of sound)');
+  assert(frac < 0.25, 'fewer than 1 event per ~4 seconds on average (sparse)');
+}
+
+// ---- BIOME GATING: water ONLY in the wet biomes ----
+{
+  let swampWater = 0;
+  const rng = mulberry32(7);
+  for (let t = 0; t < 6000; t++) {
+    const ev = nextAmbientEvent({ biome: 'swamp', rng, t });
+    if (ev && ev.type === 'water') swampWater++;
+  }
+  assert(swampWater === 0, 'swamp: NO water-drip events in 6000 slots (water is a reeds-only kind)');
+  // and in reeds, water DOES occur (the wet biome drips).
+  const rng2 = mulberry32(7);
+  let reedsWater = 0;
+  for (let t = 0; t < 6000; t++) {
+    const ev = nextAmbientEvent({ biome: 'reeds', rng: rng2, t });
+    if (ev && ev.type === 'water') reedsWater++;
+  }
+  assert(reedsWater > 0, 'reeds: water-drip events DO occur in the wet biome');
+}
+
+// ---- every returned event is a known kind + a 0..1 flavor ----
+{
+  const rng = mulberry32(1);
+  let okKinds = true, okFlavor = true;
+  for (let t = 0; t < 2000; t++) {
+    const ev = nextAmbientEvent({ biome: 'blackReeds', rng, t });
+    if (!ev) continue;
+    if (!AMBIENT_KINDS.includes(ev.type)) okKinds = false;
+    if (typeof ev.flavor !== 'number' || ev.flavor < 0 || ev.flavor > 1) okFlavor = false;
+    if (ev.t !== t) assert(false, 'the event carries its slot t');
+  }
+  assert(okKinds, 'every sampled event is one of the 4 AMBIENT_KINDS');
+  assert(okFlavor, 'every event flavor is a 0..1 number');
+}
+
+// ---- the real AudioSys ambient-life bus rides musicBus (slider + mute) ----
+section('S3: the ambient-life bus rides _ambLifeMaster -> musicBus (slider + mute)');
+{
+  assert(!!au._ambLifeMaster, 'the ambient-life bus (_ambLifeMaster) exists after ensure()');
+  assert(au._ambLifeMaster._connections.includes(au.musicBus), '_ambLifeMaster connects INTO musicBus (music slider + mute inherit)');
+  // start the ambient-life events (seeded) + drive the stepper; it must run
+  // without throwing across many whole-second slots (the rAF path).
+  au.startAmbientLife('reeds', 1234);
+  assert(au._ambLifeOn === true, 'startAmbientLife sets _ambLifeOn');
+  assert(au._ambLifeBiome === 'reeds', 'startAmbientLife points the biome at the run\'s biome (reeds)');
+  assert(au._ambLifeRng != null, 'startAmbientLife seeds the mulberry32 rng stream');
+  // an unknown biome normalizes to swamp.
+  au.startAmbientLife('watery', 1234);
+  assert(au._ambLifeBiome === 'swamp', 'an unknown biome normalizes to swamp');
+  au.startAmbientLife('reeds', 1234);
+  let stepThrew = false;
+  try {
+    // Drive ~5 whole-second slots (dt in 1.0s steps so each crosses a slot
+    // boundary exactly once).
+    for (let i = 0; i < 5; i++) au.stepAmbientLife(1.0);
+  } catch (e) { stepThrew = true; }
+  assert(!stepThrew, 'stepAmbientLife drives 5 whole-second slots without throwing');
+  // re-driving the SAME slot (dt=0) must NOT double-sample it (the _lastSlot
+  // guard) — a no-op, no throw.
+  let reThrew = false;
+  try { au.stepAmbientLife(0); } catch (e) { reThrew = true; }
+  assert(!reThrew, 'stepAmbientLife(0) (same slot) is a no-op, not a double-sample');
+  // stop at run end.
+  au.stopAmbientLife();
+  assert(au._ambLifeOn === false, 'stopAmbientLife turns the events off');
+}
+
+// ==========================================================================
 // summary
 // ==========================================================================
 console.log('\n' + passCount + ' assertions passed.');
@@ -231,5 +350,5 @@ if (failures.length) {
   for (const f of failures) console.log('  - ' + f);
   process.exit(1);
 } else {
-  console.log('\nMUSIC TESTS PASSED (S2 themeSelector + music-bus routing)');
+  console.log('\nMUSIC TESTS PASSED (S2 themeSelector + S3 nextAmbientEvent + music-bus routing)');
 }

@@ -3222,6 +3222,11 @@ _drawAtelier(ctx) {
     this.audio.ensure();
     this.audio.startMusic();
     this._updateZoneAmbient(); // V3: seed the ambient bed for the starting region
+    // S3 (v1.9): start the sparse AMBIENT-LIFE events for this run, seeded by the
+    // run's biome + seed (deterministic in node). They ride the music slider +
+    // mute (the _ambLifeMaster -> musicBus) and are driven by the rAF tick in
+    // _updateExpedition (no setInterval). Presentation-only: never feeds runT.
+    if (this.audio.startAmbientLife) this.audio.startAmbientLife(this.runBiome, seed);
     this.sfx('ui');
     this._prevHp = this.tuning.maxHp;
     const firstRun = !this.save.flags.intro;
@@ -3568,6 +3573,12 @@ _drawAtelier(ctx) {
 
   _updateExpedition(dt) {
     this.runT += dt;
+    // S3 (v1.9): drive the sparse ambient-life events from this rAF tick (NO
+    // setInterval). stepAmbientLife accumulates a run clock and, once per whole
+    // second, runs the PURE nextAmbientEvent sampler + schedules one quiet
+    // voice (insect/drip/wind/heron). Presentation-only: it never touches runT
+    // or any game state — a no-op if the audio isn't running.
+    if (this.audio && this.audio.stepAmbientLife) this.audio.stepAmbientLife(dt);
 
     // ----- T1 (v1.2 M13): the guided first expedition --------------------------
     // While the tutorial runs the timed expedition clock is FROZEN (runT holds
@@ -4873,6 +4884,9 @@ _drawAtelier(ctx) {
         // V3: fade out the per-zone ambient bed — the run's place has ended;
         // the atelier keeps the base music bed (startMusic) but not a zone.
         if (this.audio && this.audio.clearZoneAmbient) this.audio.clearZoneAmbient();
+        // S3 (v1.9): stop the sparse ambient-life events — the run's place has
+        // ended (the atelier keeps the base bed, not a zone's life).
+        if (this.audio && this.audio.stopAmbientLife) this.audio.stopAmbientLife();
         // S1 (v1.4): the melodic theme ends with the run's place too.
         if (this.audio && this.audio.clearZoneTheme) this.audio.clearZoneTheme();
   }
