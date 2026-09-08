@@ -8343,5 +8343,49 @@ console.log('== stage 105: H2 (v1.8) — the Gallery Wall progress readout + the
   console.log('ok — H2: the Gallery Wall screen + the completion beat. The existing Atelier Gallery tab gains a progress readout (X / 10 paintings · Y / 6 bosses) so a player can SEE what they are missing, + a full-collection gold glow behind the 10-frame wall (procedural art only, gated on galleryCompletion), + a title-screen "collection complete" badge (gated on save.galleryComplete). Pure presentation over the H1 galleryCompletion state — no timed-run time, no new assets, both a non-complete and a complete save draw cleanly (no JS errors).');
 }
 
+// ====================================================================
+// stage 106: R1 (v1.8) — the 1.0.0 RELEASE VERSION string. The single
+// source of truth is `GAME_VERSION` in logic.js (display-only: it is
+// never part of the save schema and never feeds a run). This stage
+// asserts the VALUE is '1.0.0' (pure) and that it is REFERENCED by the
+// two render sites: the title-screen corner stamp and the Options
+// header line (a fillText spy over a real `_drawTitle` /
+// `_drawOptions` draw proves the string reaches the canvas).
+// ====================================================================
+console.log('== stage 106: R1 (v1.8) — the 1.0.0 release version string (single source of truth in logic.js, referenced by the title + Options renders) ==');
+{
+  const LV = await import('../src/logic.js');
+
+  // (1) the value: the release string is exactly '1.0.0'.
+  assert(typeof LV.GAME_VERSION === 'string', 'R1: GAME_VERSION is a string (the single source of truth)');
+  assert(LV.GAME_VERSION === '1.0.0', 'R1: GAME_VERSION is "1.0.0" (the 1.0 release)');
+
+  // (2) REFERENCED — a real draw reaches the canvas with the version text.
+  // Spy on fillText, drive one full title frame + an options frame, and
+  // collect the text drawn. The title corner stamp renders
+  // "Frogue Gallery · v1.0.0"; the options header renders the version
+  // beside the controls hint.
+  const gV = new Game(makeCanvas());
+  gV.start();
+  frames(30);   // settle the title (stagger alpha, world boot)
+  const texts = [];
+  const realFill = gV.ctx.fillText;
+  gV.ctx.fillText = (...a) => { texts.push(String(a[0])); return realFill(...a); };
+  const stateBefore = gV.state;
+  const saveBefore = JSON.stringify(gV.save);
+  gV.state = 'title';
+  frames(1);    // one real title frame through the frame loop
+  gV._drawOptions(gV.ctx);   // the options panel (draw-only; no input)
+  gV.ctx.fillText = realFill;
+  assert(texts.some(t => t === 'Frogue Gallery · v' + LV.GAME_VERSION),
+    'R1: the title screen renders the version stamp "Frogue Gallery · v1.0.0" (referenced, not dead code)');
+  const optLine = texts.find(t => t.includes('Esc / O to close') && t.includes('v' + LV.GAME_VERSION));
+  assert(!!optLine, 'R1: the Options header line carries the version beside the controls hint (referenced)');
+  assert(gV.state === stateBefore && JSON.stringify(gV.save) === saveBefore,
+    'R1: the version renders are display-only — no state or save change from drawing them');
+
+  console.log('ok — R1: the 1.0.0 release version string. A single GAME_VERSION = "1.0.0" in logic.js (display-only; never in the save schema, never feeds a run) is rendered by the title corner stamp ("Frogue Gallery · v1.0.0") and the Options header line — both verified referenced by a fillText spy over real draws.');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

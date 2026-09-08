@@ -2532,6 +2532,12 @@ export const OPTIONS_KEY = 'frogue_gallery_options';
 // player actually completes the collection).
 export const SAVE_VERSION = 12;
 
+// R1 (v1.8): the game's RELEASE version string — the single source of truth.
+// Display-only (the title screen + the Options panel render it); it is never
+// part of the save schema and never feeds a run, so a version bump can never
+// shift save migration or pacing. `tests/smoke.mjs` asserts its value.
+export const GAME_VERSION = '1.0.0';
+
 // Ordered schema-migration chain. Each entry upgrades a save from `from` to
 // `to` by remapping an already-normalized save. The loader walks entries in
 // `from` order, so a save written at any older version migrates forward step
