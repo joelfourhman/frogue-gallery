@@ -70,6 +70,37 @@ globalThis.performance = performanceStub;
 globalThis.requestAnimationFrame = (cb) => { rafCb = cb; return 1; };
 globalThis.cancelAnimationFrame = () => {};
 
+// ---------------- HYGIENE (v1.7): deterministic Math.random for the whole run
+// The harness already stubs the CLOCK (performance.now -> fake nowMs), so the
+// ONLY remaining non-determinism source in a full `node tests/smoke.mjs` run is
+// Math.random() — which the REAL Game update path calls for enemy/heron wander
+// (enemies.js), particle/trail scatter (paint.js, particles.js), and orb spawn
+// jitter. A few stages (E1, K4, T3, ...) build a real `new Game(makeCanvas())`
+// and assert a paint-damage / heal / spawn outcome that depends on where the
+// enemy ended up after several frames of AI — so on ~1-in-N runs a Math.random
+// wander drift moves the target and the assertion flaps (the v1.7 stage-75 K4
+// flake was exactly this: healAcc 0.00 -> -0.28).
+//
+// The fix mirrors the v1.6 R2 hardening ("no Math.random in the pure path"):
+// make the harness's Math.random a SEEDED mulberry32 stream (the SAME RNG the
+// pure logic uses), so a full run is byte-for-byte reproducible and the I1
+// "smoke x3 green" audit gate is deterministic. This does NOT weaken any
+// assertion — every stage's intended behavior is still exercised; it just
+// removes the RNG leak that made real-Game positions frame-nondeterministic.
+// Stages that need a SPECIFIC roll already capture `Math.random` first
+// (origRand/realRand) and override it with a constant during their block, then
+// restore the (now-seeded) baseline — so they are unaffected.
+(() => {
+  let s = 0x9e3779b9; // a fixed, well-mixed seed (reproducible forever)
+  const mulberry32 = () => {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  Math.random = mulberry32;
+})();
+
 // ---------------- fire synthetic input events ----------------
 // A full key TAP: keydown then keyup. game.js only registers a "just pressed"
 // event when the key isn't already held, so we must release between taps
@@ -5235,7 +5266,30 @@ console.log('== stage 75: v1.5 K4 — THE GILDED HERON (NG+ cycle-3+ third boss;
   h._intro = 0;                                   // reveal the boss so its plume + paint path run
   p.maxHp = 9999; p.hp = 100; p.iframes = 999; p._healAcc = 0;   // low HP + invulnerable (heal test, not combat)
   const foe = spawnEnemy('beetle', h.x, h.y - 50, g75.tuning); g75.enemies.push(foe); foe.hp = 10000; foe.maxHp = 10000; // a tanky green-paintable enemy
-  const greenPaint = (n) => { g75.input.mouse.lDown = true; p.pigment = 'green'; for (let i = 0; i < n; i++) { p.x = foe.x; p.y = foe.y - 40; p.vx = 0; p.vy = 0; g75._updateExpedition(0.016); } g75.input.mouse.lDown = false; };
+  // HYGIENE (v1.7): the heal-in-gap vs absorb-while-active assertion must be
+  // DETERMINISTIC. The target beetle's AI wander uses Math.random (enemies.js)
+  // and would drift its y over the paint window, so the frog (repositioned to
+  // foe.y - 40 each frame) intermittently paints a moving target and the
+  // green-paint-heal vs standing-cell-drain race flaps (~1-in-12 the net
+  // healAcc goes negative). Pin the target to a fixed coordinate each frame so
+  // the test isolates the K4 plume behavior, not a wandering target.
+  const TX = h.x, TY = h.y - 50;
+  const greenPaint = (n) => {
+    g75.input.mouse.lDown = true;
+    p.pigment = 'green';
+    for (let i = 0; i < n; i++) {
+      // pin the target + aim the brush at it (the brush fan aims at
+      // p.aimA, derived from the mouse world position) so the swipe
+      // connects deterministically; the K4 assertion isolates the
+      // plume heal/absorb behavior, not a wandering target or a
+      // drifting brush aim.
+      foe.x = TX; foe.y = TY; foe.vx = 0; foe.vy = 0;
+      p.x = TX; p.y = TY - 40; p.vx = 0; p.vy = 0;
+      g75.input.mouse.worldX = foe.x; g75.input.mouse.worldY = foe.y;
+      g75._updateExpedition(0.016);
+    }
+    g75.input.mouse.lDown = false;
+  };
   // (a) GAP: the plume is off (h.plumeT = 0) -> painting green heals the frog
   p._healAcc = 0;
   const healGapBefore = p._healAcc;
