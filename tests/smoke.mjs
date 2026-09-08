@@ -8272,5 +8272,76 @@ console.log('== stage 104: H1 (v1.8) — the "Full Collection" ledger (the pure 
   console.log('ok — H1: the "Full Collection" ledger. A NEW logic.js GALLERY_COMPLETE tuning + the pure galleryCompletion(save) check (all 10 paintings owned + all 6 bosses defeated [gray/green/gilded/Silt Wyrm/Warden/Umbral Wyrm] + a first-time victory + a Reeds victory) + a one-time completion cinematic (reusing the M1 first-victory beat machinery, tagged .collection) + a permanent saved capstone galleryBonus level ("the museum keeps you better"). A NEW save.galleryComplete boolean latch + save.flags.bossDefeats list (SAVE_VERSION 11 -> 12); a legacy v11 save migrates to v12 with the new fields DEFAULTED OFF and plays byte-identically (makeTuning unchanged when galleryComplete is false). The latch is idempotent (flips once).');
 }
 
+// ====================================================================
+// Stage 105: H2 (v1.8) — the Gallery Wall screen + the completion beat.
+// Pure presentation over H1: the existing Gallery tab (tab 2) gains a
+// progress readout (X / 10 paintings, Y / 6 bosses) + a full-collection
+// glow (gated on galleryCompletion), and the title screen gains a
+// "collection complete" badge (gated on save.galleryComplete). Proves the
+// wall data + the glow/badge gating draw cleanly for both a non-complete
+// and a complete save (no JS errors), with no timed-run time added.
+// ====================================================================
+console.log('== stage 105: H2 (v1.8) — the Gallery Wall progress readout + the full-collection glow + the title "collection complete" badge ==');
+{
+  const LH = await import('../src/logic.js');
+  const allPaintings = LH.PAINTINGS.map(p => p.id);
+
+  // ---- (a) a NON-COMPLETE save: the readout shows partial counts, NO glow. ----
+  const gW = new Game(makeCanvas()); gW.start(); gW._quitToTitle();
+  const wSave = LH.freshSave();                 // a truly empty save (the shared stub may carry earlier-stage state)
+  gW.save = wSave; gW.tuning = LH.makeTuning(wSave.upgrades, wSave.loadout, gW.options.difficulty, LH.galleryBonusTotal(wSave), wSave.owned, false);
+  gW._beginAtelier(); gW._atelierIntro = false; gW.atelierTab = 2; frames(30);
+  assert(gW.state === 'atelier', 'H2: the Gallery tab drew cleanly (30 frames, no JS errors) for a save with no collection');
+  const progW = LH.galleryCompletionProgress(gW.save);
+  assert(progW.complete === false, 'H2: a non-complete save\'s wall progress reads complete:false (no glow)');
+  assert(progW.paintingsOwned === 0 && progW.bossesDefeated === 0, 'H2: the fresh-save wall readout reads 0/10 + 0/6');
+
+  // a PARTIALLY-complete save (some paintings + some bosses) — the readout
+  // tracks what is owned/defeated, still no glow.
+  gW.save.owned = allPaintings.slice(0, 5);
+  gW.save.flags.bossDefeats = ['gray', 'green'];
+  frames(30);
+  const progPart = LH.galleryCompletionProgress(gW.save);
+  assert(progPart.paintingsOwned === 5 && progPart.bossesDefeated === 2 && progPart.complete === false,
+    'H2: the wall readout tracks partial progress (5/10 paintings, 2/6 bosses) + stays incomplete');
+  assert(gW.state === 'atelier', 'H2: the Gallery tab drew cleanly with partial progress (no JS errors)');
+  // the title shows NO badge when the collection is incomplete.
+  gW._quitToTitle(); frames(2);
+  assert(gW.state === 'title', 'H2: returned to the title (the "collection complete" badge is gated off when incomplete)');
+
+  // ---- (b) a COMPLETE save: the glow + the title badge light up. ----
+  const gC = new Game(makeCanvas()); gC.start(); gC._quitToTitle();
+  const cSave = LH.freshSave();
+  cSave.owned = allPaintings.slice();
+  cSave.flags.bossDefeats = LH.BOSS_IDS.slice();
+  cSave.flags.heronDefeated = true; cSave.flags.reedsVictory = true;
+  cSave.stats.victories = 2;
+  cSave.galleryComplete = true; cSave.galleryBonus = 1;               // the capstone minted
+  gC.save = cSave; gC.tuning = LH.makeTuning(cSave.upgrades, cSave.loadout, gC.options.difficulty, LH.galleryBonusTotal(cSave), cSave.owned, false);
+  assert(LH.galleryCompletion(cSave) === true, 'H2: the synthetic complete save qualifies');
+  // the title badge draws + is gated on the latch.
+  gC._drawTitle(gC.ctx || makeCanvas().getContext('2d')); frames(2);
+  assert(gC.state === 'title', 'H2: the title drew cleanly WITH the full-collection badge (no JS errors)');
+  const progC = LH.galleryCompletionProgress(cSave);
+  assert(progC.complete === true && progC.paintingsOwned === 10 && progC.bossesDefeated === 6,
+    'H2: the complete save\'s wall progress reads 10/10 paintings + 6/6 bosses + complete:true (the glow gates on)');
+  // the Gallery tab glows + reads full counts.
+  gC._beginAtelier(); gC._atelierIntro = false; gC.atelierTab = 2; frames(30);
+  assert(gC.state === 'atelier', 'H2: the Gallery tab drew cleanly WITH the full-collection glow (30 frames, no JS errors)');
+  assert(LH.galleryCompletionProgress(gC.save).complete === true, 'H2: the Gallery wall\'s glow gating reads complete:true on the complete save');
+
+  // ---- (c) the completion BEAT is pure presentation over H1 (no run time). ----
+  // The cinematic beat reuses the M1 _cine machinery with a .collection tag;
+  // it is opened by the H1 latch (verified in stage 104). Here we confirm the
+  // beat draws cleanly (the distinct caption path) + does not mutate the save.
+  gC._cine = { t: 0, dur: 4, arpeggiated: false, collection: true, firstBeat: true };
+  const saveBefore = JSON.stringify(gC.save);
+  gC.state = 'end'; frames(2);
+  gC._drawCineBeat(gC.ctx || makeCanvas().getContext('2d'));
+  assert(JSON.stringify(gC.save) === saveBefore, 'H2: the completion beat is pure presentation — it does not mutate the save (no timed-run time added)');
+
+  console.log('ok — H2: the Gallery Wall screen + the completion beat. The existing Atelier Gallery tab gains a progress readout (X / 10 paintings · Y / 6 bosses) so a player can SEE what they are missing, + a full-collection gold glow behind the 10-frame wall (procedural art only, gated on galleryCompletion), + a title-screen "collection complete" badge (gated on save.galleryComplete). Pure presentation over the H1 galleryCompletion state — no timed-run time, no new assets, both a non-complete and a complete save draw cleanly (no JS errors).');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

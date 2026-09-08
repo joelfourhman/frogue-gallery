@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste, BOSS_IDS, galleryCompletion, capstoneLevel, galleryBonusTotal } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste, BOSS_IDS, galleryCompletion, galleryCompletionProgress, capstoneLevel, galleryBonusTotal } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -2002,6 +2002,34 @@ _drawAtelier(ctx) {
       const fw = 190, fh = 150, fgap = 28, cols = 5, rows = 2;  // G2: 10 paintings (5x2) fit the width
       const gridW = cols * fw + (cols - 1) * fgap, gridH = rows * fh + (rows - 1) * fgap;
       const gx0 = cx - gridW / 2, gy0 = g.rowY0 + 8;
+      // H2 (v1.8): the Gallery Wall progress readout + the full-collection glow.
+      // Pure presentation over galleryCompletion(save) — no run time. (a) A thin
+      // gilded progress strip above the wall shows "Paintings X / 10 · Bosses Y /
+      // 6" so the player can SEE what they are missing; (b) when the Full
+      // Collection has latched (save.galleryComplete), a soft gold glow blooms
+      // behind the 10-frame wall (procedural art only — no new asset). Both are
+      // gated on galleryCompletionProgress(save), so a non-complete save reads
+      // the readout but no glow (byte-identical look to pre-H2 apart from the
+      // readout line).
+      const prog = galleryCompletionProgress(this.save);
+      const progY = gy0 - 26;
+      centerText(ctx,
+        `Paintings ${prog.paintingsOwned} / ${prog.paintingsTotal}   ·   Bosses ${prog.bossesDefeated} / ${prog.bossesTotal}`,
+        cx, progY, '700 13px Georgia, serif',
+        prog.complete ? '#f3d98a' : '#fdf6e9', 0.9);
+      if (prog.complete) {
+        // the full-collection glow — a soft gold radial bloom behind the wall
+        // (drawn UNDER the frames, over the paper). Procedural only.
+        const glow = ctx.createRadialGradient(cx, gy0 + gridH / 2, gridH * 0.2,
+          cx, gy0 + gridH / 2, gridW * 0.55);
+        const pulse = 0.5 + 0.5 * Math.sin(this.atelierT * 2);
+        glow.addColorStop(0, `rgba(201,146,42,${0.18 + 0.10 * pulse})`);
+        glow.addColorStop(1, 'rgba(201,146,42,0)');
+        ctx.save();
+        ctx.fillStyle = glow;
+        ctx.fillRect(gx0 - 40, gy0 - 20, gridW + 80, gridH + 40);
+        ctx.restore();
+      }
       PAINTINGS.forEach((pt, i) => {
         const col = i % cols, row = (i / cols) | 0;
         const x = gx0 + col * (fw + fgap), y = gy0 + row * (fh + fgap);
@@ -7231,6 +7259,27 @@ _drawAtelier(ctx) {
     outlineText(ctx, 'Frogue Gallery', cx, 190 + bob, '700 72px Georgia, serif', '#f4ead8', INK, 10);
     centerText(ctx, 'a cozy action roguelite about a tiny frog painter', cx, 248 + bob, 'italic 20px Georgia, serif', '#fdf6e9', 0.92);
     ctx.restore();
+
+    // H2 (v1.8): the title-screen "collection complete" badge — a small gilded
+    // plaque that appears ONLY when the Full Collection has latched
+    // (save.galleryComplete). Pure presentation over galleryCompletion(save);
+    // no run time, no input. A non-complete save draws nothing here (the title
+    // layout is untouched), so a first-time player sees the unchanged title.
+    if (this.save.galleryComplete && galleryCompletion(this.save)) {
+      const bw2 = 250, bh2 = 30, bx2 = cx - bw2 / 2, by2 = 268 + bob;
+      const bc = paperPanel(ctx, bx2, by2, bw2, bh2, { seed: 77, fill: '#f7edcf' });
+      bc.save();
+      bc.lineWidth = 2; bc.strokeStyle = '#b8912e';
+      bc.beginPath(); bc.roundRect(bx2 + 2, by2 + 2, bw2 - 4, bh2 - 4, 5); bc.stroke();
+      const gpulse = 0.55 + 0.45 * Math.sin(this.now * 2);
+      bc.fillStyle = '#c9922a';
+      bc.textAlign = 'center'; bc.textBaseline = 'middle';
+      bc.font = '700 14px Georgia, serif';
+      bc.globalAlpha = 0.85 + 0.15 * gpulse;
+      bc.fillText('✦  The Full Collection  ✦', cx, by2 + bh2 / 2);
+      bc.restore();
+      paperEnd(ctx);
+    }
 
     // M8 P7: single source of truth for every title-screen rect (shared with the
     // click handling in _updateTitle).
