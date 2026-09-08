@@ -10,7 +10,7 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, inGravityPocket, hopLift, floodedWaterFactor, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS } from './logic.js';
 import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -267,6 +267,18 @@ export class Game {
 
     // ---------- systems ----------
     this.input = new Input(canvas);
+    // W1 (v1.6 Module W): the GAMEPAD feed state. The poll runs every frame in
+    // _frame and writes INTO this.input (kb/pressed/mouse) — it never invents
+    // a new input path, so a controller drives the exact same move keys,
+    // pigments, hop, splash and lantern the keyboard/mouse use. `connected`
+    // + `lastActiveMs` feed the pure gamepadActive() engagement rule; the
+    // `_gpWas*` mirrors are the per-button edge detectors (just-pressed).
+    // `_gpBannerShown` gates the one-time "a gamepad was found" banner. All of
+    // this is UI/input only — it never feeds runT, tuning, or spawn, so a
+    // no-pad run is byte-identical to the pre-gamepad baseline.
+    this._gp = { connected: false, id: null, lastActiveMs: -1,
+      was: { move: { a: false, d: false, w: false, s: false }, pig1: false, pig2: false, pig3: false, hop: false, lantern: false, splash: false },
+      bannerShown: false };
     this.audio = new AudioSys();
     this.audio.setVolume(this.options.volume);
     this.audio.setMusicVolume(this.options.musicVol);
@@ -445,6 +457,185 @@ export class Game {
   }
   addShake(n) { this.shake = Math.max(this.shake, n); }
 
+  // W1 (v1.6 Module W): the GAMEPAD feed — polled once per frame (called at the
+  // TOP of _frame, before any state update reads input). It reads the raw
+  // navigator.getGamepads() stream and WRITES into the existing input.js
+  // kb/pressed/mouse APIs, so a controller drives the exact same move keys,
+  // pigments, hop, splash and lantern the keyboard/mouse already use.
+  //
+  // Invariants (see the W1 roadmap row):
+  //   - Off skips the poll entirely (options.gamepad === 'off').
+  //   - Auto engages only while a pad is connected + recently active
+  //     (gamepadActive). A fresh connection counts as active.
+  //   - KEYBOARD ALWAYS WINS: the feed never adds a key the player is holding,
+  //     and clears only a key it OWNS (still driving it, and the physical
+  //     keyboard — input._phys — is not holding it). The pad can never fight
+  //     the keyboard/mouse.
+  //   - No pad connected (or disengaged) -> the feed writes nothing, so the
+  //     in-run key state is byte-identical to the no-gamepad baseline.
+  //   - 60fps: no per-frame allocation; a few array reads + writes into
+  //     pre-existing Sets. The `was` edge-mirrors are reused, not rebuilt.
+  _pollGamepad() {
+    const gp = this._gp, inp = this.input;
+    // Off disables the feed entirely — skip the poll (and clear the
+    // connected flag so the W2 title chip goes away).
+    if (this.options.gamepad === 'off') {
+      gp.connected = false; gp.id = null; gp.lastActiveMs = -1;
+      this._gpClearOwned();
+      return;
+    }
+    // Raw Gamepad API (zero deps). navigator/getGamepads may be absent
+    // (headless, privacy); treat as no pad.
+    const pads = (typeof navigator !== 'undefined' && navigator.getGamepads)
+      ? navigator.getGamepads() : null;
+    let pad = null;
+    if (pads) {
+      for (let i = 0; i < pads.length; i++) if (pads[i]) { pad = pads[i]; break; }
+    }
+    const now = typeof performance !== 'undefined' ? performance.now() : (this.last || 0) * 1000;
+    if (pad) {
+      const id = pad.id || 'pad';
+      const wasConnected = gp.connected;
+      gp.connected = true; gp.id = id;
+      // Any axis/button activity this frame keeps the feed engaged.
+      const ax = (pad.axes || [0, 0]);
+      const dxa = Math.abs(ax[GAMEPAD_MAP.axes.x] || 0), dya = Math.abs(ax[GAMEPAD_MAP.axes.y] || 0);
+      let active = dxa > GAMEPAD_MAP.deadzone || dya > GAMEPAD_MAP.deadzone;
+      if (!active) { const bs = pad.buttons || []; for (let i = 0; i < bs.length; i++) if (bs[i] && bs[i].pressed) { active = true; break; } }
+      if (active || !wasConnected) gp.lastActiveMs = now; // fresh connect counts
+      // (W2 adds the one-time "a gamepad was found" banner on this connect
+      // edge, gated by gp.bannerShown — W1's feed is input-only.)
+    } else {
+      gp.connected = false; gp.id = null;
+      // Lost the pad: disengage + clear any keys we own (keyboard unaffected).
+      this._gpClearOwned();
+      return;
+    }
+    // Engagement: fresh connect engages immediately; otherwise the pad must
+    // have been active within GAMEPAD_INACTIVITY_MS. Off handled above.
+    if (!gamepadActive(this.options, pad, now, gp.lastActiveMs, GAMEPAD_INACTIVITY_MS)) {
+      // Disengaged (idle timeout): don't fight the player — release our keys.
+      this._gpClearOwned();
+      return;
+    }
+    this._gpWrite(pad, now);
+  }
+
+  // W1: the frame's pad -> input write. Reads axes/buttons once, computes the
+  // deadzone-thresholded move, and drives kb (just-pressed) + keys (held) for
+  // the move/pigment/hop/lantern, and mouse.rDown for the splash charge.
+  // KEYBOARD WINS: a key the player physically holds (input._phys) is never
+  // cleared by the feed.
+  _gpWrite(pad, now) {
+    const gp = this._gp, inp = this.input, M = GAMEPAD_MAP;
+    const axes = pad.axes || [0, 0];
+    const ax = axes[M.axes.x] || 0, ay = axes[M.axes.y] || 0;
+    // ---- movement: left stick -> a/d/w/s (deadzone 0.25) ----
+    // (no per-frame allocation: the four booleans go straight to _gpDriveMove)
+    const dz = M.deadzone;
+    const sx = Math.abs(ax) > dz ? ax : 0;
+    const sy = Math.abs(ay) > dz ? ay : 0;
+    const wa = sx < 0, wd = sx > 0, ww = sy < 0, ws = sy > 0;
+    if (wa || wd || ww || ws) gp.lastActiveMs = now; // stick alive
+    this._gpDriveMove(wa, wd, ww, ws);
+    // ---- discrete just-pressed buttons (pigments / hop / lantern) ----
+    const btns = pad.buttons || [];
+    const btn = (i) => !!(btns[i] && btns[i].pressed);
+    this._gpDriveBtn(btn(0), 'pig1');   // A -> red ('1')
+    this._gpDriveBtn(btn(2), 'pig2');   // X -> blue ('2')
+    this._gpDriveBtn(btn(3), 'pig3');   // Y -> green ('3')
+    this._gpDriveBtn(btn(5), 'hop');    // RB -> hop (' ')
+    this._gpDriveBtn(btn(4), 'lantern'); // LB -> lantern ('l'; no-op off-Reeds)
+    // ---- splash charge: hold-to-charge / press-at-full-to-fire ----
+    // The REAL mouse contract (verified against the RMB handlers): holding
+    // RMB sets rDown and charges; releasing does NOT fire (rPressed is false on
+    // the release frame — the game's fire check is `rPressed && charge >= 1`);
+    // a PRESS edge while the charge is already full fires + resets it. The feed
+    // mirrors that exactly: B held -> rDown (charge accumulates); B released ->
+    // drop rDown (no fire); a B press edge -> rPressed (fires iff already full).
+    // The feed owns rDown only while the mouse is not physically on RMB (mouse
+    // always wins — input.mouse._physR, set on physical RMB down).
+    const splashHeld = btn(M.splash);
+    const physR = inp.mouse._physR;
+    const feedHolds = splashHeld && !physR;
+    if (feedHolds && !gp.was.splash) inp.mouse.rPressed = true; // press edge (mouse contract)
+    if (feedHolds) {
+      gp.lastActiveMs = now;
+      inp.mouse.rDown = true;
+    } else if (gp.was.splash) {
+      if (!physR) inp.mouse.rDown = false; // pad released; the mouse may own it
+    }
+    gp.was.splash = feedHolds;
+  }
+
+  // W1: drive one MOVE key (a/d/w/s). The feed writes `keys` (+ a `kb` edge)
+  // only when the pad wants the key AND the physical keyboard isn't holding it
+  // (keyboard always wins). `was` mirrors which keys the feed OWNS (actually
+  // wrote), so on release it clears only its own key — it never deletes a key
+  // the keyboard is independently holding.
+  _gpDriveMove(wa, wd, ww, ws) {
+    const inp = this.input, was = this._gp.was.move, phys = inp._phys;
+    // KEYBOARD ALWAYS WINS on the axis: while the physical keyboard holds any
+    // movement key, the feed YIELDS movement entirely (releases the keys it
+    // owns) so the two inputs can never fight on the same axis. The feed
+    // re-acquires on the next frame the keyboard releases.
+    const kbMove = phys.has('a') || phys.has('d') || phys.has('w') || phys.has('s')
+      || phys.has('arrowleft') || phys.has('arrowright');
+    if (kbMove) {
+      const drop = (k) => { if (was[k]) { was[k] = false; if (!phys.has(k)) inp.keys.delete(k); } };
+      drop('a'); drop('d'); drop('w'); drop('s');
+      return;
+    }
+    const drive = (k, held) => {
+      if (held && !phys.has(k)) {
+        if (!inp.down(k)) inp.kb.add(k); // edge: just engaged this frame
+        inp.keys.add(k);
+        was[k] = true;
+      } else if (!held && was[k] && !phys.has(k)) {
+        inp.keys.delete(k); // pad released a key it owns -> drop ours
+        was[k] = false;
+      } else if (held && phys.has(k)) {
+        was[k] = false; // keyboard owns it; the feed must not clear it
+      }
+    };
+    drive('a', wa); drive('d', wd); drive('w', ww); drive('s', ws);
+  }
+
+  // W1: drive one DISCRETE button (pigment/hop/lantern) as a `kb` tap with the
+  // same just-pressed semantics the keyboard path uses. A held pad button is
+  // an edge ONCE (the kb set is cleared each frame), exactly like a keyboard
+  // tap — and the physical key press, when it happens, simply shares the same
+  // kb entry (keyboard wins trivially: it IS the same key event).
+  _gpDriveBtn(pressed, tag) {
+    const inp = this.input, was = this._gp.was;
+    const key = { pig1: '1', pig2: '2', pig3: '3', hop: ' ', lantern: 'l' }[tag];
+    if (pressed && !was[tag]) {
+      // Keyboard always wins on the same action: if the player is physically
+      // holding this key, the feed writes nothing (the keyboard's own kb edge
+      // already carries the tap).
+      if (!inp._phys.has(key) && !inp.pressed(key)) {
+        inp.kb.add(key);
+        this._gp.lastActiveMs = typeof performance !== 'undefined' ? performance.now() : (this.last || 0) * 1000;
+      }
+    }
+    was[tag] = pressed;
+  }
+
+  // W1: release every key/button the pad owns (used on disconnect /
+  // disengage / Off) so the pad can't leave a stuck move or a held splash.
+  // Keys the physical keyboard holds (input._phys) are never touched.
+  _gpClearOwned() {
+    const inp = this.input, was = this._gp.was;
+    const phys = inp._phys;
+    const drop = (k, owned) => { if (owned && !phys.has(k)) inp.keys.delete(k); };
+    const m = was.move;
+    drop('a', m.a); drop('d', m.d); drop('w', m.w); drop('s', m.s);
+    was.move.a = was.move.d = was.move.w = was.move.s = false;
+    const bk = { pig1: '1', pig2: '2', pig3: '3', hop: ' ', lantern: 'l' };
+    for (const t of ['pig1', 'pig2', 'pig3', 'hop', 'lantern']) if (was[t]) { drop(bk[t], was[t]); was[t] = false; }
+    if (was.splash) { if (!inp.mouse._physR) inp.mouse.rDown = false; was.splash = false; }
+  }
+
   // J2 (v1.4): a brief hit-stop. Holds timeScale at `scale` for `secs` of REAL
   // time (the frame loop restores it to 1 when the timer expires). Gated by
   // options.shake — with shake OFF, timeScale is never touched (the game runs
@@ -488,6 +679,7 @@ export class Game {
     const dt = clamp((t - this.last) / 1000, 0, 0.05);
     this.last = t;
     this.now = t / 1000;
+    this._pollGamepad();   // W1: feed BEFORE any update reads input (kb/keys/mouse)
     this.shake *= Math.exp(-5.5 * dt);
     this.zoom = approach(this.zoom, this.zoomTarget, 10, dt);
     // J2 (v1.4): advance/expire the hit-stop on REAL time (never sim time).
@@ -5550,17 +5742,22 @@ _drawAtelier(ctx) {
     // C3 (v1.3 M16): the panel grew 380→424 to fit a FOURTH toggle (paper
     // grain) below the vignette; the back button stays anchored to the panel
     // bottom (py + ph - 66), so its rect moves down with the taller panel.
-    const pw = 460, ph = 424, px = cx - pw / 2, py = cy - ph / 2;
+    const pw = 460, ph = 462, px = cx - pw / 2, py = cy - ph / 2;
     const padX = 46;
     const trackX = px + padX, trackW = pw - padX * 2;
     const row = (baseY) => ({ x: trackX, y: baseY, w: trackW, h: 22 });
     const yMusic = py + 112, ySfx = py + 178, yShake = py + 240, yVign = py + 278, yGrain = py + 316;
+    // W1 (v1.6 Module W): the "Gamepad: Auto / Off" row sits below the paper
+    // grain toggle; the panel grows 424->462 to fit it and the back button
+    // (anchored to py + ph - 66) moves down with the taller panel.
+    const yGpad = py + 354;
     const back = { x: cx - 90, y: py + ph - 66, w: 180, h: 46 };
     return { cx, cy, pw, ph, px, py, padX, trackX, trackW,
       music: row(yMusic), sfx: row(ySfx),
       shake: { x: trackX, y: yShake, w: trackW, h: 26 },
       vignette: { x: trackX, y: yVign, w: trackW, h: 26 },
       grain: { x: trackX, y: yGrain, w: trackW, h: 26 },
+      gpad: { x: trackX, y: yGpad, w: trackW, h: 26 },
       back };
   }
   _sliderValue(rect, val) {
@@ -5591,6 +5788,30 @@ _drawAtelier(ctx) {
     SaveSys.saveOptions(this.options);
     this.sfx('ui');
   }
+  // W1 (v1.6 Module W): flip the gamepad mode Auto<->Off. Persisted via the
+  // options blob (SAVE_VERSION stays 10 — options migration, not a save bump).
+  _setGamepadMode() {
+    this.options.gamepad = (this.options.gamepad === 'auto' ? 'off' : 'auto');
+    SaveSys.saveOptions(this.options);
+    this.sfx('ui');
+    // Turning Auto back on should re-engage a connected pad immediately.
+    if (this.options.gamepad === 'auto') this._gp.lastActiveMs =
+      (typeof performance !== 'undefined' ? performance.now() : (this.last || 0) * 1000);
+  }
+  // W1: draw the "Gamepad: Auto / Off" row (label + a two-state pill).
+  _drawGpad(c, rect, mode) {
+    c.save();
+    centerText(c, 'Gamepad', rect.x + 12, rect.y + rect.h / 2, '600 15px Georgia, serif', INK, 0.92);
+    const pw = 84, ph = 28, pxx = rect.x + rect.w - pw, pyy = rect.y + (rect.h - ph) / 2;
+    roundRectPath(c, pxx, pyy, pw, ph, ph / 2);
+    c.fillStyle = (mode === 'auto') ? '#7fae6a' : 'rgba(43,35,32,0.28)'; c.fill();
+    c.lineWidth = 2; c.strokeStyle = INK; c.stroke();
+    const on = (mode === 'auto');
+    c.beginPath(); c.arc(on ? pxx + pw - ph / 2 : pxx + ph / 2, pyy + ph / 2, ph / 2 - 4, 0, TAU);
+    c.fillStyle = PAPER; c.fill(); c.lineWidth = 1.5; c.strokeStyle = INK; c.stroke();
+    centerText(c, on ? 'Auto' : 'Off', pxx + pw / 2, pyy + ph / 2 + 1, '700 12px Georgia, serif', INK, 0.85);
+    c.restore();
+  }
   _updateOptions() {
     const g = this._optionsLayout();
     const m = this.input.mouse;
@@ -5602,6 +5823,8 @@ _drawAtelier(ctx) {
       if (this._mouseIn(g.shake.x, g.shake.y, g.shake.w, g.shake.h)) { this._toggleOpt('shake'); return; }
       if (this._mouseIn(g.vignette.x, g.vignette.y, g.vignette.w, g.vignette.h)) { this._toggleOpt('vignette'); return; }
       if (this._mouseIn(g.grain.x, g.grain.y, g.grain.w, g.grain.h)) { this._toggleOpt('grain'); return; }
+      // W1: the gamepad Auto/Off row toggles the feed mode.
+      if (this._mouseIn(g.gpad.x, g.gpad.y, g.gpad.w, g.gpad.h)) { this._setGamepadMode(); return; }
       if (this._mouseIn(g.back.x, g.back.y, g.back.w, g.back.h)) { this._closeOptions(); return; }
       // sliders: a fresh press on the track jumps the handle AND starts a drag
       const hit = (r) => m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y - 8 && m.y <= r.y + r.h + 8;
@@ -5668,6 +5891,9 @@ _drawAtelier(ctx) {
     this._drawToggle(c, g.vignette, 'Low-HP vignette', this.options.vignette);
     // C3 (v1.3 M16): the paper-grain presentation toggle (default OFF).
     this._drawToggle(c, g.grain, 'Paper grain', this.options.grain);
+    // W1 (v1.6 Module W): the "Gamepad: Auto / Off" row. A two-state pill:
+    // Auto (engages while a pad is connected + active) vs Off (feed skipped).
+    this._drawGpad(c, g.gpad, this.options.gamepad);
     // back
     uiButton(ctx, g.back.x, g.back.y, g.back.w, g.back.h, 'Back', this._mouseIn(g.back.x, g.back.y, g.back.w, g.back.h), false, { seed: 62, size: 16, mouseX: m.x, mouseY: m.y, mouseClicked: false });
     paperEnd(ctx);

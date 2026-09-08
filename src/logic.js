@@ -2281,7 +2281,7 @@ export function migrateSave(raw) {
 // (see game.js _buildGrain/_drawGrain). Presentation-only; an old options blob
 // (no `grain` field) migrates forward to OFF so returning players see no change.
 export function freshOptions() {
-  return { volume: 0.8, muted: false, difficulty: 'normal', musicVol: 0.6, sfxVol: 0.7, shake: true, vignette: true, grain: false };
+  return { volume: 0.8, muted: false, difficulty: 'normal', musicVol: 0.6, sfxVol: 0.7, shake: true, vignette: true, grain: false, gamepad: 'auto' };
 }
 export function migrateOptions(raw) {
   const o = freshOptions();
@@ -2300,6 +2300,55 @@ export function migrateOptions(raw) {
     // C3: grain defaults OFF; only an explicit true turns it on. A legacy blob
     // (field absent) migrates to OFF — presentation unchanged.
     o.grain = !!raw.grain;
+    // W1 (v1.6 Module W): `gamepad` ('auto' | 'off'). Defaults to 'auto'; only
+    // an explicit persisted 'off' is honored, so a legacy options blob (field
+    // absent) migrates forward to 'auto'. Presentation/input routing only —
+    // never feeds runT, tuning, or the pacing probes.
+    if (raw && (raw.gamepad === 'off' || raw.gamepad === 'auto')) o.gamepad = raw.gamepad;
   }
   return o;
+}
+
+// W1 (v1.6 Module W): GAMEPAD support — the raw-Gamepad-API mapping + the
+// activation rule. PURE (no browser APIs) so the smoke test can import and
+// unit-test the mapping without a real controller. The ONLY browser surface
+// the game touches is `navigator.getGamepads()` (see game.js _pollGamepad);
+// everything the feed decides from a pad's state is done here.
+//
+// Standard Gamepad API layout (the "standard" mapping):
+//   axes[0] left-stick X, axes[1] left-stick Y
+//   buttons: [0]=A [1]=B [2]=X [3]=Y (face)  [4]=LB [5]=RB (shoulders)
+//
+// The feed WRITES into the existing input.js kb/pressed/mouse APIs (it never
+// invents a new input path), so a controller drives the exact same move keys,
+// pigment keys, hop, splash and lantern the keyboard/mouse use:
+//   left stick -> a/d/w/s (deadzone 0.25)
+//   A(0) -> '1' (red)   X(2) -> '2' (blue)   Y(3) -> '3' (green)
+//   RB(5) -> ' ' (hop)  LB(4) -> 'l' (lantern; a no-op outside the Reeds)
+//   B(1)  -> splash charge (hold-to-charge / release-to-fire, mirrors RMB)
+export const GAMEPAD_MAP = {
+  deadzone: 0.25,
+  axes: { x: 0, y: 1 },
+  // discrete just-pressed buttons: index -> the input key the feed writes into kb
+  btn: { 0: '1', 2: '2', 3: '3', 4: 'l', 5: ' ' },
+  // the splash-charge button (hold-to-charge / release-to-fire, mirrors mouse RMB)
+  splash: 1,
+};
+
+// W1: is the gamepad feed ENGAGED this frame? Pure. `pad` is the (possibly
+// null) connected Gamepad, `nowMs`/`lastActiveMs` are the frame clock + the
+// last time the pad reported activity (game.js tracks both). `save` accepts
+// either the save blob (options under save.options) or the options blob
+// itself (game.js passes this.options). Off disables the feed entirely (game
+// skips the poll); Auto engages on a FRESH connect (lastActiveMs === -1) and
+// stays engaged while the pad was active within `inactivityMs`, then
+// disengages (a quiet idle pad can't fight the keyboard/mouse).
+export const GAMEPAD_INACTIVITY_MS = 6000;
+export function gamepadActive(save, pad, nowMs, lastActiveMs, inactivityMs = GAMEPAD_INACTIVITY_MS) {
+  const o = (save && save.options && typeof save.options === 'object') ? save.options : (save || {});
+  if (o.gamepad === 'off') return false;      // Off skips the poll entirely
+  if (!pad) return false;                      // nothing connected
+  if (lastActiveMs === -1) return true;        // fresh connect: engage immediately
+  if (lastActiveMs === undefined || lastActiveMs === null) return false;
+  return (nowMs - lastActiveMs) <= inactivityMs; // connected + recently active
 }

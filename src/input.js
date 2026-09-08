@@ -6,7 +6,13 @@ export class Input {
     this.canvas = canvas;
     this.keys = new Set();
     this.kb = new Set();         // "just pressed this frame" (consumed on read)
-    this.mouse = { x: 0, y: 0, worldX: 0, worldY: 0, lDown: false, rDown: false, lPressed: false, rPressed: false, wheel: 0 };
+    // W1 (v1.6 Module W): the PHYSICAL keyboard's held keys, tracked separately
+    // from `keys` (which the gamepad feed also writes into). The feed uses
+    // `_phys` to honor "keyboard always wins": it never overwrites/clears a key
+    // the player is physically holding. Zero behavioral change for the
+    // keyboard/mouse paths — `keys`/`kb` are driven exactly as before.
+    this._phys = new Set();
+    this.mouse = { x: 0, y: 0, worldX: 0, worldY: 0, lDown: false, rDown: false, lPressed: false, rPressed: false, wheel: 0, _physR: false };
     this.dragging = null;        // P9: name of the UI element being dragged (or null)
     this._bind(canvas);
   }
@@ -17,12 +23,13 @@ export class Input {
       const k = e.key.toLowerCase();
       if (!this.keys.has(k)) this.kb.add(k);
       this.keys.add(k);
+      this._phys.add(k);       // W1: the physical keyboard holds this (the pad feed checks _phys)
       if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
     };
-    this._ku = (e) => { this.keys.delete(e.key.toLowerCase()); };
+    this._ku = (e) => { const k = e.key.toLowerCase(); this.keys.delete(k); this._phys.delete(k); };
     window.addEventListener('keydown', this._kd);
     window.addEventListener('keyup', this._ku);
-    window.addEventListener('blur', () => { this.keys.clear(); this.mouse.lDown = false; this.mouse.rDown = false; });
+    window.addEventListener('blur', () => { this.keys.clear(); this._phys.clear(); this.mouse.lDown = false; this.mouse.rDown = false; });
 
     this._mm = (e) => {
       const r = cv.getBoundingClientRect();
@@ -32,11 +39,11 @@ export class Input {
     this._md = (e) => {
       this._mm(e);
       if (e.button === 0) { this.mouse.lDown = true; this.mouse.lPressed = true; }
-      if (e.button === 2) { this.mouse.rDown = true; this.mouse.rPressed = true; }
+      if (e.button === 2) { this.mouse.rDown = true; this.mouse.rPressed = true; this.mouse._physR = true; } // W1: physical RMB (the pad feed checks this)
     };
     this._mu = (e) => {
       if (e.button === 0) this.mouse.lDown = false;
-      if (e.button === 2) this.mouse.rDown = false;
+      if (e.button === 2) { this.mouse.rDown = false; this.mouse._physR = false; }
     };
     this._cm = (e) => e.preventDefault();
     this._wh = (e) => { this.mouse.wheel += Math.sign(e.deltaY); };

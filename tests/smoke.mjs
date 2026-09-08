@@ -6435,5 +6435,225 @@ console.log('== stage 88: v1.6 R6 — Reeds run probe (tests/reedspace.mjs) — 
   console.log(`ok — R6: the Reeds run probe documents the biome's run-length (human ~${human.toFixed(1)} min, wyrm fight ${wyrmMin.toFixed(1)} min) — a designed descent, opt-in post-victory, first-time swamp pace untouched`);
 }
 
+console.log('== stage 89: v1.6 W1 — GAMEPAD INPUT-ABSTRACTION LAYER (raw Gamepad API feed -> input.js kb/keys/mouse; keyboard always wins; Auto/Off option) ==');
+{
+  const W1 = await import('../src/logic.js');
+  // ---- (a) pure mapping + activation rule (logic.js, no browser) ----
+  assert(W1.GAMEPAD_MAP && W1.GAMEPAD_MAP.deadzone === 0.25, 'W1: GAMEPAD_MAP defines the left-stick deadzone (0.25)');
+  assert(W1.GAMEPAD_MAP.btn[0] === '1' && W1.GAMEPAD_MAP.btn[2] === '2' && W1.GAMEPAD_MAP.btn[3] === '3' && W1.GAMEPAD_MAP.btn[5] === ' ' && W1.GAMEPAD_MAP.btn[4] === 'l', 'W1: GAMEPAD_MAP maps the face/shoulder buttons to the pigment/hop/lantern keys (A->1, X->2, Y->3, RB->space, LB->l)');
+  assert(W1.GAMEPAD_MAP.splash === 1, 'W1: GAMEPAD_MAP designates the B button (index 1) as the splash-charge button');
+  assert(W1.GAMEPAD_INACTIVITY_MS === 6000, 'W1: GAMEPAD_INACTIVITY_MS defines the Auto disengage timeout (6000ms)');
+  const PADM = { id: 'mock' };
+  assert(W1.gamepadActive({ gamepad: 'auto' }, PADM, 1000, 500) === true, 'W1: gamepadActive — Auto + pad + recently active (500ms < 6000ms) -> ENGAGED');
+  assert(W1.gamepadActive({ gamepad: 'auto' }, PADM, 1000, -1) === true, 'W1: gamepadActive — Auto + FRESH connect (lastActiveMs -1) -> ENGAGED immediately');
+  assert(W1.gamepadActive({ gamepad: 'auto' }, PADM, 1000, -6000) === false, 'W1: gamepadActive — Auto but stale (7s since last active) -> disengaged (inactivity timeout)');
+  assert(W1.gamepadActive({ gamepad: 'off' }, PADM, 1000, 500) === false, 'W1: gamepadActive — Off disables the feed entirely (even fresh + active)');
+  assert(W1.gamepadActive({ gamepad: 'auto' }, null, 1000, 500) === false, 'W1: gamepadActive — no pad connected -> disengaged');
+  // options blob: legacy (no field) migrates to Auto; an explicit off is honored.
+  assert(W1.freshOptions().gamepad === 'auto', 'W1: freshOptions defaults gamepad to "auto"');
+  assert(W1.migrateOptions({ volume: 0.5 }).gamepad === 'auto', 'W1: migrateOptions — a legacy options blob (no gamepad field) migrates to "auto"');
+  assert(W1.migrateOptions({ gamepad: 'off' }).gamepad === 'off', 'W1: migrateOptions — an explicit persisted "off" is honored');
+  assert(W1.SAVE_VERSION === 10, 'W1: SAVE_VERSION stays 10 (the gamepad option is an OPTIONS-blob migration, not a save-schema bump)');
+
+  // ---- (b) no-pad regression: in-run key state is byte-identical to baseline ----
+  // Run a real expedition with NO pad connected and assert the feed is dormant
+  // (never engaged, never wrote a key) so keyboard/mouse play is unchanged.
+  const gNP = new Game(makeCanvas()); gNP.start(); gNP._quitToTitle();
+  gNP.save = W1.freshSave();
+  gNP._beginExpedition();
+  gNP.player.iframes = 9999;
+  frames(4);
+  assert(gNP._gp.connected === false && gNP._gp.lastActiveMs === -1, 'W1: with no pad connected the feed is dormant (not-connected, never stamped active)');
+  assert(gNP.input.moveVec()[0] === 0 && gNP.input.moveVec()[1] === 0, 'W1: no-pad — the idle move vector is zero (the feed wrote nothing)');
+  // drive the keyboard the normal way: the key set is exactly the physical keys.
+  // (keydown only — a full fireKey tap auto-releases; the game needs the key HELD.)
+  (windowListeners['keydown'] || []).forEach((fn) => fn({ key: 'a', repeat: false, preventDefault() {} }));
+  frames(2);
+  assert(gNP.input.down('a') === true && gNP.input.moveVec()[0] < 0, 'W1: no-pad — a physical "a" drives the move axis exactly as the baseline (feed never touched it)');
+  // the feed's ownership map is all-false (it wrote zero keys into the input).
+  assert(!gNP._gp.was.move.a && !gNP._gp.was.move.d && !gNP._gp.was.splash, 'W1: no-pad — the feed owns no key/mouse (keyboard-only play is byte-identical to the pre-gamepad baseline)');
+  fireKey('keyup', 'a');
+  gNP.input.keys.clear(); gNP.input._phys.clear();
+  gNP.state = 'title';
+
+  // ---- (c) the mocked navigator.getGamepads stream (a fake Gamepad) ----
+  // The feed polls navigator.getGamepads() each frame. We swap it for a
+  // controllable fake pad and drive the feed DIRECTLY (gW._pollGamepad()) so
+  // we can inspect the input right after the write — the frame-bottom
+  // endFrame() would otherwise have cleared the kb edge. endF() consumes the
+  // edge the way a real frame end would.
+  const pad = { id: 'mock-pad', axes: [0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  navigator.getGamepads = () => [pad];   // (restored after the stage)
+  const gW = new Game(makeCanvas()); gW.start();   // state === 'title'
+  const inpW = gW.input;
+  const poll = () => gW._pollGamepad();   // the feed, isolated from the frame loop
+  const endF = () => inpW.endFrame();     // consume the kb/rPressed edge (frame-bottom)
+
+  // connect: a fresh connection engages (input-only in W1; the one-time
+  // "gamepad was found" banner + the title chip are W2's job).
+  poll();
+  assert(gW._gp.connected === true && gW._gp.id === 'mock-pad', 'W1: the feed detects the connected pad (id read from the Gamepad API)');
+  assert(gW._gp.lastActiveMs >= 0, 'W1: a fresh connection counts as active (lastActiveMs stamped on connect)');
+  endF();
+
+  // stick -> move keys (deadzone 0.25 honored): full right drives "d".
+  pad.axes = [1, 0];
+  poll();
+  assert(inpW.down('d') === true && inpW.moveVec()[0] > 0, 'W1: the left stick drives the SAME move key ("d") the keyboard uses — moveVec reads it');
+  endF();
+  pad.axes = [-1, 0];
+  poll();
+  assert(inpW.down('a') === true && inpW.down('d') === false, 'W1: the left stick drives the opposite move key ("a"); the released key drops');
+  endF();
+  // deadzone honored: below 0.25 the axis drives nothing.
+  pad.axes = [0.249, 0];
+  poll();
+  assert(inpW.down('a') === false, 'W1: the deadzone is honored — an axis at/below 0.25 (0.249) drives no move key');
+  pad.axes = [0.3, 0];
+  poll();
+  assert(inpW.down('d') === true, 'W1: just above the deadzone (0.3) the axis drives a move key again (threshold honored)');
+  endF();
+  pad.axes = [0, 0];
+  poll(); endF();
+
+  // face buttons -> pigment 1/2/3 (just-pressed kb taps).
+  pad.buttons[0].pressed = true;  // A -> red ('1')
+  poll();
+  assert(inpW.kb.has('1'), 'W1: the A button (0) taps pigment "1" (red) into kb (just-pressed)');
+  endF();
+  pad.buttons[2].pressed = true;  // X -> blue ('2')
+  poll();
+  assert(inpW.kb.has('2'), 'W1: the X button (2) taps pigment "2" (blue)');
+  endF();
+  pad.buttons[3].pressed = true;  // Y -> green ('3')
+  poll();
+  assert(inpW.kb.has('3'), 'W1: the Y button (3) taps pigment "3" (green)');
+  endF();
+  pad.buttons[3].pressed = false;
+  pad.buttons[0].pressed = false;  // release A (still held from the pigment-1 test) so the next press is a fresh edge
+  poll(); endF();
+  // a held face button is an edge ONCE (not repeated each frame).
+  pad.buttons[0].pressed = true;
+  poll();
+  const firstTap = inpW.kb.has('1');
+  endF();
+  poll();                       // still held -> no new edge
+  const secondTap = inpW.kb.has('1');
+  assert(firstTap === true && secondTap === false, 'W1: a held pad button is a just-pressed edge ONCE (kb semantics match a keyboard tap), not repeated each frame');
+  endF();
+  pad.buttons[0].pressed = false;
+
+  // RB -> hop (' '), LB -> lantern ('l'; a no-op outside the Reeds — parity in W3).
+  pad.buttons[5].pressed = true;   // RB -> hop
+  poll();
+  assert(inpW.kb.has(' '), 'W1: the RB shoulder (5) taps the hop key (" ") into kb');
+  endF();
+  pad.buttons[5].pressed = false;
+  pad.buttons[4].pressed = true;   // LB -> lantern
+  poll();
+  assert(inpW.kb.has('l'), 'W1: the LB shoulder (4) taps the lantern key ("l") into kb');
+  endF();
+  pad.buttons[4].pressed = false;
+
+  // ---- (d) KEYBOARD ALWAYS WINS on the same axis ----
+  // stick pushing "d" + a physical "a" -> the feed must YIELD the axis.
+  pad.axes = [1, 0];               // pad wants "d"
+  poll();
+  assert(inpW.down('d') === true, 'W1: the pad drives "d" when the keyboard is idle');
+  endF();
+  const kdA = { key: 'a', repeat: false, preventDefault() {} };
+  (windowListeners['keydown'] || []).forEach((fn) => fn(kdA));   // physical "a"
+  poll();
+  assert(inpW.down('a') === true && inpW.down('d') === false, 'W1: KEYBOARD WINS — a physical "a" press yields the movement axis to the keyboard (the feed drops its "d"); no fighting mouse/keys');
+  endF();
+  const kuA = { key: 'a', preventDefault() {} };
+  (windowListeners['keyup'] || []).forEach((fn) => fn(kuA));     // release "a"
+  poll();
+  assert(inpW.down('d') === true, 'W1: on keyboard release the feed re-acquires the axis ("d" driven again)');
+  endF();
+  pad.axes = [0, 0];
+  poll(); endF();
+
+  // ---- (e) splash button: hold-to-charge / press-at-full-to-fire (feed level) ----
+  // The feed mirrors the REAL mouse RMB contract (verified against the RMB
+  // handlers): press -> rDown + rPressed edge; hold -> rDown (charge);
+  // release -> drop rDown WITHOUT an rPressed (release alone does NOT fire).
+  pad.buttons[1].pressed = true;   // B -> splash
+  poll();
+  assert(inpW.mouse.rDown === true && inpW.mouse.rPressed === true, 'W1: pressing the B button (1) sets mouse.rDown + an rPressed edge (mirrors the RMB press)');
+  endF();
+  poll();                           // still held
+  assert(inpW.mouse.rDown === true && inpW.mouse.rPressed === false, 'W1: holding B keeps rDown with NO rPressed (the edge is one-shot, like RMB)');
+  pad.buttons[1].pressed = false;
+  poll();                           // release
+  assert(inpW.mouse.rDown === false && inpW.mouse.rPressed === false, 'W1: releasing B drops rDown and does NOT fire (no rPressed on release — matches the mouse)');
+  endF();
+
+  // ---- (f) inactivity timeout disengages the feed (and releases its keys) ----
+  pad.axes = [1, 0];               // pad wants "d" (active -> engages)
+  poll();
+  assert(inpW.down('d') === true, 'W1: the feed is engaged and driving "d" before the timeout test');
+  endF();
+  pad.axes = [0, 0];               // pad goes quiet (so the poll won't refresh lastActiveMs)
+  gW._gp.lastActiveMs = -999999;   // simulate 6000ms+ of idleness elapsing
+  poll();
+  assert(inpW.down('d') === false && gW._gp.connected === true, 'W1: after the inactivity timeout the feed disengages (still connected) and releases its keys — a stale pad cannot hold movement');
+  endF();
+
+  // ---- (g) Off disables the feed entirely (the poll is skipped) ----
+  gW.options.gamepad = 'off';
+  pad.axes = [1, 0];               // pad still wants "d"
+  poll();
+  assert(inpW.down('d') === false && gW._gp.connected === false, 'W1: with the option "off" the poll is skipped — the feed does not engage and reports not-connected (the W2 chip goes away)');
+  gW.options.gamepad = 'auto';
+  poll();
+  assert(inpW.down('d') === true, 'W1: flipping the option back to "auto" re-engages the connected pad immediately (fresh-connect engage)');
+  endF();
+  pad.axes = [0, 0];
+  poll(); endF();
+
+  // ---- (e2) splash charge-to-full + press-at-full-to-fire, in a REAL expedition ----
+  // The feed only sets rDown/rPressed; the CHARGE (charge += dt/splashCharge
+  // while rDown) and the FIRE (rPressed && charge>=1 -> trySplash) run in the
+  // expedition update. Prove the full mouse-mirrored loop end-to-end: hold B
+  // to full, release (no fire), press again at full (fires).
+  const gS = new Game(makeCanvas()); gS.start(); gS._quitToTitle();
+  gS.save = W1.freshSave();
+  gS._beginExpedition();
+  gS.player.iframes = 9999;
+  gS.player.splashCharge = 0;
+  pad.axes = [0, 0];
+  pad.buttons[1].pressed = true;   // B held -> rDown -> the expedition charges
+  frames(40);                       // ~0.67s > splashCharge (0.55s) -> full
+  assert(gS.player.splashCharge >= 1, `W1: holding the B button charges the splash to full in a real expedition (charge ${gS.player.splashCharge.toFixed(2)} >= 1)`);
+  assert(gS.paint.splashCd === 0, 'W1: holding (never releasing) does NOT fire the splash (rPressed was only the initial press edge, at charge ~0 — mirrors the mouse)');
+  pad.buttons[1].pressed = false;    // release alone does not fire
+  frames(2);
+  assert(gS.paint.splashCd === 0, 'W1: releasing the B button alone does NOT fire the splash (release has no rPressed — byte-identical to the mouse RMB)');
+  pad.buttons[1].pressed = true;     // re-press at full -> rPressed edge -> fire
+  frames(1);
+  assert(gS.paint.splashCd > 0, 'W1: re-pressing B at full charge FIRES the splash (splashCooldown armed — press-at-full-to-fire mirrors the mouse)');
+  assert(gS.player.splashCharge === 0, 'W1: the fired splash resets the charge (trySplash consumes it — the mouse contract)');
+  pad.buttons[1].pressed = false;
+  gS.state = 'title';
+
+  // ---- (h) the option persists + legacy options migrate to Auto (options blob) ----
+  const { OPTIONS_KEY } = W1;
+  // a legacy blob with NO gamepad field loads as "auto" through the real loadOptions path.
+  localStorageStub.setItem(OPTIONS_KEY, JSON.stringify({ volume: 0.5, difficulty: 'normal' }));
+  const { SaveSys } = await import('../src/save.js');
+  assert(SaveSys.loadOptions().gamepad === 'auto', 'W1: a legacy persisted options blob (no gamepad field) loads as "auto" via the real loadOptions/migrateOptions path');
+  // an explicit "off" persists + round-trips.
+  localStorageStub.setItem(OPTIONS_KEY, JSON.stringify({ volume: 0.5, gamepad: 'off' }));
+  assert(SaveSys.loadOptions().gamepad === 'off', 'W1: a persisted "off" round-trips through the options blob');
+  // the in-game setter flips + persists.
+  gW.options.gamepad = 'auto';
+  gW._setGamepadMode();
+  assert(gW.options.gamepad === 'off', 'W1: _setGamepadMode flips auto -> off and persists (options migration; SAVE_VERSION stays 10)');
+  localStorageStub.removeItem(OPTIONS_KEY);
+}
+// restore the real navigator (no pad) so no later stage sees the mock.
+delete navigator.getGamepads;
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
