@@ -19,3 +19,8 @@ node_modules/
 
 # ---- Test artifacts (headless playtest driver screenshots) ----
 tests/.out/
+
+# ---- v1.9 frame evidence (T0): the PNGs are regenerated, large artifacts.
+#      Keep the index README committed so the audit trail survives. ----
+tests/frames/*.png
+tests/frames/*.manifest.json
