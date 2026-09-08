@@ -655,6 +655,18 @@ export class AudioSys {
       // (different type + freq) on the sfx bus so the strokes read differently.
       case 'paint-swipe': {
         const pig = opt.pig || null;
+        // S1 (v1.9): a surface-aware layer (the paint verb's texture changes by
+        // what the brush touches). The base pigment voice below is unchanged —
+        // this only ADDS a short stinger for water / vegetation (soil is the
+        // dry baseline, so it adds nothing). No-surface calls are byte-identical
+        // to the S3 (v1.4) signature.
+        const surf = opt.surface || null;
+        if (surf === 'water') {
+          this._tone(t + 0.02, 'sine', 620, 280, 0.1, 0.14);      // a soft liquid blip
+          this._noise(t, 0.09, 'lowpass', 700, 0.7, 0.1);         // a soft plop tail
+        } else if (surf === 'veg') {
+          this._noise(t, 0.08, 'bandpass', 2800, 1.6, 0.12);      // a dry rustle
+        }
         const sweep = 900 + Math.random() * 200;        // the "shh" center
         this._noise(t, 0.13, 'bandpass', sweep, 1.1, 0.22);
         this._noise(t + 0.02, 0.10, 'bandpass', sweep * 1.4, 1.3, 0.12); // airy top
@@ -682,6 +694,16 @@ export class AudioSys {
       case 'paint-splat': {
         const big = opt.big || 0;
         const pig = opt.pig || null;
+        // S1 (v1.9): a surface-aware layer (the charged splash's texture changes
+        // by what it lands on). Base voice below is unchanged; water gets a
+        // liquid body, vegetation a dry rustle, soil is the baseline.
+        const surf = opt.surface || null;
+        if (surf === 'water') {
+          this._tone(t + 0.02, 'sine', 520, 220, 0.14, 0.16);     // a wet blip
+          this._noise(t + 0.03, 0.12, 'lowpass', 600, 0.7, 0.12); // a soft ripple
+        } else if (surf === 'veg') {
+          this._noise(t, 0.1, 'bandpass', 2600, 1.6, 0.14);       // a dry scatter
+        }
         this._noise(t, 0.12 + big * 0.08, 'lowpass', 500 + big * 300, 0.7, 0.4 + big * 0.12);
         this._tone(t, 'sine', 160, 60, 0.16 + big * 0.08, 0.4);
         if (pig === 'red') {
@@ -946,6 +968,176 @@ export class AudioSys {
         this._tone(t + 0.09, 'sine', 1109, 1109, 0.14, 0.16);
         this._tone(t + 0.18, 'sine', 1319, 1760, 0.26, 0.16);
         this._tone(t + 0.09, 'triangle', 550, 1100, 0.2, 0.05);
+        break;
+      }
+      // ---- S1 (v1.9): per-enemy HIT voices. A distinct signature sting per
+      // creature so a paint hit reads as THAT enemy being struck (beetle clang /
+      // mosquito buzz-sting / toad thud / wisp hiss / serpent slither-hiss /
+      // leech slurp). All on the sfx bus via _tone/_noise (target null), short,
+      // capped by _sfxCanStart. Presentation-only: no timing / tuning change.
+      case 'hit-beetle': {   // armored CLANG — a metallic ring + a dull knock
+        this._tone(t, 'square', 220, 160, 0.08, 0.26);
+        this._tone(t, 'triangle', 880, 660, 0.12, 0.14);   // the armor ring
+        this._noise(t, 0.04, 'highpass', 3200, 1.2, 0.12);
+        break;
+      }
+      case 'hit-mosquito': { // BZ-STING — a fast buzzing zap
+        this._tone(t, 'sawtooth', 1400, 900, 0.06, 0.14);
+        this._tone(t + 0.03, 'sawtooth', 1600, 1000, 0.05, 0.10);
+        this._noise(t, 0.03, 'bandpass', 5000, 3, 0.08);
+        break;
+      }
+      case 'hit-toad': {     // THUD — a low, wet body knock
+        this._tone(t, 'sine', 120, 70, 0.12, 0.34);
+        this._noise(t, 0.06, 'lowpass', 500, 0.8, 0.16);
+        break;
+      }
+      case 'hit-wisp': {     // HISS — a light airy exhale (it is made of light)
+        this._noise(t, 0.12, 'bandpass', 4200, 2.5, 0.14);
+        this._tone(t, 'sine', 1800, 2400, 0.1, 0.06);
+        break;
+      }
+      case 'hit-serpent': {  // SLITHER-HISS — a low sliding scrape + hiss
+        this._tone(t, 'sawtooth', 180, 90, 0.14, 0.16);
+        this._noise(t, 0.1, 'bandpass', 2600, 1.5, 0.12);
+        break;
+      }
+      case 'hit-leech': {    // SLURP — a wet suction blip
+        this._tone(t, 'sine', 300, 120, 0.09, 0.22);
+        this._noise(t, 0.05, 'lowpass', 1200, 1, 0.14);
+        break;
+      }
+      // ---- S1 (v1.9): per-enemy DEATH voices. A distinct "last note" per
+      // creature (vs the generic enemy-die) so a kill reads as THAT enemy going.
+      case 'die-beetle': {   // the armor cracks — a clang that falls out
+        this._tone(t, 'square', 300, 90, 0.18, 0.28);
+        this._tone(t + 0.05, 'triangle', 990, 400, 0.2, 0.12);
+        this._noise(t, 0.12, 'highpass', 2800, 1.2, 0.14);
+        break;
+      }
+      case 'die-mosquito': { // the buzz cuts out — a descending zap
+        this._tone(t, 'sawtooth', 1600, 300, 0.16, 0.16);
+        this._noise(t, 0.08, 'bandpass', 4500, 3, 0.10);
+        break;
+      }
+      case 'die-toad': {     // a heavy wet flop
+        this._tone(t, 'sine', 140, 55, 0.24, 0.36);
+        this._noise(t, 0.14, 'lowpass', 450, 0.8, 0.2);
+        break;
+      }
+      case 'die-wisp': {     // it disperses — a fading shimmer
+        this._tone(t, 'sine', 1400, 2200, 0.2, 0.12);
+        this._tone(t + 0.06, 'sine', 1800, 2800, 0.22, 0.08);
+        this._noise(t, 0.16, 'bandpass', 5000, 2.5, 0.08);
+        break;
+      }
+      case 'die-serpent': {  // it sinks away — a low slither-fade
+        this._tone(t, 'sawtooth', 200, 60, 0.26, 0.2);
+        this._noise(t, 0.18, 'bandpass', 2000, 1.5, 0.12);
+        break;
+      }
+      case 'die-leech': {    // it peels off and drops — a wet plop
+        this._tone(t, 'sine', 320, 90, 0.14, 0.24);
+        this._noise(t + 0.06, 0.08, 'lowpass', 1000, 1, 0.16);
+        break;
+      }
+      // ---- S1 (v1.9): the FULL COLLECTION fanfare (the H2 completion beat).
+      // A triumphant major arpeggio + a gilded shimmer — the "museum keeps you
+      // better" moment. SFX-bus (distinct from the music-layer cinematicArp it
+      // accompanies), presentation-only.
+      case 'collection-fanfare': {
+        const maj = [523.25, 659.25, 783.99, 1046.5, 1318.5]; // C5 E5 G5 C6 E6
+        maj.forEach((f, i) => {
+          this._tone(t + i * 0.12, 'triangle', f, f, 0.4, 0.22);
+          this._tone(t + i * 0.12, 'sine', f * 2, f * 2, 0.28, 0.08); // sparkle octave
+        });
+        this._tone(t + 0.6, 'sine', 261.63, 261.63, 1.0, 0.14);       // warm C4 swell
+        this._noise(t + 0.5, 0.9, 'bandpass', 5000, 2.5, 0.1);       // gilded shimmer
+        break;
+      }
+      // ---- S1 (v1.9): the CHARGED SPLASH (the big RMB burst). The core paint
+      // verb's "charged big" — a heavier impact than the base splash with a low
+      // body + a wide wet throw. Surface-aware (water/veg/soil) like the swipe.
+      // SFX-bus, presentation-only (fires from paint.trySplash).
+      case 'charge-splash': {
+        const surf = opt.surface || null;
+        this._tone(t, 'sine', 120, 45, 0.22, 0.42);                 // the deep impact
+        this._noise(t, 0.2, 'lowpass', 480, 0.7, 0.42);             // the wide wet throw
+        this._noise(t + 0.04, 0.16, 'bandpass', 1600, 1.2, 0.18);   // a spray of droplets
+        this._tone(t + 0.03, 'triangle', 240, 140, 0.16, 0.14);     // a bright body
+        if (surf === 'water') {
+          this._tone(t + 0.05, 'sine', 540, 220, 0.16, 0.16);       // a liquid plunge
+          this._noise(t + 0.06, 0.14, 'lowpass', 600, 0.7, 0.14);   // a soft ripple
+        } else if (surf === 'veg') {
+          this._noise(t, 0.12, 'bandpass', 2600, 1.6, 0.16);        // a dry scatter
+        }
+        break;
+      }
+      // ---- S1 (v1.9): status OFF voices — the counterpart to the S3 (v1.4)
+      // ignite/freeze/root blips, fired the instant a status EXPIRES (or is
+      // scrubbed by a dry brush) so each effect has a distinct "it's over" sting.
+      case 'burn-out': {
+        // the fire fizzles — a crackle that thins to nothing + a soft low fade
+        this._noise(t, 0.12, 'highpass', 1800, 1.8, 0.12);
+        this._noise(t + 0.05, 0.14, 'lowpass', 500, 0.9, 0.1);
+        this._tone(t + 0.08, 'sine', 300, 140, 0.14, 0.08);
+        break;
+      }
+      case 'freeze-release': {
+        // the ice thaws — a soft crystal crack + a warm defrosting hum
+        this._tone(t, 'sine', 2200, 1500, 0.07, 0.1);
+        this._noise(t + 0.03, 0.09, 'highpass', 3200, 2, 0.08);
+        this._tone(t + 0.06, 'sine', 400, 620, 0.12, 0.08);
+        break;
+      }
+      case 'root-crackle': {
+        // the roots give way — a low dry crackle + a thud of relief
+        this._noise(t, 0.1, 'lowpass', 700, 1, 0.16);
+        this._tone(t, 'sine', 130, 80, 0.1, 0.16);
+        this._noise(t + 0.06, 0.08, 'bandpass', 1200, 1.4, 0.08);
+        break;
+      }
+      // ---- S1 (v1.9): the BOSS PHASE-SHIFT sting. One shared sting for all four
+      // bosses (the gray/green/gilded herons + the Silt Wyrm + Hollow Warden +
+      // Umbral Wyrm all route through the same this.heron awaken latch). It is the
+      // "the fight just escalated" hit — distinct from the awaken BLOOM (the
+      // visual+arpeggio beat in _triggerBloom) and from the per-pigment awaken tone.
+      // SFX-bus, presentation-only (fires at the boss's awaken/phase flip).
+      case 'boss-phase': {
+        this._tone(t, 'sawtooth', 180, 90, 0.3, 0.22);              // a rising roar
+        this._tone(t + 0.08, 'sawtooth', 240, 120, 0.3, 0.18);
+        this._noise(t, 0.24, 'lowpass', 600, 0.9, 0.18);            // a heavy body
+        this._tone(t + 0.16, 'triangle', 520, 780, 0.28, 0.14);     // a rising resolve
+        break;
+      }
+      // ---- S1 (v1.9): the UI HOVER tick — a very soft, high, dry "tick" for
+      // moving the focus cursor between options (distinct from the fuller
+      // 'ui' confirm click + 'ui-back' back step, which stay as-is).
+      case 'ui-hover': {
+        this._tone(t, 'sine', 1400, 1600, 0.03, 0.05);
+        break;
+      }
+      // ---- S1 (v1.9): PAUSE open/close — a distinct, slightly larger panel
+      // whoosh (vs the flat 'ui' tick) so the pause moment reads as a screen
+      // state change, not a button click.
+      case 'pause-open': {
+        this._noise(t, 0.14, 'bandpass', 900, 1, 0.12);
+        this._tone(t, 'sine', 300, 520, 0.14, 0.1);
+        break;
+      }
+      case 'pause-close': {
+        this._noise(t, 0.12, 'bandpass', 1400, 1, 0.1);
+        this._tone(t, 'sine', 520, 300, 0.12, 0.1);
+        break;
+      }
+      // ---- S1 (v1.9): the BOSS KILL (big) sting. The final blow that drops any
+      // heron/wyrm/warden/umbra — a heavy impact + a rising resolve. SFX-bus,
+      // presentation-only (fires alongside the existing awaken/hitStop beat).
+      case 'boss-kill': {
+        this._tone(t, 'sine', 90, 45, 0.5, 0.4);                     // the deep impact
+        this._noise(t, 0.3, 'lowpass', 700, 0.8, 0.24);              // the body fall
+        this._tone(t + 0.12, 'triangle', 392, 784, 0.4, 0.2);        // rising resolve
+        this._tone(t + 0.24, 'triangle', 523, 1046, 0.5, 0.16);
         break;
       }
     }

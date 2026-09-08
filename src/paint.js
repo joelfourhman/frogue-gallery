@@ -2,8 +2,20 @@
 // Painting is combat AND environmental interaction: every swipe writes to the
 // world paint layer and applies pigment damage + statuses to anything it touches.
 'use strict';
-import { TAU, clamp, dist } from './math.js';
-import { PIGMENTS, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus } from './logic.js';
+import { TAU, clamp, dist, dist2 } from './math.js';
+import { PIGMENTS, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus, REEDS_FLOOD_FLOOR } from './logic.js';
+
+// S1 (v1.9): the creatures with a DEDICATED per-creature hit sting (the 6
+// archetypes built in audio.js). Turtle/cragfrog have no dedicated sting, so a
+// hit on them falls back to the generic 'enemy-hit'. Kept as a Set (no per-hit
+// allocation) so the once-per-action gate stays cheap.
+const _HIT_KINDS = new Set(['beetle', 'mosquito', 'toad', 'wisp', 'serpent', 'leech']);
+
+// S1 (v1.9): the STATUS-OFF sting per status type — the wet "pop" as a state
+// drops (burn burns out / freeze thaws / root cracks). `slow` folds into the
+// freeze release. Used by the dry-scrub (paint) and the natural-expiry
+// (game) paths. Kept as a module const (no per-frame allocation).
+const _STATUS_OFF = { burn: 'burn-out', freeze: 'freeze-release', slow: 'freeze-release', root: 'root-crackle' };
 
 export class Paint {
   constructor(player, world, tuning, sfx, particles) {
@@ -27,6 +39,29 @@ export class Paint {
   _addWet(x, y, r, pig, life) {
     this.wet.push({ x, y, r, t: life, max: life, pig, seed: Math.random() * 100 });
     if (this.wet.length > this.MAX_WET) this.wet.shift();
+  }
+
+  // S1 (v1.9): the SURFACE the brush is laying onto, from the target point.
+  // Presentation-only — feeds a distinct paint voice (water blip / vegetation
+  // rustle / soil baseline). Order: open water (Reeds flood band, a pure
+  // elevation test), then vegetation (a live reed cluster within the stroke's
+  // reach), else the soil/dry baseline. Bounded O(veg) scan per stroke — a
+  // world's veg array is small (~24) and this runs at swipe rate only.
+  paintSurfaceAt(x, y, reach) {
+    const w = this.world;
+    if (!w) return 'soil';
+    // open dark water (Reeds variant only; a base swamp has no flood floor, so
+    // it is always the dry baseline — a byte-identical no-op there).
+    const rw = w.reedsWater || (w.reedsVariant ? { floor: REEDS_FLOOD_FLOOR } : null);
+    if (rw && y >= rw.floor) return 'water';
+    // A real World always has a veg array; the headless smoke stub may not —
+    // treat a missing array as "no vegetation here" (the dry baseline).
+    const veg = w.veg || [];
+    const r2 = reach * reach;
+    for (const v of veg) {
+      if (v.alive && dist2(v.x, v.y, x, y) < r2) return 'veg';
+    }
+    return 'soil';
   }
 
   get swipeRange() { return this.tuning.swipeRange; }
@@ -85,7 +120,11 @@ export class Paint {
     this._addWet(p.x + Math.cos(a) * R * 0.9, p.y + Math.sin(a) * R * 0.9, 6 + Math.random() * 4, pig, 0.7 + Math.random() * 0.4);
     // S3 (v1.4): a pigment-colored swipe voice (wet "shh" + a per-pigment
     // signature) replaces the plain generic swish.
-    this.sfx('paint-swipe', { pig });
+    // S1 (v1.9): + the surface the stroke lands on (water blip / vegetation
+    // rustle / soil baseline). Presentation-only — a no-surface stroke is the
+    // byte-identical S3 signature.
+    const surf = this.paintSurfaceAt(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R, R * 0.7);
+    this.sfx('paint-swipe', { pig, surface: surf });
 
     // fan-shaped hit test
     const arc = this.tuning.swipeArc;
@@ -121,7 +160,12 @@ export class Paint {
     this.world.paintSplash(p.x, p.y, R, pig);
     // S3 (v1.4): a pigment-colored splash voice (wet "splat" + a per-pigment
     // signature) replaces the plain generic splat.
-    this.sfx('paint-splat', { pig, big: 1 });
+    // S1 (v1.9): the CHARGED big burst gets its own voice — `charge-splash`
+    // (heavier impact + a per-pigment signature) with the surface it lands on.
+    // The full-charge splash is the "charged big" of the core paint verb; a
+    // no-surface call still lands the pigment + big signature.
+    const surf = this.paintSurfaceAt(p.x, p.y, this.tuning.splashRadius);
+    this.sfx('charge-splash', { pig, surface: surf });
     // R3 (v1.6 Module R): the serpent is unhittable while burrowed/recovering
     // (see trySwipe) — a blue splash that blinds a wisp still counts, but the
     // serpent stays planted under the water line.
@@ -160,6 +204,17 @@ export class Paint {
         enemy: e, deflectFactor: deflect, sleepBonus,
       });
       e.hp -= dmg;
+      // S1 (v1.9): the per-creature HIT sting — the 6 archetypes have a
+      // dedicated voice (armor clang / mosquito zap / toad thud / wisp hiss /
+      // serpent slither / leech slurp); turtle/cragfrog fall back to the
+      // generic 'enemy-hit'. Fired at most ONCE per action (a big splash
+      // hitting many enemies should not be a sting machine-gun), using the
+      // first hit creature's kind.
+      if (!fired.hit) {
+        fired.hit = true;
+        const hk = e.kind;
+        this.sfx(_HIT_KINDS.has(hk) ? 'hit-' + hk : 'enemy-hit');
+      }
       // floating damage number (pigment-colored); a deflected hit says "shell!"
       if (deflect < 1) {
         this.note(e.x, e.y - e.r - 18, 'shell', pig);
@@ -171,10 +226,17 @@ export class Paint {
       // not a stain, so it's left alone.
       if (pig === 'dry') {
         if (e.status && e.status.type !== 'dizzy') {
+          const clearedType = e.status.type;
           e.status = null; e.burnAccum = 0;
           this.note(e.x, e.y - e.r - 6, 'cleanse', 'dry');
           // S3: the scrub-whoosh, once per action.
-          if (!fired.cleanse) { fired.cleanse = true; this.sfx('cleanse'); }
+          if (!fired.cleanse) {
+            fired.cleanse = true; this.sfx('cleanse');
+            // S1 (v1.9): the STATUS-OFF sting for whatever was scrubbed off
+            // (the dry brush scrubs burn/freeze/slow/root). Fires with the
+            // cleanse (once per action) — a wet "pop" as the state drops.
+            this.sfx(_STATUS_OFF[clearedType] || 'burn-out');
+          }
         }
       // toad special: any non-dry paint can dizzy instead of the normal status
       } else if (e.dizzyPaintChance && Math.random() < e.dizzyPaintChance) {
@@ -208,6 +270,10 @@ export class Paint {
     if (pig === 'green' && hits.length && p.hp < p.maxHp && !p._plumeSuppress) {
       p._healAcc = (p._healAcc || 0) + (this.tuning.greenHealOnPaint || 0.5);
       this.note(p.x, p.y - p.r - 14, 'heal', 'green');
+      // S1 (v1.9): the heal chime — fires the instant a green stroke actually
+      // lands a heal (suppressed by the gilded plume, like the heal itself).
+      // Presentation-only (sfx-bus; no-op in headless smoke).
+      this.sfx('heal');
     }
   }
 

@@ -364,6 +364,12 @@ export class Game {
     this._floats = [];       // [{ x, y, text, t, max, color }]
     this._streakTrail = [];  // [{ x, y, t, max }] — recent positions on a streak
     this._pauseOpenT = 0;    // J5: pause panel slide+fade clock (real time)
+    // S1 (v1.9): the UI hover tick state. `_hoverIdx` is the index of the
+    // focused-menu button the cursor is currently over (or -1 when none); the
+    // frame-end hook fires 'ui-hover' only when the hover TARGET changes, so a
+    // cursor resting on a button never re-ticks. (Pause open/close is handled
+    // by direct swaps at the pause-transition sites, not here.)
+    this._hoverIdx = -1;
     // J3 (v1.4): the camera's awaken-moment hold. A heron rising (the Great
     // Green Heron reveal) triggers a ~1.2 s zoom-out + hold on the heron, then
     // the camera eases back to normal follow. Real-time presentation — it never
@@ -1005,7 +1011,7 @@ export class Game {
         this._pauseOpenT += dt;
         if (this.input.pressed('p')) {
           this.paused = false;
-          this.sfx('ui');
+          this.sfx('pause-close');   // S1 (v1.9): dedicated pause close
         } else if (this.input.pressed('escape')) {
           this.sfx('ui-back');
           this._quitToTitle();
@@ -1015,7 +1021,7 @@ export class Game {
             // geometry must match _drawPause (M5; Q1 kept the card + buttons in lock-step)
             const cx = this.cw / 2, cy = this.ch / 2;
             const pw = 340, ph = 320, px = cx - pw / 2, py = cy - ph / 2;
-            if (this._mouseIn(px, py + 164, pw, 44)) { this.paused = false; this.sfx('ui'); }
+            if (this._mouseIn(px, py + 164, pw, 44)) { this.paused = false; this.sfx('pause-close'); }   // S1 (v1.9): dedicated pause close
             else if (this._mouseIn(px, py + 216, pw, 44)) { this.sfx('ui-back'); this._quitToTitle(); }
           }
         }
@@ -1076,8 +1082,32 @@ export class Game {
       else this._updateAtelier(dt);
     }
 
+    this._sfxMenuHover();   // S1 (v1.9): a UI hover tick when the cursor enters a button
     this._drawAll();
     this.input.endFrame();
+  }
+
+  // S1 (v1.9): the UI HOVER tick. Fires 'ui-hover' when the mouse cursor ENTERS
+  // a focused-menu button (the target changes). Presentation-only — reads the
+  // current menu button list (the same _gpMenuList the gamepad/keyboard nav use)
+  // and the cursor, fires at most once per hover-target change, and no-ops in
+  // headless smoke (the sfx wrapper is a no-op there). `_hoverIdx` tracks the
+  // last hovered button index so a resting cursor never re-ticks.
+  _sfxMenuHover() {
+    const focus = this._gpMenuList();
+    const list = focus && focus.list ? focus.list : null;
+    let idx = -1;
+    if (list && this.state !== 'expedition') {
+      const m = this.input.mouse;
+      for (let i = 0; i < list.length; i++) {
+        const b = list[i];
+        if (b && b.w > 0 && m.x >= b.x && m.x <= b.x + b.w && m.y >= b.y && m.y <= b.y + b.h) { idx = i; break; }
+      }
+    }
+    if (idx !== this._hoverIdx) {
+      this._hoverIdx = idx;
+      if (idx >= 0) this.sfx('ui-hover');
+    }
   }
 
   _stepHeronFlight(dt) {
@@ -3562,7 +3592,9 @@ _drawAtelier(ctx) {
     if (!tut) {
       if (this.input.pressed('p')) {
         this.paused = !this.paused;
-        this.sfx(this.paused ? 'ui-back' : 'ui');
+        // S1 (v1.9): dedicated pause open/close (the panel slides+fade either
+        // way) replaces the generic ui/ui-back.
+        this.sfx(this.paused ? 'pause-open' : 'pause-close');
         if (this.paused) this._pauseOpenT = 0;   // J5: restart the panel slide+fade
         return;
       }
@@ -3747,6 +3779,12 @@ _drawAtelier(ctx) {
         const res = this.paint.paintBossHit(this.heron, p.pigment, this.tuning.bossPaintHit);
         if (res === 'awaken') {
           this.sfx('awaken');
+          // S1 (v1.9): the shared BOSS PHASE-SHIFT sting — the 3-hue awaken is
+          // the boss's phase-shift moment (it turns vulnerable + the pattern
+          // changes). One sting covers all 4 boss archetypes (heron/wyrm/
+          // warden/umbra all flow through this path). The distinct awaken
+          // BLOOM is the separate 'awaken-bloom' from _triggerBloom below.
+          this.sfx('boss-phase');
           // V2 (v1.2 M11): the heron turns colorful — a short celebratory
           // bloom: radial color wash + a brief world-saturation surge + a
           // distinctive 'awaken-bloom' SFX. Pure presentation (see _triggerBloom).
@@ -3833,6 +3871,19 @@ _drawAtelier(ctx) {
         if (far && !(e.status && e.status.type === 'burn')) continue;
       }
       e.update(dt, p, this.tuning, this.world, this.now);
+      // S1 (v1.9): the STATUS-OFF sting (the state drops on its own timer —
+      // burn burns out / freeze thaws / root cracks). `stepStatus` only sets
+      // the expiry when the timer hits 0 (a burn KILL is a separate hp path,
+      // so a just-died enemy skips this and plays its death sound instead).
+      // Presentation-only: consumed (nulled) so it fires exactly once.
+      if (e._statusExpired) {
+        const st = e._statusExpired; e._statusExpired = null;
+        if (!e.dead) {
+          if (st === 'burn') this.sfx('burn-out');
+          else if (st === 'freeze' || st === 'slow') this.sfx('freeze-release');
+          else if (st === 'root') this.sfx('root-crackle');
+        }
+      }
       if (e._burnTick) {
         e._burnTick = 0;
         this.particles.embers(e.x, e.y - 10, 2);
@@ -4566,7 +4617,16 @@ _drawAtelier(ctx) {
   _onEnemyDead(e) {
     this.score += e.score;
     this.runEnemies += 1;  // Q1 (v1.6): this expedition's enemies painted (pause summary; in-memory only)
-    this.sfx('enemy-die');
+    // S1 (v1.9): the per-creature DEATH sting — the 6 archetypes have a
+    // dedicated voice (armor crack / buzz cut-out / wet flop / shimmer /
+    // slither-fade / slurp-plop); turtle/cragfrog fall back to the generic
+    // 'enemy-die'. Presentation-only (no-op in headless smoke).
+    {
+      const dk = e.kind;
+      const dieName = (dk === 'beetle' || dk === 'mosquito' || dk === 'toad' || dk === 'wisp' || dk === 'serpent' || dk === 'leech')
+        ? 'die-' + dk : 'enemy-die';
+      this.sfx(dieName);
+    }
     // J2 (v1.4): a small hit-stop pop on a kill (60–90 ms @ ~0.3×). Gated by
     // options.shake (hitStop is a no-op when shake is OFF).
     this.hitStop(0.08, 0.3);
@@ -4680,6 +4740,11 @@ _drawAtelier(ctx) {
         this._cine = { t: 0, dur: 4, arpeggiated: false, collection: true };
         this._cine.firstBeat = true;
         if (this.audio && this.audio.cinematicArp) this.audio.cinematicArp();
+        // S1 (v1.9): the FULL COLLECTION fanfare (the H2 completion beat) — a
+        // triumphant major arpeggio + a gilded shimmer on the SFX bus, layered
+        // under the music-layer cinematicArp it accompanies. The "museum keeps
+        // you better" moment. Fires exactly once (the galleryComplete latch).
+        this.sfx('collection-fanfare');
         this.addBanner('THE FULL COLLECTION — the museum keeps you better.', 4.6, this.ch * 0.34);
       }
     }
@@ -5201,7 +5266,11 @@ _drawAtelier(ctx) {
     // duration as bossTime; a no-op for a normal run).
     this._challengeAdd('bossDefeat');
     this.sfx('awaken');
-        this.addShake(16);
+    // S1 (v1.9): the BOSS KILL (big) sting — the final blow that drops any
+    // heron/wyrm/warden/umbra. Fires alongside the existing awaken + the
+    // hitStop/whiteFlash beat (presentation-only; no-op in headless smoke).
+    this.sfx('boss-kill');
+    this.addShake(16);
         // J2 (v1.4): the big moment — ~0.8 s of slow-mo (~0.35×) + a white
         // flash frame + a shake spike. All gated by options.shake (hitStop /
         // whiteFlash are no-ops when shake is OFF), so this is pure presentation

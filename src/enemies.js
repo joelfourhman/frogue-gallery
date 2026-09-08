@@ -252,6 +252,11 @@ export class Enemy {
     const ev = stepStatus(this, dt, tuning, now);
     this._burnTick = ev.tick; // consumed by game for fx
     if (ev.expired === 'burn' && !this.dead) this._burnedOut = true;
+    // S1 (v1.9): the status type that EXPIRED this frame (null most frames).
+    // Consumed by game.js for the presentation-only "status off" sting
+    // (burn-out / freeze-release / root-crackle). Pure presentation — the
+    // expiry itself is logic.js's job (stepStatus); this just surfaces WHICH.
+    this._statusExpired = ev.expired;
     if (this.hp <= 0) { this.dead = true; return; }
     if (this.tintT > 0) { this.tintT -= dt * this.paintTintDecay; if (this.tintT <= 0) this.tint = null; }
     if (this.hitFlash > 0) this.hitFlash -= dt;
