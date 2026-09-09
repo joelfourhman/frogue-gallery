@@ -36,6 +36,70 @@ export const MIST_BANDS = [
 // Cap on open-water shimmer glints (bounded so the draw cost never grows).
 export const SHIMMER_CAP = 12;
 
+// L1 (v1.9 "The Living Swamp"): the ENVIRONMENTAL LIFE layer — a parallax
+// layer-0 of LIVING elements (breathing mist, ambient fireflies, drifting
+// pollen, surface ripples). PRESENTATION-ONLY: every element below is a pure
+// function of (a) the world SEED (positions — built once in build() from a
+// dedicated seeded stream, so a fixed seed always gives the same layout) and
+// (b) the wall-clock `now` (motion — drawn in drawAmbient). No new per-frame
+// state, no global Math.random in the hot path, NO tuning / runT / logic.js
+// change (logic.js stays byte-identical), so all 9 pacing probes are
+// unchanged. The pools are small + view-culled so the on-screen element total
+// stays capped into the existing P10 particle budget (the drawAmbient +
+// paint-juice combined on-screen total is asserted ≤ 220 in smoke).
+
+// L1: the BREATHING mist — a slow alpha/offset oscillation on the existing
+// parallax mist bands (the v1.4 MIST_BANDS). Returns the breathing factor
+// (≈0..1, centered ~0.5) for the `seed`-th band, so the band's alpha swells
+// and the whole band drifts a few px — the mist "breathes." Period ~9 s (a
+// deep, slow inhale/exhale), phased per band so the bands breathe out of
+// sync. Pure + deterministic.
+export function mistBreath(seed, now) {
+  return 0.5 + 0.5 * Math.sin(now * 0.7 + (seed % 61) * 0.53);   // 0..1
+}
+
+// L1: the AMBIENT firefly twinkle — a slow, low-frequency brightness pulse for
+// the i-th ambient firefly. Staggered (each firefly in/out of phase) so the
+// swarm flickers rather than blinks in unison. Returns 0..1. Pure +
+// deterministic.
+export function fireflyTwinkle(i, now) {
+  const s = 0.5 + 0.5 * Math.sin(now * 0.85 + i * 1.33);   // 0..1, staggered
+  return s * s;                                            // ease (dim mid)
+}
+
+// L1: the SURFACE-ripple phase — a repeating 0..1 expansion cycle for the i-th
+// water ripple. A staggered sawtooth so a few ripples pulse out of sync. Pure
+// + deterministic.
+export function ripplePhase(i, now) {
+  const t = (now * 0.22 + i * 0.31) % 1;                   // 0..1, looping
+  return t;
+}
+
+// L1: pool size caps (presentation elements, view-culled in drawAmbient). Kept
+// SMALL so the on-screen element total stays capped into the existing P10
+// particle budget: pollen 14 + ambient fireflies 18 (Reeds only) + ripples 13.
+export const AMBIENT_POLLEN_CAP = 14;
+export const AMBIENT_FIREFLY_CAP = 18;
+export const AMBIENT_RIPPLE_CAP = 13;
+
+// L1: count the ambient (living-world) elements that fall inside the visible
+// view rect (world px). This is the P10 "on-screen particle" measure for the
+// new layer — the SAME cull the draw pass uses, so the smoke assertion and the
+// render agree. The counts (not the positions) are returned so the caller can
+// assert the cap without re-deriving the layout.
+export function ambientCounts(w, view) {
+  const l = view.x, r = view.x + view.w / view.scale;
+  const t = view.y, b = view.y + view.h / view.scale;
+  const inside = (x, y, m) => x + m > l && x - m < r && y + m > t && y - m < b;
+  let pollen = 0;
+  for (const p of w.ambientPollen) if (inside(p.x, p.y, 16)) pollen++;
+  let fireflies = 0;
+  for (const f of w.ambientFireflies) if (inside(f.x, f.y, 16)) fireflies++;
+  let ripples = 0;
+  for (const rp of w.ambientRipples) if (inside(rp.x, rp.y, rp.rMax)) ripples++;
+  return { pollen, fireflies, ripples, total: pollen + fireflies + ripples };
+}
+
 // L2 (v1.4 "Make It Amazing"): the layered watercolor render pass. Pure
 // draw-time + a bake-once cache — no new per-frame state, so P10 (off-screen
 // culling) and the pacing probes (runT) are untouched.
@@ -116,6 +180,17 @@ export class World {
     // world carries empty arrays, so a first-time run is byte-identical.
     this.fireflies = [];       // {x,y,r,seed,ph} — drifting light, refills the lantern
     this.restSpots = [];       // {x,y,r,seed} — lantern-rest stones
+    // L1 (v1.9): the ENVIRONMENTAL LIFE pools (presentation-only living
+    // elements). Built in build() from a dedicated seeded stream (seed + 731)
+    // so a fixed seed always yields the same layout — deterministic + capped.
+    // `ambientPollen` (swamp drifting leaves/pollen), `ambientFireflies`
+    // (Reeds/Black-Reeds only — a SEPARATE small pool from the lantern-light
+    // economy `fireflies` above), `ambientRipples` (surface ripples on the
+    // open-water bands). Empty arrays on a base world where a pool doesn't
+    // apply, so a first-time run's on-screen element count is unchanged.
+    this.ambientPollen = [];      // {x,y,drift,seed,sz,ph} — swamp drifting leaves/pollen
+    this.ambientFireflies = [];   // {x,y,seed,ph,sz} — Reeds/Black-Reeds ambient fireflies
+    this.ambientRipples = [];     // {x,y,rMax,seed,ph} — surface ripples on the water bands
     // R1 (v1.6): `this.reedsVariant` (set from opts.reeds above) marks the
     // Reeds VARIANT world. `this.reeds` (below) is the GROWN-REEDS array
     // (vegetation) — a different thing — hence the distinct flag.
@@ -184,6 +259,39 @@ export class World {
       // gets the DEFAULT v1.6 thresholds (REEDS_BESTIARY_DENSITY) and a base
       // run never enters the branch at all (byte-identical).
       this.reedsBestiary = dark ? REEDS_DARK_BESTIARY_DENSITY : null;
+    }
+    // L1 (v1.9): the ENVIRONMENTAL LIFE pools — a dedicated DETERMINISTIC RNG
+    // stream (seed + 731, distinct from the terrain `rng` AND the light-economy
+    // +977/+2977 streams) so the living-world layout is reproducible per seed
+    // without perturbing any existing stream. PRESENTATION-ONLY: these arrays
+    // are read only by drawAmbient / ambientCounts (draw + the smoke cull) —
+    // never by the tuning / runT / logic.js path, so a fixed seed gives the
+    // same layout and the pacing probes are unchanged. Capped small:
+    //   pollen  (swamp)        AMBIENT_POLLEN_CAP   — drifting leaves/pollen
+    //   fireflies (Reeds only) AMBIENT_FIREFLY_CAP  — the ambient swarm
+    //   ripples (water bands)  AMBIENT_RIPPLE_CAP   — surface ripples
+    const arng = mulberry32((this.seed + 731) | 0);
+    // (a) drifting leaves / pollen — swamp world (a base world is the swamp;
+    //     the Reeds descent has no pollen, only its own firefly swarm).
+    if (!this.reedsVariant) {
+      for (let i = 0; i < AMBIENT_POLLEN_CAP; i++) {
+        this.ambientPollen.push({ x: 60 + arng() * (this.w - 120), y: 80 + arng() * (this.h - 160), drift: 6 + arng() * 10, seed: (i * 29) % 971, sz: 1.6 + arng() * 2.0, ph: arng() * TAU });
+      }
+    }
+    // (b) ambient fireflies — Reeds + Black Reeds ONLY (a SEPARATE small pool
+    //     from the lantern-light-economy `fireflies`). The base swamp has no
+    //     ambient fireflies.
+    if (this.reedsVariant) {
+      for (let i = 0; i < AMBIENT_FIREFLY_CAP; i++) {
+        this.ambientFireflies.push({ x: 120 + arng() * (this.w - 240), y: 140 + arng() * (this.h - 280), seed: (i * 41) % 991, ph: arng() * TAU, sz: 1.4 + arng() * 1.8 });
+      }
+    }
+    // (c) surface ripples — on the water bands (every world carries a few; the
+    //     open-water / flooded bands are where they read as surface ripples).
+    //     y is biased toward the lower open-water half of the swamp.
+    for (let i = 0; i < AMBIENT_RIPPLE_CAP; i++) {
+      const y = 0.55 * this.h + arng() * (0.45 * this.h);
+      this.ambientRipples.push({ x: 100 + arng() * (this.w - 200), y, rMax: 10 + arng() * 16, seed: (i * 37) % 891, ph: arng() * TAU });
     }
     // grass tufts
     for (let i = 0; i < Math.round(260 * k); i++) {
@@ -554,6 +662,113 @@ export class World {
     }
   }
 
+  // L1 (v1.9 "The Living Swamp"): the ENVIRONMENTAL LIFE layer — the parallax
+  // layer-0 of LIVING elements that make the swamp feel inhabited:
+  //   (a) SURFACE RIPPLES — a few soft expanding rings on the open-water bands
+  //       (every world; y biased to the lower open-water half).
+  //   (b) DRIFTING POLLEN — small drifting leaves/pollen motes (swamp only).
+  //   (c) AMBIENT FIREFLIES — a small twinkling swarm (Reeds / Black Reeds only
+  //       — a SEPARATE pool from the lantern light-economy fireflies).
+  // The BREATHING MIST is the v1.4 parallax bands, now modulated in drawProps.
+  //
+  // PRESENTATION-ONLY + POOLED + SEEDED:
+  //   - positions come from the seeded pools built in build() (seed + 731);
+  //   - motion is a pure function of `now` (no per-frame world state, no
+  //     Math.random in the hot path — so the byte-identity / A/B invariance
+  //     holds and the pacing probes are unchanged);
+  //   - every element is VIEW-CULLED to the visible rect (the same cull
+  //     ambientCounts uses), so the on-screen count stays capped into the
+  //     existing P10 particle budget;
+  //   - zero new tuning / runT / logic.js (logic.js stays byte-identical).
+  //
+  // Called from _drawAll's world-space pass (camera transform already applied).
+  // No-op on a base world for the pools that don't apply (swamp has no
+  // ambient fireflies; Reeds has no pollen) so a first-time run's ambient
+  // element set is exactly what the seed says.
+  drawAmbient(ctx, view, colorSat, now) {
+    const vx = view.x - 40, vy = view.y - 40, vw = view.w + 80, vh = view.h + 80;
+    const inView = (x, y, m) => x + m > vx && x - m < vx + vw && y + m > vy && y - m < vy + vh;
+
+    // (a) SURFACE RIPPLES — soft expanding concentric rings on the water bands.
+    //     Each ripple cycles on ripplePhase(i, now): radius grows, alpha fades.
+    //     Drawn as 2 thin ellipses (a painted-water look, not a hard ring).
+    let ri = 0;
+    for (const rp of this.ambientRipples) {
+      ri++;
+      if (!inView(rp.x, rp.y, rp.rMax)) continue;
+      const t = ripplePhase(ri - 1, now);           // 0..1 looping cycle
+      const rad = rp.rMax * (0.25 + 0.75 * t);      // expand outward
+      const a = 0.35 * (1 - t) * (0.4 + 0.6 * colorSat);  // fade as it expands
+      if (a < 0.02) continue;
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = 'rgba(224,232,230,1)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.ellipse(rp.x, rp.y, rad, rad * 0.42, 0, 0, TAU);
+      ctx.stroke();
+      // a fainter inner echo (a hand-painted ripple has 2 rings).
+      ctx.globalAlpha = a * 0.5;
+      ctx.beginPath();
+      ctx.ellipse(rp.x, rp.y, rad * 0.55, rad * 0.55 * 0.42, 0, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // (b) DRIFTING POLLEN — small drifting motes (swamp only). Each drifts on
+    //     a slow bounded Lissajous-ish path (a pure function of now + seed) +
+    //     sways; a soft warm dot with a faint halo. Cheap (one fill + one arc).
+    if (this.ambientPollen.length) {
+      let pi = 0;
+      for (const p of this.ambientPollen) {
+        pi++;
+        const dx = Math.sin(now * 0.35 + p.ph) * p.drift;
+        const dy = Math.cos(now * 0.28 + p.ph * 1.7) * p.drift * 0.6;
+        const x = p.x + dx, y = p.y + dy;
+        if (!inView(x, y, 16)) continue;
+        const tw = 0.4 + 0.6 * fireflyTwinkle(pi, now);   // gentle flicker
+        ctx.globalAlpha = 0.30 * tw * (0.4 + 0.6 * colorSat);
+        ctx.fillStyle = 'rgba(236,224,178,1)';
+        ctx.beginPath();
+        ctx.arc(x, y, p.sz, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = 0.12 * tw;
+        ctx.beginPath();
+        ctx.arc(x, y, p.sz * 2.4, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // (c) AMBIENT FIREFLIES — a small twinkling swarm (Reeds / Black Reeds).
+    //     A SEPARATE small pool from the lantern light-economy fireflies: these
+    //     are the AMBIENT living layer (dimmer, more numerous, purely
+    //     decorative); the light-economy ones are the bright lantern refills.
+    if (this.ambientFireflies.length) {
+      let fi = 0;
+      for (const f of this.ambientFireflies) {
+        fi++;
+        const dx = Math.sin(now * 0.5 + f.ph) * 9;
+        const dy = Math.cos(now * 0.4 + f.ph * 1.4) * 7;
+        const x = f.x + dx, y = f.y + dy;
+        if (!inView(x, y, 16)) continue;
+        const tw = fireflyTwinkle(fi, now);              // 0..1 twinkle
+        const a = 0.15 + 0.85 * tw;                       // dim -> bright
+        // a warm green-amber point with a soft glow halo.
+        ctx.globalAlpha = 0.55 * tw;
+        ctx.fillStyle = 'rgba(214,244,150,1)';
+        ctx.beginPath();
+        ctx.arc(x, y, f.sz * 2.2, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = a;
+        ctx.fillStyle = 'rgba(244,255,196,1)';
+        ctx.beginPath();
+        ctx.arc(x, y, f.sz, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
   // Collision: push circle out of obstacles/reeds (blocks enemies too).
   collideCircle(x, y, r, passReeds = false) {
     let px = x, py = y;
@@ -814,19 +1029,23 @@ export class World {
       ctx.restore();
     }
 
-    // L1: drifting mist bands — 2-3 very-low-alpha procedural ellipses that
-    // slow-parallax (lag the camera) and drift on their own. Pure draw-time:
-    // the tile scroll S = (1+parallax)*view.x + now*speed, so on screen the
-    // band advances at `parallax`× the camera plus a slow drift. Cull to view.
+    // L1 (v1.9): BREATHING mist — a slow alpha/offset oscillation on the
+    // existing parallax bands. `mistBreath(seed, now)` gives each band a ~0.7 s
+    // period (≈9 s) 0..1 factor that SWELLS the band's alpha (a*b.alpha *
+    // (0.45 + 0.9*a)) and DRIFTS the whole band ±8 px — the mist breathes in
+    // and out. Pure draw-time (no state); the MIST_BANDS constants (alpha,
+    // parallax) are unchanged so the v1.4 L1 test (stage 63) still passes.
     const visL = view.x, visR = view.x + view.w / view.scale;
     for (const b of MIST_BANDS) {
       const span = 1200;
       const S = (1 + b.parallax) * view.x + now * b.speed + b.seed * 173;
+      const breath = mistBreath(b.seed, now);                  // L1: 0..1, ~9 s
+      const breathOff = (breath - 0.5) * 2 * 8;                // ±8 px drift
       let k = Math.floor((visL - span - S) / span);
       for (let x = S + k * span; x < visR + span; x += span) {
         if (x + b.r < visL || x - b.r > visR) continue;
-        const bob = Math.sin(now * 0.25 + b.seed) * 14;   // slow vertical drift
-        ctx.globalAlpha = b.alpha;
+        const bob = Math.sin(now * 0.25 + b.seed) * 14 + breathOff;   // + L1 drift
+        ctx.globalAlpha = b.alpha * (0.45 + 0.9 * breath);    // L1: breathing alpha
         ctx.fillStyle = 'rgba(232,238,234,1)';
         ctx.beginPath();
         ctx.ellipse(x, b.y + bob, b.r, b.h * 0.5, 0, 0, TAU);

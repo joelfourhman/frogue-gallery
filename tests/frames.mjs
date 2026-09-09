@@ -433,6 +433,33 @@ await page.addInitScript(() => {
   S['frog-low-HP'] = (G) => frogStateScene(G, 'lowhp');
   S['frog-victory-pose'] = (G) => frogStateScene(G, 'victory');
 
+  // ---- L1 (v1.9): the ENVIRONMENTAL LIFE layer (breathing mist / ambient
+  //      fireflies / drifting pollen / surface ripples). BEFORE = the baseline
+  //      world scenes (swamp + reeds-descent); AFTER = after-L1/. `drawAmbient`
+  //      is a PURE function of the world SEED (layout) + the wall-clock `now`
+  //      (motion), so each scene parks the camera still and sets `G.now` — the
+  //      mist-breathing pair differs ONLY by `now` (~2.2 s apart), proving the
+  //      alpha/offset oscillation reads (the two frames md5-differ).
+  function worldAmbient(G, { reeds, now, x, y }) {
+    beginRun(G, (sv) => { if (reeds) { sv.flags.reedsUnlocked = true; sv.stats.victories = 1; } }, null, { reeds });
+    G.enemies = []; G.orbs = []; G.heron = null; G.midHeron = null;
+    G.player.x = x; G.player.y = y; G.player.vx = 0; G.player.vy = 0; G.player.hopT = 0;
+    G.player._staggerT = 0; G.player._victoryHopT = 0;
+    if (reeds) { G.lantern.fuel = 1; G.lantern.lit = true; }
+    G.cam.x = x; G.cam.y = y; G.zoom = 1; G.shake = 0; G.now = now;
+  }
+  // the MIST-BREATHING pair: the SAME world + camera, ~2.2 s apart. drawAmbient
+  // is a pure f(seed, now) + the mist draw is now*mistBreath(seed,now), so the
+  // two frames differ ONLY by the breathing (alpha swell + ±8 px drift) — the
+  // evidence that the mist breathes (md5 differs; the pixel std shifts).
+  S['world-mist-a'] = (G) => { worldAmbient(G, { reeds: false, now: 0.0, x: 900, y: 760 }); return { note: 'L1 mist-breathing pair A (now=0.0)' }; };
+  S['world-mist-b'] = (G) => { worldAmbient(G, { reeds: false, now: 2.2, x: 900, y: 760 }); return { note: 'L1 mist-breathing pair B (now=2.2, ~2.2 s after A)' }; };
+  // the Reeds/Black Reeds AMBIENT FIREFLY swarm (a SEPARATE small pool from the
+  // lantern light-economy fireflies) + surface ripples.
+  S['world-fireflies'] = (G) => { worldAmbient(G, { reeds: true, now: 3.0, x: 2000, y: 780 }); return { note: 'L1 ambient fireflies (Reeds) + ripples' }; };
+  // the base-swamp DRIFTING POLLEN (leaves) + surface ripples on the water bands.
+  S['world-pollen'] = (G) => { worldAmbient(G, { reeds: false, now: 5.0, x: 1500, y: 740 }); return { note: 'L1 drifting pollen (swamp) + surface ripples' }; };
+
   S['boss-gray-heron'] = (G) => bossFrame(G, { variant: 'gray', hpFrac: 0.75 });
   S['boss-gray-heron-awaken'] = (G) => bossFrame(G, { variant: 'gray', awakened: true });
   S['boss-green-heron'] = (G) => bossFrame(G, { variant: 'green', hpFrac: 0.75 });
@@ -567,6 +594,7 @@ const POLISH_SCENES = [
   'arc-red', 'arc-blue', 'arc-green', 'arc-water', 'arc-charged', // J2 (v1.9)
   'toad-kill-burst', 'beetle-kill-burst', 'boss-kill-burst',      // J3 (v1.9)
   'frog-idle-breathe', 'frog-hurt-stagger', 'frog-low-HP', 'frog-victory-pose', // J4 (v1.9)
+  'world-mist-a', 'world-mist-b', 'world-fireflies', 'world-pollen',          // L1 (v1.9)
 ];
 const KNOWN_SCENES = BASELINE_SCENES.concat(POLISH_SCENES);
 if (SCENE_FILTER) {

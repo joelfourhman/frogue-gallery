@@ -6235,6 +6235,15 @@ _drawAtelier(ctx) {
     this.world.drawBackground(ctx, v, drawSatFinal);
     this.world.drawProps(ctx, v, drawSatFinal, this.now);
     this.world.drawObstacles(ctx, v, drawSatFinal);
+    // L1 (v1.9): the ENVIRONMENTAL LIFE layer — the living-world ambient
+    // elements (surface ripples on the water bands, drifting pollen (swamp),
+    // the ambient firefly swarm (Reeds/Black Reeds)). The BREATHING MIST is
+    // the v1.4 parallax bands, already modulated inside drawProps (so it stays
+    // the topmost ambient wash). Presentation-only + pooled + seeded +
+    // view-culled (P10-safe): no new per-frame state, no tuning / runT /
+    // logic.js change. Drawn on top of the terrain so ripples read on the
+    // water and pollen / fireflies drift across the scene.
+    this.world.drawAmbient(ctx, v, drawSatFinal, this.now);
     // R1 (v1.6): the Reeds biome's LIGHT ECONOMY — the drifting fireflies + the
     // static lantern-rest stones (world space, VIEW-CULLED so they never add to
     // the P10 draw budget). No-op for a base (non-Reeds) world, so a first-time

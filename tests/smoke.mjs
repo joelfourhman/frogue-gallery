@@ -8784,5 +8784,119 @@ console.log('== stage 108: v1.9 J4 — the frog\'s liveness (idle breathe / hurt
   console.log('ok — J4: the frog\'s liveness. A subtle IDLE BREATHE (a small dt-driven squash offset, OFF while moving), a HURT STAGGER (set by the real hurt(), decays on its own, NEVER changes the i-frame window or the damage), a LOW-HP TREMBLE (a draw-only worried brow + faint jitter, gated below ~30% HP and fading above it), and a VICTORY POSE (set by the real boss-defeat handoff at full 1.0, a contented hop + squash-and-settle, decays to 0). All read in draw() from the state timers + the wall-clock `now` — no physics / HP / i-frame number moves.');
 }
 
+// ======================================================================
+// stage 109 — v1.9 T3 L1: environmental life (the living-world ambient layer)
+// A parallax layer-0 of living elements — surface ripples on the water bands,
+// drifting leaves/pollen (swamp), the ambient firefly swarm (Reeds/Black Reeds)
+// — and BREATHING MIST (a slow alpha/offset oscillation on the existing
+// parallax bands). PRESENTATION-ONLY: the layer is POOLED (bounded arrays),
+// SEEDED (a dedicated mulberry32 stream, seed + 731 — a fixed seed gives the
+// same layout, and the A/B invariance holds because nothing here touches
+// logic.js / tuning / runT), and capped into the existing P10 particle budget
+// (the drawAmbient + ambientCounts culling keeps the on-screen total bounded).
+// Acceptance: (a) the layout is a PURE function of the seed (two builds at the
+// same seed are identical; a different seed differs), (b) the pools are capped
+// + view-culled (ambientCounts <= pool caps), (c) the P10 combined on-screen
+// total (paint juice + the ambient layer) stays <= 220 with the layer ACTIVE,
+// (d) the mist BREATHES (mistBreath oscillates; the drawn alpha/offset change
+// over a ~9 s period). All read in the draw path — no tuning / runT / logic.js
+// number moves.
+// ======================================================================
+console.log('== stage 109: v1.9 T3 L1 — environmental life (seeded, capped, breathing mist) — presentation-only ==');
+{
+  const { World, ambientCounts, mistBreath, fireflyTwinkle, ripplePhase,
+          AMBIENT_POLLEN_CAP, AMBIENT_FIREFLY_CAP, AMBIENT_RIPPLE_CAP } =
+    await import('../src/world.js');
+  const { mulberry32 } = await import('../src/math.js');
+  const { Game } = await import('../src/game.js');
+  const { Paint } = await import('../src/paint.js');
+
+  // ---- (a) SEEDED: the ambient layout is a pure function of the world seed ----
+  // Two World builds at the SAME seed (a fresh mulberry32 terrain RNG, as a
+  // real expedition builds it) yield the identical ambient pools; a different
+  // seed yields a different layout. (No global Math.random — the pools are
+  // driven by the dedicated mulberry32(seed + 731) stream in build().)
+  function buildWorld(seed, opts) { return new World(mulberry32((seed * 2654435761) >>> 0), seed, opts); }
+  const ambSig = (w) => [
+    w.ambientPollen.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('|'),
+    w.ambientFireflies.map((f) => `${f.x.toFixed(1)},${f.y.toFixed(1)}`).join('|'),
+    w.ambientRipples.map((r) => `${r.x.toFixed(1)},${r.y.toFixed(1)}`).join('|'),
+  ].join('##');
+  const swA = buildWorld(1234, {}), swB = buildWorld(1234, {});
+  assert(ambSig(swA) === ambSig(swB), `L1: the ambient layout is a PURE function of the seed (two builds at seed 1234 are identical)`);
+  const swC = buildWorld(9876, {});
+  assert(ambSig(swA) !== ambSig(swC), `L1: a different seed (9876) yields a different ambient layout`);
+  // a Reeds world has the firefly pool (and no pollen); a base swamp has the
+  // pollen pool (and no ambient fireflies) — the variant gating is correct.
+  const reA = buildWorld(1234, { reeds: true });
+  assert(reA.ambientPollen.length === 0 && reA.ambientFireflies.length === AMBIENT_FIREFLY_CAP,
+    `L1: the Reeds world carries the ambient firefly pool (${reA.ambientFireflies.length}) and NO pollen`);
+  assert(swA.ambientPollen.length === AMBIENT_POLLEN_CAP && swA.ambientFireflies.length === 0,
+    `L1: the base swamp carries the pollen pool (${swA.ambientPollen.length}) and NO ambient fireflies`);
+  // the firefly swarm is a SEPARATE pool from the lantern-light-economy fireflies
+  assert(reA.ambientFireflies !== reA.fireflies, `L1: the ambient firefly pool is distinct from the light-economy fireflies`);
+
+  // ---- (b) POOLED + CAPPED + VIEW-CULLED: the on-screen count never exceeds the pool ----
+  // ambientCounts culls to the view, so a full-world view shows at most the pool
+  // size (P10-safe: the draw cost is bounded by the cap, not the world size).
+  const fullView = { x: 0, y: 0, scale: 1, w: reA.w, h: reA.h };
+  const reCounts = ambientCounts(reA, fullView);
+  assert(reCounts.fireflies <= AMBIENT_FIREFLY_CAP && reCounts.pollen <= AMBIENT_POLLEN_CAP && reCounts.ripples <= AMBIENT_RIPPLE_CAP,
+    `L1: the on-screen ambient counts stay within the pool caps (fireflies=${reCounts.fireflies}<=${AMBIENT_FIREFLY_CAP}, pollen=${reCounts.pollen}<=${AMBIENT_POLLEN_CAP}, ripples=${reCounts.ripples}<=${AMBIENT_RIPPLE_CAP})`);
+  assert(reCounts.total <= AMBIENT_FIREFLY_CAP + AMBIENT_RIPPLE_CAP,
+    `L1: the total on-screen ambient set is bounded by the pool size (total=${reCounts.total})`);
+  // an off-screen view culls to zero (P10: off-screen = invisible = zero work)
+  const offView = { x: 10 ** 9, y: 10 ** 9, scale: 1, w: 1280, h: 800 };
+  assert(ambientCounts(reA, offView).total === 0, `L1: an off-screen view culls the ambient layer to zero (P10 view-cull)`);
+
+  // ---- (c) P10: the COMBINED on-screen total (paint juice + the ambient layer) ----
+  //     stays within the budget (<= 220) with the living-world layer ACTIVE.
+  //     The ambient pools are small (capped ~13 ripples + 18 fireflies + 14
+  //     pollen, view-culled to a handful per frame) and the paint-juice burst
+  //     peaks well under the cap, so the combined total is bounded.
+  const savedRandom = Math.random;
+  const g = new Game(makeCanvas());
+  g.start(); g._beginExpedition(false, { reeds: true, seed: 424242 });
+  const P = g.player;
+  P.alive = true; P.hp = 99; P.iframes = 999; P.x = 640; P.y = 750;
+  g.state = 'expedition';
+  g.tuning = (await import('../src/logic.js')).makeTuning(g.save.upgrades, g.save.loadout, 'normal', g.save.galleryBonus || 0);
+  const paint = new Paint(g.player, g.world, g.tuning, () => {}, g.particles);
+  const juice = () => paint.droplets.length + paint.ink.length + paint.wet.length + paint.trails.length;
+  let peakJuice = 0, peakCombined = 0;
+  const ambOn = ambientCounts(g.world, g._view()).total;
+  // drive a full-power sustained burst (the SAME pattern stage 59c uses —
+  // 20 rapid swipes + a charged splash, the real trySwipe/trySplash API) and
+  // track the peak paint-juice + the peak combined (juice + ambient on-screen).
+  paint.droplets.length = 0; paint.ink.length = 0; paint.wet.length = 0; paint.trails.length = 0;
+  for (let i = 0; i < 20; i++) {
+    P.swipeT = 0; paint.swipeCd = 0; P.aimA = i * 0.2;
+    paint.trySwipe(g.enemies);
+    paint.update(0.05);                        // let the pools age a little between
+    const j = juice(); if (j > peakJuice) peakJuice = j;
+    const comb = j + ambientCounts(g.world, g._view()).total; if (comb > peakCombined) peakCombined = comb;
+  }
+  P.splashCharge = 1; paint.splashCd = 0; paint.trySplash(g.enemies);
+  { const j = juice(); if (j > peakJuice) peakJuice = j; const comb = j + ambientCounts(g.world, g._view()).total; if (comb > peakCombined) peakCombined = comb; }
+  assert(peakCombined <= 220, `L1: the COMBINED on-screen total (paint juice ${peakJuice} + the ambient layer) after a full-power burst stays within the P10 budget (${peakCombined} <= 220) with the living-world layer ACTIVE`);
+  assert(ambOn >= 0 && ambOn <= AMBIENT_FIREFLY_CAP + AMBIENT_RIPPLE_CAP, `L1: the ambient layer's on-screen count at the frog's start is bounded (on-screen=${ambOn})`);
+  Math.random = savedRandom;
+
+  // ---- (d) BREATHING MIST: the mistBreath oscillation reads over a ~9 s period ----
+  // The v1.4 parallax bands are modulated by mistBreath(seed, now): a slow 0..1
+  // factor that SWELLS the band's alpha (a*b.alpha*(0.45+0.9*a)) and DRIFTS the
+  // whole band ±8 px. Two frames a period apart must DIFFER (the breathing
+  // reads), and the factor must span a real 0..1 range across the period.
+  const b0 = mistBreath(11, 0.0), b1 = mistBreath(11, 2.2), b2 = mistBreath(11, 4.4), b3 = mistBreath(11, 6.6);
+  assert(Math.abs(b0 - b1) > 0.2 || Math.abs(b1 - b2) > 0.2 || Math.abs(b2 - b3) > 0.2,
+    `L1: the mist BREATHES — the alpha/offset factor oscillates across the period (t0=${b0.toFixed(2)}, t2.2=${b1.toFixed(2)}, t4.4=${b2.toFixed(2)}, t6.6=${b3.toFixed(2)})`);
+  let mn = 1, mx = 0; for (let t = 0; t < 18; t += 0.1) { const b = mistBreath(57, t); mn = Math.min(mn, b); mx = Math.max(mx, b); }
+  assert(mn < 0.3 && mx > 0.7, `L1: the mist-breath factor spans a real 0..1 range across the ~9 s period (min=${mn.toFixed(2)}, max=${mx.toFixed(2)})`);
+  // the pure helpers are bounded + deterministic (no global RNG in the hot path)
+  assert(fireflyTwinkle(1, 0) >= 0 && fireflyTwinkle(1, 99) <= 1, `L1: the firefly twinkle is bounded 0..1`);
+  assert(ripplePhase(3, 0) >= 0 && ripplePhase(3, 40) <= 1, `L1: the surface-ripple phase is a bounded looping function of now (deterministic)`);
+  console.log('ok — L1: environmental life. A parallax layer-0 of living elements — surface ripples on the water bands (a looping ripplePhase: radius grows, alpha fades), drifting leaves/pollen (swamp, a slow wall-clock drift), the ambient firefly swarm (Reeds/Black Reeds, a pulsing fireflyTwinkle) — and BREATHING MIST (mistBreath: a slow ~9 s alpha/offset oscillation on the existing parallax bands). All POOLED (capped arrays), SEEDED (a dedicated mulberry32 seed+731 stream — a fixed seed gives the same layout, the A/B invariance holds), and capped into the existing P10 particle budget (drawAmbient + ambientCounts view-cull keeps the on-screen total bounded; the combined paint-juice + ambient stays <= 220). Presentation-only: no tuning / runT / logic.js number moves.');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
