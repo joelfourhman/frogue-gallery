@@ -4,6 +4,7 @@
 'use strict';
 import { TAU, clamp, dist, lerp } from './math.js';
 import { ENEMIES, stepStatus, physicalDamage, lightFactor, REEDS_BESTIARY, wispBlinded, leechDrain, PIGMENTS } from './logic.js';
+import { UI, uiFont } from './ui.js';
 
 // ------------------------------------------------------------------
 // L3 (v1.9 T3): enemy liveness — distinct telegraphs + panic/lick/flee.
@@ -686,7 +687,7 @@ function drawSerpent(ctx, e, now) {
     // exclamation (the "watch the lane" tell)
     ctx.globalAlpha = (0.6 + 0.4 * pulse) * (0.5 + 0.5 * prog);
     ctx.fillStyle = '#8fb0f0';
-    ctx.font = '700 24px Georgia, serif';
+    ctx.font = uiFont(UI.sizes.h1Sm, { weight: 700 });
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('!', 0, -18);
@@ -1018,7 +1019,7 @@ function drawCragFrog(ctx, e, frozen, flash, now) {
   if (asleep) {
     ctx.fillStyle = '#dfeaf5';
     ctx.globalAlpha = 0.75;
-    ctx.font = 'bold 9px serif';
+    ctx.font = uiFont(UI.sizes.micro, { weight: 700 });
     const zy = -16 - (Math.sin(now * 1.4 + e._seed) * 2);
     ctx.fillText('z', 2, zy);
     ctx.fillText('z', 8, zy - 6);

@@ -11,7 +11,7 @@ import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
 import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste, BOSS_IDS, galleryCompletion, galleryCompletionProgress, capstoneLevel, galleryBonusTotal, GAME_VERSION } from './logic.js';
-import { INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
+import { UI, uiFont, INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
 // Five context pools per character (victory / defeat / purchase / general /
@@ -704,7 +704,7 @@ export class Game {
     ctx.strokeStyle = 'rgba(60,52,42,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
     // a small pad glyph + label
     ctx.fillStyle = 'rgba(60,52,42,0.85)';
-    ctx.font = '600 13px Georgia, serif';
+    ctx.font = uiFont(UI.sizes.label, { weight: 600 });
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText('\u2726  pad connected', x + 12, y + h / 2 + 1);
     ctx.restore();
@@ -1378,8 +1378,8 @@ export class Game {
     const g = this._modPromptGeom();
     const pw = 1000, px = g.cx - pw / 2, py = g.y0 - 64, ph = g.cards[0].y + g.cards[0].h + 26 + 50 + 30;
     const c = paperPanel(ctx, px, py, pw, ph, { seed: 55 });
-    outlineText(c, 'Choose your Expedition', g.cx, py + 40, '700 26px Georgia, serif', '#5a9e3d', INK, 4);
-    centerText(c, 'each New Game+ cycle wears one condition — pick the season you will swim through (Esc to back out)', g.cx, py + 64, 'italic 13px Georgia, serif', INK, 0.72);
+    outlineText(c, 'Choose your Expedition', g.cx, py + 40, uiFont(UI.sizes.h1, { weight: 700 }), '#5a9e3d', INK, 4);
+    centerText(c, 'each New Game+ cycle wears one condition — pick the season you will swim through (Esc to back out)', g.cx, py + 64, uiFont(UI.sizes.label, { italic: true }), INK, 0.72);
     const sel = this._modPrompt.sel;
     g.cards.forEach((card, i) => {
       const active = i === sel;
@@ -1390,14 +1390,14 @@ export class Game {
       cc.beginPath(); cc.roundRect(card.x + 8, card.y + 8, card.w - 16, card.h - 16, 6); cc.stroke();
       cc.restore();
       // number key hint
-      centerText(cc, String(i + 1), card.x + 24, card.y + 28, '700 15px Georgia, serif', active ? '#5a9e3d' : INK, 0.8);
+      centerText(cc, String(i + 1), card.x + 24, card.y + 28, uiFont(UI.sizes.bodyLg, { weight: 700 }), active ? '#5a9e3d' : INK, 0.8);
       const titleY = card.y + 54;
-      centerText(cc, card.id ? MODIFIERS[card.id].name : 'No Modifier', card.x + card.w / 2, titleY, '700 16px Georgia, serif', active ? '#5a9e3d' : INK, 1);
+      centerText(cc, card.id ? MODIFIERS[card.id].name : 'No Modifier', card.x + card.w / 2, titleY, uiFont(UI.sizes.sub, { weight: 700 }), active ? '#5a9e3d' : INK, 1);
       // description — centered word-wrap within the card (measureText-driven so
       // it never overflows the card regardless of how long the line is).
       const desc = card.id ? MODIFIERS[card.id].desc : 'the plain swamp — no condition this cycle';
       cc.save();
-      cc.fillStyle = INK; cc.globalAlpha = 0.68; cc.font = 'italic 11px Georgia, serif';
+      cc.fillStyle = INK; cc.globalAlpha = 0.68; cc.font = uiFont(UI.sizes.xsmall, { italic: true });
       cc.textAlign = 'center'; cc.textBaseline = 'middle';
       const maxW = card.w - 30, words = desc.split(' ');
       let line = '', yy = card.y + 80;
@@ -1417,7 +1417,7 @@ export class Game {
     // they can spend before they dive. PURE read of save.gold (no new mechanics).
     {
       const ro = this._goldReadout();
-      centerText(c, `◆ ${ro.text}`, g.cx, g.cont.y + g.cont.h + 20, '700 12.5px Georgia, serif', '#c9922a', 0.95);
+      centerText(c, `◆ ${ro.text}`, g.cx, g.cont.y + g.cont.h + 20, uiFont(UI.sizes.smallPlus, { weight: 700 }), '#c9922a', 0.95);
     }
     ctx.restore();
   }
@@ -1475,18 +1475,18 @@ export class Game {
     ctx.fillRect(0, 0, this.cw, this.ch);
     const g = this._seedCardGeom();
     const c = paperPanel(ctx, g.px, g.py, g.pw, g.ph, { seed: 77 });
-    outlineText(c, 'The Wander — tonight\u2019s seed', g.cx, g.py + 38, '700 23px Georgia, serif', '#5a9e3d', INK, 4);
-    centerText(c, 'a single expedition, drawn from the swamp\u2019s own current', g.cx, g.py + 62, 'italic 12.5px Georgia, serif', INK, 0.66);
+    outlineText(c, 'The Wander — tonight\u2019s seed', g.cx, g.py + 38, uiFont(UI.sizes.h2, { weight: 700 }), '#5a9e3d', INK, 4);
+    centerText(c, 'a single expedition, drawn from the swamp\u2019s own current', g.cx, g.py + 62, uiFont(UI.sizes.smallPlus, { italic: true }), INK, 0.66);
     // the seed — large, monospaced-feel, noteable / shareable
-    centerText(c, 'seed ' + seed, g.cx, g.py + 104, '700 30px Georgia, serif', '#c9922a', 1);
+    centerText(c, 'seed ' + seed, g.cx, g.py + 104, uiFont(UI.sizes.heroSm, { weight: 700 }), '#c9922a', 1);
     // the taste name + its one-line flavor (reproducible from the seed)
     if (taste) {
-      centerText(c, taste.name, g.cx, g.py + 134, '700 15px Georgia, serif', '#8a6a3a', 0.95);
-      centerText(c, taste.note, g.cx, g.py + 152, 'italic 12px Georgia, serif', INK, 0.62);
+      centerText(c, taste.name, g.cx, g.py + 134, uiFont(UI.sizes.bodyLg, { weight: 700 }), '#8a6a3a', 0.95);
+      centerText(c, taste.note, g.cx, g.py + 152, uiFont(UI.sizes.small, { italic: true }), INK, 0.62);
     }
     // the "Set Out" button
     uiButton(ctx, g.set.x, g.set.y, g.set.w, g.set.h, 'Set Out', this._mouseIn(g.set.x, g.set.y, g.set.w, g.set.h), false, { seed: 78, size: 16 });
-    centerText(ctx, 'Esc — back to the pond', g.cx, g.py + g.ph + 14, 'italic 11px Georgia, serif', '#fdf6e9', 0.5);
+    centerText(ctx, 'Esc — back to the pond', g.cx, g.py + g.ph + 14, uiFont(UI.sizes.xsmall, { italic: true }), '#fdf6e9', 0.5);
     paperEnd(ctx);
     ctx.restore();
   }
@@ -1753,7 +1753,7 @@ export class Game {
     ctx.lineWidth = 2;
     ctx.strokeStyle = INK;
     ctx.stroke();
-    centerText(ctx, String(amount) + 'g', cx0 + 20, y, '700 14px Georgia, serif', '#8a6d1f', 1);
+    centerText(ctx, String(amount) + 'g', cx0 + 20, y, uiFont(UI.sizes.body, { weight: 700 }), '#8a6d1f', 1);
     return cx0 + 56;
   }
 
@@ -1827,7 +1827,7 @@ export class Game {
           ctx.lineWidth = 2;
           ctx.strokeStyle = INK;
           ctx.stroke();
-          centerText(ctx, String(piece.amount), cx0 + 19, y, '700 15px Georgia, serif', INK, 1);
+          centerText(ctx, String(piece.amount), cx0 + 19, y, uiFont(UI.sizes.bodyLg, { weight: 700 }), INK, 1);
           cx0 += 44;
         }
         return cx0;
@@ -1842,8 +1842,8 @@ _drawAtelier(ctx) {
     ctx.restore();
 
     const cx = g.cx;
-    outlineText(ctx, 'The Atelier', cx, 40, '700 40px Georgia, serif', '#f4ead8', INK, 6);
-    centerText(ctx, 'a quiet studio above the water — spend your pigments well', cx, 78, 'italic 15px Georgia, serif', '#fdf6e9', 0.85);
+    outlineText(ctx, 'The Atelier', cx, 40, uiFont(UI.sizes.displayLg, { weight: 700 }), '#f4ead8', INK, 6);
+    centerText(ctx, 'a quiet studio above the water — spend your pigments well', cx, 78, uiFont(UI.sizes.bodyLg, { italic: true }), '#fdf6e9', 0.85);
     // G4 (v1.3 M15): the gold BALANCE READOUT — a header line showing the
     // available gold + a hint of what it buys (a pure read of save.gold).
     // Sits between the subtitle and the bank strip; the bank strip moves down
@@ -1856,7 +1856,7 @@ _drawAtelier(ctx) {
       ctx.fillStyle = '#d9a520'; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = INK; ctx.stroke();
       ctx.restore();
-      centerText(ctx, ro.text, cx, 93, '700 12px Georgia, serif', '#c9922a', 0.95);
+      centerText(ctx, ro.text, cx, 93, uiFont(UI.sizes.small, { weight: 700 }), '#c9922a', 0.95);
     }
 
     // bank strip with loadout preview
@@ -1870,7 +1870,7 @@ _drawAtelier(ctx) {
     ctx.fill(); ctx.stroke();
     ctx.restore();
     const b = this.save.bank;
-    centerText(ctx, 'Bank', sx + 44, sy + stripH / 2, '700 15px Georgia, serif', INK, 0.9);
+    centerText(ctx, 'Bank', sx + 44, sy + stripH / 2, uiFont(UI.sizes.bodyLg, { weight: 700 }), INK, 0.9);
     PIGMENT_ORDER.filter(c => c !== 'dry').forEach((color, i) => {
       const pig = PIGMENTS[color];
       const px = sx + 110 + i * 90;
@@ -1881,7 +1881,7 @@ _drawAtelier(ctx) {
       ctx.lineWidth = 2;
       ctx.strokeStyle = INK;
       ctx.stroke();
-      centerText(ctx, String(b[color]), px + 20, sy + stripH / 2, '700 16px Georgia, serif', INK, 1);
+      centerText(ctx, String(b[color]), px + 20, sy + stripH / 2, uiFont(UI.sizes.sub, { weight: 700 }), INK, 1);
     });
     // G1 (v1.3 M15): the meta gold — displayed in the bank strip but visually
     // distinct (a gold dot) so players learn it is NOT a pigment. It is
@@ -1894,9 +1894,9 @@ _drawAtelier(ctx) {
     ctx.lineWidth = 2;
     ctx.strokeStyle = INK;
     ctx.stroke();
-    centerText(ctx, String(this.save.gold || 0), gx + 20, sy + stripH / 2, '700 16px Georgia, serif', INK, 1);
-    centerText(ctx, 'GOLD', gx - 4, sy + stripH / 2, '600 9px Georgia, serif', INK, 0.6);
-    centerText(ctx, `loadout ${this.save.loadout.length}/2`, sx + stripW - 210, sy + stripH / 2, '700 13px Georgia, serif', INK, 0.7);
+    centerText(ctx, String(this.save.gold || 0), gx + 20, sy + stripH / 2, uiFont(UI.sizes.sub, { weight: 700 }), INK, 1);
+    centerText(ctx, 'GOLD', gx - 4, sy + stripH / 2, uiFont(UI.sizes.micro, { weight: 600 }), INK, 0.6);
+    centerText(ctx, `loadout ${this.save.loadout.length}/2`, sx + stripW - 210, sy + stripH / 2, uiFont(UI.sizes.label, { weight: 700 }), INK, 0.7);
     for (let s = 0; s < 2; s++) {
       const id = this.save.loadout[s];
       const fx = sx + stripW - 96 + s * 32, fy = sy + 7, fs = 26;
@@ -1910,7 +1910,7 @@ _drawAtelier(ctx) {
       ctx.restore();
       const pt = id ? PAINTINGS.find(p => p.id === id) : null;
       if (pt) this._drawPaintingMotif(ctx, pt, fx + 3, fy + 3, fs - 6);
-      else centerText(ctx, '·', fx + fs / 2, fy + fs / 2 + 1, '700 14px Georgia, serif', INK, 0.35);
+      else centerText(ctx, '·', fx + fs / 2, fy + fs / 2 + 1, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.35);
     }
 
     // tabs (M8 P8 + A3 + K7: five) — same centered layout as the click map in
@@ -1923,24 +1923,24 @@ _drawAtelier(ctx) {
     });
     // persistent one-line legends, so returning players never have to guess
     if (this.atelierTab === 0) {
-      centerText(ctx, 'training is paid in banked pigments — it is permanent, even after a defeat', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
+      centerText(ctx, 'training is paid in banked pigments — it is permanent, even after a defeat', cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.75);
     } else if (this.atelierTab === 1) {
       // A2: when the current 2-slot loadout forms a named "duo", the legend
       // surfaces it (the creative slot choice is visible, not just applied).
       const duo = activeSynergy(this.save.loadout);
-      if (duo) centerText(ctx, `✦ duo active: ${duo.name} — ${duo.desc}`, cx, g.tabY + g.tabH + 18, '700 14px Georgia, serif', '#c9922a', 1);
-      else centerText(ctx, 'buy once, then hang up to 2 — hung paintings are real passive bonuses on your runs', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
+      if (duo) centerText(ctx, `✦ duo active: ${duo.name} — ${duo.desc}`, cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.body, { weight: 700 }), '#c9922a', 1);
+      else centerText(ctx, 'buy once, then hang up to 2 — hung paintings are real passive bonuses on your runs', cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.75);
     } else if (this.atelierTab === 3) {
       // G4 (v1.3 M15): the gold LEGEND line — a short "what gold is + where it
       // comes from" note, so the meta currency is explained right where it is
       // spent (the Curator's Ledger holds the gold-tier works + the Gilded Frame).
-      centerText(ctx, `◆ gold is a meta pigment — earned from boss defeats, first synergies & the 100-orb run, spent here on gold-tier works & the Gilded Frame (NG+ only)`, cx, g.tabY + g.tabH + 18, '700 12.5px Georgia, serif', '#c9922a', 0.95);
+      centerText(ctx, `◆ gold is a meta pigment — earned from boss defeats, first synergies & the 100-orb run, spent here on gold-tier works & the Gilded Frame (NG+ only)`, cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.smallPlus, { weight: 700 }), '#c9922a', 0.95);
     } else if (this.atelierTab === 4) {
       // K7 (v1.5 M2): the Curator Challenge legend — one shared daily challenge,
       // a seeded loadout + modifier, scored and filed to the best-score list.
-      centerText(ctx, 'the Curator’s daily challenge — one swamp, one brush, seeded for the whole world. paint it, clear the heron; your score is filed below', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.78);
+      centerText(ctx, 'the Curator’s daily challenge — one swamp, one brush, seeded for the whole world. paint it, clear the heron; your score is filed below', cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.78);
     } else {
-      centerText(ctx, 'your collection — every painting you own, hung on the wall (owned frames are lit)', cx, g.tabY + g.tabH + 18, 'italic 13px Georgia, serif', '#fdf6e9', 0.75);
+      centerText(ctx, 'your collection — every painting you own, hung on the wall (owned frames are lit)', cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.75);
     }
 
     // list
@@ -1952,12 +1952,12 @@ _drawAtelier(ctx) {
         const buyable = !maxed && canAfford(this.save.bank, Array.isArray(u.levels[lv].cost) ? u.levels[lv].cost : costArray(u.levels[lv].cost));
         const y = g.rowY0 + i * (g.rowH + g.rowGap);
         const c = paperPanel(ctx, g.listX, y, g.listW, g.rowH, { seed: 40 + i });
-        this._leftText(c, u.name, g.listX + 36, y + 30, '700 20px Georgia, serif', INK, 1);
-        this._leftText(c, u.desc, g.listX + 36, y + 58, '14px Georgia, serif', INK, 0.75);
+        this._leftText(c, u.name, g.listX + 36, y + 30, uiFont(UI.sizes.titlePlus, { weight: 700 }), INK, 1);
+        this._leftText(c, u.desc, g.listX + 36, y + 58, uiFont(UI.sizes.body), INK, 0.75);
         drawPips(c, g.listX + 44, y + 84, 6, u.levels.length, lv, PIGMENTS.green.color);
-        this._leftText(c, `level ${lv}/${u.levels.length}`, g.listX + 130, y + 84, '13px Georgia, serif', INK, 0.6);
+        this._leftText(c, `level ${lv}/${u.levels.length}`, g.listX + 130, y + 84, uiFont(UI.sizes.label), INK, 0.6);
         if (maxed) {
-          this._leftText(c, 'fully learned — the frog hums with it', g.listX + 400, y + 30, 'italic 13px Georgia, serif', INK, 0.5);
+          this._leftText(c, 'fully learned — the frog hums with it', g.listX + 400, y + 30, uiFont(UI.sizes.label, { italic: true }), INK, 0.5);
         } else {
           const tNow = makeTuning(this.save.upgrades, this.save.loadout);
           const tNext = makeTuning({ ...this.save.upgrades, [id]: lv + 1 }, this.save.loadout);
@@ -1965,7 +1965,7 @@ _drawAtelier(ctx) {
           if (tNext.maxHp !== tNow.maxHp) diffs.push(`health ${tNow.maxHp} → ${tNext.maxHp}`);
           if (Math.abs(tNext.power - tNow.power) > 1e-9) diffs.push(`power ${tNow.power.toFixed(2)} → ${tNext.power.toFixed(2)}`);
           if (tNext.capacity !== tNow.capacity) diffs.push(`capacity ${tNow.capacity} → ${tNext.capacity}`);
-          if (diffs.length) this._leftText(c, diffs.join('   ·   '), g.listX + 400, y + 30, '700 14px Georgia, serif', '#4c8a34', 0.95);
+          if (diffs.length) this._leftText(c, diffs.join('   ·   '), g.listX + 400, y + 30, uiFont(UI.sizes.body, { weight: 700 }), '#4c8a34', 0.95);
           this._costChips(c, u.levels[lv].cost, g.listX + 400, y + 84);
         }
         const bw = 220, bh = 62, bx = g.listX + g.listW - 250, by = y + 21;
@@ -1998,11 +1998,11 @@ _drawAtelier(ctx) {
         // text
         const tx = artX + artS + 14;
         const sealed = this._ptLocked(pt);
-        this._leftText(c, sealed ? '???' : pt.name, tx, y + 28, '700 15px Georgia, serif', INK, 1);
+        this._leftText(c, sealed ? '???' : pt.name, tx, y + 28, uiFont(UI.sizes.bodyLg, { weight: 700 }), INK, 1);
         c.save();
         c.globalAlpha = sealed ? 0.5 : 0.78;
         c.fillStyle = isGold ? '#8a6d1f' : INK;
-        c.font = '12px Georgia, serif';
+        c.font = uiFont(UI.sizes.small);
         c.textBaseline = 'middle';
         c.fillText(sealed ? 'a portrait someone must earn' : pt.desc, tx, y + 50, 300);
         c.restore();
@@ -2021,7 +2021,7 @@ _drawAtelier(ctx) {
         } else if (owned) { label = inLoadout ? 'Unhang' : 'Hang'; enabled = inLoadout || this.save.loadout.length < 2; }
         if (sealed) { label = 'Sealed'; enabled = false; }
         uiButton(c, bx, by, bw, bh, label, this._mouseIn(bx, by, bw, bh), false, { seed: 90 + i, size: 13 });
-        if (inLoadout) centerText(c, '★', x + g.cardW - 24, y + 20, '700 16px Georgia, serif', '#c9922a', 1);
+        if (inLoadout) centerText(c, '★', x + g.cardW - 24, y + 20, uiFont(UI.sizes.sub, { weight: 700 }), '#c9922a', 1);
         paperEnd(ctx);
       });
     } else if (this.atelierTab === 2) {
@@ -2045,7 +2045,7 @@ _drawAtelier(ctx) {
       const progY = gy0 - 26;
       centerText(ctx,
         `Paintings ${prog.paintingsOwned} / ${prog.paintingsTotal}   ·   Bosses ${prog.bossesDefeated} / ${prog.bossesTotal}`,
-        cx, progY, '700 13px Georgia, serif',
+        cx, progY, uiFont(UI.sizes.label, { weight: 700 }),
         prog.complete ? '#f3d98a' : '#fdf6e9', 0.9);
       if (prog.complete) {
         // the full-collection glow — a soft gold radial bloom behind the wall
@@ -2085,7 +2085,7 @@ _drawAtelier(ctx) {
           c.fillRect(fx, fy, fs, fs);
           c.globalAlpha = 0.4;
           c.fillStyle = INK;
-          c.font = '700 26px Georgia, serif';
+          c.font = uiFont(UI.sizes.h1, { weight: 700 });
           c.textAlign = 'center'; c.textBaseline = 'middle';
           c.fillText(sealed ? '?' : '✕', fx + fs / 2, fy + fs / 2);
         }
@@ -2095,15 +2095,15 @@ _drawAtelier(ctx) {
         c.fillStyle = INK;
         c.textAlign = 'center'; c.textBaseline = 'middle';
         if (owned) {
-          c.font = '700 14px Georgia, serif';
+          c.font = uiFont(UI.sizes.body, { weight: 700 });
           c.globalAlpha = 1;
           c.fillText(pt.name, x + fw / 2, y + fh - 34);
-          c.font = 'italic 11px Georgia, serif';
+          c.font = uiFont(UI.sizes.xsmall, { italic: true });
           c.globalAlpha = 0.7;
           c.fillText(pt.desc, x + fw / 2, y + fh - 18, fw - 24);
-          if (this.save.loadout.includes(pt.id)) { c.globalAlpha = 1; c.font = '700 12px Georgia, serif'; c.fillStyle = '#c9922a'; c.fillText('★ hung', x + fw - 20, y + 22); }
+          if (this.save.loadout.includes(pt.id)) { c.globalAlpha = 1; c.font = uiFont(UI.sizes.small, { weight: 700 }); c.fillStyle = '#c9922a'; c.fillText('★ hung', x + fw - 20, y + 22); }
         } else {
-          c.font = 'italic 11px Georgia, serif';
+          c.font = uiFont(UI.sizes.xsmall, { italic: true });
           c.globalAlpha = 0.6;
           c.fillText(sealed ? 'a sealed portrait' : 'not yet collected', x + fw / 2, y + fh - 24);
         }
@@ -2141,17 +2141,17 @@ _drawAtelier(ctx) {
         // the text
         const tx0 = mtx + ms + 16, txMid = tx0 + (fpw - 12 - ms - 16) / 2;
         pc.fillStyle = '#a3762a'; pc.textAlign = 'center'; pc.textBaseline = 'middle';
-        pc.font = '700 15px Georgia, serif';
+        pc.font = uiFont(UI.sizes.bodyLg, { weight: 700 });
         pc.fillText(MASTERPIECE.name, txMid, py + ph * 0.32);
-        pc.font = 'italic 10.5px Georgia, serif'; pc.globalAlpha = 0.9; pc.fillStyle = INK;
+        pc.font = uiFont(UI.sizes.tinyPlus, { italic: true }); pc.globalAlpha = 0.9; pc.fillStyle = INK;
         pc.fillText('MASTERPIECE — framed by the Curator', txMid, py + ph * 0.58);
-        pc.globalAlpha = 0.6; pc.font = '10px Georgia, serif';
+        pc.globalAlpha = 0.6; pc.font = uiFont(UI.sizes.tiny);
         pc.fillText('first challenge clearing · unbuyable collection piece', txMid, py + ph * 0.82);
         pc.restore();
         paperEnd(ctx);
-        centerText(ctx, `${ownedCount} of ${PAINTINGS.length} paintings + 1 masterpiece in your collection`, cx, py + ph + 14, '700 13px Georgia, serif', '#fdf6e9', 0.85);
+        centerText(ctx, `${ownedCount} of ${PAINTINGS.length} paintings + 1 masterpiece in your collection`, cx, py + ph + 14, uiFont(UI.sizes.label, { weight: 700 }), '#fdf6e9', 0.85);
       } else {
-        centerText(ctx, `${ownedCount} of ${PAINTINGS.length} paintings in your collection`, cx, gy0 + gridH + 16, '700 14px Georgia, serif', '#fdf6e9', 0.85);
+        centerText(ctx, `${ownedCount} of ${PAINTINGS.length} paintings in your collection`, cx, gy0 + gridH + 16, uiFont(UI.sizes.body, { weight: 700 }), '#fdf6e9', 0.85);
       }
     } else if (this.atelierTab === 3) {
       // A3 — the Curator's Ledger: a display-only collection book. Every
@@ -2192,7 +2192,7 @@ _drawAtelier(ctx) {
           c.fillRect(fx, fy, fs, fs);
           c.globalAlpha = 0.4;
           c.fillStyle = isGold ? '#8a6d1f' : INK;
-          c.font = '700 22px Georgia, serif';
+          c.font = uiFont(UI.sizes.h3, { weight: 700 });
           c.textAlign = 'center'; c.textBaseline = 'middle';
           c.fillText('✕', fx + fs / 2, fy + fs / 2);
         }
@@ -2203,13 +2203,13 @@ _drawAtelier(ctx) {
         c.textAlign = 'left'; c.textBaseline = 'alphabetic';
         // line 1: name + GOLD tag
         c.fillStyle = isGold ? '#8a6d1f' : INK;
-        c.font = '700 14.5px Georgia, serif';
+        c.font = uiFont(UI.sizes.bodyPlus, { weight: 700 });
         c.globalAlpha = owned ? 1 : 0.78;
         c.fillText(pt.name, tx, y + 24);
         if (isGold) {
           const nameW = c.measureText(pt.name).width;
           c.globalAlpha = owned ? 1 : 0.7;
-          c.font = '700 10.5px Georgia, serif';
+          c.font = uiFont(UI.sizes.tinyPlus, { weight: 700 });
           c.fillStyle = '#b8912e';
           c.fillText('◆ GOLD', tx + nameW + 8, y + 24);
         }
@@ -2221,14 +2221,14 @@ _drawAtelier(ctx) {
         let state;
         if (owned) state = hung ? '★ hung in the loadout' : 'collected';
         else state = isGold ? `${pt.goldCost}g · NG+ only` : 'not yet collected';
-        c.font = '700 11px Georgia, serif';
+        c.font = uiFont(UI.sizes.xsmall, { weight: 700 });
         c.fillStyle = owned ? (hung ? '#c9922a' : '#4e8a5a') : (isGold ? '#8a6d1f' : '#9a9078');
         c.globalAlpha = 1;
         c.fillText(state, tx, y + 44);
         const stateW = c.measureText(state).width;
         c.fillStyle = INK;
         c.globalAlpha = owned ? 0.78 : 0.5;
-        c.font = 'italic 12px Georgia, serif';
+        c.font = uiFont(UI.sizes.small, { italic: true });
         let loreOut = entry.lore;
         const loreMax = tw - stateW - 12;
         while (c.measureText(loreOut).width > loreMax && loreOut.length > 1) loreOut = loreOut.slice(0, loreOut.length - 1);
@@ -2239,7 +2239,7 @@ _drawAtelier(ctx) {
       });
       const ownCt = PAINTINGS.filter(pt => this.save.owned.includes(pt.id)).length;
       const goldCt = PAINTINGS.filter(pt => pt.goldTier).length;
-      centerText(ctx, `the curator's ledger — ${ownCt} of ${PAINTINGS.length} collected · ${goldCt} gold-tier · a display only`, cx, gy0 + gridH + 15, 'italic 12.5px Georgia, serif', '#fdf6e9', 0.7);
+      centerText(ctx, `the curator's ledger — ${ownCt} of ${PAINTINGS.length} collected · ${goldCt} gold-tier · a display only`, cx, gy0 + gridH + 15, uiFont(UI.sizes.smallPlus, { italic: true }), '#fdf6e9', 0.7);
       // A4 (v1.2 M9): the 'Rehung Frame' retirement — a permanent, saved
       // gallery bonus minted once the collection is complete. Sits above the
       // Depart button (same geometry as the retire row in _atelierRows).
@@ -2255,11 +2255,11 @@ _drawAtelier(ctx) {
         c.save();
         c.textAlign = 'left'; c.textBaseline = 'alphabetic';
         c.fillStyle = '#8a6d1f';
-        c.font = '700 15px Georgia, serif';
+        c.font = uiFont(UI.sizes.bodyLg, { weight: 700 });
         c.globalAlpha = 1;
         c.fillText('◆ Gilded Frame', bx + 20, by + 26);
         c.fillStyle = INK;
-        c.font = '12.5px Georgia, serif';
+        c.font = uiFont(UI.sizes.smallPlus);
         c.globalAlpha = 0.8;
         c.fillText('A one-time gilded tier on top of the Rehung Frame — a permanent, saved tuning bump.', bx + 20, by + 45);
         c.fillText(gilded
@@ -2279,10 +2279,10 @@ _drawAtelier(ctx) {
         c.save();
         c.textAlign = 'left'; c.textBaseline = 'alphabetic';
         c.fillStyle = INK;
-        c.font = '700 15px Georgia, serif';
+        c.font = uiFont(UI.sizes.bodyLg, { weight: 700 });
         c.globalAlpha = 1;
         c.fillText('Rehung Frame', bx + 20, by + 26);
-        c.font = '12.5px Georgia, serif';
+        c.font = uiFont(UI.sizes.smallPlus);
         c.globalAlpha = 0.8;
         c.fillText('Retire the complete collection for a permanent Gallery Bonus (the bank and collection remain).', bx + 20, by + 45);
         c.fillText(`Currently: +${lvl * 2} start ink · +${Math.round(lvl * 10)}% orb value per run. Repeatable.`, bx + 20, by + 63);
@@ -2312,9 +2312,9 @@ _drawAtelier(ctx) {
         mc.strokeRect(mtx, mty, ms, ms);
         mc.save();
         mc.textAlign = 'left'; mc.textBaseline = 'middle';
-        mc.fillStyle = '#a3762a'; mc.font = '700 13px Georgia, serif'; mc.globalAlpha = 1;
+        mc.fillStyle = '#a3762a'; mc.font = uiFont(UI.sizes.label, { weight: 700 }); mc.globalAlpha = 1;
         mc.fillText(MASTERPIECE.name, mtx + ms + 14, mpY + 11);
-        mc.fillStyle = INK; mc.font = '10.5px Georgia, serif'; mc.globalAlpha = 0.72;
+        mc.fillStyle = INK; mc.font = uiFont(UI.sizes.tinyPlus); mc.globalAlpha = 0.72;
         mc.fillText('◆ MASTERPIECE — framed by the Curator (first challenge clearing; unbuyable collection piece)', mtx + ms + 14, mpY + 23);
         mc.restore();
         paperEnd(ctx);
@@ -2337,30 +2337,30 @@ _drawAtelier(ctx) {
       c.save();
       c.textAlign = 'left'; c.textBaseline = 'alphabetic';
       c.fillStyle = '#8a6d1f';
-      c.font = '700 18px Georgia, serif';
+      c.font = uiFont(UI.sizes.subLg, { weight: 700 });
       c.globalAlpha = 1;
       c.fillText(`The Curator's Challenge — ${challengeDate(seed)}`, bx + 22, by + 30);
       c.fillStyle = INK;
-      c.font = '13px Georgia, serif';
+      c.font = uiFont(UI.sizes.label);
       c.globalAlpha = 0.85;
       c.fillText('One shared challenge per day — the same loadout and modifier for the whole world.', bx + 22, by + 52);
       // the seeded loadout + modifier, drawn deterministically from the day seed
       const loTxt = loadout.length
         ? loadout.map(id => { const pt = PAINTINGS.find(p => p.id === id); return pt ? pt.name : id; }).join('  +  ')
         : 'no paintings owned yet — a bare-brush day';
-      c.font = '700 14px Georgia, serif';
+      c.font = uiFont(UI.sizes.body, { weight: 700 });
       c.globalAlpha = 1;
       c.fillStyle = '#4c8a34';
       c.fillText('Brush (loadout):', bx + 22, by + 80);
       c.fillStyle = INK;
       c.fillText(loTxt, bx + 170, by + 80);
-      c.font = '700 14px Georgia, serif';
+      c.font = uiFont(UI.sizes.body, { weight: 700 });
       c.fillStyle = '#4c8a34';
       c.fillText('Condition (modifier):', bx + 22, by + 104);
       c.fillStyle = INK;
       c.globalAlpha = 1;
       c.fillText(mod ? `${mod.name} — ${mod.desc}` : 'clear conditions', bx + 190, by + 104);
-      c.font = 'italic 12px Georgia, serif';
+      c.font = uiFont(UI.sizes.small, { italic: true });
       c.fillStyle = INK;
       c.globalAlpha = 0.6;
       c.fillText('score = color restored + enemies cleared in time + orbs gathered + a boss-time bonus. file it to the best list below.', bx + 22, by + 130);
@@ -2372,10 +2372,10 @@ _drawAtelier(ctx) {
       const fw = 640, fh = 46, fgap = 8;
       const fy0 = by + bh + 18;
       c.save();
-      centerText(ctx, `filed challenges — the ${CHALLENGE_TOP_N} best scores (best first)`, cx, fy0 - 12, '700 13px Georgia, serif', '#c9922a', 1);
+      centerText(ctx, `filed challenges — the ${CHALLENGE_TOP_N} best scores (best first)`, cx, fy0 - 12, uiFont(UI.sizes.label, { weight: 700 }), '#c9922a', 1);
       c.restore();
       if (scores.length === 0) {
-        centerText(ctx, 'no challenges filed yet — clear one from the title screen.', cx, fy0 + 20, 'italic 13px Georgia, serif', '#fdf6e9', 0.6);
+        centerText(ctx, 'no challenges filed yet — clear one from the title screen.', cx, fy0 + 20, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.6);
       } else {
         scores.forEach((s, i) => {
           const y = fy0 + i * (fh + fgap);
@@ -2385,23 +2385,23 @@ _drawAtelier(ctx) {
           cc.textAlign = 'left'; cc.textBaseline = 'middle';
           const my = y + fh / 2;
           cc.fillStyle = '#8a6d1f';
-          cc.font = '700 17px Georgia, serif';
+          cc.font = uiFont(UI.sizes.subPlus, { weight: 700 });
           cc.globalAlpha = 1;
           cc.fillText(rank === 1 ? '①' : rank === 2 ? '②' : rank === 3 ? '③' : String(rank), cx - fw / 2 + 20, my);
           cc.fillStyle = INK;
-          cc.font = '700 13px Georgia, serif';
+          cc.font = uiFont(UI.sizes.label, { weight: 700 });
           cc.fillText(s.date, cx - fw / 2 + 60, my);
-          cc.font = '12px Georgia, serif';
+          cc.font = uiFont(UI.sizes.small);
           cc.globalAlpha = 0.6;
           cc.fillText(`seed ${s.seed}`, cx - fw / 2 + 200, my);
           cc.textAlign = 'right';
           cc.fillStyle = rank === 1 ? '#c9922a' : INK;
           cc.globalAlpha = 1;
-          cc.font = '700 19px Georgia, serif';
+          cc.font = uiFont(UI.sizes.title, { weight: 700 });
           cc.fillText(String(s.score), cx + fw / 2 - 22, my);
           cc.textAlign = 'left';
           cc.fillStyle = '#4c8a34';
-          cc.font = '700 11px Georgia, serif';
+          cc.font = uiFont(UI.sizes.xsmall, { weight: 700 });
           cc.fillText('pts', cx + fw / 2 - 96, my);
           cc.restore();
           paperEnd(ctx);
@@ -2413,15 +2413,15 @@ _drawAtelier(ctx) {
     if (this._atelierIntro) {
       const pw = 660, ph = 300, px = cx - pw / 2, py = 250;
       const c = paperPanel(ctx, px, py, pw, ph, { seed: 120 });
-      centerText(c, 'Welcome to the Atelier', cx, py + 40, '700 24px Georgia, serif', INK, 1);
+      centerText(c, 'Welcome to the Atelier', cx, py + 40, uiFont(UI.sizes.h1Sm, { weight: 700 }), INK, 1);
       const lines = [
         'Between your runs, spent and gathered pigments settle into the bank above.',
         'Studio upgrades are training for the frog — permanent, kept even after a defeat.',
         'Paintings are bought once, then hung: up to 2 at a time, and a hung painting is a real bonus on future runs.',
         'Ready when you are — Depart sends you back out to the swamp.',
       ];
-      lines.forEach((ln, i) => centerText(c, ln, cx, py + 84 + i * 32, '15px Georgia, serif', INK, 0.85));
-      centerText(c, 'press 1 / 2 / 3 to browse the shelves, paintings, and gallery — any action closes this note', cx, py + ph - 24, 'italic 12px Georgia, serif', INK, 0.55);
+      lines.forEach((ln, i) => centerText(c, ln, cx, py + 84 + i * 32, uiFont(UI.sizes.bodyLg), INK, 0.85));
+      centerText(c, 'press 1 / 2 / 3 to browse the shelves, paintings, and gallery — any action closes this note', cx, py + ph - 24, uiFont(UI.sizes.small, { italic: true }), INK, 0.55);
       paperEnd(ctx);
     }
 
@@ -2436,12 +2436,12 @@ _drawAtelier(ctx) {
       const shown = say.text.slice(0, Math.floor(say.revealed));
       ctx.save();
       ctx.fillStyle = '#8a5a2b';
-      ctx.font = '700 13px Georgia, serif';
+      ctx.font = uiFont(UI.sizes.label, { weight: 700 });
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.fillText(say.name, cxp + 16, cyp + chipH / 2);
       const nameW = ctx.measureText(say.name).width;
       ctx.fillStyle = INK;
-      ctx.font = 'italic 14px Georgia, serif';
+      ctx.font = uiFont(UI.sizes.body, { italic: true });
       ctx.fillText('“' + shown, cxp + 24 + nameW, cyp + chipH / 2, chipW - 34 - nameW);
       ctx.restore();
     }
@@ -2459,7 +2459,7 @@ _drawAtelier(ctx) {
     ctx.roundRect(l.x, l.y, l.w, l.h, 17);
     ctx.fill(); ctx.stroke();
     ctx.restore();
-    centerText(ctx, '← back to the pond', l.x + l.w / 2, l.y + l.h / 2 + 1, '14px Georgia, serif', '#fdf6e9', 0.9);
+    centerText(ctx, '← back to the pond', l.x + l.w / 2, l.y + l.h / 2 + 1, uiFont(UI.sizes.body), '#fdf6e9', 0.9);
     // M2: the "Encore" viewing-screen entry (a paper chip, right of Depart).
     const en = g.encore;
     ctx.save();
@@ -2471,8 +2471,8 @@ _drawAtelier(ctx) {
     ctx.roundRect(en.x, en.y, en.w, en.h, 17);
     ctx.fill(); ctx.stroke();
     ctx.restore();
-    centerText(ctx, 'Encore — the gallery wall', en.x + en.w / 2, en.y + en.h / 2 + 1, '14px Georgia, serif', '#fdf6e9', 0.9);
-    centerText(ctx, 'Enter — depart the studio   ·   Esc — return to the pond', cx, d.y + d.h + 16, 'italic 11px Georgia, serif', '#fdf6e9', 0.55);
+    centerText(ctx, 'Encore — the gallery wall', en.x + en.w / 2, en.y + en.h / 2 + 1, uiFont(UI.sizes.body), '#fdf6e9', 0.9);
+    centerText(ctx, 'Enter — depart the studio   ·   Esc — return to the pond', cx, d.y + d.h + 16, uiFont(UI.sizes.xsmall, { italic: true }), '#fdf6e9', 0.55);
   }
 
   // ==================== M2 (v1.4): the "Encore" viewing screen ====================
@@ -2550,10 +2550,10 @@ _drawAtelier(ctx) {
     ctx.globalAlpha = fade;
 
     // header
-    outlineText(ctx, 'The Encore', cx, 46, '700 34px Georgia, serif', '#f4ead8', INK, 6);
-    centerText(ctx, 'a quiet walk through the gallery wall', cx, 80, 'italic 15px Georgia, serif', '#fdf6e9', 0.8);
+    outlineText(ctx, 'The Encore', cx, 46, uiFont(UI.sizes.display, { weight: 700 }), '#f4ead8', INK, 6);
+    centerText(ctx, 'a quiet walk through the gallery wall', cx, 80, uiFont(UI.sizes.bodyLg, { italic: true }), '#fdf6e9', 0.8);
     // counter (which painting is on display)
-    centerText(ctx, `${this._encoreIdx + 1} / ${PAINTINGS.length}`, cx, 108, '700 15px Georgia, serif', gold ? '#d9a520' : '#fdf6e9', 0.9);
+    centerText(ctx, `${this._encoreIdx + 1} / ${PAINTINGS.length}`, cx, 108, uiFont(UI.sizes.bodyLg, { weight: 700 }), gold ? '#d9a520' : '#fdf6e9', 0.9);
 
     // the large frame (one at a time). Reuses the P8 gallery-wall frame look:
     // paperPanel + a double border (GILDED for owned gold-tier) + the generative
@@ -2577,7 +2577,7 @@ _drawAtelier(ctx) {
       c.fillRect(fx + 4, fy + 4, S - 8, S - 8);
       c.globalAlpha = 0.5;
       c.fillStyle = '#c9bfa8';
-      c.font = '700 96px Georgia, serif';
+      c.font = uiFont(UI.sizes.megaLg, { weight: 700 });
       c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillText(sealed ? '?' : '✕', cx, fy + S / 2);
     }
@@ -2589,19 +2589,19 @@ _drawAtelier(ctx) {
     c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillStyle = INK;
     if (owned) {
-      c.font = '700 20px Georgia, serif';
+      c.font = uiFont(UI.sizes.titlePlus, { weight: 700 });
       c.globalAlpha = 1;
       c.fillText(pt.name, cx, py);
-      if (gold) { c.fillStyle = '#c9922a'; c.font = '700 12px Georgia, serif'; c.fillText('★ gold tier', cx + 150, py); }
+      if (gold) { c.fillStyle = '#c9922a'; c.font = uiFont(UI.sizes.small, { weight: 700 }); c.fillText('★ gold tier', cx + 150, py); }
     } else {
-      c.font = 'italic 18px Georgia, serif';
+      c.font = uiFont(UI.sizes.subLg, { italic: true });
       c.globalAlpha = 0.7;
       c.fillText(sealed ? 'a sealed portrait — not yet' : 'not yet', cx, py);
     }
     // the lore blurb (Curator's Ledger data) — always shown; it's the story the
     // curator keeps for every painting, earned or not.
     c.fillStyle = INK;
-    c.font = 'italic 14px Georgia, serif';
+    c.font = uiFont(UI.sizes.body, { italic: true });
     c.globalAlpha = owned ? 0.9 : 0.6;
     c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(entry.lore, cx, py + 30, S - 48);
@@ -2612,14 +2612,14 @@ _drawAtelier(ctx) {
     ctx.save();
     ctx.globalAlpha = fade * 0.9;
     ctx.fillStyle = '#fdf6e9';
-    ctx.font = '700 40px Georgia, serif';
+    ctx.font = uiFont(UI.sizes.displayLg, { weight: 700 });
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('‹', cx - S / 2 - 52, fy + S / 2);
     ctx.fillText('›', cx + S / 2 + 52, fy + S / 2);
     ctx.restore();
 
     // footer hint
-    centerText(ctx, '← → / click to browse   ·   Esc — return to the atelier', cx, this.ch - 34, 'italic 12px Georgia, serif', '#fdf6e9', 0.6);
+    centerText(ctx, '← → / click to browse   ·   Esc — return to the atelier', cx, this.ch - 34, uiFont(UI.sizes.small, { italic: true }), '#fdf6e9', 0.6);
     ctx.restore();
   }
 
@@ -3546,13 +3546,13 @@ _drawAtelier(ctx) {
     // goal text
     const textX = swX + swR + 10;
     const textMaxW = w - (skip.x - x) - (textX - x) - 12;
-    centerText(ctx, ph.chip, textX + textMaxW / 2, y + h / 2, '12px Georgia, serif', INK, 0.88);
+    centerText(ctx, ph.chip, textX + textMaxW / 2, y + h / 2, uiFont(UI.sizes.small), INK, 0.88);
 
     // step counter (e.g. "1/3")
     const total = TUTORIAL_PHASES.length;
     const stepLabel = `step ${t.idx + 1} / ${total}`;
     ctx.globalAlpha = 0.5;
-    centerText(ctx, stepLabel, textX + textMaxW / 2, y + 12, '10px Georgia, serif', INK, 0.5);
+    centerText(ctx, stepLabel, textX + textMaxW / 2, y + 12, uiFont(UI.sizes.tiny), INK, 0.5);
     ctx.globalAlpha = 1;
 
     // SKIP button
@@ -3565,7 +3565,7 @@ _drawAtelier(ctx) {
     ctx.lineWidth = hov ? 2 : 1.2;
     ctx.strokeStyle = hov ? '#a03020' : INK;
     ctx.stroke();
-    centerText(ctx, 'SKIP', skip.x + skip.w / 2, skip.y + skip.h / 2 + 4, '700 11px Georgia, serif', hov ? '#fdf6e9' : INK, 1);
+    centerText(ctx, 'SKIP', skip.x + skip.w / 2, skip.y + skip.h / 2 + 4, uiFont(UI.sizes.xsmall, { weight: 700 }), hov ? '#fdf6e9' : INK, 1);
     ctx.restore();
 
     ctx.restore();
@@ -5687,7 +5687,7 @@ _drawAtelier(ctx) {
     ctx.fill();
     // exclamation
     ctx.fillStyle = '#e8d44a';
-    ctx.font = '700 26px Georgia, serif';
+    ctx.font = uiFont(UI.sizes.h1, { weight: 700 });
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('!', x, y - 4);
@@ -5806,7 +5806,7 @@ _drawAtelier(ctx) {
       ctx.fillRect(bx, by, bw * frac, 7);
       ctx.globalAlpha = 0.9;
       ctx.fillStyle = '#f4efe6';
-      ctx.font = '600 15px Georgia, serif';
+      ctx.font = uiFont(UI.sizes.bodyLg, { weight: 600 });
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('THE SILT WYRM', headX, by - 10);
@@ -5968,7 +5968,7 @@ _drawAtelier(ctx) {
       ctx.fillRect(bx, by, bw * frac, 7);
       ctx.globalAlpha = 0.9;
       ctx.fillStyle = '#f4efe6';
-      ctx.font = '600 15px Georgia, serif';
+      ctx.font = uiFont(UI.sizes.bodyLg, { weight: 600 });
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(phase2 ? 'THE UMBRAL WYRM — THE DEEP DARK' : 'THE UMBRAL WYRM', headX, by - 10);
@@ -6137,7 +6137,7 @@ _drawAtelier(ctx) {
       ctx.fillRect(bx, by, bw * frac, 7);
       ctx.globalAlpha = 0.9;
       ctx.fillStyle = '#f4efe6';
-      ctx.font = '600 15px Georgia, serif';
+      ctx.font = uiFont(UI.sizes.bodyLg, { weight: 600 });
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('THE HOLLOW WARDEN', headX, by - 10);
@@ -6669,7 +6669,7 @@ _drawAtelier(ctx) {
     // small label at the right end so the fantasy reads as "color restored"
     ctx.globalAlpha = 0.72;
     centerText(ctx, `color restored ${Math.round(rev * 100)}%`, this.cw - 66, barH + 10,
-      'italic 10px Georgia, serif', INK, 0.75);
+      uiFont(UI.sizes.tiny, { italic: true }), INK, 0.75);
     ctx.restore();
 
     // ---- D1 (v1.7): THE WANDER badge (top-left, under the reveal bar) ----
@@ -6694,14 +6694,14 @@ _drawAtelier(ctx) {
       ctx.stroke();
       // line 1: the reproducibility seed (a player can note it to replay the run)
       centerText(ctx, `Wandering · ${this.wanderSeedRun}`, bx + 18 + (bw - 22) / 2, by + 13,
-        '700 11px Georgia, serif', '#7a5a2a', 0.95);
+        uiFont(UI.sizes.xsmall, { weight: 700 }), '#7a5a2a', 0.95);
       // line 2 (D2): the run's TASTE — one line of flavor that tells the player
       // which archetype this generated run leans (mosquito-heavy / toad-heavy /
       // ...). Pure presentation over wanderTaste (reproducible from the seed);
       // a default-OFF run never reaches here (wanderActive false).
       if (this.wanderTaste) {
         centerText(ctx, this.wanderTaste.name, bx + 18 + (bw - 22) / 2, by + 29,
-          'italic 10px Georgia, serif', '#8a6a3a', 0.9);
+          uiFont(UI.sizes.tiny, { italic: true }), '#8a6a3a', 0.9);
       }
       ctx.restore();
     }
@@ -6728,7 +6728,7 @@ _drawAtelier(ctx) {
       ctx.globalAlpha = 1;
       const label = ss.active ? `streak ×${ss.mult.toFixed(2)}` : `streak ${ss.streak}/${ORB_STREAK.min}`;
       centerText(ctx, label, cx + chipW / 2, cy + chipH / 2 + 1,
-        '700 12px Georgia, serif', ss.active ? '#b8741f' : INK, ss.active ? 1 : 0.7);
+        uiFont(UI.sizes.small, { weight: 700 }), ss.active ? '#b8741f' : INK, ss.active ? 1 : 0.7);
       ctx.restore();
     }
 
@@ -6773,7 +6773,7 @@ _drawAtelier(ctx) {
       }
       // the "L" key hint at the right end.
       centerText(ctx, 'L', cx2 + chipW - 14, cy2 + chipH / 2 + 1,
-        '700 11px Georgia, serif', lit ? '#b8741f' : INK, lit ? 1 : 0.6);
+        uiFont(UI.sizes.xsmall, { weight: 700 }), lit ? '#b8741f' : INK, lit ? 1 : 0.6);
       ctx.restore();
     }
 
@@ -6797,7 +6797,7 @@ _drawAtelier(ctx) {
       }
       ctx.globalAlpha = 1;
       // key hint
-      centerText(ctx, `${i + 1}`, x + 9, y + 10, '700 11px Georgia, serif', INK, 0.55);
+      centerText(ctx, `${i + 1}`, x + 9, y + 10, uiFont(UI.sizes.xsmall, { weight: 700 }), INK, 0.55);
       // swatch
       ctx.fillStyle = pig.color;
       ctx.lineWidth = 2;
@@ -6824,7 +6824,7 @@ _drawAtelier(ctx) {
     const chg = p.splashCharge;
     ctx.save();
     ctx.globalAlpha = 0.92;
-    centerText(ctx, 'SPLASH', bx + bw / 2, by + 10, '700 10px Georgia, serif', INK, 0.6);
+    centerText(ctx, 'SPLASH', bx + bw / 2, by + 10, uiFont(UI.sizes.tiny, { weight: 700 }), INK, 0.6);
     ctx.fillStyle = 'rgba(43,35,32,0.15)';
     this._blobRect(ctx, bx + 10, by + 22, bw - 20, 12, 1);
     ctx.fill();
@@ -6841,14 +6841,14 @@ _drawAtelier(ctx) {
       }
     }
     ctx.globalAlpha = 1;
-    centerText(ctx, 'hold right-click', bx + bw / 2, by + 39, 'italic 9px Georgia, serif', INK, 0.5);
+    centerText(ctx, 'hold right-click', bx + bw / 2, by + 39, uiFont(UI.sizes.micro, { italic: true }), INK, 0.5);
     ctx.restore();
 
     // ---- score + collected (top-right) ----
     ctx.save();
     ctx.globalAlpha = 0.92;
     const sx = this.cw - 14;
-    centerText(ctx, `Score  ${this.score}`, sx - 70, 28, '700 16px Georgia, serif', INK);
+    centerText(ctx, `Score  ${this.score}`, sx - 70, 28, uiFont(UI.sizes.sub, { weight: 700 }), INK);
     for (let i = 0; i < 3; i++) {
       const c = ORB_COLORS[i];
       const pig = PIGMENTS[c];
@@ -6859,7 +6859,7 @@ _drawAtelier(ctx) {
       ctx.beginPath();
       ctx.arc(ox, oy, 9, 0, TAU);
       ctx.fill(); ctx.stroke();
-      centerText(ctx, `${this.collected[c]}`, ox, oy + 20, '700 13px Georgia, serif', INK);
+      centerText(ctx, `${this.collected[c]}`, ox, oy + 20, uiFont(UI.sizes.label, { weight: 700 }), INK);
     }
     ctx.restore();
 
@@ -6873,7 +6873,7 @@ _drawAtelier(ctx) {
       ctx.restore();
       const frac = Math.max(0, h.hp / h.maxHp);
       ctx.save();
-      centerText(ctx, h.warden ? 'THE HOLLOW WARDEN' : 'THE GREAT GRAY HERON', this.cw / 2, by + 4, '700 12px Georgia, serif', INK, 0.85);
+      centerText(ctx, h.warden ? 'THE HOLLOW WARDEN' : 'THE GREAT GRAY HERON', this.cw / 2, by + 4, uiFont(UI.sizes.small, { weight: 700 }), INK, 0.85);
       ctx.fillStyle = 'rgba(43,35,32,0.18)';
       this._blobRect(ctx, bx, by + 12, bw, 12, 1);
       ctx.fill();
@@ -6905,7 +6905,7 @@ _drawAtelier(ctx) {
     ctx.fillStyle = sat('#6f9e8e', this.world.worldColorSat());
     ctx.fillRect(mx2 - rr, my2 - rr, rr * 2, rr * 2);
     ctx.restore();
-    centerText(ctx, 'swamp color', mx2 + 16 + ctx.measureText('x').width, my2, 'italic 11px Georgia, serif', INK, 0.75);
+    centerText(ctx, 'swamp color', mx2 + 16 + ctx.measureText('x').width, my2, uiFont(UI.sizes.xsmall, { italic: true }), INK, 0.75);
     ctx.restore();
 
     // ---- J5 (v1.4): HUD floating "+n" numbers (pop up + fade near the jars) ----
@@ -6918,7 +6918,7 @@ _drawAtelier(ctx) {
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - k);
       ctx.fillStyle = f.color;
-      ctx.font = `700 ${Math.round(15 * pop)}px Georgia, serif`;
+      ctx.font = uiFont(Math.round(15 * pop), { weight: 700 });
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,250,240,0.85)';
       ctx.strokeText(f.text, f.x, f.y - rise);
@@ -6949,7 +6949,7 @@ _drawAtelier(ctx) {
       if (a <= 0) continue;
       ctx.save();
       ctx.globalAlpha = a;
-      outlineText(ctx, b.text, this.cw / 2, b.y, '600 26px "Comic Sans MS", "Segoe Print", cursive', '#fdf6e9', INK, 5);
+      outlineText(ctx, b.text, this.cw / 2, b.y, uiFont(UI.sizes.h1, { weight: 600, display: true }), UI.palette.paperLight, INK, 5);
       ctx.restore();
     }
   }
@@ -7136,7 +7136,7 @@ _drawAtelier(ctx) {
   // W1 (v1.6 Module W): draw the "Gamepad: Auto / Off" row (label + a two-state pill).
   _drawGpad(c, rect, mode) {
     c.save();
-    centerText(c, 'Gamepad', rect.x + 12, rect.y + rect.h / 2, '600 15px Georgia, serif', INK, 0.92);
+    centerText(c, 'Gamepad', rect.x + 12, rect.y + rect.h / 2, uiFont(UI.sizes.bodyLg, { weight: 600 }), INK, 0.92);
     const pw = 84, ph = 28, pxx = rect.x + rect.w - pw, pyy = rect.y + (rect.h - ph) / 2;
     roundRectPath(c, pxx, pyy, pw, ph, ph / 2);
     c.fillStyle = (mode === 'auto') ? '#7fae6a' : 'rgba(43,35,32,0.28)'; c.fill();
@@ -7144,7 +7144,7 @@ _drawAtelier(ctx) {
     const on = (mode === 'auto');
     c.beginPath(); c.arc(on ? pxx + pw - ph / 2 : pxx + ph / 2, pyy + ph / 2, ph / 2 - 4, 0, TAU);
     c.fillStyle = PAPER; c.fill(); c.lineWidth = 1.5; c.strokeStyle = INK; c.stroke();
-    centerText(c, on ? 'Auto' : 'Off', pxx + pw / 2, pyy + ph / 2 + 1, '700 12px Georgia, serif', INK, 0.85);
+    centerText(c, on ? 'Auto' : 'Off', pxx + pw / 2, pyy + ph / 2 + 1, uiFont(UI.sizes.small, { weight: 700 }), INK, 0.85);
     c.restore();
   }
   // Q3 (v1.6 Module Q): SAVE EXPORT/IMPORT — the sanctioned escape hatch for the
@@ -7301,7 +7301,7 @@ _drawAtelier(ctx) {
   }
   _drawToggle(c, rect, label, on) {
     c.save();
-    centerText(c, label, rect.x + 12, rect.y + rect.h / 2, '600 15px Georgia, serif', INK, 0.92);
+    centerText(c, label, rect.x + 12, rect.y + rect.h / 2, uiFont(UI.sizes.bodyLg, { weight: 600 }), INK, 0.92);
     // pill
     const pw = 56, ph = 28, pxx = rect.x + rect.w - pw, pyy = rect.y + (rect.h - ph) / 2;
     roundRectPath(c, pxx, pyy, pw, ph, ph / 2);
@@ -7319,20 +7319,20 @@ _drawAtelier(ctx) {
     ctx.restore();
     const g = this._optionsLayout();
     const c = paperPanel(ctx, g.px, g.py, g.pw, g.ph, { seed: 61 });
-    centerText(c, 'Options', g.cx, g.py + 44, '700 30px Georgia, serif');
+    centerText(c, 'Options', g.cx, g.py + 44, uiFont(UI.sizes.heroSm, { weight: 700 }));
     // R1 (v1.8): the release version sits in the options header — the natural
     // "about" spot, beside the existing controls hint. Display-only (renders
     // the single GAME_VERSION string from logic.js; no state touched).
-    centerText(c, `M to mute · Esc / O to close  ·  v${GAME_VERSION}`, g.cx, g.py + 74, 'italic 12px Georgia, serif', INK, 0.65);
+    centerText(c, `M to mute · Esc / O to close  ·  v${GAME_VERSION}`, g.cx, g.py + 74, uiFont(UI.sizes.small, { italic: true }), INK, 0.65);
     const m = this.input.mouse;
     const hot = (r) => m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y - 8 && m.y <= r.y + r.h + 8;
     // music slider
-    centerText(c, 'Music', g.trackX, g.music.y - 18, '700 14px Georgia, serif', INK, 0.9);
-    centerText(c, Math.round(this.options.musicVol * 100) + '%', g.trackX + g.trackW, g.music.y - 18, '700 13px Georgia, serif', INK, 0.8);
+    centerText(c, 'Music', g.trackX, g.music.y - 18, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.9);
+    centerText(c, Math.round(this.options.musicVol * 100) + '%', g.trackX + g.trackW, g.music.y - 18, uiFont(UI.sizes.label, { weight: 700 }), INK, 0.8);
     this._drawSliderTrack(c, g.music, this.options.musicVol, hot(g.music), m.x, m.y);
     // sfx slider
-    centerText(c, 'Sound effects', g.trackX, g.sfx.y - 18, '700 14px Georgia, serif', INK, 0.9);
-    centerText(c, Math.round(this.options.sfxVol * 100) + '%', g.trackX + g.trackW, g.sfx.y - 18, '700 13px Georgia, serif', INK, 0.8);
+    centerText(c, 'Sound effects', g.trackX, g.sfx.y - 18, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.9);
+    centerText(c, Math.round(this.options.sfxVol * 100) + '%', g.trackX + g.trackW, g.sfx.y - 18, uiFont(UI.sizes.label, { weight: 700 }), INK, 0.8);
     this._drawSliderTrack(c, g.sfx, this.options.sfxVol, hot(g.sfx), m.x, m.y);
     // toggles
     this._drawToggle(c, g.shake, 'Screen shake', this.options.shake);
@@ -7359,8 +7359,8 @@ _drawAtelier(ctx) {
   _drawSaveSection(c, g, m) {
     c.save();
     // the section header
-    centerText(c, 'Save', g.trackX, g.saveHead, '700 14px Georgia, serif', INK, 0.9);
-    centerText(c, 'copy · paste · carry your gallery', g.trackX + g.trackW, g.saveHead, 'italic 11px Georgia, serif', INK, 0.55);
+    centerText(c, 'Save', g.trackX, g.saveHead, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.9);
+    centerText(c, 'copy · paste · carry your gallery', g.trackX + g.trackW, g.saveHead, uiFont(UI.sizes.xsmall, { italic: true }), INK, 0.55);
     const hotE = this._mouseIn(g.export.x, g.export.y, g.export.w, g.export.h);
     const hotI = this._mouseIn(g.import.x, g.import.y, g.import.w, g.import.h);
     // EXPORT button (top of the left column)
@@ -7381,7 +7381,7 @@ _drawAtelier(ctx) {
     const txt = this._saveFieldText || '';
     const shown = txt.length > 46 ? '…' + txt.slice(-44) : (txt.length ? txt : 'paste the exported save here…');
     const preview = shown.length > 52 ? shown.slice(0, 52) : shown;
-    centerText(c, preview, g.field.x + g.field.w / 2, g.field.y + g.field.h / 2, '10px "Courier New", monospace', INK, this._saveFieldFocus ? 0.9 : (txt.length ? 0.75 : 0.4));
+    centerText(c, preview, g.field.x + g.field.w / 2, g.field.y + g.field.h / 2, uiFont(UI.sizes.tiny, { mono: true }), INK, this._saveFieldFocus ? 0.9 : (txt.length ? 0.75 : 0.4));
     c.restore();
     // the one-line outcome banner (a thin pill in the band just above the Save
     // section — transient, it lingers ~3s then the banner timer clears it).
@@ -7391,7 +7391,7 @@ _drawAtelier(ctx) {
       roundRectPath(c, bx, by, bw, 22, 8);
       c.fillStyle = 'rgba(43,35,32,0.08)'; c.fill();
       c.lineWidth = 1; c.strokeStyle = 'rgba(43,35,32,0.35)'; c.stroke();
-      centerText(c, this._saveBanner, g.cx, by + 12, '600 12px Georgia, serif', INK, 0.9);
+      centerText(c, this._saveBanner, g.cx, by + 12, uiFont(UI.sizes.small, { weight: 600 }), INK, 0.9);
       c.restore();
     }
   }
@@ -7496,8 +7496,8 @@ _drawAtelier(ctx) {
     ctx.translate(cx, 200);                    // pivot near the title text
     ctx.scale(1 + swell, 1 + swell);
     ctx.translate(-cx, -200);
-    outlineText(ctx, 'Frogue Gallery', cx, 190 + bob, '700 72px Georgia, serif', '#f4ead8', INK, 10);
-    centerText(ctx, 'a cozy action roguelite about a tiny frog painter', cx, 248 + bob, 'italic 20px Georgia, serif', '#fdf6e9', 0.92);
+    outlineText(ctx, 'Frogue Gallery', cx, 190 + bob, uiFont(UI.sizes.mega, { weight: 700 }), '#f4ead8', INK, 10);
+    centerText(ctx, 'a cozy action roguelite about a tiny frog painter', cx, 248 + bob, uiFont(UI.sizes.titlePlus, { italic: true }), '#fdf6e9', 0.92);
     ctx.restore();
 
     // H2 (v1.8): the title-screen "collection complete" badge — a small gilded
@@ -7514,7 +7514,7 @@ _drawAtelier(ctx) {
       const gpulse = 0.55 + 0.45 * Math.sin(this.now * 2);
       bc.fillStyle = '#c9922a';
       bc.textAlign = 'center'; bc.textBaseline = 'middle';
-      bc.font = '700 14px Georgia, serif';
+      bc.font = uiFont(UI.sizes.body, { weight: 700 });
       bc.globalAlpha = 0.85 + 0.15 * gpulse;
       bc.fillText('✦  The Full Collection  ✦', cx, by2 + bh2 / 2);
       bc.restore();
@@ -7528,8 +7528,8 @@ _drawAtelier(ctx) {
 
     // controls card
     const c = paperPanel(ctx, px, py, pw, ph, { seed: 11 });
-    centerText(c, 'The swamp is fading to gray.', cx, py + 34, '600 17px Georgia, serif');
-    centerText(c, 'Paint it back to color — then face the Great Gray Heron.', cx, py + 58, '600 17px Georgia, serif');
+    centerText(c, 'The swamp is fading to gray.', cx, py + 34, uiFont(UI.sizes.subPlus, { weight: 600 }));
+    centerText(c, 'Paint it back to color — then face the Great Gray Heron.', cx, py + 58, uiFont(UI.sizes.subPlus, { weight: 600 }));
     const rows = [
       ['Move', 'WASD / arrow keys'],
       ['Paint', 'hold left mouse, aim with the cursor'],
@@ -7540,8 +7540,8 @@ _drawAtelier(ctx) {
     ];
     rows.forEach((r, i) => {
       const ry = py + 96 + i * 28;
-      centerText(c, r[0], px + 110, ry, '700 14px Georgia, serif', INK, 0.9);
-      centerText(c, r[1], px + 330, ry, '14px Georgia, serif', INK, 0.8);
+      centerText(c, r[0], px + 110, ry, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.9);
+      centerText(c, r[1], px + 330, ry, uiFont(UI.sizes.body), INK, 0.8);
     });
     paperEnd(ctx);
 
@@ -7573,7 +7573,7 @@ _drawAtelier(ctx) {
         // L3: staggered step 2.
         ctx.save();
         ctx.globalAlpha = titleItemAlpha(this._titleShowT, 2);
-        centerText(ctx, 'difficulty', cx - g.diff[0].x + 34, g.diff[0].y + 20, '11px Georgia, serif', INK, 0.55);
+        centerText(ctx, 'difficulty', cx - g.diff[0].x + 34, g.diff[0].y + 20, uiFont(UI.sizes.xsmall), INK, 0.55);
         for (const p of g.diff) {
           const sel = this.options.difficulty === p.id;
           const hov = this._mouseIn(p.x, p.y, p.w, p.h);
@@ -7586,7 +7586,7 @@ _drawAtelier(ctx) {
           ctx.lineWidth = sel ? 2.4 : 1.4;
           ctx.strokeStyle = sel ? '#2b4a34' : INK;
           ctx.stroke();
-          centerText(ctx, p.label, p.x + p.w / 2, p.y + p.h / 2 + 4, sel ? '700 13px Georgia, serif' : '12px Georgia, serif', sel ? '#fdf6e9' : INK, sel ? 1 : 0.85);
+          centerText(ctx, p.label, p.x + p.w / 2, p.y + p.h / 2 + 4, sel ? uiFont(UI.sizes.label, { weight: 700 }) : uiFont(UI.sizes.small), sel ? '#fdf6e9' : INK, sel ? 1 : 0.85);
           ctx.restore();
         }
         ctx.restore();
@@ -7602,7 +7602,7 @@ _drawAtelier(ctx) {
           const chov = this._mouseIn(g.chall.x, g.chall.y, g.chall.w, g.chall.h);
           uiButton(ctx, g.chall.x, g.chall.y, g.chall.w, g.chall.h, 'Challenge  [C]', chov, false, { seed: 58, size: 15, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
           const day = challengeDate(challengeDaySeed(Date.now()));
-          centerText(ctx, `today's pick · ${day}`, g.chall.x + g.chall.w / 2, g.chall.y - 8, 'italic 10px Georgia, serif', '#e8c86a', 0.9);
+          centerText(ctx, `today's pick · ${day}`, g.chall.x + g.chall.w / 2, g.chall.y - 8, uiFont(UI.sizes.tiny, { italic: true }), '#e8c86a', 0.9);
         }
         uiButton(ctx, g.abx, g.aby, g.abw, g.abh, 'Visit the Atelier', this._mouseIn(g.abx, g.aby, g.abw, g.abh), false, { seed: 6, size: 15 });
         uiButton(ctx, g.ox, g.oy, g.ow, g.oh, 'Options', this._mouseIn(g.ox, g.oy, g.ow, g.oh), false, { seed: 7, size: 15 });
@@ -7615,7 +7615,7 @@ _drawAtelier(ctx) {
           ctx.save();
           ctx.globalAlpha = 0.92;
           uiButton(ctx, g.reeds.x, g.reeds.y, g.reeds.w, g.reeds.h, 'Beneath the Reeds  [R]', this._mouseIn(g.reeds.x, g.reeds.y, g.reeds.w, g.reeds.h), false, { seed: 59, size: 14, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-          centerText(ctx, 'the deeper swamp · carry a lantern', g.reeds.x + g.reeds.w / 2, g.reeds.y + g.reeds.h + 9, 'italic 10px Georgia, serif', 'rgba(253,246,233,0.6)', 0.9);
+          centerText(ctx, 'the deeper swamp · carry a lantern', g.reeds.x + g.reeds.w / 2, g.reeds.y + g.reeds.h + 9, uiFont(UI.sizes.tiny, { italic: true }), 'rgba(253,246,233,0.6)', 0.9);
           ctx.restore();
         }
         ctx.restore();
@@ -7624,22 +7624,22 @@ _drawAtelier(ctx) {
         // nothing overlaps — see _titleLayout's fpush)
         const s = this.save.stats;
         const fpush = g.fpush || 0;
-        centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, g.aby + g.abh + 18 + fpush, 'italic 13px Georgia, serif', '#fdf6e9', 0.7);
+        centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, g.aby + g.abh + 18 + fpush, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.7);
         const br = this.save.bestRun;
         if (br) {
           const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
-          centerText(ctx, `best run — ${what}`, cx, g.aby + g.abh + 38 + fpush, '700 14px Georgia, serif', '#e8c86a', 0.95);
+          centerText(ctx, `best run — ${what}`, cx, g.aby + g.abh + 38 + fpush, uiFont(UI.sizes.body, { weight: 700 }), '#e8c86a', 0.95);
         }
-        centerText(ctx, 'G/N/B to set difficulty · M to mute · A for the atelier · R for the Reeds · "New Game" = erase save (bottom left)', cx, g.aby + g.abh + (br ? 58 : 38) + fpush, '12px Georgia, serif', '#fdf6e9', 0.5);
+        centerText(ctx, 'G/N/B to set difficulty · M to mute · A for the atelier · R for the Reeds · "New Game" = erase save (bottom left)', cx, g.aby + g.abh + (br ? 58 : 38) + fpush, uiFont(UI.sizes.small), '#fdf6e9', 0.5);
         // erase-save link (bottom-left; two-click confirm, see _updateTitle)
         const ex = 16, ey = this.ch - 40;
         const armed = (this.now - (this._eraseArm || -99)) < 3;
-        centerText(ctx, armed ? 'click again to erase save data…' : 'erase save data', ex + 120, ey + 14, armed ? '700 12px Georgia, serif' : '11px Georgia, serif', armed ? '#d8543c' : 'rgba(253,246,233,0.45)', armed ? 1 : 0.8);
+        centerText(ctx, armed ? 'click again to erase save data…' : 'erase save data', ex + 120, ey + 14, armed ? uiFont(UI.sizes.small, { weight: 700 }) : uiFont(UI.sizes.xsmall), armed ? '#d8543c' : 'rgba(253,246,233,0.45)', armed ? 1 : 0.8);
         // R1 (v1.8): the release version stamp — a quiet bottom-right corner
         // mark (clear of the erase link at bottom-left and the idle frog at
         // (150, ch-150)). Display-only: it renders the single GAME_VERSION
         // string from logic.js and touches no state.
-        centerText(ctx, 'Frogue Gallery · v' + GAME_VERSION, this.cw - 160, this.ch - 26, '11px Georgia, serif', 'rgba(253,246,233,0.5)', 0.9);
+        centerText(ctx, 'Frogue Gallery · v' + GAME_VERSION, this.cw - 160, this.ch - 26, uiFont(UI.sizes.xsmall), 'rgba(253,246,233,0.5)', 0.9);
       }
 
   // M8 P6: the "?" field guide. A single source of truth for its layout so the
@@ -7680,15 +7680,15 @@ _drawAtelier(ctx) {
     ctx.fillRect(0, 0, this.cw, this.ch);
     ctx.restore();
     const c = paperPanel(ctx, g.px, g.py, g.pw, g.ph, { seed: 71 });
-    this._leftText(c, 'Field Guide', g.px + 40, g.py + 38, '700 26px Georgia, serif', INK, 1);
-    this._leftText(c, 'the run is paused — take your time', g.px + 40, g.py + 62, 'italic 13px Georgia, serif', INK, 0.6);
+    this._leftText(c, 'Field Guide', g.px + 40, g.py + 38, uiFont(UI.sizes.h1, { weight: 700 }), INK, 1);
+    this._leftText(c, 'the run is paused — take your time', g.px + 40, g.py + 62, uiFont(UI.sizes.label, { italic: true }), INK, 0.6);
     // close button
     uiButton(ctx, g.close.x, g.close.y, g.close.w, g.close.h, 'Close (H)', this._mouseIn(g.close.x, g.close.y, g.close.w, g.close.h), false, { seed: 75, size: 14 });
 
     const colL = g.px + 34, colR = g.px + g.pw / 2 + 14, colW = g.pw / 2 - 58;
     const y0 = g.py + 96;
     // ---- left column: painting (the pigments) ----
-    c.save(); c.font = '700 16px Georgia, serif'; c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Painting — your brush', colL, y0); c.restore();
+    c.save(); c.font = uiFont(UI.sizes.sub, { weight: 700 }); c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Painting — your brush', colL, y0); c.restore();
     const pig = [
       ['1', PIGMENTS.red.color, 'Crimson', 'BIG damage + burn (damage over time, ignores armor); your main weapon'],
       ['2', PIGMENTS.blue.color, 'Cobalt', 'medium damage + FREEZE: flies freeze solid on the spot, ground enemies slow then freeze'],
@@ -7698,16 +7698,16 @@ _drawAtelier(ctx) {
       const y = y0 + 34 + i * 58;
       c.fillStyle = r[1]; c.beginPath(); c.arc(colL + 12, y, 11, 0, TAU); c.fill();
       c.lineWidth = 1.6; c.strokeStyle = INK; c.stroke();
-      c.fillStyle = INK; c.font = '700 15px Georgia, serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillStyle = INK; c.font = uiFont(UI.sizes.bodyLg, { weight: 700 }); c.textAlign = 'left'; c.textBaseline = 'middle';
       c.fillText(`${r[2]} (key ${r[0]})`, colL + 32, y);
-      c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.8)';
+      c.font = uiFont(UI.sizes.label); c.fillStyle = 'rgba(43,35,32,0.8)';
       this._wrapHelp(c, r[3], colL + 32, y + 16, colW - 32, 14);
     });
-    c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.7)'; c.textAlign = 'left'; c.textBaseline = 'middle';
+    c.font = uiFont(UI.sizes.label); c.fillStyle = 'rgba(43,35,32,0.7)'; c.textAlign = 'left'; c.textBaseline = 'middle';
     this._wrapHelp(c, 'Hold left mouse to paint, aim with the cursor. Hold right mouse to charge a Splash burst, release to fire. A dry brush (no pigment) deals light damage, but it CLEANS enemy status and restores the swamp\u2019s color the fastest — it never runs out.', colL, y0 + 34 + 3 * 58 + 6, colW, 14);
 
     // ---- right column: counterplay + the heron ----
-    c.save(); c.font = '700 16px Georgia, serif'; c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Know your quarry', colR, y0); c.restore();
+    c.save(); c.font = uiFont(UI.sizes.sub, { weight: 700 }); c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Know your quarry', colR, y0); c.restore();
     const foes = [
       ['Mud Beetle', 'armored — burn (red) ignores its shell. Don\u2019t just chip it.'],
       ['Mosquito', 'fast and airborne — blue FREEZES it solid; it ignores root.'],
@@ -7718,17 +7718,17 @@ _drawAtelier(ctx) {
     ];
     foes.forEach((r, i) => {
       const y = y0 + 34 + i * 48;
-      c.font = '700 14px Georgia, serif'; c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.font = uiFont(UI.sizes.body, { weight: 700 }); c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle';
       c.fillText(r[0], colR, y);
-      c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.8)';
+      c.font = uiFont(UI.sizes.label); c.fillStyle = 'rgba(43,35,32,0.8)';
       this._wrapHelp(c, r[1], colR, y + 15, colW, 13);
     });
     const hy = y0 + 34 + foes.length * 48 + 12;
     // K9 (v1.5 M4): the boss line adapts to the NG+ heron the player now faces.
     const bossName = this.heron && this.heron.gilded ? 'The Gilded Heron (NG+)' : 'The Great Gray Heron';
-    c.font = '700 15px Georgia, serif'; c.fillStyle = this.heron && this.heron.gilded ? GILDED_HERON.gildedHue : '#8d7bb0'; c.textAlign = 'left'; c.textBaseline = 'middle';
+    c.font = uiFont(UI.sizes.bodyLg, { weight: 700 }); c.fillStyle = this.heron && this.heron.gilded ? GILDED_HERON.gildedHue : '#8d7bb0'; c.textAlign = 'left'; c.textBaseline = 'middle';
     c.fillText(bossName, colR, hy);
-    c.font = '13px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.85)';
+    c.font = uiFont(UI.sizes.label); c.fillStyle = 'rgba(43,35,32,0.85)';
     this._wrapHelp(c, 'Watch the telegraph (a glow before it strikes). Move off the marked line when it swoops, sweeps, or dives. It gathers reinforcements and grows fiercer the lower its health falls — keep painting to keep it stunned.', colR, hy + 16, colW, 14);
     if (this.heron && this.heron.gilded) {
       this._wrapHelp(c, 'NEW: its gilded plume EATS your green healing — heal in the 30s gaps between plumes.', colR, hy + 44, colW, 14);
@@ -7744,28 +7744,28 @@ _drawAtelier(ctx) {
     const reedsGuide = reedsUnlocked(this.save);
     if (reedsGuide) {
       const rgY = y0 + 34 + foes.length * 48 + 12 + 60 + 40;
-      c.save(); c.font = '700 16px Georgia, serif'; c.fillStyle = '#b08a4a'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.save(); c.font = uiFont(UI.sizes.sub, { weight: 700 }); c.fillStyle = '#b08a4a'; c.textAlign = 'left'; c.textBaseline = 'middle';
       c.fillText('Beneath the Reeds', colR, rgY);
-      c.font = 'italic 11px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.7)';
+      c.font = uiFont(UI.sizes.xsmall, { italic: true }); c.fillStyle = 'rgba(43,35,32,0.7)';
       this._wrapHelp(c, 'the deeper swamp — carry your lantern (L). Its light draws these creatures.', colR, rgY + 15, colW, 12);
       c.restore();
       REEDS_CREATURES.forEach((r, i) => {
         const y = rgY + 40 + i * 30;
-        c.font = '700 13px Georgia, serif'; c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle';
+        c.font = uiFont(UI.sizes.label, { weight: 700 }); c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle';
         c.fillText(r.name, colR, y);
-        c.font = '12px Georgia, serif'; c.fillStyle = 'rgba(43,35,32,0.8)';
+        c.font = uiFont(UI.sizes.small); c.fillStyle = 'rgba(43,35,32,0.8)';
         this._wrapHelp(c, r.note, colR, y + 13, colW, 12);
       });
     }
 
     // footer
-    centerText(c, 'WASD / arrows to move  ·  Space to hop (brief invulnerability)  ·  P to pause  ·  M to mute', g.cx, g.py + g.ph - 22, 'italic 13px Georgia, serif', INK, 0.6);
+    centerText(c, 'WASD / arrows to move  ·  Space to hop (brief invulnerability)  ·  P to pause  ·  M to mute', g.cx, g.py + g.ph - 22, uiFont(UI.sizes.label, { italic: true }), INK, 0.6);
     // T4 (v1.2 M13): the "Watch me" retraining band — replay a single pigment
     // drill or the sketch-heron phase on demand (opt-in; never auto-enters, and
     // the replay is a frozen aside that never counts toward the timed run).
     if (g.retrain && g.retrain.enabled) {
       const rt = g.retrain;
-      centerText(c, 'Watch me — replay a lesson (frozen; the run keeps its clock)', g.cx, rt.titleY, '700 14px Georgia, serif', INK, 0.9);
+      centerText(c, 'Watch me — replay a lesson (frozen; the run keeps its clock)', g.cx, rt.titleY, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.9);
       for (const b of rt.buttons) {
         const hov = this._mouseIn(b.x, b.y, b.w, b.h);
         ctx.save();
@@ -7777,7 +7777,7 @@ _drawAtelier(ctx) {
         ctx.strokeStyle = INK;
         ctx.stroke();
         ctx.restore();
-        centerText(ctx, b.label, b.x + b.w / 2, b.y + b.h / 2 + 1, '700 12px Georgia, serif', '#fdf6e9', 1);
+        centerText(ctx, b.label, b.x + b.w / 2, b.y + b.h / 2 + 1, uiFont(UI.sizes.small, { weight: 700 }), '#fdf6e9', 1);
       }
     }
     paperEnd(ctx);
@@ -7818,8 +7818,8 @@ _drawAtelier(ctx) {
     // the SAME offsets so the hit-rects stay in lock-step.
     const pw = 340, ph = 320, px = cx - pw / 2, py = cy - ph / 2 + slide;
     const c = paperPanel(ctx, px, py, pw, ph, { seed: 21 });
-    centerText(c, 'Paused', cx, py + 38, '700 30px Georgia, serif');
-    centerText(c, 'P to resume - Esc quits to the pond', cx, py + 66, '13px Georgia, serif', INK, 0.7);
+    centerText(c, 'Paused', cx, py + 38, uiFont(UI.sizes.heroSm, { weight: 700 }));
+    centerText(c, 'P to resume - Esc quits to the pond', cx, py + 66, uiFont(UI.sizes.label), INK, 0.7);
     // Q1: the "this expedition" block — a live read of the current run (time,
     // zone, enemies painted, orbs). In-memory only; never touches the save.
     if (this.state === 'expedition') {
@@ -7832,9 +7832,9 @@ _drawAtelier(ctx) {
       c.strokeStyle = 'rgba(43,35,32,0.28)';
       c.lineWidth = 1;
       c.beginPath(); c.moveTo(px + 44, by - 18); c.lineTo(px + pw - 44, by - 18); c.stroke();
-      centerText(c, 'this expedition', cx, by, '700 12px Georgia, serif', '#a3762a', 0.9);
-      centerText(c, `time ${this._fmtClock(this.runT || 0)}  ·  ${zname}`, cx, by + 20, '13px Georgia, serif', INK, 0.85);
-      centerText(c, `enemies painted ${this.runEnemies || 0}  ·  orbs ${this.runOrbs || 0}`, cx, by + 40, '13px Georgia, serif', INK, 0.85);
+      centerText(c, 'this expedition', cx, by, uiFont(UI.sizes.small, { weight: 700 }), '#a3762a', 0.9);
+      centerText(c, `time ${this._fmtClock(this.runT || 0)}  ·  ${zname}`, cx, by + 20, uiFont(UI.sizes.label), INK, 0.85);
+      centerText(c, `enemies painted ${this.runEnemies || 0}  ·  orbs ${this.runOrbs || 0}`, cx, by + 40, uiFont(UI.sizes.label), INK, 0.85);
       ctx.restore();
     }
     ctx.save();
@@ -7842,7 +7842,7 @@ _drawAtelier(ctx) {
     uiButton(ctx, px, py + 164, pw, 44, 'Resume', this._mouseIn(px, cy - ph / 2 + 164, pw, 44), false, { seed: 41, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
     uiButton(ctx, px, py + 216, pw, 44, 'Quit to the Pond', this._mouseIn(px, cy - ph / 2 + 216, pw, 44), false, { seed: 42, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
     ctx.restore();
-    centerText(c, 'M to mute', cx, py + 286, 'italic 12px Georgia, serif', INK, 0.6);
+    centerText(c, 'M to mute', cx, py + 286, uiFont(UI.sizes.small, { italic: true }), INK, 0.6);
     paperEnd(ctx);
   }
 
@@ -7944,17 +7944,17 @@ _drawAtelier(ctx) {
       ctx.fillStyle = '#3a6d3a';
       ctx.beginPath(); ctx.arc(stripX + clamp(le.x / w, 0, 1) * stripW, stripY + clamp((le.y / (this.world.h || 1)) * stripH, 3, stripH - 3), 2.6, 0, TAU); ctx.fill();
     } else {
-      centerText(ctx, 'the route was not recorded', cx, stripY + stripH / 2 + 4, 'italic 11px Georgia, serif', INK, 0.5);
+      centerText(ctx, 'the route was not recorded', cx, stripY + stripH / 2 + 4, uiFont(UI.sizes.xsmall, { italic: true }), INK, 0.5);
     }
     // the recap line: run time + zones crossed + the boss outcome
-    centerText(ctx, `the last expedition — ${this._fmtClock(this.runT || 0)} · ${crossed} zone${crossed === 1 ? '' : 's'} crossed · ${this._recapBossLine()}`, cx, stripY + stripH + 14, '700 12px Georgia, serif', '#5a5a52', 0.92);
+    centerText(ctx, `the last expedition — ${this._fmtClock(this.runT || 0)} · ${crossed} zone${crossed === 1 ? '' : 's'} crossed · ${this._recapBossLine()}`, cx, stripY + stripH + 14, uiFont(UI.sizes.small, { weight: 700 }), '#5a5a52', 0.92);
     // O2 (v1.7): a SECOND line for a WANDER run only — the "Wandering expedition
     // · seed N" tag + the taste's name + its flavor. Guarded by _recapWanderLine
     // (null for hand-tuned runs), so a default-OFF run's recap strip is
     // byte-identical to before. It sits 14px below the recap line and 14px above
     // the card's top — in the same empty band, so nothing existing moves.
     const wl = this._recapWanderLine();
-    if (wl) centerText(ctx, wl, cx, stripY + stripH + 30, 'italic 11px Georgia, serif', '#8a6a3a', 0.9);
+    if (wl) centerText(ctx, wl, cx, stripY + stripH + 30, uiFont(UI.sizes.xsmall, { italic: true }), '#8a6a3a', 0.9);
     ctx.restore();
   }
 
@@ -8044,16 +8044,16 @@ _drawAtelier(ctx) {
         ? 'Every painting hung, every heron painted, every reed crossed. The museum keeps you better.'
         : 'The Great Gray Heron takes flight, dripping in your colors. The swamp remembers.';
       outlineText(ctx, cap, this.cw / 2, this.ch * 0.42,
-        '700 46px Georgia, serif', '#eaf3e0', 'rgba(10,13,8,0.9)', 6);
+        uiFont(UI.sizes.displayXl, { weight: 700 }), '#eaf3e0', 'rgba(10,13,8,0.9)', 6);
       centerText(ctx, sub,
-        this.cw / 2, this.ch * 0.42 + 44, 'italic 17px Georgia, serif', '#eaf3e0', 0.85 * capA);
+        this.cw / 2, this.ch * 0.42 + 44, uiFont(UI.sizes.subPlus, { italic: true }), '#eaf3e0', 0.85 * capA);
     }
     // "press any key to skip" hint — pulses, fades in late, never before 1.2s
     const hintA = clamp((t - 1.2) / 0.6, 0, 1);
     if (hintA > 0) {
       const pulse = 0.55 + 0.45 * Math.sin((t - 1.2) * 4);
       centerText(ctx, 'press any key or click to continue', this.cw / 2,
-        this.ch - barH - 26, '13px Georgia, serif', '#cfe6c4', hintA * pulse);
+        this.ch - barH - 26, uiFont(UI.sizes.label), '#cfe6c4', hintA * pulse);
     }
     // a thin gold rule between the caption and the skip hint on full reveal
     if (in01 > 0.6) {
@@ -8092,16 +8092,16 @@ _drawAtelier(ctx) {
     // to "route not recorded" when <2 points, but the time + boss line always shows).
     if (Array.isArray(this.runWaypoints)) this._drawRecap(c);
 
-    outlineText(c, victory ? 'The Swamp Blooms!' : 'The Brush Rests…', cx, py + 52, '700 40px Georgia, serif', victory ? '#5a9e3d' : '#8d9aa0', INK, 6);
+    outlineText(c, victory ? 'The Swamp Blooms!' : 'The Brush Rests…', cx, py + 52, uiFont(UI.sizes.displayLg, { weight: 700 }), victory ? '#5a9e3d' : '#8d9aa0', INK, 6);
     centerText(c, victory
       ? 'The Heron takes flight, dripping in your colors. The swamp remembers.'
       : 'The frog slips beneath the reeds… but the pigments you kept are yours.',
-      cx, py + 88, 'italic 15px Georgia, serif', INK, 0.8);
+      cx, py + 88, uiFont(UI.sizes.bodyLg, { italic: true }), INK, 0.8);
 
     // gains
     const g = this.endGains || {};
     const gainsY = victory ? 122 : 150;
-    centerText(c, victory ? 'Pigments added to the bank' : 'Pigments kept (half, the swamp is unforgiving)', cx, py + gainsY, '700 14px Georgia, serif', INK, 0.85);
+    centerText(c, victory ? 'Pigments added to the bank' : 'Pigments kept (half, the swamp is unforgiving)', cx, py + gainsY, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.85);
     for (let i = 0; i < 3; i++) {
       const col = ORB_COLORS[i];
       const pig = PIGMENTS[col];
@@ -8116,8 +8116,8 @@ _drawAtelier(ctx) {
       c.beginPath();
       c.arc(ox - 4, oy - 5, 3.4, 0, TAU);
       c.fill();
-      centerText(c, `+${g[col] || 0}`, ox, oy + 34, '700 18px Georgia, serif', INK);
-      centerText(c, pig.name, ox, oy + 54, '12px Georgia, serif', INK, 0.7);
+      centerText(c, `+${g[col] || 0}`, ox, oy + 34, uiFont(UI.sizes.subLg, { weight: 700 }), INK);
+      centerText(c, pig.name, ox, oy + 54, uiFont(UI.sizes.small), INK, 0.7);
     }
 
     // V4 (v1.2 M11): on a victory, the paintings hung for this expedition
@@ -8131,7 +8131,7 @@ _drawAtelier(ctx) {
     if (exh.length > 0) {
       const reveal = clamp((this.endT - 0.4) / 0.9, 0, 1);
       if (reveal > 0.02) {
-        centerText(c, `Curator's Wall — ${exh.length} painting${exh.length === 1 ? '' : 's'} from this expedition`, cx, py + 244, '700 14px Georgia, serif', '#5a9e3d', 0.9 * reveal);
+        centerText(c, `Curator's Wall — ${exh.length} painting${exh.length === 1 ? '' : 's'} from this expedition`, cx, py + 244, uiFont(UI.sizes.body, { weight: 700 }), '#5a9e3d', 0.9 * reveal);
         const n = exh.length;
         const fs = 66;
         const gap = 96;
@@ -8154,7 +8154,7 @@ _drawAtelier(ctx) {
           c.strokeRect(fx + 6, fy + 6, fs - 12, fs - 12);
           this._drawPaintingMotif(c, pt, fx + 8, fy + 8, fs - 16);
           c.restore();
-          centerText(c, pt.name, fx + fs / 2, fy + fs + 15, 'italic 12px Georgia, serif', INK, 0.9 * ri);
+          centerText(c, pt.name, fx + fs / 2, fy + fs + 15, uiFont(UI.sizes.small, { italic: true }), INK, 0.9 * ri);
         }
         bankY = 350;   // victory card: bank moves below the exhibition
       }
@@ -8162,16 +8162,16 @@ _drawAtelier(ctx) {
 
     // bank totals
     const b = this.save.bank;
-    centerText(c, `Bank — red ${b.red} · blue ${b.blue} · green ${b.green}`, cx, py + bankY, '700 15px Georgia, serif', INK, 0.9);
+    centerText(c, `Bank — red ${b.red} · blue ${b.blue} · green ${b.green}`, cx, py + bankY, uiFont(UI.sizes.bodyLg, { weight: 700 }), INK, 0.9);
     const s = this.save.stats;
     const statsY = victory ? 374 : 274;
-    centerText(c, `expeditions ${s.expeditions} · victories ${s.victories} · herons painted ${s.heronsPainted}`, cx, py + statsY, '13px Georgia, serif', INK, 0.65);
+    centerText(c, `expeditions ${s.expeditions} · victories ${s.victories} · herons painted ${s.heronsPainted}`, cx, py + statsY, uiFont(UI.sizes.label), INK, 0.65);
 
     // best run
     const br = this.save.bestRun;
     if (br) {
       const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
-      centerText(c, `best run — ${what}`, cx, py + (victory ? 396 : 296), '700 13px Georgia, serif', INK, 0.8);
+      centerText(c, `best run — ${what}`, cx, py + (victory ? 396 : 296), uiFont(UI.sizes.label, { weight: 700 }), INK, 0.8);
     }
 
     // spend hint / challenge reward block. On a challenge victory the spend
@@ -8183,17 +8183,17 @@ _drawAtelier(ctx) {
       // best list; K8: the completion reward (the minted Masterpiece / rank gold).
       const cr = this._challengeResult;
       const rankTxt = cr.rank <= 5 ? `#${cr.rank} of 5` : 'below the top 5';
-      centerText(c, `The Curator's Challenge — score ${cr.score} · filed ${rankTxt} on today's best list`, cx, py + 418, '700 13px Georgia, serif', '#a3762a', 0.95);
-      centerText(c, `the whole world shares today's swamp (${challengeDate(cr.seed)})`, cx, py + 436, 'italic 12px Georgia, serif', INK, 0.6);
+      centerText(c, `The Curator's Challenge — score ${cr.score} · filed ${rankTxt} on today's best list`, cx, py + 418, uiFont(UI.sizes.label, { weight: 700 }), '#a3762a', 0.95);
+      centerText(c, `the whole world shares today's swamp (${challengeDate(cr.seed)})`, cx, py + 436, uiFont(UI.sizes.small, { italic: true }), INK, 0.6);
       if (cr.minted) {
-        centerText(c, `masterpiece minted: "${MASTERPIECE.name}"  ·  +${cr.gold} gold`, cx, py + 456, '700 13px Georgia, serif', '#c9922a', 0.95);
+        centerText(c, `masterpiece minted: "${MASTERPIECE.name}"  ·  +${cr.gold} gold`, cx, py + 456, uiFont(UI.sizes.label, { weight: 700 }), '#c9922a', 0.95);
       } else if (cr.gold > 0) {
-        centerText(c, `rank ${cr.rank} reward: +${cr.gold} gold`, cx, py + 456, '700 13px Georgia, serif', '#c9922a', 0.9);
+        centerText(c, `rank ${cr.rank} reward: +${cr.gold} gold`, cx, py + 456, uiFont(UI.sizes.label, { weight: 700 }), '#c9922a', 0.9);
       } else {
-        centerText(c, 'the best list is already at its top-5 — beat your best to file again', cx, py + 456, 'italic 12px Georgia, serif', INK, 0.6);
+        centerText(c, 'the best list is already at its top-5 — beat your best to file again', cx, py + 456, uiFont(UI.sizes.small, { italic: true }), INK, 0.6);
       }
     } else {
-        centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + (victory ? 420 : 320), 'italic 12px Georgia, serif', INK, 0.55);
+        centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + (victory ? 420 : 320), uiFont(UI.sizes.small, { italic: true }), INK, 0.55);
     }
 
     // C2 (v1.3 M16): the "Season" summary (VICTORY ONLY, NOT a challenge) — a
@@ -8212,10 +8212,10 @@ _drawAtelier(ctx) {
       c.strokeStyle = 'rgba(43,35,32,0.30)';
       c.lineWidth = 1;
       c.beginPath(); c.moveTo(cx - 175, sy - 16); c.lineTo(cx + 175, sy - 16); c.stroke();
-      centerText(c, 'Season', cx, sy, '700 13px Georgia, serif', '#a3762a', 0.9);
-      centerText(c, `cycle ${ss.cycle} · modifier ${ss.mod} · Gilded Frame ${ss.gilded}`, cx, sy + 22, '13px Georgia, serif', INK, 0.75);
-      centerText(c, `gold earned this expedition +${ss.goldThisRun} · gold total ${ss.goldTotal}`, cx, sy + 40, '13px Georgia, serif', INK, 0.75);
-      centerText(c, `paintings from this expedition: ${ss.paintings.length ? ss.paintings.join(', ') : 'none'}`, cx, sy + 58, '12.5px Georgia, serif', INK, 0.65);
+      centerText(c, 'Season', cx, sy, uiFont(UI.sizes.label, { weight: 700 }), '#a3762a', 0.9);
+      centerText(c, `cycle ${ss.cycle} · modifier ${ss.mod} · Gilded Frame ${ss.gilded}`, cx, sy + 22, uiFont(UI.sizes.label), INK, 0.75);
+      centerText(c, `gold earned this expedition +${ss.goldThisRun} · gold total ${ss.goldTotal}`, cx, sy + 40, uiFont(UI.sizes.label), INK, 0.75);
+      centerText(c, `paintings from this expedition: ${ss.paintings.length ? ss.paintings.join(', ') : 'none'}`, cx, sy + 58, uiFont(UI.sizes.smallPlus), INK, 0.65);
       c.restore();
     }
     paperEnd(ctx);
@@ -8237,7 +8237,7 @@ _drawAtelier(ctx) {
         ctx.roundRect(lx, ly, lw, lh, 17);
         ctx.fill(); ctx.stroke();
         ctx.restore();
-        centerText(ctx, 'return to the pond (Esc)', cx, ly + lh / 2 + 1, '13px Georgia, serif', '#fdf6e9', 0.9);
+        centerText(ctx, 'return to the pond (Esc)', cx, ly + lh / 2 + 1, uiFont(UI.sizes.label), '#fdf6e9', 0.9);
         // N4 (v1.3 M14): the expedition-modifier picker overlays the end screen.
         if (this._modPrompt) this._drawModPrompt(ctx);
       }

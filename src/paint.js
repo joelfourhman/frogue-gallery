@@ -4,6 +4,7 @@
 'use strict';
 import { TAU, clamp, dist, dist2 } from './math.js';
 import { PIGMENTS, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus, REEDS_FLOOD_FLOOR } from './logic.js';
+import { UI, uiFont } from './ui.js';
 
 // S1 (v1.9): the creatures with a DEDICATED per-creature hit sting (the 6
 // archetypes built in audio.js). Turtle/cragfrog have no dedicated sting, so a
@@ -727,7 +728,7 @@ export class Paint {
     for (const n of this.hitNotes) {
       const k = n.t / n.max;
       ctx.globalAlpha = Math.min(1, k * 2);
-      ctx.font = '600 13px Georgia, serif';
+      ctx.font = uiFont(UI.sizes.label, { weight: 600 });
       ctx.textAlign = 'center';
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(43,35,32,0.8)';

@@ -2,9 +2,74 @@
 'use strict';
 import { traceBlob, traceWobblyRect, wobble, clamp } from './math.js';
 
-export const INK = '#2b2320';
-export const PAPER = '#f4ead8';
-export const PAPER_DARK = '#e7d9c2';
+// ---- L4 (v1.9): the shared UI grade. ONE paper/pigment palette, ONE typeface
+// family, ONE type scale. Every panel / HUD / title / gallery / seed-card /
+// recap draw routes its paper-theme colors through UI.palette and its fonts
+// through uiFont() (below). Presentation-only: no layout or behavior change,
+// no new font, no new rendering mode (grain + vignette remain the shared grade).
+export const UI = {
+  // The paper / ink grade — single source of truth for the paper theme.
+  palette: {
+    paper: '#f4ead8',      // panel body
+    paperDark: '#e7d9c2',  // pressed / recessed paper
+    paperLight: '#fdf6e9', // hover highlight, on-dark text
+    ink: '#2b2320',        // the line + body ink
+    gold: '#c9922a',       // gold-tier accent
+    green: '#5a9e3d',      // the swamp's green accent
+  },
+  // One serif family is the voice of the paper UI. The display typeface (the
+  // painter's handwriting) is a NAMED EXCEPTION used only by the title screen
+  // and the in-run banner buttons — recorded here so it is a decision, not drift.
+  serif: 'Georgia, serif',
+  display: '"Comic Sans MS", "Segoe Print", cursive',
+  // A SECOND named exception: the monospace family, used ONLY for the
+  // export/save-blob preview field (a code-like text dump reads best monospaced).
+  // It routes through uiFont({ mono: true }) so it is a decision, not drift.
+  mono: '"Courier New", monospace',
+  // The type scale — the canonical font sizes (px) the UI is drawn in. EVERY
+  // static UI draw sizes its text from one of these named steps (via
+  // uiFont(UI.sizes.<step>)); the handful of genuinely dynamic sizes (the
+  // float-text pop, the uiButton height-scaled label) are the documented
+  // exceptions and pass a computed number. One scale, no ad-hoc magic sizes.
+  sizes: {
+    micro: 9, tiny: 10, tinyPlus: 10.5, xsmall: 11, small: 12,
+    smallPlus: 12.5, label: 13, body: 14, bodyPlus: 14.5, bodyLg: 15,
+    sub: 16, subPlus: 17, subLg: 18, title: 19, titlePlus: 20,
+    h3: 22, h2: 23, h1Sm: 24, h1: 26, heroSm: 30, display: 34,
+    displayLg: 40, displayXl: 46, mega: 72, megaLg: 96,
+  },
+};
+
+// Paper-theme primitives — derived from UI.palette (single source of truth).
+export const INK = UI.palette.ink;
+export const PAPER = UI.palette.paper;
+export const PAPER_DARK = UI.palette.paperDark;
+
+// L4: the font factory. Every UI draw builds its font through this so the
+// typeface family, weight, and size all come from ONE scale. `display` routes
+// to the named display-typeface exception; otherwise the serif family. A weight
+// of 400 (normal) is omitted from the string — byte-identical to the pre-L4
+// literals, so no frame changes except where L4 intends.
+//
+// P10 (the pass adds NO per-frame allocation): MEMOIZED. The same
+// (size, weight, italic, display) tuple resolves to the SAME cached string after
+// the first frame — matching the pre-L4 profile where static font LITERALS were
+// interned (0 allocs/frame). The key set is BOUNDED: the finite 25-step size
+// scale × a small weight set, and the few dynamic sizes (the float-text pop,
+// 11–20, and the uiButton height-scaled label) each span only a bounded range —
+// so the cache cannot grow unbounded. Steady-state UI draws are allocation-free.
+const _uiFontCache = new Map();
+export function uiFont(px, { weight = 400, italic = false, display = false, mono = false } = {}) {
+  const key = px + '|' + weight + '|' + (italic ? 1 : 0) + '|' + (display ? 1 : 0) + '|' + (mono ? 1 : 0);
+  let s = _uiFontCache.get(key);
+  if (s === undefined) {
+    const family = display ? UI.display : (mono ? UI.mono : UI.serif);
+    const w = weight === 400 ? '' : `${weight} `;
+    s = `${italic ? 'italic ' : ''}${w}${px}px ${family}`;
+    _uiFontCache.set(key, s);
+  }
+  return s;
+}
 
 export function roundRectPath(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -62,7 +127,7 @@ export function uiButton(ctx, x, y, w, h, label, hover, pressed = false, opts = 
   traceWobblyRect(ctx, 0, 0, w, h, rr, opts.seed || 3, 0.02, 22);
   ctx.stroke();
   ctx.fillStyle = INK;
-  ctx.font = `${opts.size || Math.min(20, h * 0.45)}px "Comic Sans MS", "Segoe Print", cursive`;
+  ctx.font = uiFont(opts.size || Math.min(20, h * 0.45), { display: true });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, w / 2, h / 2 + 1);
