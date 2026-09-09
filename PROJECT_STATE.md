@@ -5,7 +5,14 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.9 "The Living Swamp" — NEXT ACTION (orchestrator handoff, 2026-09-08)
+### v1.9 "The Living Swamp" — **COMPLETE** (season audit signed off 2026-09-09; all 13 items T0/S1–S3/J1–J4/L1–L4 + **A1** landed; A1 fresh-session quality audit — every gate GREEN)
+
+**NEXT ACTION: v1.9 is COMPLETE — awaiting direction for v1.10 / the
+post-1.0 backlog.** The A1 quality audit (fresh session `v19-a1`) ran every
+line item GREEN (full audit table below + `docs/ROADMAP.md` §v1.9 A1). No open
+v1.9 scope. The post-1.0 backlog gains one A1 finding (a pre-existing footer
+text clip on the title/options + end-recap "return" label — NOT a v1.9
+regression; see the **A1 backlog finding** below).
 
 **v1.8 is COMPLETE** (all 8 items G1–G3 / H1–H2 / R1–R2 / A1 committed,
 106/106 smoke green, all 9 probes in band, 1.0.0 release signed off at
@@ -365,24 +372,65 @@ byte-identity proof above is the authoritative evidence, NOT an md5 diff.
 generic `serif` → Georgia unification (the 9px crag-frog drift "z", no
 input/layout impact).
 
-**NEXT ACTION: A1** (a FRESH session — the implementer does not sign its own
-work) — **the v1.9 quality audit** (the season's final item; read
-`docs/ROADMAP.md` §v1.9 A1 for the audit spec: smoke ×3 green; all 9 probes
-IN band UNCHANGED; P10 culling green; zero new runtime deps; SAVE_VERSION 12;
-the frame-evidence set complete (every S/J/L item has its before/after); no
-8765 server left). A1 should ALSO confirm L4's frame-set review by eye against
-`tests/frames/` (the 36 post-pass baselines) and note the L4 named exceptions
-(display cursive + save-blob mono).
-**Housekeeping note (orchestrator, post-J3/J4, still open for A1):** the J2
-latent droplet bug flagged by the J3/J4 session (drawDroplets read `d.size`,
-the spawn stores `r` → NaN radius → in-flight droplets invisible) is **ALREADY
-FIXED + committed** (`e713c1a`, a 2-line draw fix; after-J2 frames recaptured
-under the fixed code and verified md5-changed; smoke green; logic.js
-untouched). It is NOT an open item — A1 verifies the fix, it does not
-re-address it.
-Batch plan: T0 → S1 + S2 + S3 (LANDED) → **J1 + J2 + J3 + J4 (ALL LANDED this
-season)** → **L1 (LANDED, `ed8f2fa`) → L2 (LANDED, `35c3d78`) + L3 (LANDED,
-`7bcdcd1`) + L4 (LANDED, `4877487`)** → A1 (a FRESH session).
+**A1 — the v1.9 quality audit (K10/C4/A1-style, the season's final gate) — ✅ DONE
+(2026-09-09, session v19-a1, FRESH session — the implementer does not sign its
+own work; every gate GREEN).** A1 ran in a fresh session and ran EVERY line
+item of the `docs/ROADMAP.md` §v1.9 A1 spec; the measured values are recorded
+in the table below (none forced, none papered over).
+
+| # | Gate | Result | Measured |
+|---|---|---|---|
+| 1 | smoke ×3 consecutive | ✅ GREEN | **10/10** consecutive `ALL SMOKE TESTS PASSED` (10-run flakecheck; 0 failures; exceeds the ×3 requirement; the `144fb1c` determinism pin stayed green on every run) |
+| 2a | pace.mjs (first-time) | ✅ IN band | **~17.0–17.3 min** (target 15–20; the probe builds a fresh seeded world per run → inherent ±0.4 min wave-count spread; **identical distribution to the v1.8 baseline** — see 2g) |
+| 2b | humance.mjs (first-time) | ✅ IN band | **18.4 min** (target 15–20; measured cross-swamp 53s + analytic wave-fighting) |
+| 2c | ngpace.mjs (cycle-1) | ✅ IN band | **19.5 min** (target 15–20; "IN BAND ✅" printed by the probe) |
+| 2d | bosspace.mjs (heron) | ✅ IN band | **37.0 s** (in the heron-fight range; baseline 37.0 s — identical) |
+| 2e | reedspace.mjs | ✅ IN band | **~22.1 min** (target 20–25; baseline 22.2 — identical) |
+| 2f | wandpace.mjs (both legs) | ✅ IN band | first-time **17.8 min** (15–20) + Wander×Reeds **22.7 min** (20–25); 8/8 seeds in band on both legs; identical bands to baseline |
+| 2g | wardpace.mjs | ✅ IN band | **3.9–4.0 min** human (target 2–4; the 52k-HP Warden apex) — baseline 3.9–4.0 |
+| 2h | blackpace.mjs | ✅ IN band | **~25.9 min** (target 22–26; baseline 25.8) |
+| 2i | umbrapace.mjs | ✅ IN band | **~3.71 min** (target 2.5–4; baseline 3.63–3.89) |
+| 2j | probes **UNCHANGED** | ✅ UNCHANGED | **Baseline worktree comparison:** ran the identical 9 probes in a detached worktree at `6c9e09e` (v1.8-complete) vs HEAD — **every probe's distribution is identical** (pace 17.0–17.3 / humance 18.0–18.3 / ngpace 19.4–19.5 / bosspace 37.0s / reedspace 22.2 / blackpace 25.8 / umbrapace 3.6–3.9 / wardpace 3.9–4.0 / wandpace same bands). All 9 probe files are **byte-identical to `6c9e09e`** (`git diff 6c9e09e..HEAD -- tests/*pace.mjs` empty) and `logic.js` is byte-identical (gate 3), so the hand-tuned runs are structurally untouched. |
+| 3 | logic.js byte-identity (the load-bearing invariant) | ✅ EMPTY (0 lines) | `git diff 6c9e09e..HEAD -- src/logic.js` → **0 lines**; blob hash `e742877392…` == baseline `e742877392…`. Every v1.9 item is presentation-only — the invariant HOLDS. |
+| 4 | dev checks (sfx + music + ui) | ✅ ALL GREEN | `node tests/sfx.mjs` → **SFX TESTS PASSED** (44 bank names + cap + routing); `node tests/music.mjs` → **MUSIC TESTS PASSED** (143 assertions — S2 themeSelector + S3 nextAmbientEvent + music-bus routing); `node tests/ui.mjs` → **UI TESTS PASSED** (78 assertions — 12 UI-heavy draws against the shared constants) |
+| 5 | P10 culling (hitstop + droplets + kill-bursts + L1 all on) | ✅ GREEN | smoke stages **59c / 107 / 108 / 109 / 110 / 111** all present + passing (view-cull + AI-cull + the ≤220 particle budget asserted with the new juice + the L1 environmental layer active). 108 smoke stages total, all green. |
+| 6 | frame-evidence set COMPLETE | ✅ COMPLETE | **36/36** baseline frames non-trivial (re-captured by `node tests/frames.mjs` — `FRAME SET COMPLETE — 36 frames`); **26 after-frames** present (after-J1=2 / after-J2=5 / after-J3=3 / after-J4=4 / after-L1=4 / after-L2=4 / after-L3=4). **By-eye review** (a headless `fillText` hook captured every font string + measured bbox across 8 screens — title, options, atelier-loadout, gallery-wall-full, wander-seed-card, end-recap, paint-red, enemy-beetle; 308 text draws): **0 typeface drift** — every draw is Georgia (serif) except the 3 **named exceptions** (display-cursive path, mono save-blob path, the 9px crag-frog "z"); **0 off-scale font sizes** (all on the `UI.sizes` scale). The L4 identity pass is coherent. → see the **frame-review note** below. |
+| 7 | zero new runtime dependencies | ✅ CLEAN | `git diff --name-only 6c9e09e..HEAD` touches only `src/` + `tests/` + `docs/` + `PROJECT_STATE.md` (+ `.gitignore` — the frames-harness artifact-ignore block); **no package.json / package-lock.json / lockfile added**; `git ls-files \| grep node_modules` → **empty** (node_modules untracked); playwright-core stays dev-only / gitignored. |
+| 8 | SAVE_VERSION 12 / GAME_VERSION 1.0.0 | ✅ UNCHANGED | `src/logic.js:2533` → `export const SAVE_VERSION = 12;`; `src/logic.js:2539` → `export const GAME_VERSION = '1.0.0';` |
+| 9 | no `http.server 8765` left running | ✅ CLEAN | `netstat` before + after the audit → **no 8765 listener** (the frames harness runs on a free port, never 8765, and killed its own server). |
+
+**A1 verdict: ALL 9 GATES GREEN — v1.9 is COMPLETE.** No gate was forced into a
+band; the load-bearing invariant (logic.js byte-identity) holds; the frame
+evidence set is complete and the by-eye review is clean on typeface
+discipline. One **pre-existing (non-v1.9) backlog finding** was recorded below
+for the post-1.0 backlog.
+
+**Frame-review note (A1 by-eye):** 6 UI-heavy screens + 2 gameplay frames were
+reviewed by capturing every `fillText` draw (font string + measured bounding
+box) across the real rendered scenes — 308 text draws total. **The L4
+identity pass is coherent:** one typeface discipline (Georgia serif through the
+shared `uiFont()` factory), sizes strictly on the `UI.sizes` scale, and the
+**only** divergences from Georgia are the three **named exceptions** — the
+display-cursive family (the `uiFont({display:true})` path), the mono
+save-blob font (`uiFont({mono:true})` path, the export/save-blob preview), and
+the 9px crag-frog "z" (`UI.sizes.micro` Georgia). No misaligned panels, no
+broken font on any of the 8 reviewed scenes. One **clipped-text finding** was
+surfaced (the title/options footer + end-recap "return" label, pre-existing —
+documented in the **A1 backlog finding** below).
+
+**A1 backlog finding (PRE-EXISTING — NOT a v1.9 regression, routed to the
+post-1.0 backlog):** the title/options **footer** text and the end-recap
+"return to the pond (Esc)" button label render at/below the **800px canvas
+bottom** (measured bbox bottom y ≈ 803–875; the "G/N/B to set difficulty…"
+help line at y=816 is fully below the visible canvas; the stats line at y=796
+has its lower ~3px clipped; confirmed against the real PNG pixels). This is
+**pre-existing**: the footer y-geometry, the `_titleLayout`/`_endButtons`
+layout blocks, and the 1280×800 canvas dims are all **byte-identical to the
+`6c9e09e` baseline** — v1.9 (L4) changed **only** the font-string literals to
+the same-size `uiFont()` calls (same 13px/12px/11px), so it neither introduced
+nor worsened the clip. Recorded here for the post-1.0 backlog (a footer y-nudge
+or a canvas-height bump); it is a polish/layout item, not a v1.9 defect, and
+does not affect any gate.
 
 ### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 8 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
 

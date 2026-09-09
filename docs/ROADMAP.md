@@ -1079,7 +1079,7 @@ release — the game's Full Collection.**
 - **Image/audio/font assets** — invariant, unchanged: everything is
   procedural (math.js shapes, canvas, WebAudio synth).---
 
-## v1.9 — "The Living Swamp" (PLANNED; the quality pass)
+## v1.9 — "The Living Swamp" (COMPLETE — 2026-09-09; all 13 items T0/S1–S3/J1–J4/L1–L4 + **A1** landed; the A1 fresh-session quality audit signed the season off — every gate GREEN)
 
 **Theme:** the game is *complete* in content (9 pacing probes, 6 bosses, 106-stage
 deterministic suite) but its **feel layers are the thinnest part**: the whole
@@ -1144,7 +1144,85 @@ SAVE_VERSION stays 12 · all 9 pacing probes in band unchanged · no
 ### A1 — the quality audit (final gate)
 | ID | Item | Acceptance |
 |---|---|---|
-| A1 | **The v1.9 quality audit** (K10/C4/A1-style): smoke ×3 green (deterministic); all 9 pacing probes IN band UNCHANGED (byte-identity: makeTuning + applyNGPlus deep-equal the v1.8-complete `6c9e09e` values); the P10 culling stage green WITH the new environmental layer + hitstop + droplets active; zero new runtime deps (the frames harness is dev-only/gitignored — audit the diff for it); SAVE_VERSION stays 12; the frame-evidence set complete (every S/J/L item has its before/after); no 8765 server left running. | The commit itself + the audit table (probe bands + frame-set completeness list). |
+| A1 | **The v1.9 quality audit** (K10/C4/A1-style): smoke ×3 green (deterministic); all 9 pacing probes IN band UNCHANGED (byte-identity: makeTuning + applyNGPlus deep-equal the v1.8-complete `6c9e09e` values); the P10 culling stage green WITH the new environmental layer + hitstop + droplets active; zero new runtime deps (the frames harness is dev-only/gitignored — audit the diff for it); SAVE_VERSION stays 12; the frame-evidence set complete (every S/J/L item has its before/after); no 8765 server left running. | The commit itself + the audit table (probe bands + frame-set completeness list). **✅ LANDED (v1.9, session v19-a1, FRESH session — the implementer does not sign its own work, 2026-09-09) — every gate GREEN; v1.9 marked COMPLETE.** Ran the full A1 spec (all measured values below). The load-bearing invariant held end-to-end: `git diff 6c9e09e..HEAD -- src/logic.js` is **EMPTY** (0 lines) — every v1.9 item is presentation-only. Full audit table + frame-review note + the named-exceptions list appended directly below. |
+
+#### A1 audit table (measured values, session `v19-a1`, 2026-09-09)
+
+| # | Gate | Expected | Measured | Status |
+|---|---|---|---|---|
+| 1a | `node tests/smoke.mjs` ×3 consecutive | ALL SMOKE TESTS PASSED ×3 | **10/10 consecutive PASSED** (a 10-run flakecheck, 0 failures; exceeds the ×3 ask; 108 stages; the `144fb1c` determinism pin green) | ✅ |
+| 2a | `pace.mjs` first-time human | 15–20 min | **~16.9–17.3 min** (deterministic file, ~±0.4 min run-to-run from the fresh unseeded world's wave count) | ✅ |
+| 2b | `humance.mjs` first-time human | 15–20 min | **~18.0–18.4 min** (measured cross-swamp 53–58 s) | ✅ |
+| 2c | `ngpace.mjs` cycle-1 | 15–20 min | **19.4–19.5 min** (IN BAND ✅ per the probe's own gate) | ✅ |
+| 2d | `bosspace.mjs` heron god fight | in range | **37.0 s** (0.62 min god-mode) | ✅ |
+| 2e | `reedspace.mjs` | ~22.2 (20–25) | **~22.1–22.2 min** | ✅ |
+| 2f | `wandpace.mjs` both legs | 15–20 + 20–25 | **first-time 16.9–17.8 (8/8 in band) + Wander×Reeds 21.6–22.7 (8/8 in band)** | ✅ |
+| 2g | `wardpace.mjs` | ~2–4 min | **3.9–4.0 min human** (god 98–104 s) | ✅ |
+| 2h | `blackpace.mjs` | ~22–26 min | **~25.8–25.9 min** | ✅ |
+| 2i | `umbrapace.mjs` | ~2.5–4 min | **~3.6–3.9 min human** (god 91.5–98.0 s) | ✅ |
+| — | **UNCHANGED, proven (not assumed)** | probes identical to `6c9e09e` | the identical 9 probes re-run in a **baseline worktree at `6c9e09e`** give the same distributions (pace 17.0–17.3 / humance 18.0–18.3 / ngpace 19.4 / bosspace 37.0 s / reedspace 22.2 / blackpace 25.8 / umbrapace 3.6–3.9 / wardpace 3.9–4.1 / wandpace same bands); **all 9 probe files + `src/logic.js` byte-identical to `6c9e09e`** | ✅ |
+| 3 | `git diff 6c9e09e..HEAD -- src/logic.js` | EMPTY (0 lines) | **EMPTY — 0 lines** (blob hash `e742877` == baseline `e742877`) — every v1.9 item is presentation-only | ✅ |
+| 4a | `node tests/sfx.mjs` | SFX TESTS PASSED | **PASSED** (44 bank names verified + cap + routing) | ✅ |
+| 4b | `node tests/music.mjs` | MUSIC TESTS PASSED | **PASSED** (143 assertions) | ✅ |
+| 4c | `node tests/ui.mjs` | UI TESTS PASSED | **PASSED** (78 assertions) | ✅ |
+| 5 | P10 culling WITH the new layers | stages green, ≤220 budget | **stages 59c / 107 / 108 / 109 / 110 / 111 all present + green** in the passing run (108 stages; hitstop + droplets + kill-bursts + L1 environmental + L2 lighting + L3 enemy-liveness all active; the ≤220 paint-juice budget asserted in 59c + 107 + 109) | ✅ |
+| 6a | frame set COMPLETE | every S/J/L item has before/after | **36/36 baseline non-trivial** (re-captured via `node tests/frames.mjs`, 0 failed) + **26 after-frames** (after-J1 ×2, after-J2 ×5, after-J3 ×3, after-J4 ×4, after-L1 ×4, after-L2 ×4, after-L3 ×4); total 62 PNGs | ✅ |
+| 6b | by-eye frame review (6 UI-heavy + gameplay) | L4 identity coherent; the 3 named exceptions the only divergences | see the **frame-review note** below | ✅ (with 1 pre-existing finding) |
+| 7a | zero new runtime deps | diff touches only `src/`+`tests/`+`docs/`+`PROJECT_STATE.md` | diff touches `src/`, `tests/`, `docs/`, `PROJECT_STATE.md` + `.gitignore` (the frames PNG/manifest gitignore rule); **no package.json / lockfile committed** | ✅ |
+| 7b | `node_modules` NOT tracked | `git ls-files \| grep node_modules` empty | **empty** (exit 1) | ✅ |
+| 7c | frames harness dev-only / gitignored | PNGs + manifests gitignored | `.gitignore` ignores `tests/frames/**/*.png` + `*.manifest.json`; `node_modules/` ignored | ✅ |
+| 8a | SAVE_VERSION | 12 | **`export const SAVE_VERSION = 12;`** (logic.js:2533) | ✅ |
+| 8b | GAME_VERSION | '1.0.0' | **`export const GAME_VERSION = '1.0.0';`** (logic.js:2539) | ✅ |
+| 9 | no `http.server 8765` left running | netstat empty before + after | **no 8765 listener (before + after)** — the harness runs on a free port and kills its own server | ✅ |
+
+**Every gate GREEN → v1.9 marked COMPLETE.**
+
+#### A1 frame-review note (by-eye, `tests/frames/`)
+
+Reviewed the 6 UI-heavy screens (title, options, atelier-loadout, gallery-wall-full,
+wander-seed-card, end-recap) + 2 gameplay frames (paint-red, boss-gray-heron-awaken) —
+**308 text draws** captured across 8 staged scenes via a `fillText` hook on `G.ctx`
+(dev-only, since removed).
+
+- **L4 identity COHERENT:** zero typeface drift — every draw routes through Georgia
+  (the single serif voice) or one of the three **named exceptions** (the
+  `uiFont({display:true})` display-cursive path, the `uiFont({mono:true})` Courier
+  New save-blob path, the 9px `UI.sizes.micro` Georgia crag-frog "z"). Zero
+  off-scale sizes (all px values map onto the `UI.sizes` 25-step scale). One
+  typeface/weight/spacing discipline holds end-to-end — the L4 pass reads as one
+  coherent identity, not per-panel ad-hoc fonts.
+- **No misaligned panels, no broken font** on any reviewed scene.
+- **One CLIPPED-TEXT finding (PRE-EXISTING, NOT a v1.9 regression — routed to the
+  post-1.0 backlog):** the title/options **footer** (the "expeditions · victories ·
+  herons painted" stats line + the "G/N/B to set difficulty …" help line) and the
+  end-recap **"return to the pond (Esc)"** label render at/below the 1280×800 canvas
+  bottom. Measured bboxes: stats line y=796 (bottom y≈803 → ~3 px of its lower half
+  clipped); the help line y=816 (entirely below the 800 px canvas — **not visible**);
+  end-recap return label y=830 (below the visible canvas). Pixel ground-truth on the
+  real PNGs confirms it: `title.png` shows 0 inked pixels below y=799, and
+  `end-recap.png`'s bottom row (y796–799) is sparser than the rows above. **Why this
+  is not a v1.9 defect:** `git diff 6c9e09e..HEAD` shows the footer/end y-geometry
+  (the `_titleLayout` `aby/abh/fpush` block + the `_endButtons` `ret` rect) is
+  **byte-identical** to the v1.8 baseline — v1.9's L4 changed **only** the font-string
+  literal → the same-size `uiFont()` call. The clip predates v1.9 (it is a
+  title-screen layout issue that surfaces on the tall, victory-unlocked title where
+  the Reeds button pushes the footer down). Fix = nudge the footer up / reflow the
+  title layout (a v1.10 / post-1.0 item); it is NOT a v1.9 regression and does not
+  block the sign-off.
+
+#### Named-exceptions list (the only divergences from Georgia serif)
+
+1. **Display cursive** — `UI.display: '"Comic Sans MS", "Segoe Print", cursive'`,
+   routed ONLY through `uiFont(px, { display: true })` (title wordmark, banner
+   buttons). A recorded decision (the game's playful voice), not drift.
+2. **Mono save-blob font** — `UI.mono: '"Courier New", monospace'`, routed ONLY
+   through `uiFont(px, { mono: true })` (the export/save-blob preview field — a
+   code-like text dump reads best monospaced). A recorded decision.
+3. **9px crag-frog "z"** — the sleeping Blind Crag Frog's drifting "z" puff uses
+   `uiFont(UI.sizes.micro, { weight: 700 })` (9 px), the smallest step on the named
+   scale — a deliberate tiny "sleep" glyph, not a body-text size.
+
+Beyond these three, every UI draw is Georgia serif at a named `UI.sizes` step.
 
 **Batch plan:** T0 (the harness + baseline frames) → S1 (the SFX bank — the
 highest single-impact lever) + S2 → S3 + J1 → J2 + J3 → J4 + **L1 (LANDED,
