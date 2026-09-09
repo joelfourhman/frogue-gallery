@@ -143,15 +143,45 @@ green) + frames before→after (`paint-{red,blue,green,water}.png` →
 Invariant held: `makeTuning` byte-identical (logic.js untouched), SAVE_VERSION
 12, smoke `ALL SMOKE TESTS PASSED`, all 9 probes in band unchanged.
 
-**NEXT ACTION: J3** (the next session) — **Kill quality**: every enemy death is
-an ink burst that takes the palette of the pigment that killed it (painted-body
-tint extended to the death), enemies dissolve into the palette (a few frames of
-the painted blob bleeding away), boss deaths get the full bloom (the existing
-victory bloom is the model). Acceptance: death bursts are pooled + seeded
-(deterministic); frame evidence — a red-kill vs a blue-kill vs a green-kill
-death each read in their hue.
-Batch plan: T0 → S1 + S2 + S3 (LANDED) → **J1 + J2 (LANDED this session)** →
-J3 → J4 + L1 → L2 + L3 → L4 + A1 (fresh sessions).
+**J3 LANDED** (session v19-kill) — **Kill quality**: every death is now an
+**ink burst** — the creature dissolves into the blobs of the pigment that
+painted it (a NEUTRAL ink splat if never painted). Implemented as a separate
+**draw-only pool** in `paint.js` (`this.inkBurst`, capped at `MAX_INKBURST=192`),
+position-seeded (a `_posSeed` of x,y — NO global RNG draws, so it is
+deterministic + never shifts the A/B invariance), pooled + capped. The burst is
+spawned AFTER the rules decide the death — in `_onEnemyDead` (regular
+creatures, 22 blobs in the enemy's painted tint; a paint-kill takes the killing
+stroke's pigment, a burn-out / never-painted death takes neutral ink) and in
+`_onHeronDefeated` (the BOSS kill: a LARGER two-burst — its last-painted pigment
+`h._lastPig` + a wider neutral-ink ring — + the camera hold, reusing the v1.4
+awaken-moment `_awakenHoldT` pattern). `paint.spawnInkBurst` / `paint.update`
+(decay) / `paint.drawInkBurst` (draw) + the game.js world-space draw call. The
+boss's `_lastPig` is tracked in `paintBossHit` (paint.js). Death timing / damage
+/ drops / tuning / runT are untouched — the burst is pure presentation.
+New smoke stage **107 (J3)**: a real kill pops a 22-blob burst in the painted
+tint; a never-painted kill pops neutral ink; a wave + boss stays within the cap
++ the P10 juice budget (≤220); the burst decays to 0; and it is deterministic
++ draw-only (A/B: seeded runs → equal `inkBurst` length + colors + decay-to-0).
+Frame evidence (harness): `tests/frames/enemy-toad.png` →
+`tests/frames/after-J3/toad-kill-burst.png` (red dissolve); `enemy-beetle.png` →
+`after-J3/beetle-kill-burst.png` (blue); `boss-gray-heron.png` →
+`after-J3/boss-kill-burst.png` (the larger two-burst, white-impact flash faded).
+Invariant held: `makeTuning` byte-identical (logic.js untouched), SAVE_VERSION
+12, smoke `ALL SMOKE TESTS PASSED`, all 9 probes in band unchanged.
+
+**NEXT ACTION: J4** (the next session) — **the frog's liveness** (draw-state
+only): an idle breathing cycle (slow squash oscillation when standing still) +
+the existing blink; a hurt stagger (a wobble + flinch, layered on top of the J1
+hitstop — the hitstop freezes the WORLD, the stagger is the frog's OWN
+reaction; NO i-frame change); a low-HP tremble (below ~30% HP, a faint
+high-freq position jitter, draw-only, + more desperate eyes, fading above 30%);
+a victory pose (on the victory screen + the moment the boss is defeated, a small
+hop + a contented squash-and-settle, reusing the existing hop mechanics). All
+draw-state (the `squash`/blink fields are the pattern) — no physics change that
+moves a number. Acceptance: frame evidence — the frog idle (subtle breathe),
+hurt-stagger, low-HP tremble, and the victory pose each read as a LIVING frog.
+Batch plan: T0 → S1 + S2 + S3 (LANDED) → **J1 + J2 + J3 (LANDED this season)**
+→ J4 + L1 → L2 + L3 → L4 + A1 (fresh sessions).
 
 ### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 8 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
 

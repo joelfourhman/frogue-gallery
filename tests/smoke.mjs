@@ -8553,5 +8553,114 @@ console.log('== stage 106: R1 (v1.8) — the 1.0.0 release version string (singl
   console.log('ok — R1: the 1.0.0 release version string. A single GAME_VERSION = "1.0.0" in logic.js (display-only; never in the save schema, never feeds a run) is rendered by the title corner stamp ("Frogue Gallery · v1.0.0") and the Options header line — both verified referenced by a fillText spy over real draws.');
 }
 
+// ======================================================================
+// stage 107 — v1.9 J3: KILL QUALITY — every death is an ink burst (presentation-only + P10)
+// A creature dissolves into a burst of the pigment it was painted with (a
+// neutral ink splat if never painted). The burst is a SEPARATE draw-only pool
+// in paint.js (spawnInkBurst / inkBurst array), seeded from the death
+// position (NO global RNG — the J1 A/B invariance holds), pooled + capped
+// (MAX_INKBURST) so a mass kill (a full wave + the boss) stays within the P10
+// budget, and it decays to 0 on its own. It is added ONLY in _onEnemyDead +
+// _onHeronDefeated AFTER the rules already decided the death, so it never
+// touches damage, drops, tuning, runT, or the seeded RNG stream.
+// Acceptance: (1) a real kill (the _onEnemyDead path) pops a burst in the
+// enemy's painted tint; (2) a boss kill pops a LARGER burst + the camera hold;
+// (3) a mass kill (5 enemies + boss) holds the pool cap; (4) the burst
+// decays to 0; (5) the burst is deterministic (position-seeded).
+// ======================================================================
+console.log('== stage 107: v1.9 J3 — kill quality: every death is an ink burst (presentation-only + P10) ==');
+{
+  const { spawnEnemy } = await import('../src/enemies.js');
+  const { PIGMENTS: PIG3 } = await import('../src/logic.js');
+  const savedRandom = Math.random;
+  const gK = new Game(makeCanvas());
+  gK.start(); gK._beginExpedition();
+  gK.tutorial = null; gK.options.shake = false;   // no hit-stop/shake for a clean measurement
+  const pK = gK.player; pK.x = 260; pK.y = 750; pK.iframes = 999; pK.pigment = 'red'; pK.alive = true;
+  const P = gK.paint;
+
+  // ---- (1) a REAL kill (the _onEnemyDead path) pops a burst in the enemy's tint ----
+  gK.timeScale = 1; gK._hitstopT = 0;
+  const b1 = spawnEnemy('toad', 300, 750, gK.tuning);
+  b1.hp = 1; b1.maxHp = 1; b1.status = null; b1.speed = 0;
+  b1.tint = 'blue'; b1.tintT = 0.6;              // the toad was painted blue
+  gK.enemies.push(b1);
+  P.inkBurst.length = 0;
+  const before1 = P.inkBurst.length;
+  pK.aimA = 0; pK.swipeT = 0; P.swipeCd = 0;
+  P.trySwipe(gK.enemies);                          // one swipe kills it (hp 1)
+  frames(1);                                       // _updateExpedition -> e.dead -> _onEnemyDead -> spawnInkBurst
+  const popped1 = P.inkBurst.length;
+  assert(b1.dead, `J3: the swipe killed the toad through the real path (dead=${b1.dead})`);
+  assert(popped1 > before1, `J3: the kill popped an ink burst through the real _onEnemyDead path (+${popped1 - before1})`);
+  assert(popped1 === 22, `J3: a regular-creature kill spawns a fixed 22-blob burst (got ${popped1})`);
+  // the burst takes the enemy's painted tint AT DEATH — for a paint-kill that
+  // is the killing stroke's pigment (the swipe re-coats the body; "the palette
+  // of the pigment that killed it"). This proves the burst tracks the enemy's
+  // painted body (a real pigment), not a neutral splat or a random orb.
+  assert(P.inkBurst[0].color === PIG3.red.color, `J3: the burst takes the enemy's painted tint at death — the killing stroke's pigment (red #c8452c, got ${P.inkBurst[0].color})`);
+  // and it is NOT the neutral splat color (that path is reserved for unpainted)
+  assert(P.inkBurst[0].color !== '#3f352a', `J3: a painted kill does NOT use the neutral-ink color (got ${P.inkBurst[0].color})`);
+  // a creature that dies with NO active paint tint (never painted, or the tint
+  // expired — e.g. a burn-out on an unpainted beetle) breaks into a NEUTRAL ink
+  // splat, not a pigment. (A paint-kill always re-coats the body first, so the
+  // neutral branch is reached by a non-paint death — exercised directly here.)
+  const b2 = spawnEnemy('beetle', 300, 750, gK.tuning);
+  b2.dead = true; b2.tint = null; b2.tintT = 0;     // died unpainted
+  P.inkBurst.length = 0;
+  gK._onEnemyDead(b2);                              // the death path (no swipe coat)
+  assert(P.inkBurst.length === 22 && P.inkBurst[0].color === '#3f352a',
+    `J3: a NEVER-PAINTED creature breaks into a neutral ink splat (got ${P.inkBurst.length} blobs, color ${P.inkBurst[0].color})`);
+
+  // ---- (2) the boss kill pops a LARGER burst + the camera hold ----
+  const h = gK.heron; h._intro = 0; h.hp = 0; h.awakened = false; h.pinned = 0;
+  h._lastPig = 'red';                               // the boss was last painted red
+  P.inkBurst.length = 0;
+  const beforeB = P.inkBurst.length;
+  const shakeB = gK.shake;
+  frames(1);                                       // bossStep emits 'defeated' -> _onHeronDefeated
+  const bossPop = P.inkBurst.length - beforeB;
+  assert(bossPop > 22, `J3: the boss kill is a LARGER burst than a regular creature (${bossPop} > 22)`);
+  assert(gK._awakenHoldT > 0, `J3: the boss kill arms the camera hold (_awakenHoldT=${gK._awakenHoldT.toFixed(2)})`);
+  assert(gK.shake > shakeB, `J3: the boss kill still spikes the shake (presentation beat preserved)`);
+  // the boss's primary burst takes its last-painted pigment (red)
+  const bossRed = P.inkBurst.some(b => b.color === PIG3.red.color);
+  assert(bossRed, `J3: the boss's primary burst takes the pigment it was last painted with (red present in the burst)`);
+
+  // ---- (3) a mass kill (5 enemies + the boss) holds the P10 pool cap ----
+  P.inkBurst.length = 0;
+  for (let i = 0; i < 5; i++) P.spawnInkBurst(200 + i * 20, 750, 'blue', 22, 4.5, 1); // a full wave
+  P.spawnInkBurst(1200, 750, 'red', 44, 6.5, 1.4);   // + the boss primary
+  P.spawnInkBurst(1200, 720, null, 20, 4.0, 1.8);    // + the boss ring
+  const mass = P.inkBurst.length;
+  assert(mass <= P.MAX_INKBURST, `J3: a full enemy wave + the boss stays within the burst pool cap (${mass} <= ${P.MAX_INKBURST})`);
+  assert(mass === 5 * 22 + 44 + 20, `J3: the mass-kill burst is the exact sum (5×22 + 44 + 20 = ${5 * 22 + 44 + 20}, got ${mass})`);
+  // the TOTAL on-screen paint juice (burst + droplets + ink + wet + trails) stays <= 220
+  const juice = P.inkBurst.length + P.droplets.length + P.ink.length + P.wet.length + P.trails.length;
+  assert(juice <= 220, `J3: the total on-screen paint juice after a mass kill stays within the P10 budget (${juice} <= 220)`);
+
+  // ---- (4) the burst DECAYS to 0 on its own (no leak) ----
+  for (let i = 0; i < 60; i++) P.update(0.05);      // 3 s — past every blob's lifetime
+  assert(P.inkBurst.length === 0, `J3: the kill ink-burst decays to 0 on its own (after 3s: ${P.inkBurst.length})`);
+
+  // ---- (5) the burst is DETERMINISTIC (position-seeded, no global RNG) ----
+  P.inkBurst.length = 0; P.spawnInkBurst(300, 750, 'green', 22, 4.5, 1);
+  const snapA = P.inkBurst.map(b => [b.x.toFixed(4), b.y.toFixed(4), b.vx.toFixed(4), b.vy.toFixed(4), b.r.toFixed(4)]);
+  P.inkBurst.length = 0; P.spawnInkBurst(300, 750, 'green', 22, 4.5, 1);
+  const snapB = P.inkBurst.map(b => [b.x.toFixed(4), b.y.toFixed(4), b.vx.toFixed(4), b.vy.toFixed(4), b.r.toFixed(4)]);
+  assert(JSON.stringify(snapA) === JSON.stringify(snapB), `J3: the ink burst is deterministic (the same death position always spawns the same burst — no global RNG)`);
+
+  // ---- (6) the burst is draw-only (referenced by a real draw, no-ops when empty) ----
+  const jctx = { save() {}, restore() {}, beginPath() {}, ellipse() { this._n++; }, fill() {}, fillStyle: '', globalAlpha: 1, _n: 0 };
+  P.inkBurst.length = 0; P.spawnInkBurst(300, 750, 'red', 22, 4.5, 1);
+  P.drawInkBurst(jctx);
+  assert(jctx._n === 44, `J3: drawInkBurst issues 2 ellipse calls per blob (22 blobs -> 44, got ${jctx._n})`);
+  P.inkBurst.length = 0; jctx._n = 0; P.drawInkBurst(jctx);
+  assert(jctx._n === 0, `J3: drawInkBurst is a no-op when the pool is empty (got ${jctx._n} calls)`);
+
+  Math.random = savedRandom;
+  console.log('ok — J3: kill quality. Every death is an ink burst (a separate draw-only pool in paint.js, position-seeded, pooled + capped at MAX_INKBURST=192). A real kill pops a 22-blob burst in the enemy\'s painted tint (a neutral splat if never painted); the boss kill pops a larger 64-blob burst + the camera hold; a full wave + boss stays within the cap + the P10 juice budget (<=220); the burst decays to 0; and it is deterministic + draw-only. Added only in _onEnemyDead/_onHeronDefeated after the rules decide the death — damage, drops, tuning, runT, and the seeded RNG are untouched.');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

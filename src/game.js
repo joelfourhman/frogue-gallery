@@ -4700,6 +4700,15 @@ _drawAtelier(ctx) {
     this.hitStop(0.11, 0.3);
     this.particles.splatter(e.x, e.y, INK, 10, 160);
     this.particles.splatter(e.x, e.y, PIGMENTS[ORB_COLORS[(Math.random() * 3) | 0]].color, 4, 120);
+    // J3 (v1.9): the KILL INK-BURST — the creature dissolves into a burst of
+    // the pigment it was painted with (the world remembers what you painted); a
+    // never-painted creature breaks into a neutral ink splat. The burst reads
+    // as the enemy breaking into the palette that killed it, layered on the
+    // J1 kill hit-stop (the world freezes; the burst settles + fades on real
+    // time). PRESENTATION-ONLY — it is a draw-only pool in paint.js, seeded
+    // from the death position (no global RNG), and never touches damage/drops/
+    // runT. Pooled + capped (MAX_INKBURST) so a mass kill stays within P10.
+    this.paint.spawnInkBurst(e.x, e.y, (e.tint && e.tintT > 0) ? e.tint : null, 22, 4.5, 1);
     // pigment orbs
     const n = 1 + ((Math.random() * 2) | 0);
     for (let i = 0; i < n; i++) {
@@ -5351,13 +5360,13 @@ _drawAtelier(ctx) {
     // hitStop/whiteFlash beat (presentation-only; no-op in headless smoke).
     this.sfx('boss-kill');
     this.addShake(16);
-        // J2 (v1.4): the big moment — ~0.8 s of slow-mo (~0.35×) + a white
-        // flash frame + a shake spike. All gated by options.shake (hitStop /
-        // whiteFlash are no-ops when shake is OFF), so this is pure presentation
-        // and never changes the measured pacing.
-        this.hitStop(0.8, 0.35);
-        this.whiteFlash();
-        this.addShake(22);
+    // J2 (v1.4): the big moment — ~0.8 s of slow-mo (~0.35×) + a white
+    // flash frame + a shake spike. All gated by options.shake (hitStop /
+    // whiteFlash are no-ops when shake is OFF), so this is pure presentation
+    // and never changes the measured pacing.
+    this.hitStop(0.8, 0.35);
+    this.whiteFlash();
+    this.addShake(22);
         // N3 (v1.3 M14): the defeat line names whichever heron was painted — the
         // Great Gray Heron on a first-time run, the Great Green Heron on NG+.
         // R4 (v1.6): the Silt Wyrm has its own defeat beat (it is painted into
@@ -5374,6 +5383,22 @@ _drawAtelier(ctx) {
           this.addBanner(h.green ? 'The Great Green Heron blooms and takes flight!' : 'The Great Gray Heron blooms and takes flight!', 4, 200);
         }
         for (const c of ORB_COLORS) this.particles.sparkles(h.x, h.y - 160, PIGMENTS[c].light, 10);
+        // J3 (v1.9): the BOSS KILL ink-burst — a LARGER burst + a brief camera
+        // hold (reuses the J3 v1.4 awaken-moment `_awakenHoldT` pattern). The
+        // boss is painted through its full 3-hue awaken loop, so its last
+        // painted pigment (h._lastPig) tints the burst; a never-painted fall-
+        // back is the neutral ink. PRESENTATION-ONLY — the defeat timing,
+        // damage, and drops are untouched; this only adds a draw-only pool
+        // (capped at MAX_INKBURST) + the camera's hold timer.
+        {
+          const bpig = (h._lastPig && h._lastPig !== 'dry') ? h._lastPig : null;
+          this.paint.spawnInkBurst(h.x, h.y - 60, bpig, 44, 6.5, 1.4);
+          // a second, wider neutral-ink ring so the boss reads as dissolving
+          // into the whole palette it was painted, not just one hue.
+          this.paint.spawnInkBurst(h.x, h.y - 90, null, 20, 4.0, 1.8);
+          this._awakenHoldT = 1.1;            // the camera holds on the bloom
+          this.zoomTarget = 0.9;
+        }
         if (h.wyrm || h.umbra || h.warden) { h.sinking = 0.001; } else { h.flying = 0.001; }   // hand off to the victory beat
         // story beat: the first heron ever painted summons the swamp's critic
         if (!this.save.flags.croaksworthAsked) {
@@ -6220,6 +6245,11 @@ _drawAtelier(ctx) {
     // active stroke and all entities (draw-only; never affects logic).
     this.paint && this.paint.drawWet(ctx);
     this.paint && this.paint.drawTrails(ctx);
+    // J3 (v1.9): the KILL INK-BURST — the soft watercolor blobs a creature
+    // dissolves into on death, drawn just after the wet marks so the burst
+    // reads as fresh ink breaking out of the enemy (draw-only; pooled + capped
+    // in paint.js, decayed in paint.update).
+    this.paint && this.paint.drawInkBurst(ctx);
     // J2 (v1.9): the in-flight ink DROPLETS — small pigment dots with gravity +
     // settle, drawn ON TOP of the wet marks so the spray reads as fresh ink in
     // the air (draw-only; pooled + capped in paint.js).

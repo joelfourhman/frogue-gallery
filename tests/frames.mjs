@@ -327,6 +327,62 @@ await page.addInitScript(() => {
   S['beetle-hitstop'] = (G) => connectScene(G, 'red', 'beetle');
   S['toad-hitstop'] = (G) => connectScene(G, 'blue', 'toad');
 
+  // ---- J3 (v1.9): the KILL INK-BURST — a creature mid-dissolve, broken into
+  // the ink blobs of the pigment that painted it. Staged via the REAL death
+  // path (_onEnemyDead -> paint.spawnInkBurst), then the burst is stepped a
+  // few frames so the blobs have spread + settled (not a static pile at the
+  // exact death point). BEFORE = the matching baseline enemy-*.png (intact);
+  // AFTER = after-J3/toad-kill-burst.png (the ink burst reads). The burst is
+  // draw-only + pooled (P10), so stepping it never leaks particles.
+  function killBurstScene(G, pig, kind) {
+    beginRun(G, null, { wander: false });
+    const p = G.player; p.pigment = pig;
+    const e = G.__modsEnemy(kind, p.x + 74, p.y - 8, G.tuning);
+    e.dead = false;
+    G.enemies = [e];
+    // the killing swipe lands the lethal blow: coat with the pigment + take the
+    // fatal damage, then run the real death path so the burst spawns exactly as
+    // it does in play (the enemy is removed from G.enemies by the call).
+    e.tint = pig; e.tintT = 0.6;
+    e.hp = 0; e.maxHp = e.maxHp; e.hitFlash = 0.14;
+    G._onEnemyDead(e);
+    // step the burst a few frames so the blobs settle + fade a touch (the
+    // "mid-dissolve" instant the evidence wants, not the t=0 flash frame).
+    const P = G.paint;
+    for (let i = 0; i < 6; i++) P.update(1 / 60);
+    // park the camera on the frog so the burst is centered + the HUD reads
+    G.cam.x = p.x; G.cam.y = p.y; G.zoom = 1; G.now = 2.5;
+    return { note: `J3 kill ink-burst: ${kind} dissolved into ${pig} ink (real death path)` };
+  }
+  S['toad-kill-burst'] = (G) => killBurstScene(G, 'red', 'toad');
+  S['beetle-kill-burst'] = (G) => killBurstScene(G, 'blue', 'beetle');
+
+  // ---- J3 (v1.9): the BOSS KILL ink-burst — a LARGER burst + the camera hold,
+  // staged via the REAL defeat path (_onHeronDefeated -> spawnInkBurst x2 +
+  // _bossKillHold). BEFORE = the baseline boss-gray-heron.png; AFTER shows the
+  // two-burst (painted-pigment + neutral ring) breaking out of the heron.
+  function bossKillScene(G) {
+    const b = bossFrame(G, { variant: 'gray', hpFrac: 0.75 });
+    const h = G.heron;
+    // the heron is already tinted by paint (the world remembers what you
+    // painted) — give it a red last-pigment so the burst takes that tint.
+    h._lastPig = 'red';
+    h.wyrm = h.umbra = h.warden = false;   // flying-bird branch
+    h.defeated = true; h.hp = 0;
+    G._onHeronDefeated();
+    // the boss-kill white flash (a pre-existing v1.4 beat) would otherwise wash
+    // the frame out — let it nearly fade so the INK-BURST (the J3 evidence) is
+    // the thing that reads, with just a hint of the impact white still in the
+    // air. (The white flash itself is v1.4 scope, not J3.)
+    G._whiteFlash = 0.12;
+    // step the burst a few frames so the larger blobs spread + settle (the
+    // "mid-dissolve" instant the evidence wants, not the t=0 flash frame).
+    const P = G.paint;
+    for (let i = 0; i < 6; i++) P.update(1 / 60);
+    return { note: `J3 boss kill ink-burst: heron dissolved (painted tint + neutral ring) (real defeat path)` };
+  }
+  S['boss-kill-burst'] = (G) => bossKillScene(G);
+
 
   // ---- 6 bosses (heron variants) + awaken ----
   S['boss-gray-heron'] = (G) => bossFrame(G, { variant: 'gray', hpFrac: 0.75 });
@@ -461,6 +517,7 @@ const BASELINE_SCENES = [
 const POLISH_SCENES = [
   'beetle-hitstop', 'toad-hitstop',                 // J1 (v1.9)
   'arc-red', 'arc-blue', 'arc-green', 'arc-water', 'arc-charged', // J2 (v1.9)
+  'toad-kill-burst', 'beetle-kill-burst', 'boss-kill-burst',      // J3 (v1.9)
 ];
 const KNOWN_SCENES = BASELINE_SCENES.concat(POLISH_SCENES);
 if (SCENE_FILTER) {

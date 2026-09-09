@@ -75,6 +75,26 @@ and the **ink landing**):
 
 Captured with: `node tests/frames.mjs --out tests/frames/after-J2 --scenes arc-red,arc-blue,arc-green,arc-water,arc-charged --min 5`
 
+## J3 (v1.9) — Kill quality: the ink burst
+
+Every death is now an **ink burst** — the creature dissolves into the blobs of
+the pigment that painted it (or a neutral ink splat if never painted). The burst
+is a separate **draw-only pool** in `paint.js` (position-seeded, pooled, capped
+at `MAX_INKBURST`), spawned after the rules decide the death, so a mass kill
+stays within P10 and the burst decays to 0. The boss kill gets a **larger**
+two-burst (its last-painted pigment + a neutral ring) + a brief camera hold.
+
+Before/after pairs (baseline `enemy-toad.png` / `enemy-beetle.png` /
+`boss-gray-heron.png` → the `after-J3/` burst frames):
+
+| Frame | Scene | What it shows |
+|---|---|---|
+| `tests/frames/after-J3/toad-kill-burst.png` | `toad-kill-burst` | A toad taking its killing blow, dissolving into **red** ink — the burst reads as the enemy breaking into the palette that killed it |
+| `tests/frames/after-J3/beetle-kill-burst.png` | `beetle-kill-burst` | The same dissolve on a beetle, **blue** pigment |
+| `tests/frames/after-J3/boss-kill-burst.png` | `boss-kill-burst` | The Great Gray Heron's death — a LARGER two-burst (painted tint + neutral ring), the white-impact flash nearly faded so the ink reads |
+
+Captured with: `node tests/frames.mjs --out tests/frames/after-J3 --scenes toad-kill-burst,beetle-kill-burst,boss-kill-burst --min 3`
+
 
 
 ## The 36 baseline frames

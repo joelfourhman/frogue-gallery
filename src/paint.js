@@ -46,6 +46,17 @@ export class Paint {
     // so the seeded RNG stream + the J1 A/B invariance are untouched.
     this.ink = [];
     this.MAX_INK = 40;
+    // J3 (v1.9): the KILL INK-BURST — when a creature dies it dissolves into a
+    // burst of the pigment it was painted with (or a neutral ink splat if never
+    // painted). Reuses the J2 droplet PATTERN: a capped array (oldest dropped
+    // first), seeded from an explicit position hash (NO global Math.random, so
+    // the seeded RNG stream + the J1 A/B invariance are untouched), draw-only
+    // (never read by logic/save). Kept in paint.js as a SEPARATE pool from the
+    // world ParticleSystem, so the P10 budget is the sum of the paint pools
+    // (asserted <= 220 in the smoke); a mass kill (a full wave + boss) stays
+    // within the cap because the pool is hard-capped at MAX_INKBURST.
+    this.inkBurst = [];
+    this.MAX_INKBURST = 192;
   }
 
   // J1: drop a capped set of wet marks. Oldest are pushed out past the cap so
@@ -116,6 +127,39 @@ export class Paint {
   // a deterministic 1..1 "seed" from a world position (NOT Math.random) — used
   // to seed a splash's droplets/ink so J2 adds no global RNG draws.
   _posSeed(x, y) { return ((Math.abs(Math.floor(x) * 37 + Math.floor(y) * 53) % 997) + 1); }
+
+  // J3 (v1.9): spawn a KILL INK-BURST at a death. The creature dissolves into a
+  // radial burst of the pigment it was painted with (the world remembers what
+  // you painted); a never-painted creature breaks into a neutral ink splat.
+  // DETERMINISTIC — seeded from the death position hash (a fresh seeded
+  // xorshift PRNG, NOT the global Math.random), so this adds ZERO draws to the
+  // global seeded RNG stream and the J1 A/B invariance holds. Pooled + capped
+  // (oldest dropped past MAX_INKBURST). Draw-only physics (gravity + settle),
+  // exactly like the J2 droplets. `pig` is a PIGMENTS key ('red'/'blue'/'green')
+  // or null/'dry' (neutral). `n` + `size` scale the burst: a boss kill passes a
+  // larger n/size for the full bloom.
+  spawnInkBurst(x, y, pig, n, size, spread) {
+    const col = PIGMENTS[pig];
+    const neutral = !col;                       // unpainted -> neutral ink splat
+    const color = neutral ? '#3f352a' : col.color;
+    const light = neutral ? '#8c7f6c' : col.light;
+    let s = (this._posSeed(x, y) * 2654435761) >>> 0 || 1;
+    const rng = () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+    for (let i = 0; i < n; i++) {
+      const a = rng() * TAU;                    // full radial ring
+      const sp = (40 + rng() * 150) * (spread || 1);
+      const life = 0.5 + rng() * 0.5;           // 0.5–1.0 s settle
+      this.inkBurst.push({
+        x, y,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40,   // slight up-bias, then gravity
+        t: life, max: life,
+        r: size * (0.4 + rng() * 0.9),
+        color, light,
+        seed: rng() * TAU,
+      });
+    }
+    if (this.inkBurst.length > this.MAX_INKBURST) this.inkBurst.splice(0, this.inkBurst.length - this.MAX_INKBURST);
+  }
 
   // J2 (v1.9): the INK-THAT-LANDS — a visible mark where the stroke touches the
   // ground, so painting reads as LEAVING ink, not just swinging. On SOIL it
@@ -197,6 +241,19 @@ export class Paint {
       m.t -= dt;
       if (m.ring) m.r += dt * 24;      // a water ripple spreads outward
       if (m.t <= 0) this.ink.splice(i, 1);
+    }
+    // J3 (v1.9): the KILL ink-burst — gravity + settle, exactly like the J2
+    // droplets (a burst flees outward, slows, "lands," and fades). Draw-only
+    // physics; it never feeds combat/runRNG. Decays to 0 on its own (the
+    // smoke asserts the pool empties past its lifetime).
+    for (let i = this.inkBurst.length - 1; i >= 0; i--) {
+      const b = this.inkBurst[i];
+      b.vy += 300 * dt;                // gravity (a touch heavier than the brush droplets)
+      b.vx *= Math.exp(-2.2 * dt);     // air drag
+      b.vy *= Math.exp(-1.4 * dt);     // vertical drag
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      b.t -= dt;
+      if (b.t <= 0) this.inkBurst.splice(i, 1);
     }
     for (let i = this.hitNotes.length - 1; i >= 0; i--) {
       const n = this.hitNotes[i];
@@ -457,6 +514,10 @@ export class Paint {
     if (res) this._restoreAcc = (this._restoreAcc || 0) + 0.012;
     this.particles.splatter(heron.x, heron.y - (heron.diveH || 0), PIGMENTS[pig].color, 5, 140);
     if (res && pig !== 'dry') {
+      // J3 (v1.9): remember the last pigment that painted the boss so its KILL
+      // ink-burst dissolves into the palette it was painted with (the world
+      // remembers). Draw-only field; never read by logic/save/pacing.
+      heron._lastPig = pig;
       let d = paintDamage(this.tuning.swipeDamage, pig, this.tuning, { enemy: heron });
       if (heron.awakened) d *= 2;
       this.note(heron.x, heron.y - 150, '-' + Math.round(d), pig);
@@ -604,6 +665,33 @@ export class Paint {
       ctx.fillStyle = col.light;
       ctx.beginPath();
       ctx.arc(d.x - d.size * 0.2, d.y - d.size * 0.2, d.size * 0.3 * k + 0.3, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // J3 (v1.9): draw the KILL INK-BURST — the soft watercolor blobs a creature
+  // dissolves into on death. Each blob fades + shrinks as it settles (a little
+  // watercolor "bleed" at the peak), with a lighter sheen at the core. Drawn
+  // just after the wet marks so the burst reads as fresh ink breaking out of
+  // the creature. Draw-only — reads only the (already-decayed) pool; it never
+  // feeds combat, save data, or pacing.
+  drawInkBurst(ctx) {
+    if (!this.inkBurst.length) return;
+    for (const b of this.inkBurst) {
+      const k = Math.max(0, Math.min(1, b.t / b.max));
+      // a soft "wet" blob that bleeds a touch wider at the peak, then dries down
+      const r = b.r * (0.6 + 0.7 * k);
+      ctx.globalAlpha = k * 0.5;
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.ellipse(b.x, b.y, r, r * 0.78, b.seed, 0, TAU);
+      ctx.fill();
+      // a lighter pigment sheen at the core (the fresh ink catching light)
+      ctx.globalAlpha = k * 0.4;
+      ctx.fillStyle = b.light;
+      ctx.beginPath();
+      ctx.ellipse(b.x, b.y, r * 0.5, r * 0.38, b.seed, 0, TAU);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
