@@ -200,18 +200,59 @@ byte-identical (EMPTY diff), SAVE_VERSION 12, smoke `ALL SMOKE TESTS PASSED`
 humance simulated cross ~57 s / boss ~351 s — vs baseline 37.1 s; run-to-run
 variance only).
 
-**NEXT ACTION: L1** (the next session) — **the living world** (the first of
-L1–L4: ambient environmental life — swaying reeds / drifting mist / water
-shimmer, the v1.4 L1 pattern re-applied). A1 (the v1.9 quality audit) is the
-season's final item; read `docs/ROADMAP.md` §v1.9 for the L1 spec.
-**Housekeeping note (orchestrator, post-J3/J4):** the J2 latent droplet bug
-flagged by the J3/J4 session (drawDroplets read `d.size`, the spawn stores `r`
-→ NaN radius → in-flight droplets invisible) is **ALREADY FIXED + committed**
-(`e713c1a`, a 2-line draw fix; after-J2 frames recaptured under the fixed code
-and verified md5-changed; smoke green; logic.js untouched). It is NOT an open
-item — A1 verifies the fix, it does not re-address it.
+**L1 LANDED** (session v19-world; `ed8f2fa`) — **environmental life** (the
+living-world / parallax layer-0 — the first of L1–L4). The swamp now reads as a
+*living* place, not a still illustration:
+- **Breathing mist** — a slow ~9 s alpha/offset oscillation (`mistBreath`) on the
+  existing v1.4 parallax mist bands: each band's alpha swells + the whole band
+  drifts ±8 px, phased per band so the bands breathe out of sync. Pure draw-time
+  on the `now` wall-clock — the v1.4 MIST_BANDS constants (alpha/parallax) are
+  unchanged, so the v1.4 L1 test (stage 63) still passes.
+- **Ambient fireflies** — a small twinkling swarm (Reeds / Black Reeds only). A
+  SEPARATE capped pool from the lantern light-economy `fireflies` (the bright
+  lantern refills); these are the dimmer, purely-decorative living layer, each
+  pulsing on a staggered `fireflyTwinkle` so the swarm flickers.
+- **Drifting pollen** — small drifting leaves/pollen motes (swamp only), a slow
+  seeded Lissajous-ish drift + sway, a soft warm dot + faint halo.
+- **Surface ripples** — a few soft expanding rings on the open-water bands
+  (every world), each cycling on a staggered `ripplePhase` (radius grows, alpha
+  fades).
+All **PRESENTATION-ONLY** (the load-bearing invariant held end-to-end):
+`src/logic.js` byte-identical to `6c9e09e` (EMPTY diff), SAVE_VERSION 12,
+GAME_VERSION 1.0.0, no tuning / runT / logic number moves. **SEEDED**: positions
+come from a dedicated `mulberry32(seed + 731)` stream built once in `build()`
+(a distinct stream from the terrain + light-economy streams), so a fixed seed
+gives the same layout (the A/B invariance holds); motion is a pure function of
+the wall-clock `now` — no global `Math.random` in the hot path, no per-frame
+allocation. **POOLED + view-culled**: capped small pools (pollen 14 / ambient
+fireflies 18 / ripples 13), the cull identical to `ambientCounts` so the
+on-screen count stays capped into the existing P10 particle budget (combined
+paint-juice + ambient asserted ≤ 220 in smoke; the v1.4 "one drawImage per
+zone" parallax-band draw budget is untouched — the new elements are a small
+pooled set, drawn in the world-space pass on top of the terrain so ripples read
+on the water). A new **smoke stage 109** (14 assertions) locks the invariant:
+determinism at a fixed seed, seed variance, the Reeds-ambient / swamp-pollen
+pool split, the pool caps + view-cull, the P10 combined-on-screen cap with the
+layer on, and the mist-breathing oscillation. The frames harness registers 4
+after-L1 scenes: `tests/frames/after-L1/world-mist-a.png` + `world-mist-b.png`
+(the SAME world + camera ~2.2 s apart — md5-differing, proving the mist
+BREATHES) / `world-fireflies.png` (the Reeds ambient swarm) / `world-pollen.png`
+(the swamp drifting pollen). Invariant held: all 9 probes in band unchanged
+(pace ~17.2, humance ~18.9, ngpace cycle-1 19.5, bosspace 37.0 s, reedspace
+~22.1, wandpace both legs, wardpace ~3.9, blackpace ~25.7, umbrapace ~3.66).
+
+**NEXT ACTION: L2** (the next session) — **the v1.9 visual-identity + living-
+world layer 2** (L2 + L3 per the batch plan; read `docs/ROADMAP.md` §v1.9 for
+the L2 / L3 spec). A1 (the v1.9 quality audit) is the season's final item.
+**Housekeeping note (orchestrator, post-J3/J4, still open for A1):** the J2
+latent droplet bug flagged by the J3/J4 session (drawDroplets read `d.size`,
+the spawn stores `r` → NaN radius → in-flight droplets invisible) is **ALREADY
+FIXED + committed** (`e713c1a`, a 2-line draw fix; after-J2 frames recaptured
+under the fixed code and verified md5-changed; smoke green; logic.js
+untouched). It is NOT an open item — A1 verifies the fix, it does not
+re-address it.
 Batch plan: T0 → S1 + S2 + S3 (LANDED) → **J1 + J2 + J3 + J4 (ALL LANDED this
-season)** → L1 → L2 + L3 → L4 + A1 (fresh sessions).
+season)** → **L1 (LANDED, `ed8f2fa`)** → L2 + L3 → L4 + A1 (fresh sessions).
 
 ### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 8 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
 
