@@ -28,7 +28,22 @@ import { homedir } from 'node:os';
 // This file lives in <repo>/tests/, so the repo root is one level up. Resolve
 // it from the script's own location (not cwd) so it works from any directory.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const FRAMES_DIR = path.join(ROOT, 'tests', 'frames');
+// T0: the baseline set goes to tests/frames/ (gitignored EXCEPT README.md).
+// v1.9 polish items capture their BEFORE/AFTER evidence into per-item subdirs
+// (e.g. tests/frames/after-J1/) by re-running this harness with --out. The
+// frames stay gitignored; the README index + the commit message reference them.
+//
+// CLI (all optional, default = the 35-scene baseline into tests/frames/):
+//   node tests/frames.mjs [--out <dir>] [--scenes a,b,c] [--min <n>]
+//   --out     output directory (resolved against the repo root if not absolute)
+//   --scenes  comma-separated scene names to capture (subset; for after-sets)
+//   --min     minimum non-trivial frames before "COMPLETE" (default 20 for the
+//             baseline set; 0 for a small after-set that is verified by eye).
+function argFlag(name) { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; }
+const OUT_DIR = path.resolve(ROOT, argFlag('--out') || path.join('tests', 'frames'));
+const SCENE_FILTER = argFlag('--scenes') ? argFlag('--scenes').split(',').map(s => s.trim()).filter(Boolean) : null;
+const MIN_FRAMES = argFlag('--min') != null ? parseInt(argFlag('--min'), 10) : 20;
+const FRAMES_DIR = OUT_DIR;
 const CHROME = path.join(homedir(), '.agent-browser', 'browsers', 'chrome-152.0.7977.82', 'chrome.exe');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json' };
 
@@ -243,6 +258,36 @@ await page.addInitScript(() => {
   S['status-freeze'] = (G) => { beginRun(G, null); return enemyScene(G, 'mosquito', 'freeze'); };
   S['status-root'] = (G) => { beginRun(G, null); return enemyScene(G, 'toad', 'root'); };
 
+  // ---- J1 (v1.9): the paint-CONNECT impact frame (the hitstop's frozen instant) ----
+  // The brush has just LANDED a red swipe on the beetle. The frame is staged AT
+  // the connect instant: e.hitFlash is at its 0.14 peak (the white-hot rim +
+  // body-flash are full — k=1), the swipe ribbon is mid-air, and the world is
+  // the "frozen" hitstop frame. This is the J1 after-evidence: enemy-beetle.png
+  // (base, hitFlash=0) -> after-J1/beetle-hitstop.png (the impact reads).
+  function connectScene(G, pig, kind) {
+    beginRun(G, null, { wander: false });
+    const p = G.player; p.pigment = pig;
+    const e = G.__modsEnemy(kind, p.x + 70, p.y - 6, G.tuning);
+    e._seed = 1.3; e.dead = false;
+    // the hit has JUST connected: flash at peak, body tinted with the pigment
+    e.hitFlash = 0.14;                 // k=1 -> white-hot rim at the peak instant
+    e.hp = e.maxHp - 7; e.status = null;
+    e.tint = pig; e.tintT = 0.6;
+    G.enemies = [e];
+    // the brush ribbon is mid-swipe (freshest, full alpha), aimed at the beetle
+    const P = G.paint; P.trails = [];
+    const a = Math.atan2(e.y - p.y, e.x - p.x);
+    P.trails.push({ ring: false, x0: p.x + Math.cos(a) * 12, y0: p.y + Math.sin(a) * 12,
+      x1: e.x, y1: e.y, w: 18, t: 0.4, max: 0.4, pig, seed: 0.7 });
+    P._addWet(e.x - 8, e.y + 4, 14, pig, 0.9);
+    // park the camera on the frog so the impact is centered + the HUD reads
+    G.cam.x = p.x; G.cam.y = p.y; G.zoom = 1; G.now = 2.5;
+    return { note: `J1 paint-connect hitstop: ${pig} swipe impact on ${kind} (frozen instant)` };
+  }
+  S['beetle-hitstop'] = (G) => connectScene(G, 'red', 'beetle');
+  S['toad-hitstop'] = (G) => connectScene(G, 'blue', 'toad');
+
+
   // ---- 6 bosses (heron variants) + awaken ----
   S['boss-gray-heron'] = (G) => bossFrame(G, { variant: 'gray', hpFrac: 0.75 });
   S['boss-gray-heron-awaken'] = (G) => bossFrame(G, { variant: 'gray', awakened: true });
@@ -354,7 +399,12 @@ console.log('[frames] booted:', JSON.stringify(boot));
 
 fs.mkdirSync(FRAMES_DIR, { recursive: true });
 
-const SCENES = [
+// The T0 BASELINE set is the 35 pre-polish scenes — this is the canonical
+// "before" reference every v1.9 polish item is diffed against. The per-item
+// AFTER scenes (J1 hitstop, J2 paint arc, ...) are added as they land and are
+// captured ONLY via --scenes into their own subdirs (so the baseline run and
+// its "before" meaning stay stable as the polish items accumulate).
+const BASELINE_SCENES = [
   'title', 'options', 'wander-seed-card', 'full-collection-badge',
   'atelier-upgrades', 'atelier-loadout', 'gallery-wall-empty', 'gallery-wall-full',
   'paint-red', 'paint-blue', 'paint-green', 'paint-dry', 'paint-water', 'paint-vegetation',
@@ -365,6 +415,19 @@ const SCENES = [
   'boss-umbral-wyrm', 'boss-umbral-deep-dark',
   'reeds-descent', 'black-reeds-descent', 'warden-maw-open', 'end-recap',
 ];
+// The known polish AFTER-scenes (registered in the in-page S map above). A
+// --scenes request must name scenes that exist; validate against BASELINE + the
+// polish set so a typo fails loudly rather than silently capturing 0 frames.
+const POLISH_SCENES = [
+  'beetle-hitstop', 'toad-hitstop',                 // J1 (v1.9)
+  // J2 (v1.9) paint-arc scenes are added here as the arc upgrade lands.
+];
+const KNOWN_SCENES = BASELINE_SCENES.concat(POLISH_SCENES);
+if (SCENE_FILTER) {
+  const bad = SCENE_FILTER.filter((n) => !KNOWN_SCENES.includes(n));
+  if (bad.length) { console.log(`[frames] unknown scene(s): ${bad.join(', ')} (known: ${KNOWN_SCENES.join(', ')})`); process.exit(3); }
+}
+const SCENES = SCENE_FILTER ? SCENE_FILTER.filter((n) => KNOWN_SCENES.includes(n)) : BASELINE_SCENES;
 
 const manifest = [];
 for (const name of SCENES) {
@@ -400,5 +463,9 @@ for (const m of manifest) {
 }
 console.log(`\n${ok.length}/${manifest.length} frames non-trivial (std>=2, >=30KB); ${failed.length} failed`);
 if (pageErrors.length) console.log('[page errors]', pageErrors.slice(0, 10));
-if (ok.length < 20) { console.log('T0 FRAME SET INCOMPLETE (<20 frames non-trivial)'); process.exit(2); }
-console.log(`T0 FRAME SET COMPLETE — ${ok.length} baseline frames captured under tests/frames/`);
+if (manifest.length && ok.length < Math.min(MIN_FRAMES, manifest.length)) {
+  console.log(`FRAME SET INCOMPLETE (<${Math.min(MIN_FRAMES, manifest.length)} of ${manifest.length} frames non-trivial)`);
+  process.exit(2);
+}
+const relOut = path.relative(ROOT, FRAMES_DIR);
+console.log(`FRAME SET COMPLETE — ${ok.length} frames captured under ${relOut}/`);

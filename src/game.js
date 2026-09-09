@@ -3786,7 +3786,21 @@ _drawAtelier(ctx) {
     // ----- attacks -----
     const targetList = this.enemies;
     if (this.input.mouse.lDown) {
-      this.paint.trySwipe(targetList);
+      const swHits = this.paint.trySwipe(targetList);
+      // J1 (v1.9): the paint-CONNECT hit-stop. When the brush LANDS a hit (a
+      // real connect, not a whiff or a cooldown no-op), a brief 40–70 ms dip on
+      // the PRESENTATION clock freezes the world for an instant so the impact
+      // reads. Reuses the v1.4 hitStop (real-time timeScale dip, gated by
+      // options.shake, never touches tuning/runT/the seeded RNG). If the swipe
+      // also kills, the kill path's longer ~110 ms hit-stop (Math.max) extends
+      // it. A tiny camera punch reuses the shake. GATED OFF during the guided
+      // teaching run (`_tutorialActive`): that run is a separate FROZEN-CLOCK
+      // practice layer (runT holds, banners suppressed) where the player learns
+      // the verbs calmly — combat time-dilation belongs to the timed expedition,
+      // not the tutorial. Without the gate, the connect hit-stop would dilate
+      // simDt on every practice swipe and slow the drill's status-DoT/phase
+      // progression past the frame budget the tests (and the guided pace) rely on.
+      if (swHits && swHits.length && !this._tutorialActive()) { this.hitStop(0.05, 0.3); this.addShake(2); }
       this._noiseEvent(p.x, p.y); // K2: a paint swipe is a noise
       this._bestiarySwipe(p); // R3 (v1.6): leech paint-off + serpent ring-interrupt
       // paint the heron too (only while boss is "live" and player not dying)
@@ -3858,8 +3872,18 @@ _drawAtelier(ctx) {
       }
     }
     if (this.input.mouse.rPressed && p.splashCharge >= 1) {
-      this.paint.trySplash(targetList);
+      const spHits = this.paint.trySplash(targetList);
       this.addShake(8);
+      // J1 (v1.9): the CHARGED-splat hit-stop — a longer ~110 ms dip when the
+      // charged burst actually CONNECTS (hits >= 1 enemy). Longer than the
+      // swipe connect (the full-charge splat is the heavier impact of the core
+      // paint verb). Reuses the v1.4 hitStop (real-time, gated by options.shake,
+      // never touches tuning/runT/RNG). A whiffed charge (no hits) still fires
+      // the shake + SFX but takes no hit-stop — only a real connect freezes.
+      // Gated off during the guided teaching run (see the swipe connect above):
+      // combat time-dilation belongs to the timed expedition, not the frozen-clock
+      // practice layer.
+      if (spHits && spHits.length && !this._tutorialActive()) this.hitStop(0.11, 0.3);
       this._noiseEvent(p.x, p.y); // K2: a splash is a loud noise
       this._bestiarySplash(p); // R3 (v1.6): a BLUE splash BLINDS a nearby wisp
       // splash the heron if it's in the burst
@@ -4040,6 +4064,17 @@ _drawAtelier(ctx) {
 
     // ----- first-hit teaching (once per lifetime) -----
     if (p.alive && p.hp < this._prevHp) {
+      // J1 (v1.9): the SELF-DAMAGE hit-stop — a SHORT ~30 ms dip when the frog
+      // takes a hit this frame (contact / boss strike / hazard). The `p.hp <
+      // _prevHp` gate is true only on the frame HP actually dropped (prevHp is
+      // reset to the new HP below), so it fires once per hurt event, never
+      // machine-gun. Deliberately SHORTER + less aggressive (0.4×) than the
+      // enemy-hit connect so taking damage still reads as "ouch" without the
+      // sluggish feel of the big freezes — it layers on the existing hurt
+      // feedback (red flash, squash, shake), it doesn't replace it. Reuses the
+      // v1.4 hitStop (real-time, gated by options.shake, never touches
+      // tuning/runT/RNG).
+      this.hitStop(0.03, 0.4);
       if (!this.save.flags.firstHurt) {
         this.save.flags.firstHurt = true;
         SaveSys.save(this.save);
@@ -4656,9 +4691,13 @@ _drawAtelier(ctx) {
         ? 'die-' + dk : 'enemy-die';
       this.sfx(dieName);
     }
-    // J2 (v1.4): a small hit-stop pop on a kill (60–90 ms @ ~0.3×). Gated by
-    // options.shake (hitStop is a no-op when shake is OFF).
-    this.hitStop(0.08, 0.3);
+    // J1 (v1.9): the KILL hit-stop — a ~110 ms dip @ ~0.3× when a regular
+    // enemy is painted to death (longer than a non-killing swipe connect so the
+    // death reads as a beat). Reuses the v1.4 hitStop (real-time timeScale dip,
+    // gated by options.shake — a no-op when shake is OFF; never touches
+    // tuning/runT/the seeded RNG). If the killing swipe's connect hit-stop is
+    // still draining, Math.max keeps the longer of the two.
+    this.hitStop(0.11, 0.3);
     this.particles.splatter(e.x, e.y, INK, 10, 160);
     this.particles.splatter(e.x, e.y, PIGMENTS[ORB_COLORS[(Math.random() * 3) | 0]].color, 4, 120);
     // pigment orbs

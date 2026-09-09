@@ -25,9 +25,40 @@ node tests/frames.mjs
   non-zero if the set is incomplete (< 20 frames).
 - Kills its own server + browser at the end (leaves nothing running).
 
-To capture **after** a polish change: `node tests/frames.mjs` again into the same
-dir (or copy a frame aside first), and reference the before/after pair in the
-commit message.
+To capture **after** a polish change: re-run the harness into a per-item subdir
+(see the CLI below) and reference the before/after pair in the commit message.
+
+### Capturing a polish item's AFTER set (CLI)
+
+```
+node tests/frames.mjs [--out <dir>] [--scenes a,b,c] [--min <n>]
+```
+
+- `--out tests/frames/after-J1` writes the frames into that subdir (default
+  `tests/frames/`, the canonical "before" baseline).
+- `--scenes` captures a subset (the item's AFTER scenes) instead of the 36-scene
+  baseline; unknown scene names fail loudly.
+- `--min <n>` is the minimum non-trivial count before "COMPLETE" (20 for the
+  baseline; 0–2 for a small after-set verified by eye).
+
+The AFTER scenes live in the same harness (registered in the in-page `S` map +
+`POLISH_SCENES` list). The baseline run and its "before" meaning stay stable as
+the polish items accumulate — the baseline scenes never gain the polish effect
+(the impact rim, for example, only draws when `hitFlash > 0`, and every baseline
+scene stages `hitFlash = 0`).
+
+## J1 (v1.9) — Hitstop: the paint-CONNECT impact frame
+
+Before/after pair (baseline `enemy-beetle.png` / `enemy-toad.png` → the
+`after-J1/` impact frames):
+
+| Frame | Scene | What it shows |
+|---|---|---|
+| `tests/frames/after-J1/beetle-hitstop.png` | `beetle-hitstop` | A red swipe has just CONNECTED on the beetle — the white-hot impact rim + cream body-flash at the hitstop's frozen instant (the frame reads as IMPACT, not a pause) |
+| `tests/frames/after-J1/toad-hitstop.png` | `toad-hitstop` | The same connect beat on a toad, blue pigment |
+
+Captured with: `node tests/frames.mjs --out tests/frames/after-J1 --scenes beetle-hitstop,toad-hitstop --min 2`
+
 
 ## The 36 baseline frames
 

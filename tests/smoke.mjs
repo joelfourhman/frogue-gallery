@@ -3765,6 +3765,82 @@ console.log('== stage 59: v1.4 J2 — hit-stop + shake escalation + boss-defeat 
 }
 
 // ======================================================================
+// stage 59b — v1.9 J1: the hitstop is PURE PRESENTATION (A/B game-time invariance)
+// The v1.4 hitStop dilates the WORLD sim + runT by `timeScale`, and the dip is
+// drained on REAL time (the _frame gate), so a connect's hit-stop stretches the
+// presentation wall-clock, never the rule outcomes. PROVE it: drive two
+// identical expeditions A (hitstop ON) and B (hitStop -> no-op), each from a
+// fixed RNG seed, one real frame with the brush held at a pinned beetle. At the
+// connect instant the brush deals the SAME damage in both (the hitstop fired in
+// A but never changed the enemy's hp — pure presentation). Then, over the next
+// equal number of REAL frames, A's game clock (runT) advances SLOWER than B's
+// (A is still in its ~50 ms dip at 0.3x) — the dilation stretches real time,
+// it does not touch the rules, the seeded RNG stream, or the tuning.
+// ======================================================================
+console.log('== stage 59b: v1.9 J1 — the hitstop is pure presentation (A/B game-time invariance) ==');
+{
+  const { spawnEnemy } = await import('../src/enemies.js');
+  // reset the harness RNG to a fixed seed so A and B consume identical streams.
+  const savedRandom = Math.random;
+  const resetRng = () => { let s = 0x9e3779b1; Math.random = (() => { const m = () => { s |= 0; s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; return m; })(); };
+  const mk = (hitStopOn) => {
+    const g = new Game(makeCanvas());
+    g.start(); g._beginExpedition();
+    g.tutorial = null; g.options.shake = true;      // the J1 presentation gate ON
+    const p = g.player; p.x = 260; p.y = 750; p.iframes = 999; p.pigment = 'red';
+    const b = spawnEnemy('beetle', 300, 750, g.tuning); b.status = null; b.hp = 200; b.maxHp = 200; b.speed = 0;
+    g.enemies.push(b);
+    if (!hitStopOn) g.hitStop = () => {};            // B: the NON-hitstop baseline
+    // self-contained fixed-step driver (own clock ahead of the global nowMs so
+    // dt is positive; avoids the shared rafCb/nowMs the earlier stages use).
+    let t = nowMs + 100000;
+    const fr = (n) => { for (let i = 0; i < n; i++) { t += 16.7; g._frame(t); } };
+    return { g, p, b, fr };
+  };
+  const aimAt = (g, e) => {
+    // Park the camera on the frog so the screen<->world map is 1:1 around the
+    // frog (a fresh game's camera hasn't latched to the player yet). Then seed
+    // the input's WORLD coords (what p.update reads for aimA) directly at the
+    // target — this is view-independent and survives the frame's setView/update,
+    // which recompute the same values because the camera is parked.
+    const p = g.player;
+    g.cam.x = p.x; g.cam.y = p.y; g.zoom = 1; g.camX = p.x; g.camY = p.y;
+    const v = g._view();
+    g.input.mouse.x = (e.x - v.x) * v.scale;
+    g.input.mouse.y = (e.y - v.y) * v.scale;
+    g.input.setView(v);
+    g.input.update();            // populate mouse.worldX/Y at the target
+    p.swipeT = 0; g.paint.swipeCd = 0;   // arm a fresh swipe so the connect lands
+  };
+
+  // ---- RUN A: the connect FIRES the hitstop ----
+  resetRng();
+  const A = mk(true);
+  aimAt(A.g, A.b); A.g.input.mouse.lDown = true; A.fr(1);   // the brush lands
+  assert(A.b.hp < 200, `J1: the connect dealt paint damage (beetle hp ${A.b.hp})`);
+  assert(A.b.hitFlash > 0, `J1: the connect fired the impact flash (hitFlash=${A.b.hitFlash.toFixed(2)})`);
+  assert(A.g._hitstopT > 0, `J1: the connect FIRED the hitstop (dilation budget _hitstopT=${A.g._hitstopT.toFixed(3)}s)`);
+  assert(A.g.timeScale < 1, `J1: the hitstop dilated the PRESENTATION clock (timeScale=${A.g.timeScale.toFixed(2)})`);
+
+  // ---- RUN B: identical setup, but hitStop is a no-op (the non-hitstop baseline) ----
+  resetRng();
+  const B = mk(false);
+  aimAt(B.g, B.b); B.g.input.mouse.lDown = true; B.fr(1);
+  assert(B.g._hitstopT === 0 && B.g.timeScale === 1, `J1: the baseline had NO hitstop (timeScale=${B.g.timeScale})`);
+
+  // ---- THE INVARIANT: the hitstop never changes the rule outcome ----
+  assert(A.b.hp === B.b.hp, `J1: the connect's RULE OUTCOME is identical with/without the hitstop (hp ${A.b.hp} vs ${B.b.hp}) — pure presentation, provably`);
+  // and the hitstop dilated the PRESENTATION clock: over the next EQUAL number
+  // of REAL frames, A (still in its ~50 ms dip at 0.3x) advances its game clock
+  // SLOWER than B — the dilation stretches real wall-clock, not the rules.
+  const runTA0 = A.g.runT, runTB0 = B.g.runT;
+  A.fr(4); B.fr(4);
+  const dA = A.g.runT - runTA0, dB = B.g.runT - runTB0;
+  assert(dA < dB, `J1: the hitstop stretched the PRESENTATION clock — over 4 real frames A's game-time advanced ${dA.toFixed(4)}s vs B's ${dB.toFixed(4)}s (dilation, not a rule/tuning/RNG change)`);
+  Math.random = savedRandom;
+}
+
+// ======================================================================
 // stage 60 — v1.4 Module J, J3: camera polish (look-ahead / lag / boss midpoint / awaken moment)
 // `_updateCamera` (game.js) is PRESENTATION: it follows the already-simmed
 // frog position, so it runs on real dt and never feeds the measured runT.

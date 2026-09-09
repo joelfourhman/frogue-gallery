@@ -204,6 +204,14 @@ export class Paint {
         enemy: e, deflectFactor: deflect, sleepBonus,
       });
       e.hp -= dmg;
+      // J1 (v1.9): the paint-CONNECT impact flash. Set `e.hitFlash` so the
+      // struck creature renders white-hot on the exact frame the brush lands
+      // (drawEnemy flips the body to '#f2e9dc'/'#fff' while hitFlash > 0; the
+      // ~0.14s decay keeps it hot through the hitstop's frozen instant so the
+      // frame reads as IMPACT, not as a pause). Pure presentation — `hitFlash`
+      // is read only by the draw pass; it never feeds hit detection, damage,
+      // the seeded RNG, or runT.
+      e.hitFlash = 0.14;
       // S1 (v1.9): the per-creature HIT sting — the 6 archetypes have a
       // dedicated voice (armor clang / mosquito zap / toad thud / wisp hiss /
       // serpent slither / leech slurp); turtle/cragfrog fall back to the

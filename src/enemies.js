@@ -373,6 +373,31 @@ export function drawEnemy(ctx, e, now) {
   else drawToad(ctx, e, frozen, dizzy, flash, now);
   ctx.scale(1 / escale, 1 / escale); // undo body scale for the auras below
 
+  // J1 (v1.9): the white-hot IMPACT RIM at the connect instant. The brush
+  // landed a hit (paint.js set e.hitFlash=0.14); a brief white rim ring peaks
+  // while the hitstop's frozen instant is on screen and fades as hitFlash
+  // decays, so the struck frame reads as IMPACT (a hot edge), not as a pause.
+  // RENDER-ONLY — reads e.hitFlash (a presentation field, already decayed in
+  // e.update); it never feeds hit detection, damage, the seeded RNG, or runT.
+  if (e.hitFlash > 0) {
+    const k = Math.min(1, e.hitFlash / 0.14); // 1 at the connect, ->0 as it fades
+    ctx.save();
+    ctx.globalAlpha = k * 0.85;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2.5 + 3 * k;
+    ctx.beginPath();
+    ctx.arc(0, 0, e.r + 4 + 3 * (1 - k), 0, TAU);
+    ctx.stroke();
+    // a soft white-hot core wash for the peak frame
+    ctx.globalAlpha = k * 0.5;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(0, 0, e.r * (0.55 + 0.35 * k), 0, TAU);
+    ctx.fill();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
   // M8 P12: zone-accent ring — a slow pulsing halo in the zone's color that
   // marks the signature guardian. Pulses with `now`; sits under the status
   // aura so a burning/frozen elite still shows its status ring on top.
