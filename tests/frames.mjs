@@ -460,6 +460,45 @@ await page.addInitScript(() => {
   // the base-swamp DRIFTING POLLEN (leaves) + surface ripples on the water bands.
   S['world-pollen'] = (G) => { worldAmbient(G, { reeds: false, now: 5.0, x: 1500, y: 740 }); return { note: 'L1 drifting pollen (swamp) + surface ripples' }; };
 
+  // ---- L2 (v1.9): the LIGHTING PASS (pure draw; the parked "lantern in the
+  //      swamp" done as LIGHT + the charged-paint glow + the awaken halo).
+  //      BEFORE = the baseline world/boss scenes; AFTER = after-L2/. The three
+  //      light reads:
+  //        (1) the BASE-SWAMP LIGHT POOLS — `swamp-light-pools`: a base (non-
+  //            Reeds) swamp with the seeded light pools lit on the ground (the
+  //            "lantern in the swamp" as pure light). drawSwampLightPools is a
+  //            pure f(seed, now); the pool BREATHES, so the pair below
+  //            (swamp-light-pools-b, ~1.4 s later) md5-differs on the breath.
+  //        (2) the CHARGED-PAINT GLOW — `charged-paint-glow`: the frog with
+  //            splashCharge at 1 (full charge) so the soft radial on the brush
+  //            is at its brightest (vs the uncharged baseline paint-blue.png).
+  //        (3) the AWAKEN HALO — reuses the baseline `boss-*.png` awaken scene
+  //            (captured here so the after-L2 set is self-contained): the
+  //            heron's Awakened state now radiates a light halo.
+  function swampLightPool(G, { now, x, y }) {
+    beginRun(G, null);   // base swamp (no Reeds) -> the light pools are live
+    G.enemies = []; G.orbs = []; G.heron = null; G.midHeron = null;
+    G.player.x = x; G.player.y = y; G.player.vx = 0; G.player.vy = 0; G.player.hopT = 0;
+    G.player._staggerT = 0; G.player._victoryHopT = 0; G.player.splashCharge = 0;
+    // park the camera on a region with a couple of the seeded light pools so
+    // the faint ground glow reads; the pool BREATHES on now (the pair differs).
+    G.cam.x = x; G.cam.y = y; G.zoom = 1; G.shake = 0; G.now = now;
+  }
+  S['swamp-light-pools'] = (G) => { swampLightPool(G, { now: 0.0, x: 900, y: 780 }); return { note: 'L2 base-swamp light pools (the "lantern in the swamp" as light) — pair A (now=0.0)' }; };
+  S['swamp-light-pools-b'] = (G) => { swampLightPool(G, { now: 1.4, x: 900, y: 780 }); return { note: 'L2 base-swamp light pools — pair B (now=1.4, the pools breathe)' }; };
+  S['charged-paint-glow'] = (G) => {
+    beginRun(G, null);
+    const p = G.player; p.pigment = 'blue';
+    p.splashCharge = 1;                     // full charge -> the brush radial is brightest
+    p.aimA = -0.5;                          // aim the brush up-right so the glow reads
+    G.enemies = []; G.orbs = []; G.heron = null; G.midHeron = null;
+    G.cam.x = p.x; G.cam.y = p.y; G.zoom = 1; G.shake = 0; G.now = 2.5;
+    return { note: 'L2 charged-paint glow: the brush radial at full splashCharge (vs baseline paint-blue.png)' };
+  };
+  // the AWAKEN HALO: reuse the baseline gray-heron awaken scene so the after-L2
+  // set is self-contained (the heron's Awakened state now carries a light halo).
+  S['boss-gray-heron-awaken-halo'] = (G) => bossFrame(G, { variant: 'gray', awakened: true });
+
   S['boss-gray-heron'] = (G) => bossFrame(G, { variant: 'gray', hpFrac: 0.75 });
   S['boss-gray-heron-awaken'] = (G) => bossFrame(G, { variant: 'gray', awakened: true });
   S['boss-green-heron'] = (G) => bossFrame(G, { variant: 'green', hpFrac: 0.75 });
@@ -595,6 +634,7 @@ const POLISH_SCENES = [
   'toad-kill-burst', 'beetle-kill-burst', 'boss-kill-burst',      // J3 (v1.9)
   'frog-idle-breathe', 'frog-hurt-stagger', 'frog-low-HP', 'frog-victory-pose', // J4 (v1.9)
   'world-mist-a', 'world-mist-b', 'world-fireflies', 'world-pollen',          // L1 (v1.9)
+  'swamp-light-pools', 'swamp-light-pools-b', 'charged-paint-glow', 'boss-gray-heron-awaken-halo', // L2 (v1.9)
 ];
 const KNOWN_SCENES = BASELINE_SCENES.concat(POLISH_SCENES);
 if (SCENE_FILTER) {

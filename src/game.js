@@ -5463,6 +5463,29 @@ _drawAtelier(ctx) {
     ctx.fill();
     ctx.restore();
 
+    // L2 (v1.9): the AWAKEN BLOOM — while the heron is in its AWAKENED state
+    // (painted awake, taking 2x paint) it radiates a soft LIGHT HALO behind its
+    // body, so the "it is awake to the paint" window reads as a burst of light,
+    // not just a shimmer. Pure DRAW: reads h.awakened (a rule field set by the
+    // bossStep logic state machine in logic.js) but writes NOTHING back — no new
+    // save state, no tuning change, no HP / damage / death timing move. A single
+    // radial gradient drawn only while awakened (zero draws otherwise), so the
+    // idle + pre-awaken boss path is byte-identical to before.
+    if (h.awakened) {
+      const pulse = 0.85 + 0.15 * Math.sin(now * 4);
+      const R = 150;
+      const g = ctx.createRadialGradient(h.x, fy - 140, 20, h.x, fy - 140, R);
+      g.addColorStop(0, 'rgba(255,236,180,' + (0.22 * pulse).toFixed(3) + ')');
+      g.addColorStop(0.5, 'rgba(255,210,140,' + (0.10 * pulse).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,210,140,0)');
+      ctx.save();
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(h.x, fy - 140, R, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
     // N3 (v1.3 M14): the Great Green Heron's reed-pin visual — when pinned, moss
     // reeds wrap its feet and a faint pulsing ring shows the vulnerable window.
     // Pure presentation; the gray heron never enters this branch (no `pinned`).
@@ -6233,6 +6256,15 @@ _drawAtelier(ctx) {
     ctx.translate(-v.x * v.scale, -v.y * v.scale);
     ctx.scale(v.scale, v.scale);
     this.world.drawBackground(ctx, v, drawSatFinal);
+    // L2 (v1.9): the BASE-SWAMP LIGHT POOLS — the parked "lantern in the swamp"
+    // done as PURE LIGHT (no fuel, no mechanics). Drawn right after the
+    // background so the light pools sit ON the ground, UNDER the props / the
+    // frog / the paint. PRESENTATION-ONLY + POOLED + SEEDED + VIEW-CULLED (a
+    // baked-once glow sprite, no per-frame gradient allocation — P10-safe).
+    // Base-swamp ONLY (a Reeds variant's pool is empty → no-op), so a first-time
+    // base-swamp run gains the faint glow and a Reeds run renders exactly as
+    // before; no tuning / runT / logic.js number moves.
+    this.world.drawSwampLightPools(ctx, v, this.now);
     this.world.drawProps(ctx, v, drawSatFinal, this.now);
     this.world.drawObstacles(ctx, v, drawSatFinal);
     // L1 (v1.9): the ENVIRONMENTAL LIFE layer — the living-world ambient

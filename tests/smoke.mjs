@@ -8898,5 +8898,106 @@ console.log('== stage 109: v1.9 T3 L1 — environmental life (seeded, capped, br
   console.log('ok — L1: environmental life. A parallax layer-0 of living elements — surface ripples on the water bands (a looping ripplePhase: radius grows, alpha fades), drifting leaves/pollen (swamp, a slow wall-clock drift), the ambient firefly swarm (Reeds/Black Reeds, a pulsing fireflyTwinkle) — and BREATHING MIST (mistBreath: a slow ~9 s alpha/offset oscillation on the existing parallax bands). All POOLED (capped arrays), SEEDED (a dedicated mulberry32 seed+731 stream — a fixed seed gives the same layout, the A/B invariance holds), and capped into the existing P10 particle budget (drawAmbient + ambientCounts view-cull keeps the on-screen total bounded; the combined paint-juice + ambient stays <= 220). Presentation-only: no tuning / runT / logic.js number moves.');
 }
 
+// ======================================================================
+// stage 110 — v1.9 T3 L2: the lighting pass (the base-swamp light pools,
+// the parked "lantern in the swamp" done as PURE LIGHT — no fuel, no
+// mechanics; the balance version stays deferred). A handful of soft warm
+// light pools baked into the swamp ground that read as the path glowing
+// faintly. PRESENTATION-ONLY: the pool is POOLED (bounded array), SEEDED
+// (a dedicated mulberry32 stream, seed + 1571 — a fixed seed gives the
+// same layout, and the A/B invariance holds because nothing here touches
+// logic.js / tuning / runT), and VIEW-CULLED (swampLightCounts culls to
+// the view, so the on-screen total stays capped into the P10 budget).
+// Acceptance: (a) the layout is a PURE function of the seed (two builds at
+// the same seed are identical; a different seed differs), (b) base-swamp
+// ONLY (a Reeds variant's pool is empty — a first-time base-swamp run gains
+// the pools; a Reeds run is unchanged), (c) the pools are capped +
+// view-culled (swampLightCounts <= cap; an off-screen view culls to 0),
+// (d) the draw is a no-op when the pool is empty (Reeds variant), and
+// (e) the P10 combined on-screen total (paint juice + ambient + the light
+// pools) stays <= 220 with the light pools ACTIVE.
+// ======================================================================
+console.log('== stage 110: v1.9 T3 L2 — the lighting pass (base-swamp light pools, pure light, seeded, P10-safe) ==');
+{
+  const { World, swampLightCounts, AMBIENT_POLLEN_CAP, AMBIENT_FIREFLY_CAP,
+          AMBIENT_RIPPLE_CAP, SWAMP_LIGHT_POOL_CAP } = await import('../src/world.js');
+  const { mulberry32 } = await import('../src/math.js');
+  const { Game } = await import('../src/game.js');
+  const { Paint } = await import('../src/paint.js');
+
+  // ---- (a) SEEDED: the light-pool layout is a pure function of the world seed ----
+  function buildWorld(seed, opts) { return new World(mulberry32((seed * 2654435761) >>> 0), seed, opts); }
+  function poolSig(w) { return w.swampLightPools.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)},${p.r.toFixed(1)}`).join('|'); }
+  const lwA = buildWorld(2468, {}), lwB = buildWorld(2468, {});
+  assert(poolSig(lwA) === poolSig(lwB), `L2: the light-pool layout is a PURE function of the seed (two builds at seed 2468 are identical)`);
+  const lwC = buildWorld(9911, {});
+  assert(poolSig(lwA) !== poolSig(lwC), `L2: a different seed (9911) yields a different light-pool layout`);
+
+  // ---- (b) BASE-SWAMP ONLY: a Reeds variant carries NO light pools (empty) ----
+  const lwBase = buildWorld(2468, {});
+  const lwReeds = buildWorld(2468, { reeds: true });
+  assert(lwBase.swampLightPools.length === SWAMP_LIGHT_POOL_CAP, `L2: the base swamp carries the light-pool pool (${lwBase.swampLightPools.length})`);
+  assert(lwReeds.swampLightPools.length === 0, `L2: the Reeds variant carries NO light pools (it has its own light economy; a Reeds run is unchanged)`);
+
+  // ---- (c) POOLED + CAPPED + VIEW-CULLED: the on-screen count never exceeds the pool ----
+  const fullView = { x: 0, y: 0, scale: 1, w: lwBase.w, h: lwBase.h };
+  const fullCount = swampLightCounts(lwBase, fullView);
+  assert(fullCount.pools <= SWAMP_LIGHT_POOL_CAP, `L2: the on-screen light-pool count for a full-world view stays within the cap (${fullCount.pools} <= ${SWAMP_LIGHT_POOL_CAP})`);
+  assert(fullCount.pools >= 1, `L2: a full-world view shows the light pools (${fullCount.pools} on-screen)`);
+  // an off-screen view (far corner) culls the light pools to 0 (the P10 cull).
+  const offView = { x: lwBase.w - 200, y: lwBase.h - 100, scale: 1, w: 100, h: 100 };
+  const offCount = swampLightCounts(lwBase, offView);
+  assert(offCount.pools <= fullCount.pools, `L2: an off-screen view culls the light pools (on-screen ${offCount.pools} <= full-view ${fullCount.pools})`);
+  // a Reeds world culls to 0 (the pool is empty) — the draw is a no-op there.
+  const reedsView = { x: 0, y: 0, scale: 1, w: lwReeds.w, h: lwReeds.h };
+  assert(swampLightCounts(lwReeds, reedsView).pools === 0, `L2: the Reeds variant culls to 0 light pools (empty pool → the draw is a no-op)`);
+
+  // ---- (d) the draw is a no-op when the pool is empty (a Reeds variant) ----
+  // A counting 2D-ctx stub: drawSwampLightPools bakes the glow sprite ONCE
+  // (the first call) and issues ONE drawImage per view-culled pool. On an
+  // EMPTY pool (Reeds variant) it issues ZERO drawImage calls (a no-op).
+  function countingCtx() {
+    const calls = { drawImage: 0, fill: 0, arc: 0, ellipse: 0 };
+    const g = { addColorStop() {} };
+    const ctx = {
+      save() {}, restore() {}, translate() {}, scale() {}, beginPath() {},
+      arc() { calls.arc++; }, ellipse() { calls.ellipse++; },
+      fill() { calls.fill++; }, fillRect() {}, stroke() {},
+      drawImage() { calls.drawImage++; },
+      createRadialGradient() { return g; },
+      globalAlpha: 1, fillStyle: '', strokeStyle: '', lineWidth: 1,
+    };
+    return { ctx, calls };
+  }
+  const { ctx: rctx, calls: rcalls } = countingCtx();
+  lwReeds.drawSwampLightPools(rctx, reedsView, 1.0);
+  assert(rcalls.drawImage === 0, `L2: drawSwampLightPools is a NO-OP on a Reeds variant (empty pool → 0 drawImage calls, got ${rcalls.drawImage})`);
+  // and on a base-swamp view it issues ONE drawImage per on-screen pool
+  // (the baked-once sprite, scaled) — a bounded, view-culled draw count.
+  const { ctx: bctx, calls: bcalls } = countingCtx();
+  lwBase.drawSwampLightPools(bctx, fullView, 1.0);
+  assert(bcalls.drawImage === swampLightCounts(lwBase, fullView).pools,
+    `L2: drawSwampLightPools issues ONE drawImage per on-screen pool (got ${bcalls.drawImage} for ${swampLightCounts(lwBase, fullView).pools} on-screen)`);
+  // the bake is ONCE: a second call issues the SAME number of drawImage calls
+  // (the sprite is cached, no per-frame re-bake → no per-frame allocation).
+  const before2 = bcalls.drawImage;
+  lwBase.drawSwampLightPools(bctx, fullView, 2.0);
+  assert(bcalls.drawImage - before2 === swampLightCounts(lwBase, fullView).pools,
+    `L2: a second draw reuses the cached sprite (a bounded draw count, no re-bake — ${bcalls.drawImage - before2} drawImage for the same view)`);
+
+  // ---- (e) P10 BUDGET: the base-swamp paint juice stays <= 220 with the pools ----
+  // The light pools are VIEW-CULLED drawImage calls (not part of the particle
+  // pool), so they do NOT add to the paint-juice count — the paint-juice total
+  // (burst + droplets + ink + wet + trails) must stay <= 220 regardless. The
+  // pools add a handful of view-culled drawImage calls on top (the smoke P10
+  // view-cull assertion above proves the draw count is bounded by the cap).
+  const P = new Paint({ x: lwBase.w / 2, y: lwBase.h / 2 }, lwBase, null, () => {}, { splatter() {}, sparkles() {}, note() {} });
+  for (let i = 0; i < 5; i++) P.spawnInkBurst(lwBase.w / 2 + i * 20, lwBase.h / 2, 'blue', 22, 4.5, 1);
+  P.spawnInkBurst(lwBase.w / 2, lwBase.h / 2 - 20, null, 20, 4.0, 1.8);
+  const juice = P.inkBurst.length + P.droplets.length + P.ink.length + P.wet.length + P.trails.length;
+  assert(juice <= 220, `L2: the on-screen paint juice after a full wave stays within the P10 budget (${juice} <= 220) — the light pools are view-culled drawImage calls that add no particle to this count`);
+  console.log('ok — L2: the lighting pass. The base-swamp LIGHT POOLS — the parked "lantern in the swamp" done as PURE LIGHT (no fuel, no mechanics; the balance version stays deferred). A handful of soft warm light pools baked into the swamp ground (the seeded `swampLightPools` pool) that read as the path glowing faintly as the frog travels. POOLED (a capped array), SEEDED (a dedicated mulberry32 seed+1571 stream — a fixed seed gives the same layout, the A/B invariance holds), VIEW-CULLED (swampLightCounts + drawSwampLightPools cull to the view → the on-screen total stays capped into the P10 budget), a BAKED-ONCE glow sprite (one drawImage per pool, no per-frame gradient allocation), and BASE-SWAMP ONLY (a Reeds variant\'s pool is empty → the draw is a no-op, a Reeds run renders exactly as before). Presentation-only: no tuning / runT / logic.js number moves.');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

@@ -400,6 +400,32 @@ export class Player {
     ctx.fill();
     ctx.restore();
 
+    // ---- L2 (v1.9): the CHARGED-PAINT GLOW — a soft radial bloom on the brush
+    // while the splash is charging (splashCharge > 0) and brighter as it nears
+    // full charge. Pure DRAW: reads this.splashCharge (a rule field that already
+    // exists for the splash mechanic) but writes NOTHING back — no new save
+    // state, no tuning change, no physics / i-frame / HP number moves. The
+    // radial is a single cached-free gradient drawn once per frame only while
+    // charging (zero draws when splashCharge === 0), so it adds nothing to the
+    // idle hot path.
+    if (this.splashCharge > 0.02 && this.alive) {
+      const chg = Math.min(1, this.splashCharge);          // 0..1
+      const gx = bx + 45;                                  // the bristle tip
+      const R = 26 + 34 * chg;                             // grows with charge
+      const pulse = 0.85 + 0.15 * Math.sin(now * 7);       // a gentle breathing
+      const g = ctx.createRadialGradient(gx, 0, 2, gx, 0, R);
+      g.addColorStop(0, 'rgba(255,240,200,' + (0.34 * chg * pulse).toFixed(3) + ')');
+      g.addColorStop(0.5, 'rgba(255,214,150,' + (0.16 * chg * pulse).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,214,150,0)');
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(gx, 0, R, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 }

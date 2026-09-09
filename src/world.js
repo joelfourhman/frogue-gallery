@@ -82,6 +82,12 @@ export const AMBIENT_POLLEN_CAP = 14;
 export const AMBIENT_FIREFLY_CAP = 18;
 export const AMBIENT_RIPPLE_CAP = 13;
 
+// L2 (v1.9): the BASE-SWAMP LIGHT POOL cap — the parked "lantern in the swamp"
+// done as PURE LIGHT. Kept small (a handful of pools across the 5400px world)
+// and view-culled, so it adds at most a few on-screen draws to the P10 budget.
+// Base-swamp ONLY (a Reeds variant has its own light economy; its pool is empty).
+export const SWAMP_LIGHT_POOL_CAP = 6;
+
 // L1: count the ambient (living-world) elements that fall inside the visible
 // view rect (world px). This is the P10 "on-screen particle" measure for the
 // new layer — the SAME cull the draw pass uses, so the smoke assertion and the
@@ -98,6 +104,21 @@ export function ambientCounts(w, view) {
   let ripples = 0;
   for (const rp of w.ambientRipples) if (inside(rp.x, rp.y, rp.rMax)) ripples++;
   return { pollen, fireflies, ripples, total: pollen + fireflies + ripples };
+}
+
+// L2 (v1.9): count the BASE-SWAMP LIGHT POOLS that fall inside the visible view
+// rect (world px) — the SAME cull drawSwampLightPools uses, so the smoke P10
+// assertion and the render agree. The count (not the positions) is returned so
+// the caller can assert the cap + the base-swamp-only / P10 view-cull without
+// re-deriving the layout. Presentation-only (reads w.swampLightPools, a
+// draw-only pool). Returns the on-screen pool count.
+export function swampLightCounts(w, view) {
+  const l = view.x, r = view.x + view.w / view.scale;
+  const t = view.y, b = view.y + view.h / view.scale;
+  const inside = (x, y, m) => x + m > l && x - m < r && y + m > t && y - m < b;
+  let pools = 0;
+  for (const p of w.swampLightPools) if (inside(p.x, p.y, p.r)) pools++;
+  return { pools, total: pools };
 }
 
 // L2 (v1.4 "Make It Amazing"): the layered watercolor render pass. Pure
@@ -191,6 +212,17 @@ export class World {
     this.ambientPollen = [];      // {x,y,drift,seed,sz,ph} — swamp drifting leaves/pollen
     this.ambientFireflies = [];   // {x,y,seed,ph,sz} — Reeds/Black-Reeds ambient fireflies
     this.ambientRipples = [];     // {x,y,rMax,seed,ph} — surface ripples on the water bands
+    // L2 (v1.9): the BASE-SWAMP LIGHT POOLS — the parked "lantern in the swamp"
+    // item done as PURE LIGHT (no fuel, no mechanics; the balance version stays
+    // deferred). A handful of soft warm light pools baked into the swamp ground
+    // so the first-time (cycle-0) world has a faint sense of light even though
+    // it has no lantern economy. PRESENTATION-ONLY: read only by
+    // drawSwampLightPools + swampLightCounts (draw + the smoke P10 cull) — never
+    // by the tuning / runT / logic.js path. Built from a dedicated seeded stream
+    // (seed + 1571) so a fixed seed gives the same layout. Base-swamp only
+    // (empty on a Reeds variant, which has its own light economy).
+    this.swampLightPools = [];    // {x,y,r,seed,ph} — base-swamp soft warm light pools
+    this._swampGlowSprite = null; // baked-once soft radial glow sprite (L2)
     // R1 (v1.6): `this.reedsVariant` (set from opts.reeds above) marks the
     // Reeds VARIANT world. `this.reeds` (below) is the GROWN-REEDS array
     // (vegetation) — a different thing — hence the distinct flag.
@@ -292,6 +324,25 @@ export class World {
     for (let i = 0; i < AMBIENT_RIPPLE_CAP; i++) {
       const y = 0.55 * this.h + arng() * (0.45 * this.h);
       this.ambientRipples.push({ x: 100 + arng() * (this.w - 200), y, rMax: 10 + arng() * 16, seed: (i * 37) % 891, ph: arng() * TAU });
+    }
+    // L2 (v1.9): the BASE-SWAMP LIGHT POOLS — the parked "lantern in the swamp"
+    // done as PURE LIGHT (no fuel, no mechanics). A dedicated DETERMINISTIC RNG
+    // stream (seed + 1571, distinct from the terrain `rng` AND the L1 +731 AND
+    // the light-economy +977/+2977 streams) so the layout is reproducible per
+    // seed without perturbing any existing stream. PRESENTATION-ONLY: read only
+    // by drawSwampLightPools + swampLightCounts (draw + the smoke P10 cull) —
+    // never by the tuning / runT / logic.js path. Base-swamp ONLY: a Reeds
+    // variant has its own light economy, so its pool stays empty (a first-time
+    // base-swamp run gains the pools; a Reeds run is unchanged).
+    if (!this.reedsVariant) {
+      const lprng = mulberry32((this.seed + 1571) | 0);
+      for (let i = 0; i < SWAMP_LIGHT_POOL_CAP; i++) {
+        // biased toward the central corridor (the path the frog walks) so the
+        // light pools read as "the path glows faintly" as you travel.
+        const x = 200 + lprng() * (this.w - 400);
+        const y = 560 + lprng() * (0.6 * this.h);
+        this.swampLightPools.push({ x, y, r: 70 + lprng() * 70, seed: (i * 53) % 991, ph: lprng() * TAU });
+      }
     }
     // grass tufts
     for (let i = 0; i < Math.round(260 * k); i++) {
@@ -767,6 +818,65 @@ export class World {
       }
       ctx.globalAlpha = 1;
     }
+  }
+
+  // L2 (v1.9 "The Living Swamp"): the BASE-SWAMP LIGHT POOLS — the parked
+  // "lantern in the swamp" done as PURE LIGHT (no fuel, no mechanics; the
+  // balance version stays deferred). A handful of soft warm light pools baked
+  // into the swamp ground (the seeded `swampLightPools` pool) that read as the
+  // path glowing faintly as the frog travels. PRESENTATION-ONLY + POOLED +
+  // SEEDED + VIEW-CULLED:
+  //   - positions come from the seeded pool built in build() (seed + 1571);
+  //   - each pool "breathes" on a slow bounded pulse (a pure function of
+  //     `now` + the pool's seed) — no per-frame state, no Math.random in the
+  //     hot path;
+  //   - a single soft radial glow is BAKED ONCE into an offscreen sprite
+  //     (this._swampGlowSprite) and drawImage'd scaled per pool — so the hot
+  //     path does a bounded number of drawImage calls and NO per-frame
+  //     gradient allocation (the v1.4 P10 budget discipline);
+  //   - every pool is VIEW-CULLED to the visible rect (the same cull
+  //     swampLightCounts uses), so the on-screen count stays capped;
+  //   - base-swamp ONLY: the pool is empty on a Reeds variant, so a Reeds run
+  //     renders exactly as before and logic.js stays byte-identical.
+  //
+  // Called from _drawAll's world-space pass (camera transform already applied),
+  // drawn UNDER the props so the light sits on the ground.
+  drawSwampLightPools(ctx, view, now) {
+    if (!this.swampLightPools.length) return;   // no-op on a Reeds variant
+    const vx = view.x - 80, vy = view.y - 80, vw = view.w + 160, vh = view.h + 160;
+    const inView = (x, y, m) => x + m > vx && x - m < vx + vw && y + m > vy && y - m < vy + vh;
+    // Bake the soft radial glow sprite ONCE (a 128x128 warm gradient); reuse it
+    // for every pool (scaled). The sprite is a presentation asset, never read
+    // by logic/tuning.
+    if (!this._swampGlowSprite) {
+      const sc = document.createElement('canvas');
+      sc.width = 128; sc.height = 128;
+      const sctx = sc.getContext('2d');
+      const g = sctx.createRadialGradient(64, 64, 2, 64, 64, 64);
+      g.addColorStop(0, 'rgba(255,232,170,0.55)');
+      g.addColorStop(0.5, 'rgba(255,214,140,0.22)');
+      g.addColorStop(1, 'rgba(255,214,140,0)');
+      sctx.fillStyle = g;
+      sctx.fillRect(0, 0, 128, 128);
+      this._swampGlowSprite = sc;
+    }
+    const sprite = this._swampGlowSprite;
+    for (const p of this.swampLightPools) {
+      if (!inView(p.x, p.y, p.r)) continue;
+      // a slow bounded breath (a pure function of now + the pool's seed): the
+      // pool's alpha + radius swell gently, so the light feels alive.
+      const br = 0.5 + 0.5 * Math.sin(now * 0.7 + p.seed * 0.618 + p.ph);   // 0..1
+      const a = 0.35 + 0.45 * br;
+      const R = p.r * (0.9 + 0.2 * br);
+      ctx.globalAlpha = a;
+      // an elliptical squash (ground-lying light) reads as a pool on the swamp.
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.scale(1, 0.62);
+      ctx.drawImage(sprite, -R, -R, R * 2, R * 2);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
   }
 
   // Collision: push circle out of obstacles/reeds (blocks enemies too).
