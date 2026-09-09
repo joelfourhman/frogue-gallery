@@ -658,13 +658,15 @@ export class Paint {
       ctx.globalAlpha = k * 0.85;
       ctx.fillStyle = col.color;
       ctx.beginPath();
-      ctx.arc(d.x, d.y, d.size * (0.5 + 0.5 * k), 0, TAU);
+      // the spawn stores the droplet radius as `r` (see _spawnDroplets); read it
+      // back as `r` here — `d.size` is undefined (NaN radius → invisible droplet).
+      ctx.arc(d.x, d.y, d.r * (0.5 + 0.5 * k), 0, TAU);
       ctx.fill();
       // a tiny highlight (the wet sheen)
       ctx.globalAlpha = k * 0.5;
       ctx.fillStyle = col.light;
       ctx.beginPath();
-      ctx.arc(d.x - d.size * 0.2, d.y - d.size * 0.2, d.size * 0.3 * k + 0.3, 0, TAU);
+      ctx.arc(d.x - d.r * 0.2, d.y - d.r * 0.2, d.r * 0.3 * k + 0.3, 0, TAU);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
