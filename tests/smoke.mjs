@@ -8999,5 +8999,125 @@ console.log('== stage 110: v1.9 T3 L2 — the lighting pass (base-swamp light po
   console.log('ok — L2: the lighting pass. The base-swamp LIGHT POOLS — the parked "lantern in the swamp" done as PURE LIGHT (no fuel, no mechanics; the balance version stays deferred). A handful of soft warm light pools baked into the swamp ground (the seeded `swampLightPools` pool) that read as the path glowing faintly as the frog travels. POOLED (a capped array), SEEDED (a dedicated mulberry32 seed+1571 stream — a fixed seed gives the same layout, the A/B invariance holds), VIEW-CULLED (swampLightCounts + drawSwampLightPools cull to the view → the on-screen total stays capped into the P10 budget), a BAKED-ONCE glow sprite (one drawImage per pool, no per-frame gradient allocation), and BASE-SWAMP ONLY (a Reeds variant\'s pool is empty → the draw is a no-op, a Reeds run renders exactly as before). Presentation-only: no tuning / runT / logic.js number moves.');
 }
 
+// ======================================================================
+// stage 111 — v1.9 T3 L3: enemy liveness (distinct telegraphs + panic/lick/
+// flee). This is the ONE item that touches AI-ish behavior, so the acceptance
+// line is explicit: (a) the new behaviors are SEEDED — deterministic at a
+// fixed seed (a smoke stage samples 3 enemies × 3 seeds → identical), (b) the
+// P10 AI-cull still holds (unchanged — l3Draw is a pure DRAW function, it
+// never feeds e.update / movement / the AI-cull), and (c) "briefly flees" /
+// "licks paint off" are PURE presentation — a draw-only sprite offset that
+// NEVER changes an enemy's hitbox position, HP, damage, or death timing.
+// The A/B below proves (c): with the L3 draw state ACTIVE vs INACTIVE, the
+// SAME paint swipe yields IDENTICAL hit / HP / status / tintT outcomes.
+// ======================================================================
+console.log('== stage 111: v1.9 T3 L3 — enemy liveness (seeded, presentation-only; A/B hit/kill invariance) ==');
+{
+  const { Enemy, spawnEnemy, l3Draw, l3Pulse } = await import('../src/enemies.js');
+  const { Game } = await import('../src/game.js');
+
+  // ---- (a) SEEDED + DETERMINISTIC: 3 enemy kinds × 3 seeds, identical l3Draw
+  // fields at the same (now, _seed). The l3 state is a PURE function of
+  // (e._seed, e.tintT, e._light, e.kind, now) — no RNG, no allocation. ----
+  const kinds = ['beetle', 'toad', 'mosquito'];
+  const seeds = [0.7, 1.3, 5.1];
+  const l3Sig = (e, now) => `${e._l3dx.toFixed(3)},${e._l3dy.toFixed(3)},${e._l3scale.toFixed(3)},${e._l3crouch.toFixed(3)},${e._l3lick.toFixed(3)}`;
+  const tuning = { enemyHp: 1, enemySpeedMult: 1, enemyDmg: 1 };
+  const nows = [0.0, 0.5, 1.0, 2.5, 4.0];
+  for (const kind of kinds) {
+    for (const s of seeds) {
+      const e1 = spawnEnemy(kind, 0, 0, tuning); e1._seed = s;
+      const e2 = spawnEnemy(kind, 0, 0, tuning); e2._seed = s;
+      for (const t of nows) {
+        l3Draw(e1, t); l3Draw(e2, t);
+        assert(l3Sig(e1, t) === l3Sig(e2, t), `L3: ${kind} at seed ${s}, now ${t} — the l3 draw state is DETERMINISTIC at a fixed seed (two enemies, same seed/now → identical ${l3Sig(e1, t)})`);
+      }
+    }
+  }
+  // a different seed yields a different l3 phase (the per-enemy pulse offset is
+  // seeded), so a pack does not crouch/puff in unison.
+  const dA = spawnEnemy('beetle', 0, 0, tuning); dA._seed = 0.7;
+  const dB = spawnEnemy('beetle', 0, 0, tuning); dB._seed = 5.1;
+  let differ = false;
+  for (const t of nows) { l3Draw(dA, t); l3Draw(dB, t); if (l3Sig(dA, t) !== l3Sig(dB, t)) { differ = true; break; } }
+  assert(differ, `L3: two beetles at DIFFERENT seeds (0.7 vs 5.1) have a different l3 phase (the telegraph pulse is seeded per enemy)`);
+
+  // ---- (b) l3Pulse is bounded 0..1 (no per-frame allocation; pure) ----
+  let pmin = 1, pmax = 0;
+  for (let t = 0; t < 8; t += 0.05) { const p = l3Pulse(t, 0.4, 2.6, 0.34); pmin = Math.min(pmin, p); pmax = Math.max(pmax, p); }
+  assert(pmin >= 0 && pmax <= 1, `L3: l3Pulse is bounded 0..1 (min=${pmin.toFixed(3)}, max=${pmax.toFixed(3)})`);
+  assert(pmin < 0.05 && pmax > 0.9, `L3: l3Pulse spans a real 0..1 range across its cycle (the telegraph visibly pulses, not a constant)`);
+
+  // ---- (c) l3Draw NEVER mutates the collision body / hp / dmg / status / RNG ----
+  // The load-bearing invariant: the rendered sprite shifts (e._l3dx/_l3dy) and
+  // the toad inflates (e._l3scale), but the enemy's HITBOX position (e.x/e.y),
+  // its radius (e.r), its HP, its damage, and its status are UNTOUCHED.
+  const m = spawnEnemy('toad', 123, 456, tuning); m._seed = 1.3; m.tintT = 0.6; m.tint = 'blue';
+  const bodySig = (e) => `${e.x},${e.y},${e.r},${e.hp},${e.maxHp},${e.dmg},${e.status},${e.dead}`;
+  const m0 = bodySig(m);
+  let allocBefore; // (documented, not asserted: l3Draw writes scalar fields only)
+  for (const t of [0, 0.5, 1.1, 2.2, 3.3]) { l3Draw(m, t); assert(bodySig(m) === m0, `L3: l3Draw at now=${t} does NOT move the hitbox (x/y/r) or touch hp/dmg/status/dead — the rendered sprite shifts, the collision body stays put`); }
+  // the draw-only offset is actually NONZERO for a freshly-painted toad (the
+  // "briefly flees" dart is real), proving the presentation is active while the
+  // body is invariant.
+  l3Draw(m, 0.3);
+  assert(m._l3dx !== 0 || m._l3dy !== 0, `L3: a freshly-painted (tintT=0.6) toad's draw-only dart offset is non-zero (dx=${m._l3dx.toFixed(2)}, dy=${m._l3dy.toFixed(2)}) — the "briefly flees" presentation is live`);
+  // and a toad carrying a tint has a lick amount > 0 (the "licks paint off" tell).
+  l3Draw(m, 0.7);
+  assert(m._l3lick > 0, `L3: a painted toad's lick amount is > 0 (the "licks paint off" tell is live; got ${m._l3lick.toFixed(3)})`);
+
+  // ---- (d) A/B INVARIANCE: L3 draw state ACTIVE vs INACTIVE → the SAME paint
+  // swipe yields IDENTICAL hit / HP / status / tintT outcomes. (If a behavior
+  // would move a hitbox, this is the proof that it does not.) The swipe hit
+  // test reads e.x / e.y / e.r (the collision body) — NEVER the _l3* draw
+  // offsets — so painting a creature whose sprite has darted off-screen hits
+  // exactly as it would with the L3 layer disabled. ----
+  const g = new Game(makeCanvas());
+  g.start();
+  fireKey('keydown', 'Enter'); frames(3);   // title -> expedition (a REAL g.paint exists now)
+  g.state = 'expedition';
+  g.tuning = (await import('../src/logic.js')).makeTuning(g.save.upgrades, g.save.loadout, 'normal', g.save.galleryBonus || 0);
+  g.enemies = []; g.orbs = [];
+  const p = g.player; p.alive = true; p.hp = 99; p.iframes = 999; p.x = 200; p.y = 750; p.pigment = 'blue';
+  const gpaint = g.paint;
+  // a freshly-painted (panicking) beetle in the swipe fan (aimed squarely),
+  // close enough to the frog to be hit (swipeRange 74 > the 50px standoff).
+  const place = () => {
+    const b = spawnEnemy('beetle', 150, 750, g.tuning);
+    b._seed = 1.3; b.tintT = 0.5; b.tint = 'blue'; b.hp = 36; b.maxHp = 36; b.dead = false; b.status = null;
+    l3Draw(b, 0.3);          // the L3 "briefly flees" dart is now ACTIVE on this enemy
+    return b;
+  };
+  // capture the swipe outcome (hit + the damage/status/tint it produced)
+  const swipeOut = (b) => {
+    gpaint.swipeCd = 0; p.swipeT = 0; p.aimA = Math.PI;   // aim LEFT (toward the beetle at x=100)
+    const hits = gpaint.trySwipe([b]);
+    return { hit: !!hits, hp: b.hp, status: b.status ? b.status.type : null, tintT: b.tintT, dead: b.dead };
+  };
+  // ARM the L3 dart (active) and swipe; then DISARM it (the offset zeroed) and
+  // swipe an identical beetle. The outcomes MUST be identical.
+  const bA = place();
+  const outA = swipeOut(bA);
+  const bB = place();
+  bB._l3dx = 0; bB._l3dy = 0; bB._l3scale = 1; bB._l3crouch = 0; bB._l3lick = 0; // L3 layer DISABLED
+  const outB = swipeOut(bB);
+  assert(outA.hit === outB.hit && outA.hp === outB.hp && outA.status === outB.status && Math.abs(outA.tintT - outB.tintT) < 1e-6 && outA.dead === outB.dead,
+    `L3 A/B: with the L3 "briefly flees" dart ACTIVE (dx=${bA._l3dx.toFixed(2)}) vs DISABLED (dx=0), the SAME swipe yields IDENTICAL outcomes (hit=${outA.hit}, hp=${outA.hp}/${outB.hp}, status=${outA.status}/${outB.status}, tintT=${outA.tintT.toFixed(3)}/${outB.tintT.toFixed(3)}, dead=${outA.dead}) — the presentation NEVER changes a hit/kill`);
+  // the beetle was actually hit (the A/B is meaningful — not a no-hit both ways)
+  assert(outA.hit, `L3 A/B: the beetle WAS hit by the swipe (the invariance is proven on a real hit, hp ${36} -> ${outA.hp})`);
+
+  // ---- (e) P10 AI-cull still holds with the liveness layer present ----
+  // l3Draw is a DRAW function; it never feeds e.update (movement / the AI-cull).
+  // Stage 24 already proves the near-seeks / far-culls rule. Here we confirm the
+  // liveness layer adds NO movement: a far (AI-culled) enemy's x is unchanged
+  // by l3Draw, so the AI-cull is unaffected by the new presentation.
+  const near = spawnEnemy('beetle', 150, 750, g.tuning);
+  const far = spawnEnemy('beetle', 3000, 750, g.tuning);
+  const nearX0 = near.x, farX0 = far.x;
+  for (const t of [0, 0.2, 0.4]) { l3Draw(near, t); l3Draw(far, t); }
+  assert(near.x === nearX0 && far.x === farX0, `L3: l3Draw does NOT move any enemy's collision x (near ${nearX0}->${near.x}, far ${farX0}->${far.x}) — the P10 AI-cull (near-seeks/far-culls) is unaffected by the liveness layer`);
+  console.log('ok — L3: enemy liveness. Distinct SEEDED telegraphs (the beetle LOWERS — a crouch + a dirt "dig" tell; the toad INFLATES — a body puff; the mosquito WIDENS its weave — extra horizontal sway), a PANIC state (a freshly-painted, not-frozen creature briefly DARTS away a few px, fading as the tint decays), and small behaviors (a toad LICKS the paint off its own back between attacks; a wisp DRIFTS AWAY from the lit lantern). All are PRESENTATION-ONLY draw-state computed in l3Draw (a pure, allocation-free function of e._seed/tintT/_light/now) — the collision body (e.x/e.y/r), hp, damage, status, death timing, and the seeded RNG stream are NEVER touched, and the A/B swipe proves the dart/lick never changes a hit or a kill. The P10 AI-cull is unaffected (l3Draw feeds no movement). No tuning / logic.js number moves.');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

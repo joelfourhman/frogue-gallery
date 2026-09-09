@@ -499,6 +499,39 @@ await page.addInitScript(() => {
   // set is self-contained (the heron's Awakened state now carries a light halo).
   S['boss-gray-heron-awaken-halo'] = (G) => bossFrame(G, { variant: 'gray', awakened: true });
 
+  // ---- L3 (v1.9): enemy liveness — one tell frame per behavior. Each spawns a
+  // real enemy at a FIXED _seed (so the seeded pulse phase is deterministic),
+  // then frames it at a `now` where its tell is at peak. Pure presentation —
+  // the collision body (e.x/e.y) is untouched; only the rendered sprite moves.
+  function l3Tell(G, kind, now, mut) {
+    beginRun(G, null);   // start a real base-swamp run (so G.player exists)
+    const e = G.__modsEnemy(kind, G.player.x + 120, G.player.y - 40, G.tuning);
+    e._seed = 1.3; e.hitFlash = 0; e.hp = e.maxHp; e.dead = false; e.status = null;
+    if (mut) mut(e);
+    G.enemies = [e]; G.heron = null; G.midHeron = null; G.orbs = [];
+    G.cam.x = e.x - 150; G.cam.y = e.y; G.zoom = 1.25; G.shake = 0; G.now = now;
+    return { note: 'L3 ' + kind + ' tell' };
+  }
+  // the beetle LOWERS (crouches) — crouch peak at now≈2.48 for _seed=1.3.
+  S['beetle-lowers'] = (G) => l3Tell(G, 'beetle', 2.48);
+  // the toad INFLATES — body puff peak at now≈1.58 for _seed=1.3.
+  S['toad-inflates'] = (G) => l3Tell(G, 'toad', 1.58);
+  // the mosquito WIDENS its weave — the widen pulse peaks here AND the extra
+  // horizontal sway (sin(now*7+1.3)) is at max → ~13px extra width.
+  S['mosquito-weave'] = (G) => l3Tell(G, 'mosquito', 2.82);
+  // a wisp DRIFTS AWAY from the lantern when lit — set _light=1 (fully lit) and
+  // frame at the flee-sway peak (cos(now*1.9+1.3)≈1 at now≈1.37 for _seed=1.3).
+  S['wisp-flee-from-lantern'] = (G) => {
+    beginRun(G, (sv) => { sv.flags.reedsUnlocked = true; sv.stats.victories = 1; }, null, { reeds: true });
+    const e = G.__modsEnemy('wisp', G.player.x + 120, G.player.y - 40, G.tuning);
+    e._seed = 1.3; e.hitFlash = 0; e.hp = e.maxHp; e.dead = false; e.status = null;
+    e._light = 1;                                  // fully lit → the flee sway is maxed
+    G.enemies = [e]; G.heron = null; G.midHeron = null; G.orbs = [];
+    G.lantern.lit = true; G.lantern.fuel = 1;
+    G.cam.x = e.x - 150; G.cam.y = e.y; G.zoom = 1.25; G.shake = 0; G.now = 1.37;
+    return { note: 'L3 wisp fleeing the lit lantern (fully lit, sway peak)' };
+  };
+
   S['boss-gray-heron'] = (G) => bossFrame(G, { variant: 'gray', hpFrac: 0.75 });
   S['boss-gray-heron-awaken'] = (G) => bossFrame(G, { variant: 'gray', awakened: true });
   S['boss-green-heron'] = (G) => bossFrame(G, { variant: 'green', hpFrac: 0.75 });
@@ -635,6 +668,7 @@ const POLISH_SCENES = [
   'frog-idle-breathe', 'frog-hurt-stagger', 'frog-low-HP', 'frog-victory-pose', // J4 (v1.9)
   'world-mist-a', 'world-mist-b', 'world-fireflies', 'world-pollen',          // L1 (v1.9)
   'swamp-light-pools', 'swamp-light-pools-b', 'charged-paint-glow', 'boss-gray-heron-awaken-halo', // L2 (v1.9)
+  'beetle-lowers', 'toad-inflates', 'mosquito-weave', 'wisp-flee-from-lantern',                   // L3 (v1.9)
 ];
 const KNOWN_SCENES = BASELINE_SCENES.concat(POLISH_SCENES);
 if (SCENE_FILTER) {

@@ -3,7 +3,121 @@
 // them is handled by paint.js. Enemies here own movement + contact attacks.
 'use strict';
 import { TAU, clamp, dist, lerp } from './math.js';
-import { ENEMIES, stepStatus, physicalDamage, lightFactor, REEDS_BESTIARY, wispBlinded, leechDrain } from './logic.js';
+import { ENEMIES, stepStatus, physicalDamage, lightFactor, REEDS_BESTIARY, wispBlinded, leechDrain, PIGMENTS } from './logic.js';
+
+// ------------------------------------------------------------------
+// L3 (v1.9 T3): enemy liveness — distinct telegraphs + panic/lick/flee.
+//
+// EVERY L3 behavior is a DRAW-ONLY presentation offset / mark computed at
+// draw time from (e._seed, e.tintT, e._light, now). None of these write
+// e.x / e.y (the collision body), hp, dmg, status, or the seeded RNG stream
+// — so an enemy's HITBOX position, HP, damage, and death timing are
+// unchanged in any rule-visible way. The painted/frozen/root/burn rules stay
+// byte-identical (logic.js is untouched). Because they are computed in the
+// DRAW path (not e.update), the per-enemy AI hot path / the P10 AI-cull are
+// untouched. Deterministic at a fixed seed: l3Pulse + l3Draw are pure
+// functions of (e._seed, e.tintT, now), so a smoke stage can sample
+// 3 enemies × 3 seeds and require identical offsets. NO per-frame
+// allocation: the values are written into scalar fields on the enemy
+// (allocation-free after the first set, exactly like e._light / e.facing).
+//
+// Behaviors (all presentation-only):
+//   TELEGRAPH VARIETY
+//     • beetle lowers   — a slow crouch once per ~2.6s (a few px down) + a
+//                         small dirt "dig" tell at its base (the crouch phase).
+//     • toad inflates   — a brief body puff (a few % scale up) once per ~3.2s.
+//     • mosquito weave  — its rendered horizontal sway swells wider for a beat
+//                         (the collision body holds; only the sprite sways).
+//   PANIC
+//     • painted-but-not-frozen → briefly flees: the rendered sprite darts a
+//                         few px away (seeded direction) for a short beat that
+//                         decays as tintT decays (0.6 → 0.25). The hitbox does
+//                         not move.
+//   SMALL BEHAVIORS
+//     • toad licks paint off between attacks — a tongue flick + a paint "wipe"
+//                         shine while freshly painted (tintT > 0).
+//     • wisp drifts away from the lantern when lit — a small sway that grows
+//                         with the light it receives (e._light).
+// ------------------------------------------------------------------
+
+// A 0..1 EASED PULSE over a `period`-second cycle: 0 for most of the cycle,
+// rising to 1 then back to 0 across the first `duty` fraction of it. `phase`
+// (0..1) offsets each enemy so a pack does not crouch/puff in unison. PURE —
+// a function of (now, phase, period, duty) only. No allocation.
+export function l3Pulse(now, phase, period, duty) {
+  let t = ((now / period) + phase) % 1;
+  if (t < 0) t += 1;
+  if (t >= duty) return 0;
+  return Math.sin((t / duty) * Math.PI);   // ease up, ease down
+}
+
+// L3 DRAW STATE — computes the presentation-only offsets / marks for enemy `e`
+// at render time `now` and writes them into SCALAR FIELDS on `e`
+// (allocation-free after the first set). Pure with respect to its inputs:
+// (e._seed, e.tintT, e._light, now) → the same fields for the same inputs.
+// NEVER writes e.x / e.y / hp / dmg / status / the RNG stream. Returns `e`
+// (for chaining) — read the fields back:
+//   e._l3dx, e._l3dy  — draw-only sprite offset (px); the hitbox does not move
+//   e._l3scale        — toad body inflate (1.0 .. ~1.12); 1 for all else
+//   e._l3crouch       — beetle crouch amount 0..1 (drives the "dig" tell)
+//   e._l3lick         — toad "lick paint off" amount 0..1 (tint-driven)
+export function l3Draw(e, now) {
+  const seedPhase = ((e._seed / TAU) % 1 + 1) % 1;   // 0..1, seeded per enemy
+  let dx = 0, dy = 0;
+  const frozen = e.status && e.status.type === 'freeze';
+
+  // (PANIC) a freshly-painted, NOT-frozen creature darts away a few px for a
+  // short beat. Strength tracks how fresh the paint is (tintT decays 0.6→0);
+  // it fades out once tintT drops below ~0.25. Direction is seeded (per enemy),
+  // mostly a horizontal dart. Pure function of (e._seed, e.tintT) — no RNG.
+  if (e.tintT > 0 && !frozen && !e.dead) {
+    const panic = clamp((e.tintT - 0.25) / 0.35, 0, 1);   // 0 below 0.25 → 1 at 0.6
+    const mag = 9 * panic;
+    dx += Math.cos(e._seed) * mag;
+    dy += Math.sin(e._seed) * mag * 0.4;
+  }
+  // (TELEGRAPH) beetle lowers — a slow crouch down a few px once per ~2.6s.
+  // The same 0..1 amount drives the dirt "dig" tell drawn in drawBeetle.
+  let crouch = 0;
+  if (e.kind === 'beetle') {
+    crouch = l3Pulse(now, seedPhase, 2.6, 0.34);
+    dy += crouch * 6;
+  }
+  // (TELEGRAPH) mosquito widens its weave — an EXTRA horizontal sway that
+  // swells for a beat (the collision body e.x/e.y is untouched; only the
+  // rendered sprite sways). A baseline 2px sway keeps it lively; the pulse
+  // adds up to 7px of extra width.
+  if (e.kind === 'mosquito') {
+    const widen = l3Pulse(now, seedPhase + 0.2, 3.1, 0.5);
+    dx += Math.sin(now * 7 + e._seed) * (2 + 7 * widen);
+  }
+  // (SMALL BEHAVIOR) wisp drifts away from the lantern when lit — a small sway
+  // whose amplitude grows with the light it receives (e._light, 0..1). When
+  // unlit (e._light ~ 0) this is a no-op, so an unlit wisp renders as before.
+  if (e.wisp) {
+    const l = e._light || 0;
+    if (l > 0) {
+      dx += Math.sin(now * 2.2 + e._seed) * 5 * l;
+      dy += Math.cos(now * 1.9 + e._seed) * 3 * l;
+    }
+  }
+
+  // (TELEGRAPH) toad inflates — a brief body puff once per ~3.2s; and
+  // (SMALL BEHAVIOR) a freshly-painted toad "licks the paint off" (tongue
+  // flick + wipe shine) for a beat as tintT decays. Both are draw-only marks
+  // (scale + a tongue arc) computed here and drawn in drawToad.
+  let scale = 1, lick = 0;
+  if (e.kind === 'toad') {
+    scale = 1 + l3Pulse(now, seedPhase + 0.5, 3.2, 0.4) * 0.12;
+    lick = e.tintT > 0 ? clamp(e.tintT / 0.4, 0, 1) * (0.5 + 0.5 * Math.sin(now * 14 + e._seed)) : 0;
+  }
+
+  e._l3dx = dx; e._l3dy = dy;
+  e._l3scale = scale;
+  e._l3crouch = crouch;
+  e._l3lick = lick;
+  return e;
+}
 
 // ------------------------------------------------------------------ Enemy
 export class Enemy {
@@ -349,9 +463,19 @@ export function drawEnemy(ctx, e, now) {
   const frozen = e.status && e.status.type === 'freeze';
   const dizzy = e.status && e.status.type === 'dizzy';
 
+  // L3 (v1.9): compute the PRESENTATION-ONLY liveness offsets / marks for this
+  // enemy at render time. Pure + allocation-free (writes scalar fields); never
+  // touches e.x / e.y (the collision body), hp, dmg, status, or the RNG.
+  l3Draw(e, now);
+  const l3dx = e._l3dx || 0, l3dy = e._l3dy || 0;
+  const l3scale = e._l3scale || 1;
+
   ctx.save();
   ctx.translate(e.x, y);
-  // shadow
+  // shadow — stays at the COLLISION body (e.x, e.y). The L3 body offset below
+  // shifts only the rendered sprite, so the ground shadow holding put is the
+  // visual proof that the hitbox did not move (the "briefly flees" dart reads
+  // as presentation, not as the enemy repositioning).
   ctx.globalAlpha = 0.18;
   ctx.fillStyle = '#1c2b22';
   ctx.beginPath();
@@ -359,11 +483,17 @@ export function drawEnemy(ctx, e, now) {
   ctx.fill();
   ctx.globalAlpha = 1;
 
+  // L3 draw-only sprite offset: shift the rendered body (the sprite + auras) by
+  // a few px while the shadow / collision body stay at (e.x, e.y).
+  if (l3dx !== 0 || l3dy !== 0) ctx.translate(l3dx, l3dy);
+
   // M8 P12: elite signature guardians are drawn scaled up to match their
   // larger hitbox (the body sprites are a fixed pixel size, so scale them).
+  // L3 toad-inflate multiplies the body scale (a few % puff, draw-only).
   const base = ENEMIES[e.kind] ? ENEMIES[e.kind].radius : e.r;
   const escale = e.elite ? e.r / base : 1;
-  if (escale !== 1) ctx.scale(escale, escale);
+  const bodyScale = escale * l3scale;
+  if (bodyScale !== 1) ctx.scale(bodyScale, bodyScale);
 
   if (e.wisp || e.burrower || e.leech) drawBestiary(ctx, e, now); // R3 (v1.6): the Reeds light-bestiary
   else if (e.kind === 'beetle') drawBeetle(ctx, e, frozen, flash, now);
@@ -371,7 +501,7 @@ export function drawEnemy(ctx, e, now) {
   else if (e.kind === 'turtle') drawTurtle(ctx, e, frozen, flash, now);
   else if (e.kind === 'cragfrog') drawCragFrog(ctx, e, frozen, flash, now);
   else drawToad(ctx, e, frozen, dizzy, flash, now);
-  ctx.scale(1 / escale, 1 / escale); // undo body scale for the auras below
+  ctx.scale(1 / bodyScale, 1 / bodyScale); // undo body scale for the auras below
 
   // J1 (v1.9): the white-hot IMPACT RIM at the connect instant. The brush
   // landed a hit (paint.js set e.hitFlash=0.14); a brief white rim ring peaks
@@ -662,6 +792,28 @@ function drawBeetle(ctx, e, frozen, flash, now) {
     ctx.lineTo(15, i * 10 - wig);
     ctx.stroke();
   }
+  // L3 (v1.9): the "dig" tell — a small mound of kicked-up dirt at the beetle's
+  // base that swells as it crouches (the crouch phase of its "lowers"
+  // telegraph). DRAW-ONLY: reads e._l3crouch (computed in l3Draw); it never
+  // feeds a hitbox, hp, damage, or the seeded RNG.
+  const l3crouch = e._l3crouch || 0;
+  if (l3crouch > 0.02) {
+    const k = l3crouch;
+    ctx.globalAlpha = 0.5 * k;
+    ctx.fillStyle = '#4a3826';
+    ctx.beginPath();
+    ctx.ellipse(0, 12, 9 + 5 * k, 4 + 3 * k, 0, 0, TAU);
+    ctx.fill();
+    // a few dirt specks kicked up (seeded angles, no per-frame allocation)
+    ctx.fillStyle = '#5c4632';
+    for (let i = 0; i < 3; i++) {
+      const a = e._seed + i * 2.1;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * (6 + 8 * k), 10 - (6 + 10 * k) * (0.5 + 0.5 * Math.sin(a)), 1.4 + 0.8 * k, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
   // body
   ctx.fillStyle = c;
   ctx.beginPath();
@@ -924,4 +1076,32 @@ function drawToad(ctx, e, frozen, dizzy, flash, now) {
   ctx.moveTo(-6, 4);
   ctx.quadraticCurveTo(0, dizzy ? 7 : 2, 6, 4);
   ctx.stroke();
+  // L3 (v1.9): "licks paint off between attacks" — a toad that still carries a
+  // PAINT tint (it was painted but is not frozen / not dead) licks the pigment
+  // off its own back with a brief tongue flick. DRAW-ONLY: reads e._l3lick
+  // (computed in l3Draw from e.tintT + a seeded cycle) — a presentation value
+  // that never touches tint decay, hp, damage, or the RNG. (The toad's paint
+  // tint is its actual combat state — licking is a visual "peeling the paint
+  // off" read of that existing state, not a new rule.)
+  const lick = e._l3lick || 0;
+  if (lick > 0.05 && !frozen && !flash) {
+    const pcol = e.tint ? PIGMENTS[e.tint] : null;
+    const k = lick;
+    const tipX = 6 + 14 * k;                        // tongue extends outward
+    ctx.globalAlpha = 0.9 * k;
+    ctx.strokeStyle = '#e58aa8';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(4, 3);
+    ctx.quadraticCurveTo(8, -2 * k, tipX, 2 - 6 * k);
+    ctx.stroke();
+    // the pigment bead the tongue is peeling off (the enemy's paint tint)
+    if (pcol) {
+      ctx.fillStyle = pcol.color;
+      ctx.beginPath();
+      ctx.arc(tipX, 2 - 6 * k, 2.6 * k + 0.8, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
 }
