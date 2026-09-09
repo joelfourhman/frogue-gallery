@@ -204,6 +204,12 @@ variance only).
 L1–L4: ambient environmental life — swaying reeds / drifting mist / water
 shimmer, the v1.4 L1 pattern re-applied). A1 (the v1.9 quality audit) is the
 season's final item; read `docs/ROADMAP.md` §v1.9 for the L1 spec.
+**Housekeeping note (orchestrator, post-J3/J4):** the J2 latent droplet bug
+flagged by the J3/J4 session (drawDroplets read `d.size`, the spawn stores `r`
+→ NaN radius → in-flight droplets invisible) is **ALREADY FIXED + committed**
+(`e713c1a`, a 2-line draw fix; after-J2 frames recaptured under the fixed code
+and verified md5-changed; smoke green; logic.js untouched). It is NOT an open
+item — A1 verifies the fix, it does not re-address it.
 Batch plan: T0 → S1 + S2 + S3 (LANDED) → **J1 + J2 + J3 + J4 (ALL LANDED this
 season)** → L1 → L2 + L3 → L4 + A1 (fresh sessions).
 
