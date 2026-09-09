@@ -91,15 +91,67 @@ musicBus` routing). Invariant held: `makeTuning` byte-identical (logic.js
 untouched), SAVE_VERSION 12, smoke `ALL SMOKE TESTS PASSED`, all 9 probes in
 band unchanged (headless no-op — the sampler never feeds runT).
 
-**NEXT ACTION: J1** (the next session) — **Hitstop** (the T2 juice pass): a
-40–70 ms real-time freeze (+ 1-frame impact flash) on paint connect, longer
-(~110 ms) on a charged splat and on an enemy KILL. A real-time `hitstopT` in
-the draw/update gate (a presentation clock — the game clock keeps its own
-integrity; the existing J5 real-time pattern is the model). Acceptance: the
-hitstop exists, is clamped, and never touches tuning or the seeded RNG stream;
-frame evidence — a connect frame shows the flash.
-Batch plan: T0 → **S1 + S2 + S3 (all LANDED this session)** → J1 → J2 + J3 →
-J4 + L1 → L2 + L3 → L4 + A1 (fresh sessions).
+**J1 LANDED** (session v19-juice; `bd02f38`) — **Hitstop** (the T2 juice pass):
+a 40–70 ms real-time freeze (+ impact flash) on paint CONNECT, longer (~110 ms)
+on a charged splat and on an enemy KILL, + a shorter ~30 ms self-damage freeze.
+Reuses the v1.4 `hitStop(secs, scale)` mechanism (a real-time `timeScale` dip —
+the world sim + `runT` run on `simDt = dt*timeScale`, so a hitstop stretches
+WALL-CLOCK, never the measured `runT`: the documented invariant). Three new
+connect hooks — the swipe connect (50 ms) + the charged-splash connect (110 ms)
++ the self-damage (30 ms @ 0.4×) — all gated by `options.shake` AND
+`_tutorialActive()` (the frozen-clock guided teaching run is exempt — combat
+time-dilation belongs to the timed expedition, not the practice layer). The
+impact flash: `_applyHits` now sets `e.hitFlash = 0.14` on connect (it was
+never set positive before, so the flash was dead for regular enemies) + a new
+white-hot IMPACT RIM in `drawEnemy` (a rim ring + core wash that peaks at the
+connect and fades with hitFlash) so the frozen frame reads as IMPACT, not a
+pause. **The A/B invariant is proven in smoke** (new stage 59b): Run A (hitstop
+ON) vs Run B (hitStop→no-op), identical + seeded — the connect's RULE OUTCOME
+(enemy hp) is identical in both (the hitstop fired in A but changed no damage),
+while over equal real frames A's game-time advanced LESS (0.0434s vs 0.0668s)
+— the dilation stretched the presentation clock, provably pure. Evidence:
+`tests/smoke.mjs` stage 59b (7 assertions) + frames before→after
+(`tests/frames/enemy-beetle.png` → `tests/frames/after-J1/beetle-hitstop.png`;
+`enemy-toad.png` → `toad-hitstop.png`, the white-hot impact frame). Invariant
+held: `makeTuning` byte-identical (logic.js untouched — `git diff` empty),
+SAVE_VERSION 12, smoke `ALL SMOKE TESTS PASSED`, all 9 probes in band unchanged
+(bosspace 36.9s).
+
+**J2 LANDED** (session v19-juice; `e4ffff0`) — **the paint arc** (the core
+verb — "painting is the game"): the brush trail is upgraded from a flat
+start→end ribbon into a real wet in-flight arc. (1) **Arc fidelity** — the
+swipe ribbon bows into a curved bezier (a control point offset perpendicular to
+the swipe; drawn as a fresh 10-segment bezier, replaces the 8-segment straight
+line). (2) **Droplet physics** — a few POOLED ink droplets (capped 48, oldest
+dropped) separate off the swipe/splash with velocity + gravity + air-drag
+settle, then fade. A separate pool in `paint.js` (the world `ParticleSystem`
+stays a fixed 240), so the P10 budget is untouched. (3) **Charged-slate feel**
+— the full-charge splat is the heavy impact of the verb: a wider, denser arc (a
+bolder inner ring ribbon), MORE droplets (12 vs 5), a denser landing. (4) **Ink
+that LANDS** — painted soil darkens (a short-lived darker wet blotch under the
+pigment) + painted water shows a RIPPLE RING (uses the existing
+`paintSurfaceAt`), so the LANDING is visible, not just the arc. Deterministic /
+invariance: the new presentation is seed-derived (a seeded xorshift PRNG per
+stroke + position hashes), NOT the global Math.random, so the smoke's seeded RNG
+stream and the J1 A/B invariance hold; draw-only — never touches damage/hits/
+runT/tuning. Evidence: `tests/smoke.mjs` new stage 59c (20 assertions — the
+curve bows off the straight line, pooled + capped droplets, charged > swipe
+droplet count, the charged dense ring, the ink landing soil-blotch-vs-water-
+ripple, and that a full-power burst's total on-screen juice stays ≤ 220 P10
+green) + frames before→after (`paint-{red,blue,green,water}.png` →
+`tests/frames/after-J2/arc-{red,blue,green,water}.png` + `arc-charged.png`).
+Invariant held: `makeTuning` byte-identical (logic.js untouched), SAVE_VERSION
+12, smoke `ALL SMOKE TESTS PASSED`, all 9 probes in band unchanged.
+
+**NEXT ACTION: J3** (the next session) — **Kill quality**: every enemy death is
+an ink burst that takes the palette of the pigment that killed it (painted-body
+tint extended to the death), enemies dissolve into the palette (a few frames of
+the painted blob bleeding away), boss deaths get the full bloom (the existing
+victory bloom is the model). Acceptance: death bursts are pooled + seeded
+(deterministic); frame evidence — a red-kill vs a blue-kill vs a green-kill
+death each read in their hue.
+Batch plan: T0 → S1 + S2 + S3 (LANDED) → **J1 + J2 (LANDED this session)** →
+J3 → J4 + L1 → L2 + L3 → L4 + A1 (fresh sessions).
 
 ### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 8 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
 
