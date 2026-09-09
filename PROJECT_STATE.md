@@ -314,10 +314,65 @@ SAVE_VERSION 12, GAME_VERSION 1.0.0, no tuning / runT / logic number moves,
 no per-frame allocation in the hot path, all 9 probes in band unchanged, P10
 AI-cull green.
 
-**NEXT ACTION: L4** (the next session) — **the v1.9 visual-identity layer 4**
-(the final L item; read `docs/ROADMAP.md` §v1.9 for the L4 spec). L4 + A1
-ship in a fresh session (keep batches bounded — the 240k context wall is
-real). A1 (the v1.9 quality audit) is the season's final item.
+**L4 LANDED** (session v19-identity; `4877487`) — **the v1.9 visual-identity
+pass** (the final L item). ONE shared UI grade across every screen, all
+**PRESENTATION-ONLY** (invariant held: `src/logic.js` byte-identical to
+`6c9e09e` (EMPTY diff), SAVE_VERSION 12, GAME_VERSION 1.0.0, zero new runtime
+deps, all 9 probes in band UNCHANGED — logic.js untouched ⇒ sim-identical —
+`node tests/smoke.mjs` green). A small module-level `UI` object in
+`src/ui.js` is the single source of truth:
+- **palette** — the paper/ink grade (`paper`/`paperDark`/`paperLight`/`ink`/
+  `gold`/`green`); the existing `INK`/`PAPER`/`PAPER_DARK` consts now DERIVE
+  from `UI.palette` (one place to change the grade).
+- **3 named typefaces** — ONE serif `Georgia, serif` voice + a NAMED
+  `display` cursive exception (the title/banner buttons, the painter's
+  handwriting) + a NAMED `mono` `Courier New` exception (the save-blob
+  preview field). Both exceptions are *recorded decisions*, not drift.
+- **25-step named type scale** (`UI.sizes.micro…megaLg`) — every static UI
+  font size is one of these named steps.
+A **memoized** `uiFont(size, {weight, italic, display, mono})` factory is the
+ONLY way the UI builds a font (P10: the memo cache is bounded — finite
+size-scale × small weight set — so steady-state draws are allocation-free,
+matching the pre-L4 profile where font LITERALS were interned). Every one of
+the **~195 static** UI font sites across `game.js` (title / options / atelier
+/ gallery / seed-card / recap / HUD / pause / banners), `enemies.js` (the
+serpent "!" telegraph + the crag-frog drifting "z"), and `paint.js` (the
+hit-notes) now routes through `uiFont(UI.sizes.<step>, …)` — **zero raw font
+literals remain** (a strict scan confirms it). The 3 genuinely DYNAMIC sizes
+(the float-text pop `Math.round(15*pop)`, the `uiButton` height-scaled label,
+the factory's own `px`) pass a computed number and are the documented
+exceptions. The grain + vignette options are KEPT as the shared grade (no new
+rendering mode). **Rendering-identity proof:** `uiFont()` reproduces every
+pre-L4 font string byte-for-byte (all 196 pre-L4 literals map through the
+factory → identical) and NO color value changed across the diff (the only
+"change" is the `#fdf6e9` hover/label hex now spelled `UI.palette.paperLight`,
+the same value) — so this is a pure consistency/centralization pass,
+**provably rendering-identical to pre-L4**. **Acceptance:** new `tests/ui.mjs`
+(78 assertions) enumerates the shared UI constants (typeface / weight /
+spacing scale / palette map), asserts the 12 UI-heavy draw functions reference
+them (no per-panel ad-hoc fonts), verifies the `uiFont` factory is
+byte-identical to the old literals, and guards the P10 memoization
+(steady-state calls return the SAME cached string; the cache is bounded).
+`node tests/ui.mjs` → UI TESTS PASSED. **Frame evidence for the A1 audit:**
+the full T0 frame set re-captured post-pass (36/36 non-trivial); the 6
+UI-heavy screens (title / options / atelier-loadout / gallery-wall-full /
+wander-seed-card / end-recap) spot-checked. NOTE: the frame harness is
+pixel-**NONDETERMINISTIC** on this GPU (two identical runs of the SAME L4 code
+differ on all 6 — proven by an A/B run of the unchanged code), so the
+byte-identity proof above is the authoritative evidence, NOT an md5 diff.
+**Named-exception families (documented, not drift):** `display` cursive
+(title/banner buttons) + `mono` Courier New (save-blob preview); plus the one
+generic `serif` → Georgia unification (the 9px crag-frog drift "z", no
+input/layout impact).
+
+**NEXT ACTION: A1** (a FRESH session — the implementer does not sign its own
+work) — **the v1.9 quality audit** (the season's final item; read
+`docs/ROADMAP.md` §v1.9 A1 for the audit spec: smoke ×3 green; all 9 probes
+IN band UNCHANGED; P10 culling green; zero new runtime deps; SAVE_VERSION 12;
+the frame-evidence set complete (every S/J/L item has its before/after); no
+8765 server left). A1 should ALSO confirm L4's frame-set review by eye against
+`tests/frames/` (the 36 post-pass baselines) and note the L4 named exceptions
+(display cursive + save-blob mono).
 **Housekeeping note (orchestrator, post-J3/J4, still open for A1):** the J2
 latent droplet bug flagged by the J3/J4 session (drawDroplets read `d.size`,
 the spawn stores `r` → NaN radius → in-flight droplets invisible) is **ALREADY
@@ -327,7 +382,7 @@ untouched). It is NOT an open item — A1 verifies the fix, it does not
 re-address it.
 Batch plan: T0 → S1 + S2 + S3 (LANDED) → **J1 + J2 + J3 + J4 (ALL LANDED this
 season)** → **L1 (LANDED, `ed8f2fa`) → L2 (LANDED, `35c3d78`) + L3 (LANDED,
-`7bcdcd1`)** → L4 + A1 (fresh sessions).
+`7bcdcd1`) + L4 (LANDED, `4877487`)** → A1 (a FRESH session).
 
 ### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 8 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
 
