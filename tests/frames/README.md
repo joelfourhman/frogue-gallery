@@ -59,6 +59,23 @@ Before/after pair (baseline `enemy-beetle.png` / `enemy-toad.png` → the
 
 Captured with: `node tests/frames.mjs --out tests/frames/after-J1 --scenes beetle-hitstop,toad-hitstop --min 2`
 
+## J2 (v1.9) — Paint arc: the core verb
+
+Before/after pairs (baseline `paint-{red,blue,green,water}.png` straight ribbons
+→ the `after-J2/` arc frames, which add the **curve**, the **in-flight droplets**,
+and the **ink landing**):
+
+| Frame | Scene | What it shows |
+|---|---|---|
+| `tests/frames/after-J2/arc-red.png` | `arc-red` | A red swipe in flight: the ribbon BOWS into a curve, droplets spray off the tip, and the ink lands (darker soil blotch) |
+| `tests/frames/after-J2/arc-blue.png` | `arc-blue` | The same arc in blue |
+| `tests/frames/after-J2/arc-green.png` | `arc-green` | The same arc in green |
+| `tests/frames/after-J2/arc-water.png` | `arc-water` | A swipe on water — the ink landing is a RIPPLE RING, not a soil blotch |
+| `tests/frames/after-J2/arc-charged.png` | `arc-charged` | The CHARGED-SPLAT feel: a wider, denser arc (inner ring), more droplets, a denser landing |
+
+Captured with: `node tests/frames.mjs --out tests/frames/after-J2 --scenes arc-red,arc-blue,arc-green,arc-water,arc-charged --min 5`
+
+
 
 ## The 36 baseline frames
 

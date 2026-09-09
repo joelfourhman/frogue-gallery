@@ -3841,6 +3841,96 @@ console.log('== stage 59b: v1.9 J1 — the hitstop is pure presentation (A/B gam
 }
 
 // ======================================================================
+// stage 59c — v1.9 J2: the PAINT ARC upgrade is presentation-only + budget-safe
+// The core verb: (1) arc fidelity (the trail bows into a curve, not straight
+// start->end), (2) pooled ink droplets (velocity + gravity + settle, capped),
+// (3) the charged-slate feel (a charged splash throws MORE + LARGER droplets
+// than a swipe), and (4) ink that LANDS (a soil blotch / a water ripple).
+// Acceptance: the paint layer + particle budget are unchanged (P10 green; the
+// total on-screen juice stays <= 220); the new droplets are POOLED. All of it is
+// draw-only (never feeds damage/hits/runT/the seeded RNG stream).
+// ======================================================================
+console.log('== stage 59c: v1.9 J2 — the paint arc is presentation-only + P10 budget-safe ==');
+{
+  const savedRandom = Math.random;
+  // NB: declare sRngState BEFORE the Math.random assignment — the function body
+  // references the binding, and a `let` after the function literal is in the
+  // temporal-dead-zone at the first call.
+  const seedJ2 = 0x2a3c4e5f >>> 0; let sRngState = seedJ2;
+  Math.random = function () { sRngState |= 0; sRngState = (sRngState + 0x6D2B79F5) | 0; let t = Math.imul(sRngState ^ (sRngState >>> 15), 1 | sRngState); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const g = new Game(makeCanvas());
+  g.start(); g._beginExpedition();
+  g.tutorial = null;
+  const p = g.player; p.alive = true; p.hp = 99; p.maxHp = 99; p.iframes = 999;
+  p.swipeT = 0; g.paint.swipeCd = 0; p.pigment = 'red';
+  const P = g.paint;
+  // ---- (1) arc fidelity: a swipe leaves a CURVED trail (a control point off
+  //      the straight start->end line), not the old straight ribbon ----
+  P.trails.length = 0; P.droplets.length = 0; P.ink.length = 0;
+  p.aimA = 0; const px0 = p.x, py0 = p.y;
+  const hits = P.trySwipe(g.enemies);   // a real swipe (no enemies in the fan)
+  assert(P.trails.length >= 1, `J2: a swipe leaves a trail ribbon (trails=${P.trails.length})`);
+  const t = P.trails[P.trails.length - 1];
+  assert(t.curve === true, 'J2: the swipe ribbon is the NEW curved arc (curve=true)');
+  assert(typeof t.cx === 'number' && typeof t.cy === 'number', `J2: the curved arc carries a control point (cx=${t.cx.toFixed(1)}, cy=${t.cy.toFixed(1)})`);
+  // the control point is OFF the straight start->end line (the arc bows): the
+  // perpendicular distance from (cx,cy) to the start->end segment is non-zero.
+  const dx = t.x1 - t.x0, dy = t.y1 - t.y0; const L = Math.hypot(dx, dy) || 1;
+  const perp = Math.abs((t.cx - t.x0) * (-dy / L) + (t.cy - t.y0) * (dx / L));
+  assert(perp > 3, `J2: the arc actually BOWS (control point ${perp.toFixed(1)}px off the straight line, not the old flat start->end ribbon)`);
+  // ---- (2) pooled droplets: a swipe throws a small handful, capped ----
+  const swipeDrops = P.droplets.length;
+  assert(swipeDrops >= 2 && swipeDrops <= 8, `J2: a swipe separates a few POOLED ink droplets (${swipeDrops})`);
+  assert(P.droplets.length <= P.MAX_DROPLETS, `J2: the droplet pool is capped (${P.droplets.length} <= ${P.MAX_DROPLETS})`);
+  // droplets carry real physics (velocity) + a pigment color
+  const d0 = P.droplets[0];
+  assert(typeof d0.vx === 'number' && typeof d0.vy === 'number' && !!d0.color, `J2: each droplet has velocity + a pigment color (vx=${d0.vx.toFixed(1)}, vy=${d0.vy.toFixed(1)}, color=${d0.color})`);
+  // ---- (4) ink that LANDS: a swipe on the soil leaves a darker wet blotch ----
+  assert(P.ink.length >= 1, `J2: the swipe's ink LANDS — a wet mark is left on the surface (ink=${P.ink.length})`);
+  const soilMark = P.ink.find(m => !m.ring);
+  assert(soilMark, `J2: on a non-water surface the landing is a darker SOIL blotch (not a ripple)`);
+  // ---- (3) charged-slate feel: a full-charge splash throws MORE droplets ----
+  P.trails.length = 0; P.droplets.length = 0; P.ink.length = 0;
+  g.paint.splashCd = 0; p.splashCharge = 1; p.aimA = 0;
+  const spHits = P.trySplash(g.enemies);   // a real charged splash
+  const splashDrops = P.droplets.length;
+  assert(splashDrops > swipeDrops, `J2: a charged splash throws MORE droplets than a swipe (charged-slate feel: ${splashDrops} > ${swipeDrops})`);
+  const denseRing = P.trails.find(t => t.ring && t.dense);
+  assert(denseRing, 'J2: the charged splash leaves a WIDER, DENSER arc (a dense inner ring ribbon)');
+  // the charged ink landing is a denser blotch (bigger radius) than the swipe's
+  const chargedLanding = P.ink.find(m => !m.ring);
+  assert(chargedLanding && chargedLanding.r > soilMark.r, `J2: the charged splash's ink landing is DENSER (blotch r=${chargedLanding.r.toFixed(1)} > swipe's ${soilMark.r.toFixed(1)})`);
+  // a water landing is a RIPPLE (a spreading ring), not a soil blotch
+  P.ink.length = 0;
+  P._inkLanding(px0, py0, 'blue', 'water', false);
+  const waterMark = P.ink[0];
+  assert(waterMark && waterMark.ring === true, `J2: on water the ink landing is a RIPPLE RING (ring=${waterMark.ring}), not a blotch`);
+  // ---- P10: a sustained burst must stay within the paint juice budget (<= 220
+  //      total on-screen juice; the new droplets + ink pools are capped) ----
+  P.droplets.length = 0; P.ink.length = 0; P.wet.length = 0; P.trails.length = 0;
+  for (let i = 0; i < 20; i++) {           // 20 rapid swipes (spam the brush)
+    p.swipeT = 0; P.swipeCd = 0; p.aimA = i * 0.2;
+    P.trySwipe(g.enemies);
+    g.paint.update(0.05);                   // let the pools age a little between
+  }
+  p.splashCharge = 1; P.splashCd = 0; P.trySplash(g.enemies);
+  assert(P.droplets.length <= P.MAX_DROPLETS, `J2: after 20 swipes + a charge splash the droplet pool is still capped (${P.droplets.length} <= ${P.MAX_DROPLETS})`);
+  assert(P.ink.length <= P.MAX_INK, `J2: after the burst the ink pool is still capped (${P.ink.length} <= ${P.MAX_INK})`);
+  assert(P.wet.length <= P.MAX_WET, `J2: the wet-mark pool is still capped (${P.wet.length} <= ${P.MAX_WET})`);
+  const juice = P.droplets.length + P.ink.length + P.wet.length + P.trails.length;
+  assert(juice <= 220, `J2: the total on-screen paint juice after a full-power burst stays within the P10 budget (${juice} <= 220)`);
+  // the world ParticleSystem (the real combat particles) is never exceeded by
+  // the paint layer (the paint droplets are a SEPARATE pool in paint.js).
+  assert(g.particles.pool.length === 240, `J2: the world particle pool is a fixed 240 (unchanged; the paint droplets are a separate pool)`);
+  // ---- the arc + droplets + ink are DECAYED by update(dt) (they don't pile up)
+  const dropletsBefore = P.droplets.length, inkBefore = P.ink.length;
+  P.update(1.5);                            // age everything past its lifetime
+  assert(P.droplets.length < dropletsBefore || P.droplets.length === 0, `J2: the droplets decay out on their own (after 1.5s: ${P.droplets.length} < ${dropletsBefore})`);
+  assert(P.ink.length < inkBefore || P.ink.length === 0, `J2: the ink landings decay out on their own (after 1.5s: ${P.ink.length} < ${inkBefore})`);
+  Math.random = savedRandom;
+}
+
+// ======================================================================
 // stage 60 — v1.4 Module J, J3: camera polish (look-ahead / lag / boss midpoint / awaken moment)
 // `_updateCamera` (game.js) is PRESENTATION: it follows the already-simmed
 // frog position, so it runs on real dt and never feeds the measured runT.

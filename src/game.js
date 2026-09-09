@@ -6211,10 +6211,19 @@ _drawAtelier(ctx) {
     // water, slower ground movement) + the inverted-gravity pocket root-ceilings
     // (world space, VIEW-CULLED; no per-frame state). No-op for a base world.
     this.world.drawReedsTraversal(ctx, v, this.now);
+    // J2 (v1.9): the INK-THAT-LANDS — a darker wet blotch on painted soil + a
+    // ripple over painted water. Drawn UNDER the wet marks so the stroke sits
+    // on top of its landing (draw-only; the "painted soil darkens / water
+    // ripples" that makes the paint LANDING visible, not just the arc).
+    this.paint && this.paint.drawInk(ctx);
     // J1 (v1.4): short-lived wet residue marks sit on the surface, under the
     // active stroke and all entities (draw-only; never affects logic).
     this.paint && this.paint.drawWet(ctx);
     this.paint && this.paint.drawTrails(ctx);
+    // J2 (v1.9): the in-flight ink DROPLETS — small pigment dots with gravity +
+    // settle, drawn ON TOP of the wet marks so the spray reads as fresh ink in
+    // the air (draw-only; pooled + capped in paint.js).
+    this.paint && this.paint.drawDroplets(ctx);
     if (this.state === 'expedition' || this.state === 'end') {
       if (this.heron) (this.heron.warden ? this._drawWarden(ctx, this.heron, this.now) : (this.heron.umbra ? this._drawUmbra(ctx, this.heron, this.now) : (this.heron.wyrm ? this._drawWyrm(ctx, this.heron, this.now) : this._drawHeron(ctx, this.heron, this.now)))); // F1: Warden / G2: Umbral Wyrm / R4: Silt Wyrm / heron
       if (this.midHeron) this._drawHeron(ctx, this.midHeron, this.now); // E1: Painted Heron

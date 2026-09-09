@@ -246,6 +246,46 @@ await page.addInitScript(() => {
   S['paint-water'] = (G) => paintRun(G, 'blue', 'water');
   S['paint-vegetation'] = (G) => paintRun(G, 'green', 'vegetation');
 
+  // ---- J2 (v1.9): the paint-ARC upgrade in flight (the new curve + droplets +
+  //      ink landing). Stages a FRESH swipe via the real J2 methods (a curved
+  //      trail ribbon, seeded pooled droplets mid-air, and the ink landing) so
+  //      the frame shows the actual new rendering. Deterministic (seeded PRNG).
+  //      These are the J2 after-frames: the before is the straight-ribbon
+  //      paint-*.png baseline; the after shows the bow + spray + landing.
+  function paintArcScene(G, pig, surf, charged) {
+    beginRun(G, null, { wander: false });
+    G.enemies = []; G.orbs = [];
+    const p = G.player; p.pigment = pig;
+    if (surf === 'water') { p.x = 900; p.y = 1250; p.aimA = -0.5; }
+    else { p.x = 700; p.y = 750; p.aimA = 0.25; }
+    const P = G.paint; P.trails = []; P.droplets = []; P.ink = [];
+    const a = p.aimA, R = P.swipeRange;
+    const x0 = p.x + Math.cos(a) * p.r, y0 = p.y + Math.sin(a) * p.r;
+    const x1 = p.x + Math.cos(a) * R, y1 = p.y + Math.sin(a) * R;
+    const seed = charged ? 77 : 13;
+    const cx = (x0 + x1) / 2 - Math.sin(a) * R * 0.16, cy = (y0 + y1) / 2 + Math.cos(a) * R * 0.16;
+    // the curved ribbon (the arc fidelity) — fresh (t = max)
+    P.trails.push({ x0, y0, cx, cy, x1: x1 + Math.cos(a) * R * 0.1, y1: y1 + Math.sin(a) * R * 0.1,
+      w: 18, t: 0.4, max: 0.4, pig, seed, curve: true });
+    // the in-flight droplets (seeded, deterministic)
+    P._spawnDroplets(seed, x0, y0, x1, y1, pig, charged ? 12 : 5, charged ? 3.2 : 2.6, 1);
+    // the ink landing at the stroke's end
+    P._inkLanding(x1, y1, pig, P.paintSurfaceAt(x1, y1, R * 0.7), charged);
+    if (charged) {
+      // the charged-slate dense inner ring + a splash wet mark
+      P.trails.push({ ring: true, x: p.x, y: p.y, r: P.tuning.splashRadius * 0.72, t: 0.5, max: 0.5, pig, dense: true });
+      P._addWet(p.x, p.y, 34, pig, 1.2);
+    }
+    P._addWet((x0 + x1) / 2, (y0 + y1) / 2, 16, pig, 1.0);
+    G.cam.x = p.x; G.cam.y = p.y; G.zoom = 1; G.now = 4.5;
+    return { note: `J2 paint arc: ${pig} ${charged ? 'charged splash' : 'swipe'} on ${surf}` };
+  }
+  S['arc-red'] = (G) => paintArcScene(G, 'red', 'soil', false);
+  S['arc-blue'] = (G) => paintArcScene(G, 'blue', 'soil', false);
+  S['arc-green'] = (G) => paintArcScene(G, 'green', 'soil', false);
+  S['arc-water'] = (G) => paintArcScene(G, 'blue', 'water', false);
+  S['arc-charged'] = (G) => paintArcScene(G, 'red', 'soil', true);
+
   // ---- 6 enemies ----
   S['enemy-beetle'] = (G) => { beginRun(G, null); return enemyScene(G, 'beetle', 'plain'); };
   S['enemy-mosquito'] = (G) => { beginRun(G, null); return enemyScene(G, 'mosquito', 'plain'); };
@@ -420,7 +460,7 @@ const BASELINE_SCENES = [
 // polish set so a typo fails loudly rather than silently capturing 0 frames.
 const POLISH_SCENES = [
   'beetle-hitstop', 'toad-hitstop',                 // J1 (v1.9)
-  // J2 (v1.9) paint-arc scenes are added here as the arc upgrade lands.
+  'arc-red', 'arc-blue', 'arc-green', 'arc-water', 'arc-charged', // J2 (v1.9)
 ];
 const KNOWN_SCENES = BASELINE_SCENES.concat(POLISH_SCENES);
 if (SCENE_FILTER) {
