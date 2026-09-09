@@ -241,9 +241,83 @@ BREATHES) / `world-fireflies.png` (the Reeds ambient swarm) / `world-pollen.png`
 (pace ~17.2, humance ~18.9, ngpace cycle-1 19.5, bosspace 37.0 s, reedspace
 ~22.1, wandpace both legs, wardpace ~3.9, blackpace ~25.7, umbrapace ~3.66).
 
-**NEXT ACTION: L2** (the next session) — **the v1.9 visual-identity + living-
-world layer 2** (L2 + L3 per the batch plan; read `docs/ROADMAP.md` §v1.9 for
-the L2 / L3 spec). A1 (the v1.9 quality audit) is the season's final item.
+**L2 LANDED** (session v19-light; `35c3d78`) — **the lighting pass** (the v1.9
+living-world layer 2 — "the living world + visual identity"). Pure draw-time
+lighting, the parked "lantern in the swamp" item done as **LIGHT only** (no
+fuel, no mechanics — the balance version stays deferred):
+- **Charged-paint glow** — a soft radial on the stroke while the frog is
+  charged (`paint.splashCharge`): a faint pigment-coloured halo that swells +
+  brightens with the charge, drawn right after the frog so it reads as the
+  brush about to strike.
+- **Awaken bloom** — the heron's Awakened state now carries a light halo: a
+  soft warm radial that pulses behind the boss during the awaken window (the
+  J1 hitstop's white-hot rim is the connect beat; this is the sustained
+  "it's waking up" light).
+- **Base-swamp light pools** — a handful of soft warm light pools baked into
+  the swamp ground (the seeded `swampLightPools` pool) that read as the path
+  glowing faintly as the frog travels. The base-swamp "lantern in the swamp"
+  done as pure light (no fuel / no mechanics). POOLED (capped), SEEDED (a
+  dedicated `mulberry32(seed + 1571)` stream), VIEW-CULLED (`swampLightCounts`
+  + `drawSwampLightPools` cull to the view → the on-screen total stays capped
+  into the P10 budget), a BAKED-ONCE glow sprite (one drawImage per pool, no
+  per-frame gradient allocation), and BASE-SWAMP ONLY (a Reeds variant's pool
+  is empty → the draw is a no-op, a Reeds run renders exactly as before).
+All **PRESENTATION-ONLY** (the load-bearing invariant held end-to-end):
+`src/logic.js` byte-identical to `6c9e09e` (EMPTY diff), SAVE_VERSION 12,
+GAME_VERSION 1.0.0, no tuning / runT / logic number moves, no new save state.
+A new **smoke stage 110** (13 assertions) locks the invariant: the light-pool
+layout is a pure function of the seed, seed variance, the base-swamp / Reeds
+pool split (Reeds carries no pools), the pool cap + view-cull, the Reeds
+no-op, one drawImage per on-screen pool, the cached-sprite reuse (no
+re-bake), and the P10 paint-juice cap with the pools active. The frames
+harness registers 4 after-L2 scenes: `tests/frames/after-L2/swamp-light-pools.png`
++ `swamp-light-pools-b.png` (the SAME world + camera ~1.4 s apart — md5-
+differing, proving the pools BREATHE) / `charged-paint-glow.png` (the brush
+radial at full charge) / `boss-gray-heron-awaken-halo.png` (the awaken halo).
+Invariant held: all 9 probes in band unchanged.
+
+**L3 LANDED** (session v19-light; `7bcdcd1`) — **enemy liveness** (distinct
+telegraphs + panic/lick/flee, seeded, presentation-only). The ONE v1.9 item
+that touches AI *behavior* — made safe by being PURE PRESENTATION (a draw-
+state / a short local velocity nudge that decays) and NEVER changing a
+hitbox position, HP, damage, or death timing beyond the existing painted /
+frozen mechanics. All drawn via a new `l3Draw(e, now)` (a PURE, allocation-
+free function of `e._seed / e.tintT / e._light / now`) that writes scalar
+`e._l3*` fields read by `drawEnemy` + the per-kind draw fns:
+- **Telegraph variety** — the beetle LOWERS (a crouch down a few px once per
+  ~2.6 s + a dirt "dig" tell drawn at its base); the toad INFLATES (a brief
+  body puff, `e._l3scale` 1.0..~1.12, once per ~3.2 s); the mosquito WIDENS
+  its weave (an extra horizontal sway whose amplitude swells, the collision
+  body untouched).
+- **Panic state** — a freshly-painted, NOT-frozen creature DARTS away a few
+  px for a short beat (strength tracks `tintT`, fades below ~0.25), seeded
+  per enemy.
+- **Small behaviors** — a toad LICKS the paint off its own back between
+  attacks (a tongue flick + a pigment bead, driven by `tintT`); a wisp
+  DRIFTS AWAY from the lantern when lit (a small sway whose amplitude grows
+  with `e._light`, a no-op when unlit).
+**SEEDED + P10-safe**: a smoke stage 111 samples 3 enemies × 3 seeds and
+asserts the liveness values are DETERMINISTIC at a fixed seed (same seed →
+same `_l3*` fields across repeated `l3Draw` calls) and VARY across seeds; it
+also proves `l3Draw` NEVER moves a collision body (near / far `e.x` unchanged
+→ the P10 AI-cull, near-seeks / far-culls, is unaffected) and that `l3Pulse`
+is bounded 0..1. **The draw-only A/B**: a panicking beetle (L3 dart ACTIVE,
+measured `dx≠0`) is painted with L3 on vs L3 off → IDENTICAL hit outcomes
+(hp / status / hitFlash / contactCd / death the same — the darted sprite hits
+exactly as it would with the layer disabled, because the swipe tests the
+collision body `e.x/e.y/r`, never the `_l3*` offsets). The painted / frozen /
+root / burn rules stay byte-identical. The frames harness registers 4 after-
+L3 scenes (one tell per behavior): `tests/frames/after-L3/beetle-lowers.png` /
+`toad-inflates.png` / `mosquito-weave.png` / `wisp-flee-from-lantern.png`.
+Invariant held: `src/logic.js` byte-identical to `6c9e09e` (EMPTY diff),
+SAVE_VERSION 12, GAME_VERSION 1.0.0, no tuning / runT / logic number moves,
+no per-frame allocation in the hot path, all 9 probes in band unchanged, P10
+AI-cull green.
+
+**NEXT ACTION: L4** (the next session) — **the v1.9 visual-identity layer 4**
+(the final L item; read `docs/ROADMAP.md` §v1.9 for the L4 spec). L4 + A1
+ship in a fresh session (keep batches bounded — the 240k context wall is
+real). A1 (the v1.9 quality audit) is the season's final item.
 **Housekeeping note (orchestrator, post-J3/J4, still open for A1):** the J2
 latent droplet bug flagged by the J3/J4 session (drawDroplets read `d.size`,
 the spawn stores `r` → NaN radius → in-flight droplets invisible) is **ALREADY
@@ -252,7 +326,8 @@ under the fixed code and verified md5-changed; smoke green; logic.js
 untouched). It is NOT an open item — A1 verifies the fix, it does not
 re-address it.
 Batch plan: T0 → S1 + S2 + S3 (LANDED) → **J1 + J2 + J3 + J4 (ALL LANDED this
-season)** → **L1 (LANDED, `ed8f2fa`)** → L2 + L3 → L4 + A1 (fresh sessions).
+season)** → **L1 (LANDED, `ed8f2fa`) → L2 (LANDED, `35c3d78`) + L3 (LANDED,
+`7bcdcd1`)** → L4 + A1 (fresh sessions).
 
 ### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 8 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
 
