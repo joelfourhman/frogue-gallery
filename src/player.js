@@ -33,6 +33,16 @@ export class Player {
     // window (seconds, ~6) — while > 0 no leech can latch again.
     this.leechAttached = false;
     this.leechCd = 0;
+    // J4 (v1.9): the frog's OWN liveness — all draw-state (presentation-only;
+    // no physics / i-frame / HP number moves).
+    //  - _staggerT: a hurt STAGGER (a wobble + a flinch) set on taking damage,
+    //    layered ON TOP of the J1 hitstop (the hitstop freezes the WORLD; this
+    //    is the frog's own reaction). Decays in update; never touches iframes.
+    //  - _victoryHopT: the VICTORY pose — a small contented hop + a
+    //    squash-and-settle, set by game.js at the moment of victory (the boss
+    //    is defeated / the victory screen opens) and read by draw().
+    this._staggerT = 0;
+    this._victoryHopT = 0;
   }
 
   get speed() { return 230; }
@@ -124,10 +134,34 @@ export class Player {
     if (this.swipeT > 0) this.swipeT -= dt;
     if (this.slowT > 0) this.slowT -= dt;
     if (this.rootT > 0) this.rootT -= dt;
+    // J4 (v1.9): the hurt STAGGER (a wobble + flinch) decays — the frog's own
+    // reaction to a hit, layered on top of the J1 hitstop (which freezes the
+    // WORLD). Draw-only: it never feeds iframes / HP / movement.
+    if (this._staggerT > 0) this._staggerT -= dt;
+    // J4 (v1.9): the VICTORY pose — a contented hop that settles. Set by
+    // game.js at the moment of victory; it counts down here so draw() can read
+    // its phase (the hop then the squash-and-settle). Draw-only.
+    if (this._victoryHopT > 0) this._victoryHopT -= dt;
     // squash relaxes toward 1
     this.squash = lerp(this.squash, 1, 1 - Math.exp(-10 * dt));
     this._blinkT -= dt;
     if (this._blinkT < -0.12) this._blinkT = 1.5 + Math.random() * 3;
+    // J4 (v1.9): IDLE BREATHE — when the frog is standing still (not moving,
+    // not hopping, not staggering, not posing), a slow, SUBTLE squash
+    // oscillation so it reads as a LIVING frog rather than a static sprite.
+    // The oscillation is tiny (±~0.02) and layered on top of the relaxed
+    // squash (which is ~1 at rest); it is a draw-only visual and never moves a
+    // physics number. A moving frog (|vx|/|vy| above a hair-threshold) or a
+    // hopping / staggering / victory-posing frog gets no idle breathe, so the
+    // other states read cleanly.
+    if (this.alive && !moving && this.hopT <= 0 && this._staggerT <= 0 &&
+        this._victoryHopT <= 0 && Math.abs(this.vx) < 6 && Math.abs(this.vy) < 6) {
+      // a dt-accumulated phase (NOT wall-clock) so the breathe is smooth +
+      // deterministic under the seeded test harness; the ±0.02 offset is draw-
+      // only and never moves a physics / HP / i-frame number.
+      this._breathePhase = ((this._breathePhase || 0) + dt * 2.4) % (TAU);
+      this.squash += (1 - Math.cos(this._breathePhase)) * 0.012;   // a gentle rise + fall
+    }
 
     // fresh-paint residual: standing in green paint heals slowly.
     // K4 (v1.5 M2): the GILDED Heron's plume (p._plumeSuppress) DEVOURS this heal
@@ -155,6 +189,11 @@ export class Player {
     this.iframes = tuning.iframes;
     this.hurtT = 0.35;
     this.squash = 0.7;
+    // J4 (v1.9): the HURT STAGGER — a brief wobble + flinch, the frog's OWN
+    // reaction to the hit. Layered ON TOP of the J1 hitstop (which freezes the
+    // WORLD); it is a draw-state (set here, decayed in update, read in draw)
+    // and NEVER changes the i-frame window / HP / movement above.
+    this._staggerT = 0.4;
     if (this.hp <= 0) { this.hp = 0; this.alive = false; }
     return true;
   }
@@ -173,22 +212,64 @@ export class Player {
     // REEDS_POCKETS (byte-identical — the first 3 of REEDS_DARK_POCKETS are
     // identical, and a base swamp is never inside any pocket).
     const lift = hopLift(this.hopT, this.x, this.y, this._reedsPockets || REEDS_POCKETS);
-    const y = this.y - lift;
     const blink = this._blinkT < 0 ? 0.15 : 1;
     const hurt = this.hurtT > 0 ? Math.sin(this.hurtT * 40) * 0.5 + 0.5 : 0;
     const bodyCol = hurt > 0.5 ? '#e08a76' : '#69a24e';
 
+    // J4 (v1.9): the frog's OWN liveness — draw-only pose modifiers layered on
+    // top of the base transform. NONE of these feed the physics (x/y/vx/vy/HP/
+    // iframes); they are read straight from the (already-set) state timers +
+    // the wall-clock `now`, so they are pure presentation and safe in the
+    // seeded test harness (no Math.random here).
+    let drawLift = lift;             // the hop lift to actually draw
+    let drawSquash = this.squash;    // the squash to actually draw (x; y = 2 - x)
+    let tremX = 0, tremY = 0, stagRot = 0, desperate = 0;
+
+    //  — LOW-HP TREMBLE: below ~30% HP, a faint high-freq position jitter +
+    //    more desperate eyes. Fades out above 30% (the desperation ramps up as
+    //    HP approaches the 30% line). Deterministic (sin of `now`, no RNG).
+    const hpFrac = this.maxHp > 0 ? this.hp / this.maxHp : 1;
+    const low = clamp(1 - hpFrac / 0.30, 0, 1);      // 0 above 30%, 1 at 0 HP
+    if (this.alive && low > 0) {
+      const amp = low * 1.4;                          // faint (<= ~1.4px)
+      tremX = Math.sin(now * 46 + 0.3) * amp;
+      tremY = Math.cos(now * 51) * amp * 0.6;
+      desperate = low;                                 // the eyes narrow
+    }
+    //  — HURT STAGGER: a brief wobble + flinch (the frog's own reaction,
+    //    layered on top of the J1 hitstop). A fast, decaying rotation wobble
+    //    + a flinch squash. `_staggerT` was set in hurt(), decayed in update.
+    if (this.alive && this._staggerT > 0) {
+      const k = this._staggerT / 0.4;                 // 1 at hit -> 0 as it fades
+      stagRot = Math.sin((0.4 - this._staggerT) * 55) * 0.16 * k;   // the wobble
+      drawSquash = drawSquash * (1 - k * 0.1) - k * 0.06;           // the flinch
+    }
+    //  — VICTORY POSE: a small contented hop + a squash-and-settle, set by
+    //    game.js at the moment of victory (`_victoryHopT`). Read as a pure
+    //    function of the remaining timer + `now`: the hop lifts first (the
+    //    contented little hop, reusing the existing hopLift shape), then the
+    //    body does a contented squash-and-settle as it lands.
+    if (this.alive && this._victoryHopT > 0) {
+      const t = this._victoryHopT;                    // 1.0 -> 0
+      // the hop (the first ~40%): a small lift, reuse the existing hopLift shape
+      drawLift = Math.max(drawLift, Math.max(0, t - 0.4) / 0.6 * 26);
+      // the settle (the whole window, eased in): a contented squash (x>1) then
+      // it relaxes back to the idle breathe — draw-only, no physics.
+      const settle = 1 - Math.abs(t - 0.5) * 2;       // a 0..1 pulse, peaks at mid
+      drawSquash = drawSquash + Math.max(0, settle) * 0.16;
+    }
+
     ctx.save();
-    ctx.translate(this.x, this.y);
+    ctx.translate(this.x + tremX, this.y - drawLift + tremY);
 
     // shadow (grows smaller when hopping)
     ctx.fillStyle = 'rgba(30,50,40,0.25)';
     ctx.beginPath();
-    ctx.ellipse(0, this.r * 0.75, this.r * (1 - lift * 0.015), this.r * 0.4 * (1 - lift * 0.02), 0, 0, TAU);
+    ctx.ellipse(0, this.r * 0.75, this.r * (1 - drawLift * 0.015), this.r * 0.4 * (1 - drawLift * 0.02), 0, 0, TAU);
     ctx.fill();
 
-    ctx.rotate((this.vx - this.vy) * 0.0006);
-    ctx.scale(this.squash, 2 - this.squash);
+    ctx.rotate((this.vx - this.vy) * 0.0006 + stagRot);
+    ctx.scale(drawSquash, 2 - drawSquash);
     if (this.iframes > 0 && this.hopT <= 0 && Math.floor(now * 24) % 2 === 0) ctx.globalAlpha = 0.55;
 
     // legs
@@ -216,26 +297,40 @@ export class Player {
     ctx.ellipse(0, this.r * 0.35, this.r * 0.62, this.r * 0.4, 0, 0, TAU);
     ctx.fill();
 
-    // eyes — expressive, look toward aim
+    // eyes — expressive, look toward aim. J4 (v1.9): when the frog is at LOW
+    // HP (the `desperate` draw-state, 0 above 30% HP), the eyes NARROW + a
+    // worried brow rises — the same face, more anxious. Draw-only.
     const ex = Math.cos(this.aimA) * 2.5, ey = Math.sin(this.aimA) * 1.8;
+    const eyeH = 6 * (1 - desperate * 0.45);   // the whites narrow as HP drops
+    const pupilR = 2.6 * (1 - desperate * 0.25);  // the pupils shrink (worried)
     for (const side of [-1, 1]) {
       const bx = side * this.r * 0.45, by = -this.r * 0.55;
       ctx.fillStyle = '#fff';
       ctx.strokeStyle = INK;
       ctx.lineWidth = 1.8;
       ctx.beginPath();
-      ctx.ellipse(bx, by, 6, 6 * blink, 0, 0, TAU);
+      ctx.ellipse(bx, by, 6, eyeH * blink, 0, 0, TAU);
       ctx.fill();
       ctx.stroke();
       if (blink > 0.5) {
         ctx.fillStyle = INK;
         ctx.beginPath();
-        ctx.arc(bx + ex, by + ey, 2.6, 0, TAU);
+        ctx.arc(bx + ex, by + ey, pupilR, 0, TAU);
         ctx.fill();
         ctx.fillStyle = 'rgba(255,255,255,0.9)';
         ctx.beginPath();
         ctx.arc(bx + ex - 0.8, by + ey - 0.9, 0.9, 0, TAU);
         ctx.fill();
+      }
+      // the worried brow — a short raised ink line above the eye, drawn only
+      // when desperate (it fades with `desperate`, so it's absent above 30% HP).
+      if (desperate > 0.02) {
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 1.6 * desperate;
+        ctx.beginPath();
+        ctx.moveTo(bx - side * 4, by - eyeH - 2 - desperate * 2);
+        ctx.quadraticCurveTo(bx, by - eyeH - 5 - desperate * 3, bx + side * 4, by - eyeH - 1 - desperate * 1.5);
+        ctx.stroke();
       }
     }
     // cheeks

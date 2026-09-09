@@ -5360,6 +5360,14 @@ _drawAtelier(ctx) {
     // hitStop/whiteFlash beat (presentation-only; no-op in headless smoke).
     this.sfx('boss-kill');
     this.addShake(16);
+    // J4 (v1.9): the frog's OWN VICTORY pose — a small contented hop + a
+    // squash-and-settle, set at the moment the boss is defeated (BEFORE the
+    // victory screen transition), so the frog celebrates the win on the field.
+    // It's a draw-state on the player (`_victoryHopT`, decayed in player.update,
+    // read in player.draw) — reuses the existing hopLift shape for the lift. No
+    // physics / runT / pacing change (the defeat timing + drops above are
+    // untouched).
+    if (this.player && this.player.alive) this.player._victoryHopT = 1.0;
     // J2 (v1.4): the big moment — ~0.8 s of slow-mo (~0.35×) + a white
     // flash frame + a shake spike. All gated by options.shake (hitStop /
     // whiteFlash are no-ops when shake is OFF), so this is pure presentation

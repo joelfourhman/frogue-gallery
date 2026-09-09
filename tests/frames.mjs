@@ -383,8 +383,56 @@ await page.addInitScript(() => {
   }
   S['boss-kill-burst'] = (G) => bossKillScene(G);
 
+  // ---- J4 (v1.9): the frog's OWN LIVENESS — four draw-states (idle breathe /
+  // hurt stagger / low-HP tremble / victory pose). BEFORE = the baseline idle
+  // frog (the title screen / the still run-start frog); AFTER = the after-J4/
+  // frames. `draw()` is a PURE function of the frog's state timers + the
+  // wall-clock `now`, so each scene sets the draw-state DIRECTLY (like J1's
+  // hitFlash) — no update stepping (the game loop is `_frame`, not `update`,
+  // and stepping would let the world/player sim move). The camera is parked on
+  // the frog so the (subtle) liveness reads centered. Draw-only — nothing here
+  // moves a physics / HP / i-frame number that feeds a rule.
+  function frogStateScene(G, which) {
+    beginRun(G, null, { wander: false });
+    const p = G.player;
+    G.enemies = []; G.orbs = []; G.heron = null; G.midHeron = null;
+    p.vx = 0; p.vy = 0; p.hopT = 0; p._staggerT = 0; p._victoryHopT = 0;
+    // aim + park the camera on the frog (so the liveness reads centered)
+    G.input.mouse.worldX = p.x + 40; G.input.mouse.worldY = p.y - 4;
+    G.cam.x = p.x; G.cam.y = p.y; G.zoom = 1; G.shake = 0;
+    if (which === 'idle') {
+      // stand still: the IDLE BREATHE (a slow squash oscillation, OFF while
+      // moving) — stage a mid-breath peak so the frog reads as LIVING, not
+      // static. The breathe is a tiny squash offset layered on the relaxed ~1.0.
+      p.squash = 1.02;           // the puffed peak of the breathe (a subtle squash)
+      G.now = 5.0;
+      return { note: 'J4 idle BREATHE — the puffed peak of a subtle squash cycle (a living frog, not a static sprite)' };
+    }
+    if (which === 'hurt') {
+      // the HURT STAGGER — stage the wobble mid-flinch (`_staggerT` at ~0.28 of
+      // its 0.4 window, so draw() computes a wobble rotation + a flinch squash).
+      p._staggerT = 0.28;
+      G.now = 3.3;
+      return { note: 'J4 HURT STAGGER — a wobble + flinch (the frog own-reaction, over the J1 hitstop)' };
+    }
+    if (which === 'lowhp') {
+      // LOW-HP TREMBLE — below ~30% HP: the faint tremble + the desperate
+      // (narrowed) eyes + the worried brow, drawn straight from hp in draw().
+      p.hp = Math.round(p.maxHp * 0.15);
+      G.now = 4.7;
+      return { note: 'J4 LOW-HP TREMBLE — a faint jitter + desperate eyes (below ~30% HP)' };
+    }
+    // 'victory' — the VICTORY POSE, staged at a mid-hop instant (`_victoryHopT`
+    // at 0.6 of its 1.0 window, so the hop lift + the contented settle read).
+    p._victoryHopT = 0.6;
+    G.now = 6.0;
+    return { note: 'J4 VICTORY POSE — a small contented hop + squash-and-settle (the moment the boss is defeated)' };
+  }
+  S['frog-idle-breathe'] = (G) => frogStateScene(G, 'idle');
+  S['frog-hurt-stagger'] = (G) => frogStateScene(G, 'hurt');
+  S['frog-low-HP'] = (G) => frogStateScene(G, 'lowhp');
+  S['frog-victory-pose'] = (G) => frogStateScene(G, 'victory');
 
-  // ---- 6 bosses (heron variants) + awaken ----
   S['boss-gray-heron'] = (G) => bossFrame(G, { variant: 'gray', hpFrac: 0.75 });
   S['boss-gray-heron-awaken'] = (G) => bossFrame(G, { variant: 'gray', awakened: true });
   S['boss-green-heron'] = (G) => bossFrame(G, { variant: 'green', hpFrac: 0.75 });
@@ -518,6 +566,7 @@ const POLISH_SCENES = [
   'beetle-hitstop', 'toad-hitstop',                 // J1 (v1.9)
   'arc-red', 'arc-blue', 'arc-green', 'arc-water', 'arc-charged', // J2 (v1.9)
   'toad-kill-burst', 'beetle-kill-burst', 'boss-kill-burst',      // J3 (v1.9)
+  'frog-idle-breathe', 'frog-hurt-stagger', 'frog-low-HP', 'frog-victory-pose', // J4 (v1.9)
 ];
 const KNOWN_SCENES = BASELINE_SCENES.concat(POLISH_SCENES);
 if (SCENE_FILTER) {

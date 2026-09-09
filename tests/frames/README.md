@@ -95,6 +95,29 @@ Before/after pairs (baseline `enemy-toad.png` / `enemy-beetle.png` /
 
 Captured with: `node tests/frames.mjs --out tests/frames/after-J3 --scenes toad-kill-burst,beetle-kill-burst,boss-kill-burst --min 3`
 
+## J4 (v1.9) — The frog's liveness
+
+The frog now reads as a *living* character, not a static sprite: a subtle
+**idle breathe** (a slow squash cycle when standing still), a **hurt stagger**
+(a wobble + flinch on taking damage — the frog's own reaction, layered over the
+J1 hitstop that freezes the WORLD), a **low-HP tremble** (a faint jitter +
+desperate narrowed eyes below ~30% HP), and a **victory pose** (a small
+contented hop + squash-and-settle the moment the boss is defeated). All
+**draw-only** — the squash / stagger / tremble / victory timers feed no physics,
+HP, or i-frame number.
+
+Before/after (baseline idle frog — `title.png` / the still run-start frog → the
+`after-J4/` states):
+
+| Frame | Scene | What it shows |
+|---|---|---|
+| `tests/frames/after-J4/frog-idle-breathe.png` | `frog-idle-breathe` | The frog standing still at the puffed peak of its breathe — a subtle squash (a living frog, not a static sprite) |
+| `tests/frames/after-J4/frog-hurt-stagger.png` | `frog-hurt-stagger` | A mid-stagger wobble + flinch (the frog's own reaction to a hit, over the J1 hitstop) |
+| `tests/frames/after-J4/frog-low-HP.png` | `frog-low-HP` | Below ~30% HP: the faint tremble + the desperate (narrowed) eyes + a worried brow |
+| `tests/frames/after-J4/frog-victory-pose.png` | `frog-victory-pose` | The victory pose — a small contented hop + squash-and-settle (the moment the boss is defeated, before the screen transition) |
+
+Captured with: `node tests/frames.mjs --out tests/frames/after-J4 --scenes frog-idle-breathe,frog-hurt-stagger,frog-low-HP,frog-victory-pose --min 4`
+
 
 
 ## The 36 baseline frames

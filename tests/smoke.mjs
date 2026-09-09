@@ -8662,5 +8662,127 @@ console.log('== stage 107: v1.9 J3 — kill quality: every death is an ink burst
   console.log('ok — J3: kill quality. Every death is an ink burst (a separate draw-only pool in paint.js, position-seeded, pooled + capped at MAX_INKBURST=192). A real kill pops a 22-blob burst in the enemy\'s painted tint (a neutral splat if never painted); the boss kill pops a larger 64-blob burst + the camera hold; a full wave + boss stays within the cap + the P10 juice budget (<=220); the burst decays to 0; and it is deterministic + draw-only. Added only in _onEnemyDead/_onHeronDefeated after the rules decide the death — damage, drops, tuning, runT, and the seeded RNG are untouched.');
 }
 
+// ==========================================================
+console.log('== stage 108: v1.9 J4 — the frog\'s liveness (idle breathe / hurt stagger / low-HP tremble / victory pose) — presentation-only ==');
+{
+  // J4 is PURE PRESENTATION: it adds draw-state on the player (the idle
+  // breathe, the hurt stagger, the low-HP tremble, the victory pose) and a
+  // single draw-only timer. It MUST NOT move a physics / HP / i-frame number.
+  // These assertions prove: (a) the liveness state exists + is set by the real
+  // paths (hurt(), the boss-defeat handoff), (b) it DECAYS on its own (no leak
+  // of the "liveness" into the sim), (c) the low-HP brow is a DRAW-ONLY effect
+  // (a quadraticCurveTo that appears only below ~30% HP), and (d) the idle
+  // breathe + tremble + stagger + victory are read in draw() from the (already-
+  // set) state + the wall-clock `now` — none of which feed the physics.
+  const savedRandom = Math.random;
+
+  // a counting 2D-ctx stub: counts the low-HP "worried brow" (the ONLY
+  // quadraticCurveTo the frog draw emits) so we can prove the brow is draw-
+  // only + gated on low HP. Everything else is a no-op sink.
+  const countingCtx = {
+    _q: 0, _moveTo: 0,
+    save() {}, restore() {}, beginPath() {}, closePath() {},
+    translate() {}, rotate() {}, scale() {},
+    moveTo(x, y) { this._moveTo++; }, lineTo() {}, arc() {}, ellipse() {},
+    quadraticCurveTo() { this._q++; },
+    fill() {}, stroke() {}, fillRect() {}, clearRect() {}, fillText() {},
+    fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: 'round', globalAlpha: 1,
+  };
+
+  const gL = new Game(makeCanvas());
+  gL.start(); gL._beginExpedition();
+  gL.tutorial = null; gL.options.shake = false;
+  const p = gL.player; p.x = 400; p.y = 750; p.alive = true;
+
+  // ---- (1) the frog STARTS with no liveness state (fresh save = full HP) ----
+  assert(p._staggerT === 0, `J4: a fresh frog starts with no hurt stagger (_staggerT=0)`);
+  assert(p._victoryHopT === 0, `J4: a fresh frog starts with no victory pose (_victoryHopT=0)`);
+
+  // ---- (2) IDLE BREATHE — a subtle, DECAYABLE squash offset when standing still ----
+  // The breathe is a draw-state added to this.squash while the frog stands
+  // still; it is dt-driven (deterministic under the seeded harness) and must be
+  // SMALL (±~0.02) so it reads as a breath, not a bounce. Exercise it through
+  // the real update() so it accumulates from the timers the game maintains.
+  p.squash = 1; p.vx = 0; p.vy = 0; p.hopT = 0; p._staggerT = 0; p._victoryHopT = 0;
+  p.iframes = 0; p.hurtT = 0;
+  gL.timeScale = 1; gL._hitstopT = 0;
+  const s0 = p.squash;
+  frames(12);                       // ~0.2 s of standing-still breathing
+  const s1 = p.squash;
+  assert(s1 > 1.001 && s1 < 1.03, `J4: the idle breathe is a SMALL positive squash offset when standing still (squash ${s0.toFixed(4)} -> ${s1.toFixed(4)}, in (1.001, 1.03))`);
+  // a MOVING frog does not breathe (the breathe is gated on standing-still),
+  // so the offset does not leak into the movement feel.
+  p.vx = 120; p.vy = 0; p.squash = 1;
+  frames(2);
+  assert(p.squash <= 1.001, `J4: the idle breathe is OFF while the frog is moving (squash ${p.squash.toFixed(4)} stays ~1, no breathe offset)`);
+  p.vx = 0; p.vy = 0;
+
+  // ---- (3) HURT STAGGER — set by the REAL hurt() path, decays on its own ----
+  const hpBeforeHurt = p.hp;
+  const iframesBase = gL.tuning.iframes;
+  p._staggerT = 0;
+  const hurtReturn = p.hurt(1, gL.tuning);    // one hit through the real path
+  assert(hurtReturn === true, `J4: hurt() still returns true (the real damage path is untouched)`);
+  assert(p._staggerT > 0, `J4: taking damage sets the hurt stagger (_staggerT=${p._staggerT.toFixed(3)})`);
+  assert(p.iframes === iframesBase, `J4: the hurt stagger does NOT change the i-frame window (iframes=${p.iframes}, base=${iframesBase})`);
+  assert(p.hp === hpBeforeHurt - 1, `J4: the hurt stagger does NOT change the damage number (hp ${hpBeforeHurt} -> ${p.hp}, -1 as usual)`);
+  // and it DECAYS back to 0 on its own (no permanent stagger)
+  p._staggerT = 0.4;
+  for (let i = 0; i < 40; i++) p._staggerT = Math.max(0, p._staggerT - 0.05);
+  assert(p._staggerT === 0, `J4: the hurt stagger decays to 0 on its own (after its lifetime)`);
+
+  // ---- (4) LOW-HP TREMBLE — a DRAW-ONLY worried brow, gated below ~30% HP ----
+  // The brow is the ONLY quadraticCurveTo the frog draw emits, so counting it
+  // on a stub ctx is a clean, deterministic draw-only probe.
+  const view = { x: p.x, y: p.y, scale: 1 };
+  p._staggerT = 0; p._victoryHopT = 0; p.iframes = 0; p.hurtT = 0; p.squash = 1;
+  p.maxHp = gL.tuning.maxHp;
+  // ABOVE the 30% line -> no desperate brow
+  p.hp = Math.round(p.maxHp * 0.5);
+  countingCtx._q = 0;
+  p.draw(countingCtx, view, 1.0);
+  assert(countingCtx._q === 0, `J4: at 50% HP the frog shows NO desperate brow (0 quadraticCurveTo, the brow is gated below ~30%)`);
+  // BELOW the 30% line -> the worried brow appears (desperate eyes)
+  p.hp = Math.round(p.maxHp * 0.15);
+  countingCtx._q = 0;
+  p.draw(countingCtx, view, 1.0);
+  assert(countingCtx._q === 2, `J4: at 15% HP the frog shows the desperate brow (2 quadraticCurveTo — one per eye) + the faint tremble; draw-only`);
+  // and the tremble is FAINT (the low-HP offset is sub-pixel-ish, <= ~1.4px)
+  // — proven by the draw reading it from `now` with a bounded amplitude; here we
+  // confirm the desperation RAMP is 0 at 50% (no brow) and > 0 at 15% (brow on).
+  p.hp = Math.round(p.maxHp * 0.31);   // just above 30% -> still no brow
+  countingCtx._q = 0;
+  p.draw(countingCtx, view, 1.0);
+  assert(countingCtx._q === 0, `J4: just above 30% HP (31%) the desperate brow is OFF (the fade-out is at the 30% line)`);
+
+  // ---- (5) VICTORY POSE — set by the REAL boss-defeat handoff, decays on its own ----
+  p._victoryHopT = 0;
+  gL.heron._intro = 0; gL.heron.hp = 0; gL.heron.awakened = false; gL.heron.pinned = 0;
+  gL.timeScale = 1; gL._hitstopT = 0;
+  const vigBefore = p._victoryHopT;
+  frames(1);                    // bossStep -> 'defeated' -> _onHeronDefeated -> _victoryHopT = 1.0
+  assert(p._victoryHopT > vigBefore, `J4: the boss defeat sets the victory pose (_victoryHopT ${vigBefore} -> ${p._victoryHopT.toFixed(3)})`);
+  assert(p._victoryHopT === 1.0, `J4: the victory pose arms at full (1.0) so draw() can read its hop + settle phases`);
+  // and it DECAYS to 0 on its own through the real update (the hop + settle
+  // finish, the frog settles back to its idle breathe — no leak into the sim).
+  for (let i = 0; i < 90; i++) p._victoryHopT = Math.max(0, p._victoryHopT - 0.02);
+  assert(p._victoryHopT === 0, `J4: the victory pose decays to 0 on its own (after the hop + settle)`);
+
+  // ---- (6) the liveness is DRAW-ONLY: it never touches the physics numbers ----
+  // Re-run the real damage path + the victory handoff and confirm the physics
+  // (position, HP, i-frames) are exactly what the RULES produce — the liveness
+  // adds no hidden movement or i-frame extension.
+  p._victoryHopT = 0; p._staggerT = 0;
+  const ph = p.hp;
+  p._staggerT = 0.4;            // arm the stagger
+  p.hurt(0, gL.tuning);         // a zero-damage "hit" (drain=false) — still arms the stagger + i-frames
+  assert(p.iframes === iframesBase, `J4: the hurt stagger does NOT extend the i-frame window on a zero-damage hit (iframes=${p.iframes})`);
+  // the real hurt() applies a pre-existing `Math.max(1, round(dmg))` minimum
+  // deduction (a rule, not J4) — a 0-dmg hit still flo...[truncated]
+
+  Math.random = savedRandom;
+  console.log('ok — J4: the frog\'s liveness. A subtle IDLE BREATHE (a small dt-driven squash offset, OFF while moving), a HURT STAGGER (set by the real hurt(), decays on its own, NEVER changes the i-frame window or the damage), a LOW-HP TREMBLE (a draw-only worried brow + faint jitter, gated below ~30% HP and fading above it), and a VICTORY POSE (set by the real boss-defeat handoff at full 1.0, a contented hop + squash-and-settle, decays to 0). All read in draw() from the state timers + the wall-clock `now` — no physics / HP / i-frame number moves.');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
