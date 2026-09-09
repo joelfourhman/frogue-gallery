@@ -169,19 +169,43 @@ Frame evidence (harness): `tests/frames/enemy-toad.png` →
 Invariant held: `makeTuning` byte-identical (logic.js untouched), SAVE_VERSION
 12, smoke `ALL SMOKE TESTS PASSED`, all 9 probes in band unchanged.
 
-**NEXT ACTION: J4** (the next session) — **the frog's liveness** (draw-state
-only): an idle breathing cycle (slow squash oscillation when standing still) +
-the existing blink; a hurt stagger (a wobble + flinch, layered on top of the J1
-hitstop — the hitstop freezes the WORLD, the stagger is the frog's OWN
-reaction; NO i-frame change); a low-HP tremble (below ~30% HP, a faint
-high-freq position jitter, draw-only, + more desperate eyes, fading above 30%);
-a victory pose (on the victory screen + the moment the boss is defeated, a small
-hop + a contented squash-and-settle, reusing the existing hop mechanics). All
-draw-state (the `squash`/blink fields are the pattern) — no physics change that
-moves a number. Acceptance: frame evidence — the frog idle (subtle breathe),
-hurt-stagger, low-HP tremble, and the victory pose each read as a LIVING frog.
-Batch plan: T0 → S1 + S2 + S3 (LANDED) → **J1 + J2 + J3 (LANDED this season)**
-→ J4 + L1 → L2 + L3 → L4 + A1 (fresh sessions).
+**J4 LANDED** (session v19-kill; `8a22d46`) — **the frog's liveness** (draw-state
+only): the frog now reads as a *living* character, not a static sprite.
+- **Idle breathe** — a subtle dt-accumulated squash cycle (±~0.012, layered on
+  the relaxed ~1.0) when standing still; OFF while moving / hopping /
+  staggering / posing so the other states read cleanly.
+- **Hurt stagger** — `hurt()` arms `_staggerT = 0.4`; draw() renders a fast
+  decaying wobble rotation + a flinch squash, the frog's OWN reaction layered
+  ON TOP of the J1 hitstop (which freezes the WORLD). NO i-frame / HP / damage
+  change (verified: iframes + the damage number are exactly the rule values).
+- **Low-HP tremble** — below ~30% HP a faint high-freq position jitter (draw-
+  only) + the eyes NARROW + a worried brow (a `quadraticCurveTo` per eye); it
+  fades out above the 30% line (the `desperate` draw-state ramps 0→1 as HP
+  approaches 30%).
+- **Victory pose** — `_onHeronDefeated` sets `_victoryHopT = 1.0` at the moment
+  the boss is defeated (BEFORE the victory screen transition); draw() reads a
+  contented hop lift (reusing the `hopLift` shape) + a squash-and-settle that
+  relaxes back to the idle breathe.
+All **draw-only** (the `squash` / blink fields are the pattern) — no physics /
+HP / i-frame number moves. Frame evidence (baseline idle frog `title.png` → the
+`after-J4/` states): `tests/frames/after-J4/frog-idle-breathe.png` (the puffed
+breathe peak) / `frog-hurt-stagger.png` (a mid-stagger wobble + flinch) /
+`frog-low-HP.png` (15% HP — the tremble + desperate eyes) /
+`frog-victory-pose.png` (a mid-hop contented pose). A new smoke stage (108, 16
+assertions) locks the presentation-only guarantee: the stagger / tremble /
+victory timers + the real `hurt()` / `_onHeronDefeated` handoff, and that the
+i-frame window + damage are the rule values. Invariant held: `src/logic.js`
+byte-identical (EMPTY diff), SAVE_VERSION 12, smoke `ALL SMOKE TESTS PASSED`
+(stage 108, 16 assertions), all 9 probes in band unchanged (pace ~17.2, bosspace 37.0 s,
+humance simulated cross ~57 s / boss ~351 s — vs baseline 37.1 s; run-to-run
+variance only).
+
+**NEXT ACTION: L1** (the next session) — **the living world** (the first of
+L1–L4: ambient environmental life — swaying reeds / drifting mist / water
+shimmer, the v1.4 L1 pattern re-applied). A1 (the v1.9 quality audit) is the
+season's final item; read `docs/ROADMAP.md` §v1.9 for the L1 spec.
+Batch plan: T0 → S1 + S2 + S3 (LANDED) → **J1 + J2 + J3 + J4 (ALL LANDED this
+season)** → L1 → L2 + L3 → L4 + A1 (fresh sessions).
 
 ### v1.8 "The Full Collection" — **COMPLETE** (the 1.0.0 release — session v18-a, 2026-09-08; all 8 items G1–G3 + H1–H2 + R1–R2 + **A1** landed — the A1 1.0.0 season audit (fresh session) signed the season off)
 
