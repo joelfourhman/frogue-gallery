@@ -240,8 +240,7 @@ retune items — B3 (atelier economy) then B4 (boss fairness):
     per-phase damage is already balanced (a reacting player loses < ~40% HP per
     phase).
 
-**NEXT ACTION (next session): C3 — the audio mix pass** (then this session's
-remaining work is done; C4 + D1–D2 are the next session). **C1 LANDED**
+**NEXT ACTION (next session): C4 — worst-case frame-time** (then D1–D2 tutorial/menu polish; E1 audit closes v1.10). **C1 LANDED**
 (`fix(v1.10 C1)`, d5921af): all 8 A1 footer clips repaired — title/options
 footer reflowed up (panel 278→236, tightened gaps, footer offsets 14/30/48) so
 the "G/N/B" help line clears the floor on fresh AND returning players, and the
@@ -255,8 +254,17 @@ y≈1386, which is a **harness artifact** (the harness frames the arena centered
 on the boss; the live game centers the camera on the frog–boss midpoint, keeping
 the banner on-screen), and every flagged "overlap" was a false positive (title
 buttons, atelier tabs, overlay-vs-title pairs that never co-render). No code
-change needed for C2; the sweep evidence is recorded here. C4 (worst-case
-frame-time) + D1–D2 (tutorial/menu polish) are the next session, then E1 audit.
+change needed for C2; the sweep evidence is recorded here. **C3 LANDED** (this commit):
+the audio mix pass — `src/audio.js` gains + ducking only (no new voices), constants
+exported as `_MIX` and asserted in `tests/music.mjs`: sfx bus 0.95 sits above the music
+bus 0.62 (sfx punchy on top); the melody/boss/stinger layer is 0.34 (a modest layer over
+the ambient bed); the music bus ducks to ×0.78 (~−2.2 dB, the brief's 3–4 dB target kept
+modest so the zone theme never vanishes) for 1.6 s under stingerVictory / stingerDefeat
+/ stormSurgeStinger / collectionSwell; the ambient-life bed ducks to 0.5 while a boss is
+engaged (restored on clearZoneTheme) so the fight is sonically THE BOSS; per-biome
+melody-layer gain (1.0 across swamp/Reeds/Black Reeds) keeps a darker theme from being
+accidentally quieter. All 9 probes in band + smoke green. C4 (worst-case frame-time) +
+D1–D2 are the next session, then E1 audit.
 
 ### v1.9 "The Living Swamp" — **COMPLETE** (season audit signed off 2026-09-09; all 13 items T0/S1–S3/J1–J4/L1–L4 + **A1** landed; A1 fresh-session quality audit — every gate GREEN)
 

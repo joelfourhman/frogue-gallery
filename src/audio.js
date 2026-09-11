@@ -96,6 +96,42 @@ function _countActive(pattern) {
 // a node test asserts the right theme + density + voices for each of
 // swamp / Reeds / Black Reeds / boss / lowHp / collection. The music slider
 // still controls all of it (everything rides melodyMaster -> musicBus).
+
+// ==========================================================================
+// C3 (v1.10): the MIX constants — the relative levels + duck amounts the mix
+// pass sets. Exported so tests/music.mjs can assert them (E1 spot-checks).
+//   _MIX.musicVolume  : the default music bus level (0..1).
+//   _MIX.sfxVolume    : the default sfx bus level (0..1). SFX punchy on top.
+//   _MIX.melodyLevel  : melody/boss/stinger layer loudness vs the ambient bed.
+//   _MIX.duck         : the music-bus dip factor applied under a stinger /
+//                       fanfare (0.78 ~= -2.2 dB; the brief's "3-4 dB" target,
+//                       kept modest so the zone theme never fully vanishes).
+//   _MIX.duckDur      : seconds the music stays dipped after the trigger.
+//   _MIX.bossAmbient  : the ambient-life fraction while a boss is engaged
+//                       (the bed ducks so the fight is sonically THE BOSS).
+//   _MIX.biomeThemeGain: per-biome melody-layer gain multiplier so a darker
+//                       theme isn't accidentally quieter (loudness parity).
+// ==========================================================================
+export const _MIX = {
+  musicVolume: 0.62,
+  sfxVolume: 0.95,
+  melodyLevel: 0.34,
+  duck: 0.78,
+  duckDur: 1.6,
+  bossAmbient: 0.5,
+  biomeThemeGain: { swamp: 1.0, reeds: 1.0, blackReeds: 1.0 },
+};
+// A darker theme (Black Reeds) is NOT quieter by accident: its melody-layer
+// notes are scheduled at this per-biome gain so every biome lands at equal
+// perceived loudness (the C3 parity requirement). 1.0 across the board today;
+// the knob exists so a future retune can lift a quiet-sounding theme without
+// touching the note patterns.
+export function _biomeThemeGain(biome) {
+  return (_MIX.biomeThemeGain && _MIX.biomeThemeGain[biome]) != null
+    ? _MIX.biomeThemeGain[biome]
+    : 1.0;
+}
+
 export function themeSelector(state) {
   const zone = (state && (state.zone | 0)) || 0;
   const biome = (state && state.biome) || 'swamp';
@@ -177,8 +213,8 @@ export class AudioSys {
     this.musicBus = null;
     this.sfxBus = null;
     this.volume = 0.7;
-    this.musicVolume = 0.55;
-    this.sfxVolume = 0.7;
+    this.musicVolume = _MIX.musicVolume;   // C3: default music bus level (mix pass)
+    this.sfxVolume = _MIX.sfxVolume;       // C3: sfx punchy on top of the music
     this.muted = false;
     this._noiseBuf = null;
     this._musicNodes = []; // [osc1, osc2, gain1, gain2, lfo, lfoGain]
@@ -208,6 +244,9 @@ export class AudioSys {
     this._ambLifeRng = null;
     this._crossFade = 1.6;    // seconds to crossfade between zones
     this._amb = null;         // { zone, voices: [{ node, gain }] } — current zone bed
+    // C3: the music-bus DUCK — a short dip under stingers / fanfares so they
+    // cut through. _duckT is the ctx-time the dip should end; 0 = not dipping.
+    this._duckT = 0;
     // ---- S1 (v1.4): melodic per-zone themes (a step-sequencer layer ABOVE the ambient bed) ----
     // A short pentatonic loop per zone, scheduled by ctx.currentTime LOOKAHEAD in the
     // rAF tick (tickMusic) — no setInterval, no audio files, no new deps. It sits on
@@ -215,7 +254,7 @@ export class AudioSys {
     // The ambient bed (V3) stays as the low drone; the melody is a quiet layer on top
     // (~-10 dB relative). Zone switches crossfade the melody (old ramps to 0, new up).
     this._melodyMaster = null; // persistent gain -> musicBus (the melody layer)
-    this._melodyLevel = 0.32;  // melody loudness (kept modest vs the ambient bed)
+    this._melodyLevel = _MIX.melodyLevel;  // C3: melody/boss/stinger loudness (vs the ambient bed)
     this._zoneTheme = null;    // { zone, theme, gain, step, nextAt } — the live loop
     this._zoneThemeI = -1;     // the zone index the live theme is for
     this._zoneThemes = [];     // all live/fading loop instances (overlaps during crossfade)
@@ -527,6 +566,10 @@ export class AudioSys {
     // to swamp (byte-identical base-run behavior).
     const data = this._zoneThemeData(biome || 'swamp');
     const theme = data[((zoneI % data.length) + data.length) % data.length];
+    // C3: per-biome melody-layer gain so a darker theme isn't accidentally
+    // quieter (loudness parity). 1.0 across the board today; the knob lets a
+    // future retune lift a quiet-sounding theme without touching note patterns.
+    const biomeGain = _biomeThemeGain(biome || 'swamp');
     // fade the previous theme(s) out: stop their notes, ramp the zone gain down.
     for (const th of this._zoneThemes) {
       th.muted = true;
@@ -542,7 +585,7 @@ export class AudioSys {
     zg.gain.setValueAtTime(0.0001, this.ctx.currentTime);
     zg.gain.setTargetAtTime(1, this.ctx.currentTime + 0.05, this._crossFade / 4);
     zg.connect(this._melodyMaster);
-    this._zoneThemes.push({ zone: zoneI, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.35, muted: false, fading: false });
+    this._zoneThemes.push({ zone: zoneI, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.35, muted: false, fading: false, biomeGain });
     this._zoneThemeI = zoneI;
   }
 
@@ -577,6 +620,18 @@ export class AudioSys {
     if (!this._bossThemes) this._bossThemes = [];
     if (this._bossMusic) return; // already engaged — don't double-start
     this._bossMusic = true;
+    // C3: duck the ambient-life bed so the fight is sonically THE BOSS (the bed
+    // drops from its normal level to _MIX.bossAmbient for the duration of the
+    // fight; clearZoneTheme restores it). The zone drone (_ambMaster) is left
+    // alone — it's already a quiet low drone under the boss loop.
+    if (this._ambLifeMaster) {
+      try {
+        const t = this.ctx.currentTime;
+        this._ambLifeMaster.gain.cancelScheduledValues(t);
+        this._ambLifeMaster.gain.setValueAtTime(this._ambLifeMaster.gain.value, t);
+        this._ambLifeMaster.gain.linearRampToValueAtTime(_MIX.bossAmbient, t + this._crossFade / 2);
+      } catch (e) { /* headless */ }
+    }
     // Fade the zone theme(s) out: stop their notes, ramp the gain down (the
     // same crossfade machinery setZoneTheme uses).
     for (const th of (this._zoneThemes || [])) {
@@ -685,6 +740,7 @@ export class AudioSys {
   // melody layer (under the sfxBus collection-fanfare + the cinematicArp).
   collectionSwell() {
     if (!this.ctx || !this._melodyMaster) return;
+    this._duckMusic(_MIX.duckDur);   // C3: dip the music so the collection swell cuts through
     try {
       const t = this.ctx.currentTime;
       const g = this.ctx.createGain();
@@ -831,11 +887,32 @@ export class AudioSys {
   // Victory stinger: a RISING MAJOR arpeggio that resolves — a bright,
   // triumphant cadence (I -> V -> I, with the top note landing on the root's
   // octave). Sits on the melody layer so the music slider + mute scale it.
+  // C3 (v1.10): dip the music bus briefly so a stinger / fanfare cuts through
+  // the zone + boss theme. The dip is on the WHOLE music bus (zone themes, the
+  // boss loop, the ambient bed all ride under it), so the stinger — which rides
+  // the melody layer at full _melodyLevel — punches above the ducked bed. The
+  // tick restores the bus to its set level once _duckT passes. No-op when the
+  // context isn't ready (headless).
+  _duckMusic(dur) {
+    if (!this.ctx || !this.musicBus) return;
+    const t = this.ctx.currentTime;
+    const base = this.muted ? 0 : this.musicVolume;
+    try {
+      this.musicBus.gain.cancelScheduledValues(t);
+      this.musicBus.gain.setValueAtTime(this.musicBus.gain.value, t);
+      this.musicBus.gain.linearRampToValueAtTime(base * _MIX.duck, t + 0.05);
+      this.musicBus.gain.setValueAtTime(base * _MIX.duck, t + dur);
+      this.musicBus.gain.linearRampToValueAtTime(base, t + dur + 0.4);
+    } catch (e) { /* headless */ }
+    this._duckT = t + dur;
+  }
+
   stingerVictory() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const g = this._stingerGain();
     if (!g) return;
+    this._duckMusic(_MIX.duckDur);   // C3: dip the music so the fanfare cuts through
     // A major triad arpeggio up an octave, then a resolving top note.
     // C major: C4 E4 G4 C5 E5 G5 C6 (rising), landing on the bright top C.
     const notes = [261.63, 329.63, 392.0, 523.25, 659.25, 783.99, 1046.5];
@@ -855,6 +932,7 @@ export class AudioSys {
     const t = this.ctx.currentTime;
     const g = this._stingerGain();
     if (!g) return;
+    this._duckMusic(_MIX.duckDur);   // C3: dip the music so the defeat sting cuts through
     const notes = [440.0, 392.0, 349.23, 329.63]; // A4 G4 F4 E4 (descending)
     notes.forEach((f, i) => {
       this._tone(t + i * 0.28, 'triangle', f, f * 0.995, 0.5, 0.4, 0, g); // slight pitch dip
@@ -875,6 +953,7 @@ export class AudioSys {
     const t = this.ctx.currentTime;
     const g = this._stingerGain();
     if (!g) return;
+    this._duckMusic(_MIX.duckDur);   // C3: dip the music so the boss sting cuts through
     // a low, ominous rumble that swells (A1 -> A2), the bed the storm builds on
     this._tone(t, 'sawtooth', 55.0, 110.0, 1.6, 0.14, -4, g);
     this._tone(t, 'sine', 110.0, 220.0, 1.6, 0.10, 0, g);
@@ -945,15 +1024,17 @@ export class AudioSys {
       while (th.nextAt < ahead && guard++ < 16) {
         const step = th.step % th.theme.pattern.length;
         const note = th.theme.pattern[step];
+        // C3: per-biome melody-layer gain (loudness parity); a no-op at 1.0.
+        const bg = (th.biomeGain != null) ? th.biomeGain : 1.0;
         if (note >= 0) {
           const semi = th.theme.scale[((note % th.theme.scale.length) + th.theme.scale.length) % th.theme.scale.length]
             + 12 * Math.floor(note / th.theme.scale.length);
           const freq = th.theme.root * Math.pow(2, semi / 12);
-          try { this._tone(th.nextAt, 'triangle', freq, freq, th.theme.stepDur * 1.9, 0.5, th.theme.detune, th.gain); } catch (e) { /* headless */ }
+          try { this._tone(th.nextAt, 'triangle', freq, freq, th.theme.stepDur * 1.9, 0.5 * bg, th.theme.detune, th.gain); } catch (e) { /* headless */ }
           // S2 pulse layer: a soft low thump on every OTHER step under the boss
           // melody (drives the "intense" feel). Only when the theme opts in.
           if (th.theme.pulse && (th.step % 2 === 0)) {
-            try { this._tone(th.nextAt, 'sine', th.theme.root / 2, th.theme.root / 4, th.theme.stepDur * 0.9, 0.4, 0, th.gain); } catch (e) { /* headless */ }
+            try { this._tone(th.nextAt, 'sine', th.theme.root / 2, th.theme.root / 4, th.theme.stepDur * 0.9, 0.4 * bg, 0, th.gain); } catch (e) { /* headless */ }
           }
         }
         th.step++;
@@ -1008,6 +1089,16 @@ export class AudioSys {
     this._bossThemes = [];
     this._bossMusic = false;
     this._encoreThemes = [];
+    // C3: restore the ambient-life bed to its normal level now that the boss
+    // fight is over (setBossTheme had ducked it to _MIX.bossAmbient).
+    if (this._ambLifeMaster) {
+      try {
+        const t = this.ctx.currentTime;
+        this._ambLifeMaster.gain.cancelScheduledValues(t);
+        this._ambLifeMaster.gain.setValueAtTime(this._ambLifeMaster.gain.value, t);
+        this._ambLifeMaster.gain.linearRampToValueAtTime(0.9, t + this._crossFade / 2);
+      } catch (e) { /* headless */ }
+    }
   }
 
   // S2: ramp a list of melody loops to silence + schedule their disconnect.

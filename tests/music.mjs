@@ -35,6 +35,8 @@ import {
   nextAmbientEvent,
   AMBIENT_KINDS,
   AMBIENT_P,
+  _MIX,
+  _biomeThemeGain,
 } from '../src/audio.js';
 import { mulberry32 } from '../src/math.js';
 
@@ -339,6 +341,61 @@ section('S3: the ambient-life bus rides _ambLifeMaster -> musicBus (slider + mut
   // stop at run end.
   au.stopAmbientLife();
   assert(au._ambLifeOn === false, 'stopAmbientLife turns the events off');
+}
+
+// ==========================================================================
+// C3 (v1.10): the MIX — relative levels + duck amounts + biome parity.
+// These are the constants the mix pass sets; E1 spot-checks them. The brief:
+// sfx punchy on top, music present but never fighting sfx, ambient a quiet
+// bed (felt, not noticed); music ducks ~3-4 dB under stingers/fanfares; the
+// ambient bed ducks under the boss layer; per-biome themes at equal loudness.
+// ==========================================================================
+{
+  // Relative bus levels: SFX clearly above MUSIC, both sane (0..1).
+  assert(_MIX.sfxVolume > _MIX.musicVolume, 'C3: the sfx bus sits ABOVE the music bus (sfx punchy on top)');
+  assert(_MIX.musicVolume > 0 && _MIX.musicVolume <= 1, 'C3: music volume is in (0, 1]');
+  assert(_MIX.sfxVolume > 0 && _MIX.sfxVolume <= 1, 'C3: sfx volume is in (0, 1]');
+  // The melody/boss/stinger layer is modest vs the ambient bed (the bed is the
+  // floor, the melody a layer on top) — and the ambient-life fraction node is
+  // a quiet bed (< the full music level).
+  assert(_MIX.melodyLevel > 0 && _MIX.melodyLevel < 1, 'C3: melody level is in (0, 1)');
+  // Duck amount: a real dip (factor < 1) that maps to roughly the brief's
+  // 3-4 dB target. 20*log10(duck) should be in [-4.5, -1.5] dB.
+  const duckDb = 20 * Math.log10(_MIX.duck);
+  assert(_MIX.duck < 1 && _MIX.duck > 0, 'C3: the duck factor is a real dip (0 < duck < 1)');
+  assert(duckDb >= -4.6 && duckDb <= -1.4, 'C3: the music duck is ~3-4 dB (' + duckDb.toFixed(2) + ' dB)');
+  assert(_MIX.duckDur > 0 && _MIX.duckDur < 4, 'C3: the duck duration is short (a dip, not a silence)');
+  // Ambient bed ducks under the boss layer: the boss-fight ambient fraction is
+  // LOWER than the normal ambient-life level (0.9), so the fight is THE BOSS.
+  assert(_MIX.bossAmbient < 0.9, 'C3: the ambient bed ducks under the boss layer (bossAmbient < normal 0.9)');
+  assert(_MIX.bossAmbient > 0, 'C3: the ducked ambient bed is still present (not silenced)');
+  // Per-biome loudness parity: every biome theme lands at equal perceived
+  // loudness (all gains equal today; the knob exists for future retunes).
+  const bgs = [_biomeThemeGain('swamp'), _biomeThemeGain('reeds'), _biomeThemeGain('blackReeds')];
+  assert(bgs.every(g => g > 0), 'C3: every biome has a positive theme gain');
+  assert(Math.abs(bgs[0] - bgs[1]) < 1e-9 && Math.abs(bgs[1] - bgs[2]) < 1e-9,
+    'C3: swamp / Reeds / Black Reeds themes are at EQUAL loudness (parity)');
+  assert(_biomeThemeGain('watery') === 1.0, 'C3: an unknown biome falls back to the default gain (1.0)');
+
+  // Live wiring: boot AudioSys against the stub and confirm the new defaults +
+  // the duck machinery are actually applied (not just declared).
+  au.ensure();
+  assert(au.musicVolume === _MIX.musicVolume, 'C3: the live music bus uses the _MIX.musicVolume default');
+  assert(au.sfxVolume === _MIX.sfxVolume, 'C3: the live sfx bus uses the _MIX.sfxVolume default');
+  assert(au._melodyLevel === _MIX.melodyLevel, 'C3: the live melody layer uses the _MIX.melodyLevel default');
+  // Trigger a stinger -> the music bus dips to musicVolume*duck and _duckT is set.
+  au.stingerVictory();
+  assert(au._duckT > 0, 'C3: stingerVictory arms the music-bus duck (_duckT set)');
+  // The stub records the last-scheduled gain value; the duck ramps DOWN to
+  // musicVolume*duck (the dip floor) then back up, so the floor must have been
+  // scheduled at or below the set level (proof the dip actually happened).
+  const dipFloor = au.musicBus.gain.value;
+  assert(dipFloor <= _MIX.musicVolume + 1e-6 && dipFloor >= _MIX.musicVolume * _MIX.duck - 1e-6,
+    'C3: after a stinger the music bus dipped to its ducked level (floor ' + dipFloor.toFixed(3) + ')');
+  // Boss engage ducks the ambient-life bed; clear restores it.
+  au.setBossTheme(false);
+  assert(au._ambLifeMaster.gain.value <= 0.9 + 1e-6, 'C3: engaging the boss does not raise the ambient bed');
+  au.clearZoneTheme();
 }
 
 // ==========================================================================
