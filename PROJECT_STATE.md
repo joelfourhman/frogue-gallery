@@ -240,8 +240,30 @@ retune items — B3 (atelier economy) then B4 (boss fairness):
     per-phase damage is already balanced (a reacting player loses < ~40% HP per
     phase).
 
-**NEXT ACTION (next session): C4 — worst-case frame-time** (then D1–D2 tutorial/menu polish; E1 audit closes v1.10). **C1 LANDED**
-(`fix(v1.10 C1)`, d5921af): all 8 A1 footer clips repaired — title/options
+**NEXT ACTION (next session): D1–D2 — tutorial + menu/options polish** (then E1 audit closes v1.10). **C4 LANDED**
+(`test(v1.10 C4)`, this commit): the worst-case frame-time audit — a dedicated
+dev-only harness (`tests/perf.mjs`, free port, never 8765, swiftshader
+software-raster = a draw-cost UPPER bound) stages the canonical worst frame ALL
+LAYERS AT ONCE: an awakened heron mid-bloom + a charged full-power swipe + a
+charged splash + a J3-style mass kill (a 5-minion wave + the boss primary + ring
+= 174 ink-burst) + the environmental layer (the ambient pool is the seeded Reeds
+pool; the camera is placed at the DENSEST on-screen region so the environmental
+layer is genuinely at its peak, not zero by seed accident) + particles. It
+measures three compositions in real frames: (1) the QUIET baseline (same world,
+no juice), (2) the PEAK (the real worst frame the game can produce — mass kill
++ charged splash), and (3) the SYNTHETIC CEILING (every pool forced to its hard
+cap simultaneously: 192 ink-burst + 48 droplets + 40 ink + 120 wet + 240
+particles — the honest draw-cost upper bound; if this fits, no real frame can
+exceed the budget). **RESULT: NO SPIKE — no fix needed.** QUIET p95 0.60 ms;
+PEAK p95 0.90 ms (1.5× quiet); CEILING p95 1.10 ms (1.8× quiet); SUSTAINED
+(1-s decay) p95 1.00 ms (1.11× peak — the juice ages out, doesn't plateau). The
+real worst frame's combined on-screen paint juice = 203 ≤ 220 (the P10 budget
+the smoke J3 invariant asserts). The environmental layer adds a negligible
+<0.1 ms (the view-culled ambient set is a handful of arcs). All 10 gates green,
+stable across 2 runs. `src/` untouched (the audit is dev-only; no per-frame
+allocation was found in the hot path, so the P10 invariant holds).
+
+**C1 LANDED** (`fix(v1.10 C1)`, d5921af): all 8 A1 footer clips repaired — title/options
 footer reflowed up (panel 278→236, tightened gaps, footer offsets 14/30/48) so
 the "G/N/B" help line clears the floor on fresh AND returning players, and the
 end-card buttons shifted up (`by = py+ph-24`) so the "return to the pond" label
@@ -263,8 +285,8 @@ modest so the zone theme never vanishes) for 1.6 s under stingerVictory / stinge
 / stormSurgeStinger / collectionSwell; the ambient-life bed ducks to 0.5 while a boss is
 engaged (restored on clearZoneTheme) so the fight is sonically THE BOSS; per-biome
 melody-layer gain (1.0 across swamp/Reeds/Black Reeds) keeps a darker theme from being
-accidentally quieter. All 9 probes in band + smoke green. C4 (worst-case frame-time) +
-D1–D2 are the next session, then E1 audit.
+accidentally quieter. All 9 probes in band + smoke green. **C4 LANDED** (see
+above). D1–D2 (tutorial + menu/options polish) are the next session, then E1 audit.
 
 ### v1.9 "The Living Swamp" — **COMPLETE** (season audit signed off 2026-09-09; all 13 items T0/S1–S3/J1–J4/L1–L4 + **A1** landed; A1 fresh-session quality audit — every gate GREEN)
 
