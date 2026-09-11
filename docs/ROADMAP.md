@@ -1251,3 +1251,59 @@ its own work). ~13 items, ~5 sessions.
   tuned at the current cadence).
 - **Image/audio/font assets** — invariant: everything stays procedural
   (math.js shapes, canvas, WebAudio synth).
+---
+
+## v1.10 — "The Tuned Swamp" (PLANNED; the retune + repair pass)
+
+**Theme:** stop building, start tuning. v1.1–v1.9 *added* systems and
+*verified* them (the probes were regression checks). v1.10 is the first version
+where the instrumentation pays off as a **tuning instrument**: measure the game
+against its own data, dial the knobs, repair what the frame review surfaced,
+and mix the sound. **Zero new features** — every item improves something that
+already exists.
+
+**The contract change (pin this):** in v1.6–v1.9 the load-bearing invariant
+was *byte-identity* (logic.js unchanged vs the prior version). In v1.10 the
+contract moves: **logic.js tuning may legitimately change** (that is the
+point) — the gate becomes (a) all 9 pacing probes still IN band (the bands are
+the contract), (b) the M1 balance targets met, (c) smoke green after every
+commit. `SAVE_VERSION` stays 12 (dials, not new save fields). The hand-tuned
+runs may get *better* but never leave their bands.
+
+### M — measure (the prerequisite; M1 first)
+| ID | Item | Acceptance |
+|---|---|---|
+| M1 | **Balance telemetry** — a new dev-only probe `tests/balance.mjs` (the same tradition as the pacing probes, pure logic, node): per-enemy-kind time-to-kill per pigment (at a reference player build), player damage economy vs each zone's threat budget at upgrade levels 0/1/3, charged-splash value vs single swipes, pigment income vs painting costs over a full simulated run. It measures the CURRENT game (no retuning in M1) and prints a baseline table. | `node tests/balance.mjs` runs green + prints the baseline table; every number is derived from the pure logic path (no DOM/canvas); M1 commits the probe + the baseline numbers into PROJECT_STATE so B1–B4 have a before/after. |
+
+### B — retune (the core)
+| ID | Item | Acceptance |
+|---|---|---|
+| B1 | **Enemies + zone pressure** — dial the 6 enemy kinds' HP/damage/behavior pacing and the 4-zone + Reeds/Black-Reeds threat budgets: zone 1 teachable, zone 2 comfortable, zones 3–4 pressure; Reeds stays a different *kind* of difficulty (light + density), not just more HP. | `tests/balance.mjs` re-run shows the zone-pressure curve hits the targets; all 9 probes still in band (if a dial pushes a probe out, adjust to the probes); smoke green. |
+| B2 | **Pigment balance** — red/blue/green/dry damage multipliers + status strengths (burn duration/DoT, freeze chain threshold, root duration, dry-brush viability): every pigment has a clear role and none dominates. | balance.mjs per-pigment TTKs spread into a documented band (no pigment is both weakest-damage AND strongest-utility); hand-tuned probes in band; smoke green. |
+| B3 | **Atelier economy** — upgrade curves + painting costs vs pigment/gold income; gold-tier paintings feel like a reward, not a tax; progression pace matches a 2–3-run cadence to Full Collection. | a simulated career (balance.mjs extension or the probe's career mode) reaches Full Collection in a documented 2–3-run range at a competent play rate; smoke green. |
+| B4 | **Boss fairness** — all six bosses: telegraph durations, per-phase damage, awaken windows. Target: each beatable with a reasonable build, each stays in its documented human band. | bosspace/wardpace/umbrapace + the heron bands still hold after the retune; the maw/telegraph windows were widened or narrowed only with the probe's measured justification in the commit message. |
+
+### C — repair
+| ID | Item | Acceptance |
+|---|---|---|
+| C1 | **The 8 footer-clip defects** (spec'd by the v1.9 A1 frame review: title + options "G/N/B difficulty" help line fully off-canvas at 800px, stats line ~3px clip, end-recap "return to the pond (Esc)" label clipped) — reflow onto the shared UI scale so all footer text sits above the canvas bottom with padding. | The 6 UI-heavy frames re-captured (title, options, end-recap + the rest for regression); frame review: no text at/below the canvas bottom; A1 verifies. |
+| C2 | **Frame-defect sweep** — a systematic review of the 36 baseline + after-frames; every visual blemish found (stray shapes, misaligned HUD, palette outliers, clipped art) gets a small targeted fix. | A recorded defect list (in PROJECT_STATE, one line each: frame, defect, fix) + the fixed frames re-captured; the list is empty-or-waived by A1. |
+| C3 | **Audio mix pass** — relative levels of the v1.9 layers (sfx vs music vs ambient, per-biome), ducking rules (music dips under boss stings + collection fanfare, ambient yields to boss themes). No new sounds — just the mix. | A pure, node-testable mix table (a `tests/mix.mjs` check asserts the level/ducking constants exist and the draw/tick path references them); the mix table recorded in the commit. |
+| C4 | **Worst-case frame-time audit** — v1.9 stacked many presentation layers (mist + fireflies + lighting + hitstop + droplets + ink bursts); each was P10-checked alone. Measure them ALL at once at the worst case (a boss mid-awaken + charged splash + kill burst + environmental layer) and fix any spike. | A dev check (or the frames harness with a timed draw) shows the worst-case frame draw under the P10 budget; any fixed layer gets its fix committed with the measured before/after. |
+
+### D — polish existing systems
+| ID | Item | Acceptance |
+|---|---|---|
+| D1 | **Tutorial polish** — reword/reorder the v1.2 tutorial against the frame evidence: does it teach the things players actually fumble? (the 3 learn chips + drills stay; their copy and order may improve.) | The tutorial frames re-captured; a recorded note on what changed and why (frame evidence). |
+| D2 | **Menu / options QoL** — defaults + discoverability: the Wander toggle, challenge mode, the difficulty flow (G/N/B), save export/import — surfaced clearly, sensible defaults. | The options/title frames show the improvements; input targets unchanged (gamepad + mouse nav still cover every control); smoke green. |
+
+### E1 — the v1.10 audit (final gate)
+The K10/C4/A1-style audit, with the **v1.10 contract**: smoke ×3 + flakecheck
+green; all 9 pacing probes IN band (unchanged bands — the retune had to keep
+them); sfx/music/ui dev checks green; balance.mjs re-run shows the B1–B4
+targets met; the frame set re-captured (36 + after-sets) + the C1/C2 defect
+lists closed; P10 worst-case (C4) green; zero new runtime deps; SAVE_VERSION
+12, GAME_VERSION 1.0.0; no 8765 server. On green: v1.10 COMPLETE.
+
+**Batch plan:** M1 → B1 + B2 → B3 + B4 → C1 + C2 + C3 → C4 + D1 + D2 → E1
+(fresh session).

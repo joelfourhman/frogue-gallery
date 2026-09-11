@@ -5,6 +5,35 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
+### v1.10 "The Tuned Swamp" — NEXT ACTION (orchestrator handoff, 2026-09-09)
+
+**v1.9 is COMPLETE** (all 13 items committed, final `4b93fa1`, quality
+audit signed off — v1.9 made the game *feel* good: sound design, juice,
+living world, visual identity, frame-evidence process). v1.10 is the
+**retune + repair pass** — Joel's call: "improve what already exists, no
+new features." Plan-of-record in `docs/ROADMAP.md` §v1.10: M1 (balance
+telemetry), B1–B4 (retune: enemies/zones, pigments, atelier economy,
+boss fairness), C1–C4 (repair: footer clips, frame-defect sweep, audio
+mix, worst-case frame-time), D1–D2 (tutorial + menu polish), E1 (audit).
+
+**The contract change (pin this):** v1.6–v1.9 enforced byte-identity
+(logic.js unchanged). In v1.10 **logic.js tuning may legitimately change** —
+the gate becomes (a) all 9 pacing probes IN band (the bands are the
+contract), (b) the M1 `tests/balance.mjs` balance targets met, (c) smoke
+green after every commit. SAVE_VERSION stays 12 (dials, not fields).
+Hand-tuned runs may get *better* but never leave their bands.
+
+**First session: M1** — `tests/balance.mjs` (per-enemy TTK per pigment,
+zone pressure at upgrade 0/1/3, charged-splash value, pigment income vs
+costs) measuring the CURRENT game + baseline table into PROJECT_STATE.
+Also refresh the still-stale `AGENTS.md` (it still describes the v1.0-era
+game: 16-stage smoke, 3 archetypes, 5400px swamp, only pace/bosspace —
+bring it to v1.9 reality: ~111-stage smoke + sfx/music/ui dev checks,
+9 pacing probes, 6 bosses, 3 biomes + Wander, SAVE_VERSION 12,
+GAME_VERSION 1.0.0, the frames harness) as a small separate `docs:` commit.
+Batch plan: M1 → B1 + B2 → B3 + B4 → C1 + C2 + C3 → C4 + D1 + D2 → E1
+(fresh session).
+
 ### v1.9 "The Living Swamp" — **COMPLETE** (season audit signed off 2026-09-09; all 13 items T0/S1–S3/J1–J4/L1–L4 + **A1** landed; A1 fresh-session quality audit — every gate GREEN)
 
 **NEXT ACTION: v1.9 is COMPLETE — awaiting direction for v1.10 / the
