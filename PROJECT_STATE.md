@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.10 "The Tuned Swamp" — NEXT ACTION (orchestrator handoff, 2026-09-09)
+### v1.10 "The Tuned Swamp" — M1 LANDED (session v110-m1, 2026-09-11)
 
 **v1.9 is COMPLETE** (all 13 items committed, final `4b93fa1`, quality
 audit signed off — v1.9 made the game *feel* good: sound design, juice,
@@ -23,16 +23,92 @@ contract), (b) the M1 `tests/balance.mjs` balance targets met, (c) smoke
 green after every commit. SAVE_VERSION stays 12 (dials, not fields).
 Hand-tuned runs may get *better* but never leave their bands.
 
-**First session: M1** — `tests/balance.mjs` (per-enemy TTK per pigment,
-zone pressure at upgrade 0/1/3, charged-splash value, pigment income vs
-costs) measuring the CURRENT game + baseline table into PROJECT_STATE.
-Also refresh the still-stale `AGENTS.md` (it still describes the v1.0-era
-game: 16-stage smoke, 3 archetypes, 5400px swamp, only pace/bosspace —
-bring it to v1.9 reality: ~111-stage smoke + sfx/music/ui dev checks,
-9 pacing probes, 6 bosses, 3 biomes + Wander, SAVE_VERSION 12,
-GAME_VERSION 1.0.0, the frames harness) as a small separate `docs:` commit.
-Batch plan: M1 → B1 + B2 → B3 + B4 → C1 + C2 + C3 → C4 + D1 + D2 → E1
-(fresh session).
+**M1 LANDED (session v110-m1).** Two commits:
+- `3d29f55` `feat(v1.10 M1)` — **`tests/balance.mjs`**, the balance-telemetry
+  probe (pure node, same stubbed-DOM/drive-rAF harness as the other probes,
+  deterministic — seeded `Math.random`, no wall-clock). It measures the
+  CURRENT game (no `logic.js` change yet — M1 only *reads*):
+  (1) per-enemy time-to-kill for **every** kind (beetle/mosquito/toad + the
+  Reeds wisp/serpent/leech) × **every** pigment (red/blue/green/dry) — god-mode
+  DPS baseline AND the human estimate (reusing the probes' 0.42 dpsFrac
+  convention so it's comparable to humance); (2) **zone pressure** — each
+  zone's enemy threat budget (mix + signature-elite HP, in human-DPS seconds)
+  vs its traversal time, at upgrade level **0 / 1 / 3**, with a zone-pressure
+  *curve* check (intended: zone 1 lightest teaching zone → zone 2 deliberate
+  breather → zone 3 → zone 4 heaviest finale); (3) **charged-splash value** —
+  charged-splash sustained DPS vs the uncharged swipe (single + group);
+  (4) **pigment economy** — MEASURED per-zone orb income (a god-mode full
+  traversal sampling `collected` at each zone boundary; a lower bound, since
+  a real player dawdles/detours and collects more) vs the 10-painting catalog
+  + 3 upgrade-track costs, answering "can a first-timer afford a 2-slot
+  loadout by zone 3–4?"; and (5) a **flagged-imbalances** list.
+  Smoke green, no `logic.js` change, no 8765 server left.
+- (the second commit of this session is the `docs(v1.10 M1)` AGENTS.md refresh
+  — it was the stale v1.0-era file: 16-stage smoke / 3 archetypes + heron boss /
+  5400px swamp / only pace+bosspace. Now current: ~111-stage smoke + the
+  sfx/music/ui dev checks, the 9 pacing probes, the 6 bosses, 3 biomes + the
+  bounded Wander (default OFF), SAVE_VERSION 12, GAME_VERSION 1.0.0, the
+  `tests/frames.mjs` harness, loopback-only `python -m http.server 8765`, and
+  the v1.10 contract (probes-in-band + balance targets, not byte-identity).)
+
+**M1 BASELINE TABLE** (the numbers the CURRENT game produces; B1–B4 retune
+against this and re-run `node tests/balance.mjs` to show the deltas):
+
+```
+[1] PER-ENEMY TTK  (god s / human s, per pigment; human = god / 0.42)
+kind        red      blue     green     dry
+beetle     0.6/1.5  1.2/2.8  2.5/5.9   3.7/8.9
+mosquito   0.1/0.3  0.4/0.8  0.6/1.4   0.6/1.4
+toad       1.0/2.4  1.4/3.4  2.5/5.9   3.7/8.9
+wisp       0.4/0.9  0.4/0.9  0.8/1.9   0.8/1.9
+serpent    0.8/1.9  1.4/3.3  2.0/4.9   2.9/6.9
+leech      0.1/0.3  0.4/0.9  0.6/1.4   0.6/1.4
+
+[2] ZONE PRESSURE  ratio = fight-seconds / travel-seconds (by power upgrade)
+                zone1    zone2    zone3    zone4
+level 0 (13.6 hp/s):  1.32      1.11      1.85      2.99
+level 1 (15.6 hp/s):  1.15      0.97      1.61      2.60
+level 3 (19.7 hp/s):  0.91      0.77      1.27      2.06
+  (zone 2 dips below zone 1 = the intended "breather"; zone 4 = the finale)
+
+[3] CHARGED-SPLASH VALUE
+  swipe (uncharged) sustained DPS          : 32.4 hp/s
+  splash (charged) single-target DPS       : 2.3 hp/s (cycle 2.05s)
+  splash (charged) group DPS (~3 in radius): 6.8 hp/s
+  charged-vs-uncharged single-target ratio : 0.07× (charging only pays vs groups)
+
+[4] PIGMENT ECONOMY (first-timer; measured orb income is a LOWER bound)
+  run orb income (raw, full run)           : red 3.1 · blue 1.2 · green 2
+  cumulative banked by zone boundary (welcome + collected-to-here):
+    zone 1  r5/b8/g6   zone 2  r6/b8/g7   zone 3  r7/b8/g7   zone 4  r8/b8/g8
+  cheapest 2-painting loadout (moonlit-pond + dancing-salamander) = r8/b6/g4
+  VERDICT: affordable by zone 3? NO · by zone 4? YES
+
+[5] FLAGGED IMBALANCES (B1–B4 fix these; re-run after to show the deltas)
+  • TTK spread: toad 1.0s vs mosquito 0.1s (×6.7) — toad is tank-filler,
+    not a distinct fight
+  • zone 4 finale ratio 2.99 is 2.3× zone 1's 1.32 — a big jump at the end
+    (verify the finale is intentional; it is the "rest then finish" zone)
+  • charged splash single-target DPS 2.3 is only 0.07× the swipe's 32.4 —
+    charging rarely pays off vs a single target
+  • economy: a first-timer can't afford the cheapest 2-slot loadout (r8/b6/g4)
+    by zone 3 (bank r7/b8/g7); the margin by zone 4 (r8/b8/g8) is thin
+    (measured income is a lower bound — a real player collects more)
+```
+
+> If a B-session finds `balance.mjs` *needs* a `logic.js` change to read
+> something (it only reads today — `ENEMIES`, `ZONES`, `makeTuning`,
+> `PAINTINGS`, `UPGRADES`, `WELCOME_GRANT`, `bankGain`, `spawnEnemy`, `Game`
+> internals), stop and flag it here.
+
+**NEXT ACTION (next session): B1 + B2** — B1 (zone/enemy retune: flatten the
+zone-pressure curve so zone 1 is the light teaching zone, resolve the toad
+tank-filler TTK, soften the zone-4 finale jump if it's not intentional) and
+B2 (pigment retune: make the charged splash worth its cooldown, or reframe it
+as group-only; rebalance the pigment dmgMult spread so green/dry aren't dead
+weight). Then B3 + B4, then C/D/E. B1/B2 touch `src/logic.js` tuning — that's
+allowed in v1.10. Re-run `tests/balance.mjs` after to show the deltas vs the
+baseline above, and keep all 9 pacing probes in band + smoke green.
 
 ### v1.9 "The Living Swamp" — **COMPLETE** (season audit signed off 2026-09-09; all 13 items T0/S1–S3/J1–J4/L1–L4 + **A1** landed; A1 fresh-session quality audit — every gate GREEN)
 

@@ -2,7 +2,30 @@
 
 Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
-consequential decisions in `docs/DECISIONS.md`.
+Consequential decisions in `docs/DECISIONS.md`.
+
+**Last PM update: 2026-09-11 (v1.10 "The Tuned Swamp" — **M1 the balance
+telemetry LANDED** (session `v110-m1`; 2 commits — `feat(v1.10 M1)`
+`tests/balance.mjs` + the `docs(v1.10 M1)` AGENTS.md refresh). This is the
+season that finally *lets the numbers move*: v1.6–v1.9 gated on byte-identity
+(`logic.js` frozen), v1.10 gates on (a) all 9 pacing probes IN band + (b) the
+M1 balance targets met + (c) smoke green after every commit — so
+`src/logic.js` tuning numbers MAY now change (SAVE_VERSION stays 12). M1 is
+the MEASUREMENT pass (it reads, it does not retune): the NEW
+`node tests/balance.mjs` probe emits (1) a per-enemy TTK matrix — all 6
+archetypes × all 4 pigments, god-DPS + the 0.42-frac human model — (2) the
+zone-pressure curve (zone mix + signature elite HP, in human-DPS seconds vs
+the zone's traversal budget, at upgrade levels 0/1/3), (3) the charged-vs-
+uncharged splash DPS ratio + a per-pigment value table, (4) the pigment
+economy (measured orb income per zone × 4 + the WELCOME_GRANT vs the cost of
+every 8 pigment-priced paintings + the 3 upgrade tracks → the cheapest 2-slot
+loadout's affordability by zone 3/4), and (5) a **flagged-imbalances** list
+(TTK spread 6× / the zone-2 breather / the zone-4 finale over the 1.4 budget
+×2 / the charged-splash value gap / the tight pigment economy). Deterministic
+(×2 identical runs, no unseeded RNG, no wall-clock), no `logic.js` change,
+smoke green, no 8765 server left. The committed baseline + the full flagged
+list + the B1/B2 handoff are in `PROJECT_STATE.md` §v1.10. **Next: B1
+(zones) + B2 (pigments)** in the following session.**
 
 **Last PM audit: 2026-09-09 (v1.9 "The Living Swamp" — **A1 — the v1.9 quality
 audit, the season's final gate** (FRESH session `v19-a1` — the implementer does
