@@ -1994,21 +1994,30 @@ export function galleryBonusTotal(save) {
 export const UPGRADES = {
   capacity: {
     name: 'Pigment Satchel', desc: 'Carry more pigment on expeditions.',
+    // v1.10 B3: per-level costs form a PROGRESSION, not a wall. L1 is reachable
+    // on the first-run welcome grant; L2 is reached by zone 3–4; L3 is a
+    // multi-run aspiration. L2/L3 were softened from the pre-B3 steep jump
+    // (capacity L3 r8b8g8 → r7b7g7; vitality L2 b8/g6 → b7/g5, L3 b12/g10 → b10/g8)
+    // so the track reads as a climb. L1 costs are UNCHANGED (the welcome-grant
+    // safety net).
     levels: [ { cost: { red: 3, blue: 3, green: 3 } },
               { cost: { red: 5, blue: 5, green: 5 } },
-              { cost: { red: 8, blue: 8, green: 8 } } ],
+              { cost: { red: 7, blue: 7, green: 7 } } ],
   },
   power: {
     name: 'Brush Craft', desc: 'Your strokes hit harder.',
+    // L3 softened r10/b7/g7 → r9/b6/g6 (the red step 4→6→9 keeps a steady climb).
     levels: [ { cost: { red: 4, blue: 2, green: 2 } },
-              { cost: { red: 7, blue: 4, green: 4 } },
-              { cost: { red: 10, blue: 7, green: 7 } } ],
+              { cost: { red: 6, blue: 4, green: 4 } },
+              { cost: { red: 9, blue: 6, green: 6 } } ],
   },
   vitality: {
     name: 'Swamp Vitality', desc: 'One more lily pad of health.',
+    // L2/L3 softened (b8/g6→b7/g5, b12/g10→b10/g8) — blue 5→7→10 and green
+    // 3→5→8 keep a steady, reachable climb rather than a late wall.
     levels: [ { cost: { red: 2, blue: 5, green: 3 } },
-              { cost: { red: 4, blue: 8, green: 6 } },
-              { cost: { red: 6, blue: 12, green: 10 } } ],
+              { cost: { red: 4, blue: 7, green: 5 } },
+              { cost: { red: 6, blue: 10, green: 8 } } ],
   },
 };
 
@@ -2133,7 +2142,16 @@ export function costArray(costObj) {
 // first expedition is granted a one-time welcome amount of each pigment:
 // enough to buy the cheapest single-level upgrade (Swamp Vitality,
 // {red:2, blue:5, green:3}) plus a little cushion. Deterministic + pure.
-export const WELCOME_GRANT = { red: 3, blue: 6, green: 4 };
+// A fresh save (its FIRST expedition) banks a one-time welcome kit so a
+// brand-new player can buy a first upgrade or a first loadout slot without
+// grinding an entire zone. v1.10 B3: raised from r3/b6/g4 to r5/b9/g5 — the
+// M1 lower-bound income model showed a first-timer's bank by zone 3/4 barely
+// covered the cheapest 2-painting loadout with NOTHING left for a 3rd painting
+// or a first upgrade level (no "choices, not exactly-one"). The extra +2 red /
+// +3 blue / +1 green gives real margin so the player can take the cheapest
+// 2-slot loadout AND still pick a 3rd painting (zone 3) or a first upgrade
+// level (zone 4). One-time (gated by the welcomeGranted flag).
+export const WELCOME_GRANT = { red: 5, blue: 9, green: 5 };
 export function applyWelcomeGrant(save) {
   if (!save || !save.flags || save.flags.welcomeGranted) return save;
   save.flags.welcomeGranted = true;
