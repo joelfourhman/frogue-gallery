@@ -3504,7 +3504,7 @@ console.log('== stage 55: v1.3 M16 C2 — victory end-screen "Season" summary ==
   // their original geometry
   assert(gA._endCardH() === 540, 'C2: the victory card height is unchanged (540)');
   const ebA = gA._endButtons();
-  assert(ebA.primary.y === gA.ch / 2 - 540 / 2 + 540 + 16, 'C2: the primary button keeps its original rect (nothing below it moved)');
+  assert(ebA.primary.y === gA.ch / 2 - 540 / 2 + 540 - 24, 'C2: the primary button keeps its rect (v1.10 C1 re-flowed the end buttons up so the return label clears the 800px floor even on a full NG+ victory; nothing else moved)');
 
   // ---- (c) a first-time (cycle-0) victory: the block still renders, with
   // its own correct values (cycle 0, no modifier, 0 gold, no frame).

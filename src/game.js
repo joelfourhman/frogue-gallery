@@ -6986,14 +6986,21 @@ _drawAtelier(ctx) {
   // visuals and the click targets can never drift apart.
   _titleLayout() {
     const cx = this.cw / 2;
-    const pw = 520, ph = 254, px = cx - pw / 2, py = 300;
-    const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 18;
+    // C1 (v1.10): the controls panel was pinned at py=300, which left no room
+    // for the footer on an 800-tall canvas once a returning player's extra rows
+    // (NG+ / Curator Challenge / Beneath-the-Reeds entry + best-run line) stack
+    // in — the stats/help lines ran off the bottom (the A1 finding). Pull the
+    // panel up and tighten every inter-row gap so even the worst-case returning
+    // title fits above the 800px floor with a small margin. Geometry only —
+    // no sim/tuning number moves.
+    const pw = 520, ph = 254, px = cx - pw / 2, py = 236;
+    const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 12;
     // T1 (v1.2 M13): the guided first expedition button (shown only to a fresh
     // save — see tutorialEligible). Sits just under the start button and pushes
     // the difficulty + secondary rows down one row ONLY for a fresh save, so a
     // returning player's title keeps its original layout (no dead button).
     const eligible = tutorialEligible(this.save);
-    const tw = 260, th = 40, tx = cx - tw / 2, ty = by + bh + 14;
+    const tw = 260, th = 40, tx = cx - tw / 2, ty = by + bh + 10;
     // N1 (v1.3 M14): the "Next Expedition" (New Game+) button. Shown ONLY when
     // a victory has been earned (ngUnlocked) so a first-time save (ngCycle 0)
     // sees ZERO new UI. It occupies the same slot as the guided button (which
@@ -7002,7 +7009,7 @@ _drawAtelier(ctx) {
     // while visible, mirroring how the guided button already behaves.
     const ngShow = ngUnlocked(this.save);
     const ng = ngShow ? { x: cx - tw / 2, y: ty, w: tw, h: th } : null;
-    const slotPush = (eligible || ngShow) ? (ty + th + 12) : (by + bh + 12);
+    const slotPush = (eligible || ngShow) ? (ty + th + 8) : (by + bh + 8);
     const dy = slotPush, dH = 30, dW = 88, dGap = 10;
     const dTotal = dW * 3 + dGap * 2, dStartX = cx - dTotal / 2;
     const diff = ['gentle', 'normal', 'bold'].map((id, i) => ({ id, x: dStartX + i * (dW + dGap), y: dy, w: dW, h: dH, label: (DIFFICULTIES[id] || {}).label }));
@@ -7018,7 +7025,7 @@ _drawAtelier(ctx) {
     const chw = 150, chh = 44, cgap = 24;
     const rowW = (challShow ? chw + cgap : 0) + 200 + cgap + 200;
     const rowX = cx - rowW / 2;
-    const aby2 = dy + dH + 12, abw2 = 200, abh2 = 44;
+    const aby2 = dy + dH + 8, abw2 = 200, abh2 = 44;
     const abx2 = rowX, ox2 = rowX + (challShow ? chw + cgap : 0) + 200 + cgap;
     const ow2 = 200, oh2 = abh2;
     const abx = abx2, aby = aby2, abw = abw2, abh = abh2, ox = ox2, ow = ow2, oh = oh2;
@@ -7032,11 +7039,11 @@ _drawAtelier(ctx) {
     // row is below it), carrying the "deeper" subtitle. When absent (no victory)
     // the layout is exactly the pre-Reeds geometry (reeds null).
     const reedsShow = reedsUnlocked(this.save);
-    const rw2 = 260, rh2 = 36, rx2 = cx - rw2 / 2, ry2 = aby2 + abh2 + 16;
+    const rw2 = 260, rh2 = 36, rx2 = cx - rw2 / 2, ry2 = aby2 + abh2 + 10;
     const reeds = reedsShow ? { x: rx2, y: ry2, w: rw2, h: rh2 } : null;
     // the footer stats sit below the atelier/options row; when the Reeds entry is
     // shown they are pushed down one row so nothing overlaps.
-    const fpush = reedsShow ? (rh2 + 16) : 0;
+    const fpush = reedsShow ? (rh2 + 10) : 0;
     return { cx, pw, ph, px, py, bx, by, bw, bh, tw, th, tx, ty, diff, abx, aby, abw, abh, ox, oy: aby2, ow, oh, ng, chall, reeds, fpush };
   }
   _setDifficulty(id) {
@@ -7624,13 +7631,13 @@ _drawAtelier(ctx) {
         // nothing overlaps — see _titleLayout's fpush)
         const s = this.save.stats;
         const fpush = g.fpush || 0;
-        centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, g.aby + g.abh + 18 + fpush, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.7);
+        centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, g.aby + g.abh + 10 + fpush, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.7);
         const br = this.save.bestRun;
         if (br) {
           const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
-          centerText(ctx, `best run — ${what}`, cx, g.aby + g.abh + 38 + fpush, uiFont(UI.sizes.body, { weight: 700 }), '#e8c86a', 0.95);
+          centerText(ctx, `best run — ${what}`, cx, g.aby + g.abh + 30 + fpush, uiFont(UI.sizes.body, { weight: 700 }), '#e8c86a', 0.95);
         }
-        centerText(ctx, 'G/N/B to set difficulty · M to mute · A for the atelier · R for the Reeds · "New Game" = erase save (bottom left)', cx, g.aby + g.abh + (br ? 58 : 38) + fpush, uiFont(UI.sizes.small), '#fdf6e9', 0.5);
+        centerText(ctx, 'G/N/B to set difficulty · M to mute · A for the atelier · R for the Reeds · "New Game" = erase save (bottom left)', cx, g.aby + g.abh + (br ? 48 : 30) + fpush, uiFont(UI.sizes.small), '#fdf6e9', 0.5);
         // erase-save link (bottom-left; two-click confirm, see _updateTitle)
         const ex = 16, ey = this.ch - 40;
         const armed = (this.now - (this._eraseArm || -99)) < 3;
@@ -7973,15 +7980,15 @@ _drawAtelier(ctx) {
   _endButtons() {
     const H = this._endCardH();
     const cx = this.cw / 2, py = this.ch / 2 - H / 2, ph = H;
-    const bw = 300, bh = 54, bx = cx - bw / 2, by = py + ph + 16;
+    const bw = 300, bh = 54, bx = cx - bw / 2, by = py + ph - 24;
     const primary = { x: bx, y: by, w: bw, h: bh };
     const ngShow = ngUnlocked(this.save);
     let ng = null;
-    let retY = by + bh + 16;
+    let retY = by + bh + 10;
     if (ngShow) {
       const nbh = 44;
-      ng = { x: cx - bw / 2, y: by + bh + 14, w: bw, h: nbh };
-      retY = ng.y + ng.h + 14;
+      ng = { x: cx - bw / 2, y: by + bh + 8, w: bw, h: nbh };
+      retY = ng.y + ng.h + 8;
     }
     const ret = { x: cx - 105, y: retY, w: 210, h: 34 };
     return { primary, ng, ret };
