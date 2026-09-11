@@ -13,7 +13,12 @@ export const PIGMENTS = {
   red:   { id: 'red',   name: 'Crimson', color: '#c8452c', light: '#e8836b', dmgMult: 1.6,  status: 'burn'  },
   blue:  { id: 'blue',  name: 'Cobalt',  color: '#3a6fd8', light: '#8fb0f0', dmgMult: 1.0,  status: 'freeze' },
   green: { id: 'green', name: 'Moss',    color: '#5a9e3d', light: '#9ed483', dmgMult: 0.6,  status: 'root'  },
-  dry:   { id: 'dry',   name: 'Dry Brush', color: '#9a8f80', light: '#c9c0b2', dmgMult: 0.5, status: null   },
+  // v1.10 B2: dry is the SAFE CLEAR — weak, no status, the fallback, not a
+  // competitor. Its damage is cut well below green (0.5 -> 0.35) so it is
+  // never tied with the other paints in the TTK table (it is always the
+  // slowest kill): a player reaches for dry to finish a straggler or clear
+  // a swarm without spending a colored paint, NOT because it hits hard.
+  dry:   { id: 'dry',   name: 'Dry Brush', color: '#9a8f80', light: '#c9c0b2', dmgMult: 0.35, status: null   },
 };
 export const PIGMENT_ORDER = ['red', 'blue', 'green', 'dry'];
 
@@ -325,7 +330,15 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', g
     swipeRange: 74,
     swipeArc: 1.25,          // radians of fan
     swipeCooldown: 0.2,
-    splashDamage: 5,
+    // v1.10 B2: the charged splash was a broken 0.07x single-target DPS
+    // (a 5-damage burst on a 2.05s cycle = 2.3 hp/s vs the swipe's 32.4).
+    // Raised to a real burst (5 -> 60) so charging PAYS: vs a group it is a
+    // value spike (3 targets in the 58px radius ~= 2.5-3x the swipe's group
+    // DPS in the same cycle) and vs a single tough target it lands at
+    // roughly parity (a damage spike, not a slow trickle). The swipe is
+    // untouched (still the bread-and-butter single-target verb); the splash
+    // is now the deliberate choice for clusters / tanks.
+    splashDamage: 60,
     splashRadius: 58,
     splashCharge: 0.55,
     splashCooldown: 1.5,
