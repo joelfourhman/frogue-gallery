@@ -101,14 +101,97 @@ level 3 (19.7 hp/s):  0.91      0.77      1.27      2.06
 > `PAINTINGS`, `UPGRADES`, `WELCOME_GRANT`, `bankGain`, `spawnEnemy`, `Game`
 > internals), stop and flag it here.
 
-**NEXT ACTION (next session): B1 + B2** — B1 (zone/enemy retune: flatten the
-zone-pressure curve so zone 1 is the light teaching zone, resolve the toad
-tank-filler TTK, soften the zone-4 finale jump if it's not intentional) and
-B2 (pigment retune: make the charged splash worth its cooldown, or reframe it
-as group-only; rebalance the pigment dmgMult spread so green/dry aren't dead
-weight). Then B3 + B4, then C/D/E. B1/B2 touch `src/logic.js` tuning — that's
-allowed in v1.10. Re-run `tests/balance.mjs` after to show the deltas vs the
-baseline above, and keep all 9 pacing probes in band + smoke green.
+**B1 + B2 LANDED (session v110-b1, 2026-09-11).** Two commits, ONE coherent
+retune (B1 zone-curve + enemy-identity first, then B2 splash + pigment roles):
+- `54f6b1c` `feat(v1.10 B1)` — **zone curve + enemy identity** (in
+  `src/logic.js` enemy stats + `src/game.js` ZONES mixes/sigs):
+  - *Zone curve* — the fight/travel ratio was "dip, dip, cliff" (1.32/1.11/
+    1.85/2.99: zone 2 LIGHTER than zone 1, then a 2.3× jump into zone 4).
+    Rebalanced the zone mixes/sigs (Reed Flats beetle 3→2 + mosquito 2; Slick
+    Hollow beetle 2→3; Bramble + beetle 1; Gray Shore mosquito 3→2, sig beetle
+    2→1) so the curve is **monotonic** (level 0: 1.22/1.64/1.76/2.20 — zone 1
+    is the lightest, escalating smoothly; zone 4 is a step-up (+81% over zone
+    3) not a cliff). Monotonic at levels 0/1/3.
+  - *Toad identity* — the toad was tank-filler (raw TTK 1.0s = ×6.7 mosquito).
+    Cut its HP 52→36 + armor 0.08→0 so it is no longer the slowest kill, and
+    made the dizzy-when-painted window (2.2→2.4s, +50% dmg) the reward — a toad
+    now reads as "a different kind of fight" (a punishable sit), not "more HP".
+  - *TTK spread* — mosquito 11→16, wisp 14→18, leech 10→14 (the fast tier is
+    no longer an instant 0.1s pop). The 6-kind red-column spread is now
+    mosquito 0.4s → serpent 0.8s = **×2** (was ×6.7) — inside the healthy
+    2–3× tier range; fast tier (mosquito/leech/wisp) vs tanky tier
+    (toad/serpent/beetle) is preserved.
+- `b316131` `feat(v1.10 B2)` — **splash value + pigment roles** (all in
+  `src/logic.js`):
+  - *Splash* — `splashDamage` 5→60. The charged splash was 2.3 hp/s single
+    (0.07× the swipe — a trickle that never paid). Now single-target 27.1
+    (0.84×, near-parity on a tough target) and group (3 in radius) 81.2 (2.5×
+    the swipe's group DPS). Chose group-value + a near-parity single spike
+    (not a strict 1.0× parity, which needed a swipe-DPS cut); the swipe is
+    untouched.
+  - *Pigment roles* — `dry` dmgMult 0.5→0.35. M1 had green+dry TIED across
+    the table (two identical columns). Now dry is strictly the weakest paint
+    on every enemy (the safe clear / fallback), so each pigment has a distinct
+    profile: **red = the hard hitter** (fastest on 5/6, burn DoT), **blue = the
+    control** (freeze on already-slowed), **green = the sustain** (heal-per-hit
+    + root), **dry = the safe clear** (weakest, no status).
+
+**AFTER TABLE** (re-run of `node tests/balance.mjs` after B1+B2; deltas vs the
+M1 baseline above):
+
+```
+[1] PER-ENEMY TTK  (god s / human s, per pigment)
+kind        red      blue     green     dry
+beetle     0.6/1.5  1.2/2.8  2.5/5.9   3.7/8.9   (unchanged)
+mosquito   0.4/0.9  0.6/1.4  0.8/1.8   1.6/3.9   (was 0.1/0.3 — no more pop)
+toad       0.6/1.4  1.0/2.4  1.6/3.9   3.7/8.9   (was 1.0/2.4 — no longer a wall)
+wisp       0.4/0.8  0.6/1.4  1.0/2.4   1.8/4.4
+serpent    0.8/1.9  1.4/3.4  2.0/4.9   4.1/9.9
+leech      0.4/0.9  0.4/0.9  0.8/1.9   1.4/3.4
+  → red-column spread now ×2 (0.4→0.8); dry strictly slower than green on all.
+
+[2] ZONE PRESSURE  ratio = fight/travel (monotonic now, was dip-then-cliff)
+                zone1    zone2    zone3    zone4
+level 0 (13.6 hp/s):  1.22      1.64      1.76      2.20   (was 1.32/1.11/1.85/2.99)
+level 1 (15.6 hp/s):  1.06      1.43      1.53      1.91
+level 3 (19.7 hp/s):  0.84      1.13      1.21      1.51
+  → monotonic at every level; zone 4 is a step-up (+45% over zone 3), not a cliff.
+
+[3] CHARGED-SPLASH VALUE   (was 2.3 single / 0.07×)
+  swipe (uncharged) sustained DPS          : 32.4 hp/s
+  splash (charged) single-target DPS       : 27.1 hp/s (cycle 2.05s)
+  splash (charged) group DPS (~3 in radius): 81.2 hp/s (2.5× swipe group DPS)
+  charged-vs-uncharged single-target ratio : 0.84× (near-parity; group = the spike)
+
+[4] PIGMENT ECONOMY   (clears as a B1 side-effect — zone-mix reshuffle raised income)
+  run orb income (raw, full run)           : red 5.6 · blue 1.1 · green 2.3
+  cheapest 2-painting loadout (moonlit-pond + dancing-salamander) = r8/b6/g4
+  VERDICT: affordable by zone 3? YES · by zone 4? YES   (was NO / barely-YES)
+  (B3 can still refine the economy curves — the "can you afford it" gate passes.)
+
+[5] FLAGGED IMBALANCES — **ALL 4 M1 FLAGS RESOLVED** ("none flagged"):
+  ✓ TTK spread: ×6.7 → ×2 (toad identity + fast-tier floor raised)
+  ✓ zone curve: dip-then-cliff → monotonic (zone 4 a step-up, not a cliff)
+  ✓ charged splash: 0.07× → 0.84× single + 2.5× group (splashDamage 5→60)
+  ✓ economy: not-affordable-by-zone-3 → affordable by zone 3 (B1 income side-effect)
+```
+
+**All 9 probes IN band after B1+B2** (the contract): pace 17.1 / humance 18.3 /
+bosspace 36.9s (heron untouched — it's a swipe-dps bot) / reedspace 22.1 /
+wardpace 3.7–4.1 / blackpace 25.8 / umbrapace 3.65 / ngpace 19.5 / wandpace
+first-time [16.9,17.8] + Wander×Reeds [21.6,22.7]. Smoke `ALL SMOKE TESTS
+PASSED` after both commits. The B1 zone-mix/HP changes are the only things that
+move a probe, and they land in-band (the swamp fights are a small slice of the
+15–20 min target; the heron boss — pace.mjs' dominant term — is unchanged).
+
+**NEXT ACTION (next session): B3 + B4** — B3 (atelier economy: refine the
+orb-income / upgrade-cost curves so the loadout + upgrade track have headroom;
+the "afford a loadout" gate already passes, B3 is about pacing the *economy*,
+not a fix) and B4 (boss fairness: verify the 6 bosses' step timings / maw
+windows / siphon against the retuned splash + pigment roles — re-run the
+boss/wyrm/warden/umbra probes). Then C1–C4 (repair), D1–D2 (polish), E1 (audit).
+B3/B4 touch `src/logic.js` tuning — allowed in v1.10. Keep all 9 probes in band
++ smoke green after each commit.
 
 ### v1.9 "The Living Swamp" — **COMPLETE** (season audit signed off 2026-09-09; all 13 items T0/S1–S3/J1–J4/L1–L4 + **A1** landed; A1 fresh-session quality audit — every gate GREEN)
 

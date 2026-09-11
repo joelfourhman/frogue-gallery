@@ -4,28 +4,38 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 Consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM update: 2026-09-11 (v1.10 "The Tuned Swamp" — **M1 the balance
-telemetry LANDED** (session `v110-m1`; 2 commits — `feat(v1.10 M1)`
-`tests/balance.mjs` + the `docs(v1.10 M1)` AGENTS.md refresh). This is the
-season that finally *lets the numbers move*: v1.6–v1.9 gated on byte-identity
-(`logic.js` frozen), v1.10 gates on (a) all 9 pacing probes IN band + (b) the
-M1 balance targets met + (c) smoke green after every commit — so
-`src/logic.js` tuning numbers MAY now change (SAVE_VERSION stays 12). M1 is
-the MEASUREMENT pass (it reads, it does not retune): the NEW
-`node tests/balance.mjs` probe emits (1) a per-enemy TTK matrix — all 6
-archetypes × all 4 pigments, god-DPS + the 0.42-frac human model — (2) the
-zone-pressure curve (zone mix + signature elite HP, in human-DPS seconds vs
-the zone's traversal budget, at upgrade levels 0/1/3), (3) the charged-vs-
-uncharged splash DPS ratio + a per-pigment value table, (4) the pigment
-economy (measured orb income per zone × 4 + the WELCOME_GRANT vs the cost of
-every 8 pigment-priced paintings + the 3 upgrade tracks → the cheapest 2-slot
-loadout's affordability by zone 3/4), and (5) a **flagged-imbalances** list
-(TTK spread 6× / the zone-2 breather / the zone-4 finale over the 1.4 budget
-×2 / the charged-splash value gap / the tight pigment economy). Deterministic
-(×2 identical runs, no unseeded RNG, no wall-clock), no `logic.js` change,
-smoke green, no 8765 server left. The committed baseline + the full flagged
-list + the B1/B2 handoff are in `PROJECT_STATE.md` §v1.10. **Next: B1
-(zones) + B2 (pigments)** in the following session.**
+**Last PM update: 2026-09-11 (v1.10 "The Tuned Swamp" — **B1 + B2 the combat
+retune LANDED** (session `v110-b1`; 2 commits — `feat(v1.10 B1)` zone-curve +
+enemy-identity `54f6b1c`, `feat(v1.10 B2)` splash + pigment roles `b316131`).
+This is the season that finally *lets the numbers move*: v1.6–v1.9 gated on
+byte-identity (`logic.js` frozen), v1.10 gates on (a) all 9 pacing probes IN
+band + (b) the M1 balance targets met + (c) smoke green after every commit — so
+`src/logic.js` tuning numbers MAY now change (SAVE_VERSION stays 12). M1 was
+the MEASUREMENT pass; B1+B2 is the retune that clears the four M1 flags:
+(1) the zone-pressure curve was "dip then cliff" (1.32/1.11/1.85/2.99 — zone 2
+*lighter* than zone 1, a 2.3× jump into the finale) and is now **monotonic**
+(level 0: 1.22/1.64/1.76/2.20 — zone 1 the lightest, escalating, zone 4 a
+step-up not a cliff); (2) the toad was tank-filler (TTK ×6.7 vs mosquito) and
+now has an identity (HP 52→36, the dizzy-when-painted window is the reward) so
+the 6-kind red-column TTK spread is **×2** (mosquito 0.4s → serpent 0.8s);
+(3) the charged splash was a broken 0.07× single-target trickle
+(`splashDamage` 5→60 → 27.1 single ≈ near-parity, 81.2 group = 2.5× the swipe's
+group DPS); (4) the pigment roles were blurred (green+dry tied) and are now
+distinct — red the hard hitter, blue the control, green the sustain, dry the
+safe clear (`dry` dmgMult 0.5→0.35). **All 4 M1 flags resolved**
+(`balance.mjs` now reports "none flagged"); all 9 probes stay IN band (pace
+17.1 / humance 18.3 / ngpace 19.5 / bosspace 36.9s / reedspace 22.1 /
+blackpace 25.8 / umbrapace 3.65 / wandpace [16.9,17.8]+[21.6,22.7]), smoke
+green after both commits. **Next: B3 (atelier economy) + B4 (boss fairness)**
+in the following session.**
+
+**Prior PM update: 2026-09-11 (v1.10 — **M1 the balance telemetry LANDED**
+(session `v110-m1`; 2 commits — `feat(v1.10 M1)` `tests/balance.mjs` + the
+`docs(v1.10 M1)` AGENTS.md refresh). The balance probe emits (1) a per-enemy
+TTK matrix (6 archetypes × 4 pigments, god-DPS + 0.42-frac human), (2) the
+zone-pressure curve at levels 0/1/3, (3) the charged-vs-uncharged splash ratio,
+(4) the measured pigment economy vs painting/upgrade costs, and (5) the
+flagged-imbalances list. Deterministic, no `logic.js` change, smoke green.)**
 
 **Last PM audit: 2026-09-09 (v1.9 "The Living Swamp" — **A1 — the v1.9 quality
 audit, the season's final gate** (FRESH session `v19-a1` — the implementer does
