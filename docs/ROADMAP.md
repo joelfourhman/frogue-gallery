@@ -1297,6 +1297,7 @@ runs may get *better* but never leave their bands.
 | C2 | **Frame-defect sweep** — a systematic review of the 36 baseline + after-frames; every visual blemish found (stray shapes, misaligned HUD, palette outliers, clipped art) gets a small targeted fix. | A recorded defect list (in PROJECT_STATE, one line each: frame, defect, fix) + the fixed frames re-captured; the list is empty-or-waived by A1. |
 | C3 | **Audio mix pass** — relative levels of the v1.9 layers (sfx vs music vs ambient, per-biome), ducking rules (music dips under boss stings + collection fanfare, ambient yields to boss themes). No new sounds — just the mix. | A pure, node-testable mix table (a `tests/mix.mjs` check asserts the level/ducking constants exist and the draw/tick path references them); the mix table recorded in the commit. |
 | C4 | **Worst-case frame-time audit** — v1.9 stacked many presentation layers (mist + fireflies + lighting + hitstop + droplets + ink bursts); each was P10-checked alone. Measure them ALL at once at the worst case (a boss mid-awaken + charged splash + kill burst + environmental layer) and fix any spike. | A dev check (or the frames harness with a timed draw) shows the worst-case frame draw under the P10 budget; any fixed layer gets its fix committed with the measured before/after. |
+| **STATUS** | **C1–C3 LANDED** (2026-09-11, session `v110-c1`): **C1** (`d5921af`) repaired all 8 A1 footer clips — title/options footer reflowed up (panel 278→236, tightened gaps, footer offsets 14/30/48) so the "G/N/B" help line clears the floor on fresh AND returning players, end-card buttons shifted up (`by = py+ph-24`) so the "return to the pond" label clears even a full NG+ victory card; before/after frames in `tests/frames/after-C1/`. **C2** (`8d709ae`) — a systematic fillText-hook sweep of all 36 baseline scenes found no new real defects beyond C1's fix (the only off-canvas text was the Umbral Wyrm banner at world y≈1386, a harness artifact since the live camera centers on the frog–boss midpoint; every flagged overlap was a false positive). **C3** (`bf186a4`) — the audio mix pass: sfx bus 0.95 above music bus 0.62, melody layer 0.34, music-bus duck ×0.78 (~−2.2 dB) for 1.6 s under stingers/fanfares, ambient-life bed ducks to 0.5 under the boss, per-biome theme gain 1.0 (parity); constants exported as `_MIX` + asserted in `tests/music.mjs` (161 assertions). All 9 probes in band, smoke green. Next: **C4** (worst-case frame-time), then D1/D2, then E1. |
 
 ### D — polish existing systems
 | ID | Item | Acceptance |
@@ -1313,6 +1314,7 @@ lists closed; P10 worst-case (C4) green; zero new runtime deps; SAVE_VERSION
 12, GAME_VERSION 1.0.0; no 8765 server. On green: v1.10 COMPLETE.
 
 **Batch plan:** M1 → B1 + B2 → B3 + B4 → C1 + C2 + C3 → C4 + D1 + D2 → E1
-(fresh session). **M1 + B1–B4 LANDED** (retune complete, 2026-09-11) — next
-session starts at **C1** (the footer / clip repair pass), then C2/C3/C4,
-D1/D2, E1.
+(fresh session). **M1 + B1–B4 LANDED** (retune complete, 2026-09-11) and
+**C1–C3 LANDED** (2026-09-11, session `v110-c1` — footer/clip repair, frame-defect
+sweep, audio mix pass; see the C-table STATUS row). Next session starts at **C4**
+(worst-case frame-time), then D1/D2, then E1 (fresh-session audit closes v1.10).

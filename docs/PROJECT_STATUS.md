@@ -4,7 +4,32 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 Consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM update: 2026-09-11 (v1.10 "The Tuned Swamp" — **B3 + B4 the final
+**Last PM update: 2026-09-11 (v1.10 "The Tuned Swamp" — **C1 + C2 + C3 LANDED**
+(session `v110-c1`; 3 commits — `fix(v1.10 C1)` footer/clip repair `d5921af`,
+`fix(v1.10 C2)` frame-defect sweep `8d709ae`, `feat(v1.10 C3)` audio mix pass
+`bf186a4`). **C1** repaired all 8 A1 footer clips at the 800px canvas bottom —
+title/options footer reflowed up (panel 278→236, tightened gaps, footer offsets
+14/30/48) so the "G/N/B difficulty" help line clears the floor on fresh AND
+returning players, and the end-card buttons shifted up (`by = py+ph-24`) so the
+"return to the pond (Esc)" label clears even a full NG+ victory card; before/after
+frames in `tests/frames/after-C1/`. **C2** ran a systematic fillText-hook sweep of
+all 36 baseline scenes (clipping + label overlap, legibility-first) and found no
+new real defects beyond C1's fix — the only off-canvas text was the Umbral Wyrm
+boss name banner at world y≈1386, a harness artifact (the live camera centers on
+the frog–boss midpoint, keeping it on-screen); every flagged overlap was a false
+positive (title buttons, atelier tabs, overlay-vs-title pairs that never co-render).
+**C3** is the audio mix pass (gains + ducking only, no new voices): sfx bus 0.95
+sits above the music bus 0.62 (sfx punchy on top), the melody/boss/stinger layer is
+0.34 over the ambient bed, the music bus ducks ×0.78 (~−2.2 dB, the brief's 3–4 dB
+target kept modest so the zone theme never vanishes) for 1.6 s under stingerVictory
+/ stingerDefeat / stormSurgeStinger / collectionSwell, the ambient-life bed ducks to
+0.5 while a boss is engaged (restored on clear) so the fight is sonically THE BOSS,
+and per-biome theme gain (1.0 across swamp/Reeds/Black Reeds) keeps a darker theme
+from being accidentally quieter; constants exported as `_MIX` + asserted in
+`tests/music.mjs` (161 assertions). All 9 probes IN band, smoke green after each
+commit. **Next: C4 (worst-case frame-time), then D1–D2 polish, E1 the v1.10 audit.**
+
+**Prior PM update: 2026-09-11 (v1.10 "The Tuned Swamp" — **B3 + B4 the final
 retune items LANDED** (session `v110-b3`; 2 commits — `feat(v1.10 B3)`
 atelier economy `fb7ceba`, `feat(v1.10 B4)` boss fairness `5c16124`). This
 completes the v1.10 **retune** (M1 + B1–B4). B3 (economy): M1's hard "can't
