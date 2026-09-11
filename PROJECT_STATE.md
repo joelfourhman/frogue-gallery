@@ -240,12 +240,23 @@ retune items — B3 (atelier economy) then B4 (boss fairness):
     per-phase damage is already balanced (a reacting player loses < ~40% HP per
     phase).
 
-**NEXT ACTION (next session): C1 — the footer / clip repair pass** — C1–C4
-(repair: footer clips, frame-defect sweep, audio mix, worst-case frame-time),
-then D1–D2 (tutorial + menu polish), E1 (the v1.10 audit). The retune (M1 +
-B1–B4) is now COMPLETE: all 4 M1 flags resolved + the economy margin + boss
-fairness. C1–C4 touch presentation / audio / perf — re-run the relevant probes
-+ smoke after each, keep all 9 in band. Stop after B4 (this session).
+**NEXT ACTION (next session): C3 — the audio mix pass** (then this session's
+remaining work is done; C4 + D1–D2 are the next session). **C1 LANDED**
+(`fix(v1.10 C1)`, d5921af): all 8 A1 footer clips repaired — title/options
+footer reflowed up (panel 278→236, tightened gaps, footer offsets 14/30/48) so
+the "G/N/B" help line clears the floor on fresh AND returning players, and the
+end-card buttons shifted up (`by = py+ph-24`) so the "return to the pond" label
+clears even a full NG+ victory card. Before/after frames in
+`tests/frames/after-C1/`. **C2 LANDED** (this commit): a systematic frame-defect
+sweep of all 36 baseline scenes (fillText-hook bbox measurement for clipping +
+label overlap, legibility-first) found **no new real defects** beyond what C1
+fixed — the only off-canvas text was the Umbral Wyrm boss name banner at world
+y≈1386, which is a **harness artifact** (the harness frames the arena centered
+on the boss; the live game centers the camera on the frog–boss midpoint, keeping
+the banner on-screen), and every flagged "overlap" was a false positive (title
+buttons, atelier tabs, overlay-vs-title pairs that never co-render). No code
+change needed for C2; the sweep evidence is recorded here. C4 (worst-case
+frame-time) + D1–D2 (tutorial/menu polish) are the next session, then E1 audit.
 
 ### v1.9 "The Living Swamp" — **COMPLETE** (season audit signed off 2026-09-09; all 13 items T0/S1–S3/J1–J4/L1–L4 + **A1** landed; A1 fresh-session quality audit — every gate GREEN)
 
