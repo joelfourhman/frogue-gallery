@@ -5,7 +5,7 @@ project convention). The concise PM overview is `docs/PROJECT_STATUS.md`;
 milestones in `docs/ROADMAP.md`; decisions in `docs/DECISIONS.md`; durable
 agent instructions in `AGENTS.md`.
 
-### v1.10 "The Tuned Swamp" — M1 LANDED (session v110-m1, 2026-09-11)
+### v1.10 "The Tuned Swamp" — M1 + B1 + B2 + B3 + B4 LANDED (sessions v110-m1 / v110-b1 / v110-b3, 2026-09-11)
 
 **v1.9 is COMPLETE** (all 13 items committed, final `4b93fa1`, quality
 audit signed off — v1.9 made the game *feel* good: sound design, juice,
@@ -176,22 +176,76 @@ level 3 (19.7 hp/s):  0.84      1.13      1.21      1.51
   ✓ economy: not-affordable-by-zone-3 → affordable by zone 3 (B1 income side-effect)
 ```
 
-**All 9 probes IN band after B1+B2** (the contract): pace 17.1 / humance 18.3 /
-bosspace 36.9s (heron untouched — it's a swipe-dps bot) / reedspace 22.1 /
-wardpace 3.7–4.1 / blackpace 25.8 / umbrapace 3.65 / ngpace 19.5 / wandpace
-first-time [16.9,17.8] + Wander×Reeds [21.6,22.7]. Smoke `ALL SMOKE TESTS
-PASSED` after both commits. The B1 zone-mix/HP changes are the only things that
-move a probe, and they land in-band (the swamp fights are a small slice of the
-15–20 min target; the heron boss — pace.mjs' dominant term — is unchanged).
+**All 9 probes IN band after B3+B4** (the contract, re-run final; deltas vs the
+post-B1+B2 line): pace 17.1 / humance 18.7 / bosspace 36.9s (heron untouched —
+it's a swipe-dps bot) / reedspace 22.1 / wardpace 3.7–4.1 / blackpace 25.8 /
+umbrapace 3.79 / ngpace IN BAND / wandpace first-time [16.9,17.8] +
+Wander×Reeds [21.6,22.7]. Smoke `ALL SMOKE TESTS PASSED` after B3 and B4.
+B3 is a pure-economy tweak (welcome grant + upgrade costs — orthogonal to paint
+DPS / boss HP, so the probes barely move; humance 18.3→18.7 as the richer
+grant enables an earlier upgrade). B4 changed ONLY the Umbral Wyrm dual-maw
+telegraph (0.6→0.85 s) — umbrapace 3.65→3.79 (band 2.5–4, still in) and
+blackpace Umbral 245→248 s (band 22–26, still in); every other boss/probe
+untouched.
 
-**NEXT ACTION (next session): B3 + B4** — B3 (atelier economy: refine the
-orb-income / upgrade-cost curves so the loadout + upgrade track have headroom;
-the "afford a loadout" gate already passes, B3 is about pacing the *economy*,
-not a fix) and B4 (boss fairness: verify the 6 bosses' step timings / maw
-windows / siphon against the retuned splash + pigment roles — re-run the
-boss/wyrm/warden/umbra probes). Then C1–C4 (repair), D1–D2 (polish), E1 (audit).
-B3/B4 touch `src/logic.js` tuning — allowed in v1.10. Keep all 9 probes in band
-+ smoke green after each commit.
+**B3 + B4 LANDED (session v110-b3, 2026-09-11).** Two commits, the final two
+retune items — B3 (atelier economy) then B4 (boss fairness):
+- `fb7ceba` `feat(v1.10 B3)` — **atelier economy** (in `src/logic.js`):
+  - *Welcome-grant margin* — M1's hard flag ("can't afford a loadout by zone
+    3") was already cleared by B1's income reshuffle; what B3 fixed is the
+    *margin*. A first-timer's bank by zone 3/4 (B1 baseline) covered the
+    cheapest 2-painting loadout with ~nothing left (zone 3 after the loadout:
+    r0/b2/g3 — no 3rd painting, no first upgrade; "exactly-one, not choices").
+    Raised `WELCOME_GRANT` r3/b6/g4 → **r5/b9/g5** (+2 red / +3 blue / +1
+    green — a modest, non-trivial bump that only affects a first-timer's
+    bank, so it can't trivialize a returner). Now: by zone 3 (bank r10/b11/g8)
+    the player can take the 2-loadout (r8/b6/g4) AND still buy a 3rd painting
+    (moonlit r2/b5/g2) + a first upgrade level; by zone 4 (bank r11/b12/g8)
+    a full first upgrade level (capacity + vitality) is reachable. The
+    safety-net property (a fresh save affords ≥1 upgrade AND ≥1 painting,
+    covers Vitality) still holds — the grant only grew.
+  - *Upgrade-curve softening* — the per-level costs read as a climb, not a
+    wall. Softened only the late steps (L2/L3): capacity L3 r8b8g8→r7b7g7;
+    power L2 r7/b4/g4→r6/b4/g4, L3 r10/b7/g7→r9/b6/g6; vitality L2 b8/g6→b7/g5,
+    L3 b12/g10→b10/g8. L1 costs UNCHANGED (the welcome-grant safety net). The
+    tracks now step steadily: capacity 3→5→7, power 4→6→9 (red), vitality
+    2→4→6 (red), so each level is a reachable step rather than a late jump.
+  - *Painting value + gold* — verified by judgment (no change): the 8 pigment
+    paintings' effects are monotonic in cost (r2/b5/g2 moonlit is a single mild
+    buff … r6/b6/g5 croaksworth +18% damage is visibly the strongest), so a
+    pricier painting is visibly stronger. The 2 G2 gold-tier works
+    (gilded-meridian 25g / verdant-crown 40g) stay NG+-gated + expensive by
+    design — the gold gate (masterpiece 15g first clear, goldPaintings need
+    NG+ + the 25g/40g costs) means gold is a scarce NG+ resource, not a
+    first-run one. No tier cheapened.
+- `5c16124` `feat(v1.10 B4)` — **boss fairness** (in `src/logic.js`, one edit):
+  - Checked all SIX bosses against the four fairness axes (heavy-attack
+    telegraph ≥ ~0.8 s; per-phase damage vs the HP/vitality budget; awaken
+    window ≥ the time to paint 3 hues; the documented human pacing band).
+  - *The one genuine flag — the UMBRAL WYRM*: its `dualTelegraph` was 0.6 s,
+    under the ~0.8 s threshold for a heavy attack (it marks TWO maw points at
+    once, a heavy dual strike). A competent player must be able to read the
+    tell + move, not time it frame-perfect. Lengthened **0.6 → 0.85 s** (the
+    only B4 edit). Umbral in band after (3.79 min, band 2.5–4); Black Reeds
+    run unaffected (25.8 min, band 22–26).
+  - *Verified fair, no change* — the other five: gray heron (30k, telegraph
+    1.8 s, in band bosspace ~1.0 min) · green heron (36k, same machine, in
+    band) · gilded heron (42k, same machine, in band) · Silt Wyrm (48k,
+    telegraph 1.0 s, in band reedspace ~3.8 min) · Hollow Warden (52k,
+    telegraph 1.5 s, in band wardpace 3.7–4.1 min). Every boss uses the shared
+    `bossAwakenDuration 6 s` window which fires *after* the 3-hue completion
+    (a 2× damage burst, not a single paint window) — the 3-hue paint spans
+    multiple surface windows, so no window is shorter than the time to paint 3
+    hues (not a trap). All six bosses sit in their documented human bands, so
+    per-phase damage is already balanced (a reacting player loses < ~40% HP per
+    phase).
+
+**NEXT ACTION (next session): C1 — the footer / clip repair pass** — C1–C4
+(repair: footer clips, frame-defect sweep, audio mix, worst-case frame-time),
+then D1–D2 (tutorial + menu polish), E1 (the v1.10 audit). The retune (M1 +
+B1–B4) is now COMPLETE: all 4 M1 flags resolved + the economy margin + boss
+fairness. C1–C4 touch presentation / audio / perf — re-run the relevant probes
++ smoke after each, keep all 9 in band. Stop after B4 (this session).
 
 ### v1.9 "The Living Swamp" — **COMPLETE** (season audit signed off 2026-09-09; all 13 items T0/S1–S3/J1–J4/L1–L4 + **A1** landed; A1 fresh-session quality audit — every gate GREEN)
 

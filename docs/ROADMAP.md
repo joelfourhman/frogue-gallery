@@ -1286,7 +1286,9 @@ runs may get *better* but never leave their bands.
 | **STATUS** | **B2 LANDED** (2026-09-11, session `v110-b1`, `b316131`) — the charged splash went from a broken 0.07× single-target trickle to a real burst (`splashDamage` 5→60: 27.1 single ≈ near-parity, 81.2 group = 2.5× the swipe's group DPS), and the pigment roles were sharpened (`dry` dmgMult 0.5→0.35) so every pigment has a distinct column profile — red the hard hitter, blue the control, green the sustain, dry the safe clear (the green/dry M1 tie is gone). All 9 probes in band, smoke green. |
 
 | B3 | **Atelier economy** — upgrade curves + painting costs vs pigment/gold income; gold-tier paintings feel like a reward, not a tax; progression pace matches a 2–3-run cadence to Full Collection. | a simulated career (balance.mjs extension or the probe's career mode) reaches Full Collection in a documented 2–3-run range at a competent play rate; smoke green. |
+| **STATUS** | **B3 LANDED** (2026-09-11, session `v110-b3`, `fb7ceba`) — the margin M1 left open: a first-timer's bank by zone 3/4 covered the cheapest 2-loadout with ~nothing left (zone 3 after the loadout r0/b2/g3 — "exactly-one, not choices"). Raised `WELCOME_GRANT` r3/b6/g4→**r5/b9/g5** (now zone 3 bank r10/b11/g8 affords the 2-loadout + a 3rd painting + a first upgrade level; zone 4 r11/b12/g8 a full first upgrade level — capacity + vitality), and softened the upgrade curve's late steps (capacity L3 r8b8g8→r7b7g7, power L2/L3 → r6/b4/g4→r9/b6/g6, vitality L2/L3 → b7/g5→b10/g8; L1 unchanged) so each track is a reachable climb. Painting value (monotonic cost→effect) + the G2 gold tier (NG+-gated, scarce) verified by judgment, no change. 9 probes in band, smoke green. |
 | B4 | **Boss fairness** — all six bosses: telegraph durations, per-phase damage, awaken windows. Target: each beatable with a reasonable build, each stays in its documented human band. | bosspace/wardpace/umbrapace + the heron bands still hold after the retune; the maw/telegraph windows were widened or narrowed only with the probe's measured justification in the commit message. |
+| **STATUS** | **B4 LANDED** (2026-09-11, session `v110-b3`, `5c16124`) — the one genuine flag, the **Umbral Wyrm**: its `dualTelegraph` was 0.6 s, under the ~0.8 s threshold for a heavy dual-maw strike → lengthened **0.6→0.85 s** (umbrapace 3.65→3.79, band 2.5–4; blackpace 25.8, band 22–26). The other five **verified fair, no change**: gray (30k, 1.8 s telegraph) / green (36k) / gilded (42k) heron share the 1.8 s machine, Silt Wyrm (48k, 1.0 s) + Hollow Warden (52k, 1.5 s) all in band; the shared 6 s awaken window fires after 3-hue completion (not a trap); per-phase damage balanced (all six in band). 9 probes in band, smoke green. |
 
 ### C — repair
 | ID | Item | Acceptance |
@@ -1311,4 +1313,6 @@ lists closed; P10 worst-case (C4) green; zero new runtime deps; SAVE_VERSION
 12, GAME_VERSION 1.0.0; no 8765 server. On green: v1.10 COMPLETE.
 
 **Batch plan:** M1 → B1 + B2 → B3 + B4 → C1 + C2 + C3 → C4 + D1 + D2 → E1
-(fresh session).
+(fresh session). **M1 + B1–B4 LANDED** (retune complete, 2026-09-11) — next
+session starts at **C1** (the footer / clip repair pass), then C2/C3/C4,
+D1/D2, E1.

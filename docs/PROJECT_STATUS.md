@@ -4,7 +4,29 @@ Concise PM view. Durable status/next-action detail lives in root
 `PROJECT_STATE.md` (read that first); milestones in `docs/ROADMAP.md`;
 Consequential decisions in `docs/DECISIONS.md`.
 
-**Last PM update: 2026-09-11 (v1.10 "The Tuned Swamp" — **B1 + B2 the combat
+**Last PM update: 2026-09-11 (v1.10 "The Tuned Swamp" — **B3 + B4 the final
+retune items LANDED** (session `v110-b3`; 2 commits — `feat(v1.10 B3)`
+atelier economy `fb7ceba`, `feat(v1.10 B4)` boss fairness `5c16124`). This
+completes the v1.10 **retune** (M1 + B1–B4). B3 (economy): M1's hard "can't
+afford a loadout by zone 3" flag was cleared by B1's income reshuffle; B3 fixed
+the remaining *margin* — a first-timer's zone 3/4 bank covered the cheapest
+2-loadout with ~nothing left ("exactly-one, not choices"). Raised
+`WELCOME_GRANT` r3/b6/g4 → **r5/b9/g5** (now zone 3 affords the 2-loadout + a
+3rd painting + a first upgrade level; zone 4 a full first upgrade level) and
+softened the upgrade curve's late steps so each track is a climb (capacity
+3→5→7, power 4→6→9, vitality 2→4→6 red; L1 unchanged). Painting value + the
+NG+-gated G2 gold tier verified by judgment (unchanged). B4 (boss fairness): the
+one genuine flag — the **Umbral Wyrm** `dualTelegraph` 0.6 s (a heavy dual-maw
+strike, under the ~0.8 s readable threshold) → **0.85 s**; the other five bosses
+(gray/green/gilded heron 1.8 s, Silt Wyrm 1.0 s, Hollow Warden 1.5 s) verified
+fair, no change — all in their documented human bands, awaken windows adequate.
+All 9 probes IN band (pace 17.1 / humance 18.7 / bosspace 36.9s / reedspace
+22.1 / wardpace 3.7–4.1 / blackpace 25.8 / umbrapace 3.79 / ngpace in-band /
+wandpace [16.9,17.8]+[21.6,22.7]); smoke green after both commits. **Next:
+C1–C4 the repair pass** (footer clips, frame-defect sweep, audio mix,
+worst-case frame-time), then D1–D2 polish, E1 the v1.10 audit.**
+
+**Prior PM update: 2026-09-11 (v1.10 "The Tuned Swamp" — **B1 + B2 the combat
 retune LANDED** (session `v110-b1`; 2 commits — `feat(v1.10 B1)` zone-curve +
 enemy-identity `54f6b1c`, `feat(v1.10 B2)` splash + pigment roles `b316131`).
 This is the season that finally *lets the numbers move*: v1.6–v1.9 gated on
@@ -23,11 +45,8 @@ the 6-kind red-column TTK spread is **×2** (mosquito 0.4s → serpent 0.8s);
 group DPS); (4) the pigment roles were blurred (green+dry tied) and are now
 distinct — red the hard hitter, blue the control, green the sustain, dry the
 safe clear (`dry` dmgMult 0.5→0.35). **All 4 M1 flags resolved**
-(`balance.mjs` now reports "none flagged"); all 9 probes stay IN band (pace
-17.1 / humance 18.3 / ngpace 19.5 / bosspace 36.9s / reedspace 22.1 /
-blackpace 25.8 / umbrapace 3.65 / wandpace [16.9,17.8]+[21.6,22.7]), smoke
-green after both commits. **Next: B3 (atelier economy) + B4 (boss fairness)**
-in the following session.**
+(`balance.mjs` now reports "none flagged"); all 9 probes stayed IN band; smoke
+green after both commits.**
 
 **Prior PM update: 2026-09-11 (v1.10 — **M1 the balance telemetry LANDED**
 (session `v110-m1`; 2 commits — `feat(v1.10 M1)` `tests/balance.mjs` + the
