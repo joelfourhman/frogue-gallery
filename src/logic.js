@@ -1695,7 +1695,7 @@ export const UMBRA_WYRM = {
   surfacePoints: 4,             // 4 maw points (it pairs two of them — the DUAL maw)
   transit: 0.85,               // a BRIEF transit — the "faster twin": the body only ducks briefly between breaches (vs the Silt Wyrm's 1.8)
   transitDeep: 0.7,             // the "deep dark" phase transit multiplier (faster still)
-  dualTelegraph: 0.6,           // the DUAL-maw telegraph (BOTH points marked at once — short; the maws then stay open a long time)
+  dualTelegraph: 0.85,          // the DUAL-maw telegraph (BOTH points marked at once) — v1.10 B4: lengthened 0.6→0.85 so the heavy dual strike is readable + dodgeable (a competent player must be able to react, not frame-perfect); was the one heavy-attack telegraph under the ~0.8 s fairness threshold
   surfaced: 6.7,                // the surfaced PAINT window (the dominant phase — the DUAL maws stay open; the danger is the dual strike, not invulnerability)
   surfacedDeep: 5.4,            // the "deep dark" surfaced window (still long — the phase-2 danger is the dark + siphon, not invulnerability)
   strikeReach: 170,             // a frog this close to a surf point takes the maw hit
