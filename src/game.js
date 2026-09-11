@@ -135,14 +135,14 @@ export function ledgerEntry(pt) {
 // encounter — one larger, bolder "guardian" of the zone's signature enemy that
 // wears the zone's accent ring. The zone reads as a place, not a repeat.
 export const ZONES = [
-  { x: 0.24, name: 'Reed Flats',   accent: '#c9a94e', tip: 'Reed Flats — the swamp breathes. Beetles chew through the reeds.',   mix: { beetle: 3, mosquito: 1 },
+  { x: 0.24, name: 'Reed Flats',   accent: '#c9a94e', tip: 'Reed Flats — the swamp breathes. Beetles chew through the reeds.',   mix: { beetle: 2, mosquito: 2 },
     sig: { kind: 'beetle',   count: 1 } },
-  { x: 0.44, name: 'Slick Hollow', accent: '#5a93c9', tip: 'Slick Hollow — mosquitos swarm the still water. Blue paint chills them.', mix: { mosquito: 4, beetle: 2 },
+  { x: 0.44, name: 'Slick Hollow', accent: '#5a93c9', tip: 'Slick Hollow — mosquitos swarm the still water. Blue paint chills them.', mix: { mosquito: 4, beetle: 3 },
     sig: { kind: 'mosquito', count: 2 } },
-  { x: 0.64, name: 'Bramble Thicket', accent: '#7fb069', tip: 'Bramble Thicket — toads lurk in the bramble. Paint them dizzy (green) for open shots.', mix: { toad: 2, mosquito: 3 },
+  { x: 0.64, name: 'Bramble Thicket', accent: '#7fb069', tip: 'Bramble Thicket — toads lurk in the bramble. Paint them dizzy (green) for open shots.', mix: { toad: 2, mosquito: 3, beetle: 1 },
     sig: { kind: 'toad',     count: 1 } },
-  { x: 0.82, name: 'The Gray Shore', accent: '#9a9a8f', tip: 'The Gray Shore — everything the swamp kept gathers here. Rest, then finish.', mix: { toad: 2, beetle: 3, mosquito: 3 },
-    sig: { kind: 'beetle',   count: 2 } },
+  { x: 0.82, name: 'The Gray Shore', accent: '#9a9a8f', tip: 'The Gray Shore — everything the swamp kept gathers here. Rest, then finish.', mix: { toad: 2, beetle: 3, mosquito: 2 },
+    sig: { kind: 'beetle',   count: 1 } },
 ];
 // Elite scaling for signature encounters (P12): bolder than a normal spawn of
 // the same kind, but a single well-timed splash or a couple of swipes still

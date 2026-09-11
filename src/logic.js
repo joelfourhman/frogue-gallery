@@ -26,14 +26,27 @@ export const ENEMIES = {
     fly: false, score: 20, paintTintDecay: 0.25,
   },
   mosquito: {
-    id: 'mosquito', name: 'Mosquito', hp: 11, speed: 120, dmg: 4, radius: 10,
+    // v1.10 B1: the mosquito is the FAST tier — a quick, darting nuisance.
+    // HP raised a touch from 11 so a single paint isn't an instant kill (the
+    // old 0.1s TTK made it a free point and stretched the 6-kind spread past
+    // a healthy 2-3× vs the tanky tier). It stays the quickest kill in the
+    // bestiary, now a clean "one or two quick strokes" rather than a pop.
+    id: 'mosquito', name: 'Mosquito', hp: 16, speed: 120, dmg: 4, radius: 10,
     armor: 0, fly: true, score: 10, paintTintDecay: 0.4,
   },
   toad: {
-    id: 'toad', name: 'Grumpy Toad', hp: 52, speed: 58, dmg: 6, radius: 19,
-    armor: 0.08, score: 30, paintTintDecay: 0.2,
-    dizzyPaintChance: 0.22,  // chance a paint hit stuns the toad (sits, +50% dmg)
-    dizzyDuration: 2.2,
+    id: 'toad',
+    // v1.10 B1 identity pass: the toad is a TANK that fights with a
+    // risk/reward loop, not wall-filler. Its raw HP is cut so it is no
+    // longer the slowest kill (now ~×3 mosquito, inside the healthy 2-3×
+    // tier), and its armor is dropped so paint always lands (a toad sitting
+    // dizzy in the bramble is exposed). The dizzy-when-painted window is now
+    // the reward: paint it, it sits, you free-fire it at 1.5× — so a toad
+    // reads as "a different kind of fight" (a punishable sit), not "more HP."
+    name: 'Grumpy Toad', hp: 36, speed: 58, dmg: 6, radius: 19,
+    armor: 0, score: 30, paintTintDecay: 0.2,
+    dizzyPaintChance: 0.25,  // chance a paint hit stuns the toad (sits, +50% dmg)
+    dizzyDuration: 2.4,
   },
   // K1 (v1.5 M1): MUD TURTLE — the Living Swamp's armored plodder. High HP,
   // slow, heavy contact hit. Its SHELL deflects paint from the FRONT arc
@@ -72,7 +85,7 @@ export const ENEMIES = {
   // (draw alpha scales by the lightFactor it receives). Low HP / low contact
   // damage — a trap that pulls the frog, not a brawler.
   wisp: {
-    id: 'wisp', name: 'Glow Wisp', hp: 14, speed: 34, dmg: 3, radius: 13,
+    id: 'wisp', name: 'Glow Wisp', hp: 18, speed: 34, dmg: 3, radius: 13,
     armor: 0, fly: true, score: 22, paintTintDecay: 0.5,
     lightHoming: true,   // winds toward the lantern's light while lit
   },
@@ -95,7 +108,7 @@ export const ENEMIES = {
   // hop breaks the cling; a second leech cannot attach for ~6s — the pure
   // leechReattachCd). It has no contact attack of its own (it clings).
   leech: {
-    id: 'leech', name: 'Silt Leech', hp: 10, speed: 64, dmg: 0, radius: 11,
+    id: 'leech', name: 'Silt Leech', hp: 14, speed: 64, dmg: 0, radius: 11,
     armor: 0, fly: false, score: 18, paintTintDecay: 0.4,
     leech: true,         // clings + drains + slows (no contact attack)
   },
