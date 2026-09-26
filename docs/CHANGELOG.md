@@ -1,3 +1,29 @@
+# Astra Vertical Slice — 2026-09-26
+
+Built on c1ea26b; no runtime/save-version bump.
+
+- Added three living field paintings, a protected first studio, permanent
+  colored brush-hop, and a three-study cosmetic signature.
+- Added an eight-page sketchbook with sampled real strokes and local PNG export.
+- Repaired fly speed/telegraphs, stationary hop/buffering, splash release,
+  physical input ownership, controller aim/paint, responsive scaling, tutorial
+  softlocks/retraining, pause behavior and victory rendering.
+- Fixed invisible Silt/Umbral bodies caused by array/object coordinate mismatch;
+  added finite-geometry checks. Lantern lighting now reveals underlying art
+  with a reused mask. Corrected boss HUD names and overlapping/clipped UI.
+- Retuned Warden HP52,000→50,000 to honor its original pacing band; welcome
+  red5→6 preserves early buying power after corrected fly movement.
+- Added seeded enforced checks, source/dist browser journeys, reusable browser
+  discovery, deterministic ZIP packaging and a loopback-only local server.
+- Replaced stale live plans with current design/state docs and a concrete Qwen
+  roadmap/backlog. Historical material is preserved under docs/history.
+
+Validation: smoke, all nine pacing gates, balance, UI/audio, source/dist
+journeys,36 scenes, effects stress and package checks. See VALIDATION.md for
+measurements and limits. Static upload ready; not publicly deployed.
+
+---
+
 # Frogue Gallery — Changelog
 
 Release history, newest first. One block per version; the in-repo docs

@@ -8,10 +8,10 @@
 // Requires: playwright-core + local Chrome. HTTP server on 127.0.0.1:8901.
 import { chromium } from 'playwright-core';
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { browserPath } from '../scripts/browser.mjs';
 import path from 'node:path';
 
-const CHROME = path.join(homedir(), '.agent-browser', 'browsers', 'chrome-152.0.7977.82', 'chrome.exe');
+const CHROME = browserPath();
 const URL = 'http://127.0.0.1:8901/index.html';
 const scenario = process.argv[2] || 'explore';
 const outDir = process.argv[3] || 'tests/.out';

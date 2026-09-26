@@ -1,93 +1,35 @@
-# SYSTEM_CHANGES.md — Frogue Gallery
+# Environment and tool changes
 
-This document records every change made **outside the normal source files** of
-`frogue-gallery/`. It is maintained throughout development.
+## Astra pass — 2026-09-26
 
-## Environment facts (pre-existing, not installed by this mission)
+No software, browser, package, service, system configuration or global
+environment setting was installed/changed in this development pass.
 
-| Item | Version | Location | Note |
-|---|---|---|---|
-| Git | 2.55.0.windows.3 | `C:\Program Files\Git\bin\git` (via MSYS) | Pre-existing. Used for repo-local commits only. |
-| Python | 3.14.7 (standalone) | `C:\Users\joelf\AppData\Local\Programs\Python\Python314\python.exe` | Pre-existing user install. Used as the *base* interpreter for the project venv only. Not modified. |
-| uv | 0.12.7 | `C:\Users\joelf\AppData\Local\hermes\bin\uv` | Pre-existing. Used **as-is** — not reinstalled, not upgraded, not added to PATH. Invoked via explicit path where needed. |
-| Node.js | 22.23.2 | `C:\Users\joelf\AppData\Local\hermes\node\node` | Pre-existing. Used **read-only** to run headless JS logic tests. No npm packages installed (globally or otherwise). |
+Existing tools used:
+- Node.js 22.23.2 to run the game server, tests and dependency-free ZIP builder.
+- Python 3.14.7 for the initial local preview; no Python environment changes.
+- Existing playwright-core 1.63.0 in the ignored node_modules directory.
+- Existing Chrome 152 under the user's .agent-browser browser cache.
+- Existing Git for repository-local milestone commits; no remote push.
 
-## Changes made
+Temporary/created project outputs:
+- dist/ contains generated runtime files, ZIP and SHA-256 manifest.
+- .cache/checks/ contains regression logs and report.json.
+- .cache/astra-logs/ retains earlier diagnostic output.
+- tests/.out/astra/ and tests/frames/astra/ contain regenerated browser evidence.
+- An in-app browser preview uses the task's127.0.0.1:8766 Node server.
+  The initial Python 8765 preview was stopped during cleanup.
+- Browser tests use isolated profiles and free loopback ports, and close
+  their browser/server in their cleanup path.
 
-All changes listed below are **inside `frogue-gallery/`** or are
-session-scoped environment variables that vanish with the shell.
+Source additions (scripts/, studio.js, favicon and docs) are normal repository
+changes, not machine configuration. No public deployment, upload, account,
+scheduled task or remote service was created.
 
-1. **Project directory tree created** — `frogue-gallery/{src,assets,tests,docs}`.
-   - Reason: the mission's single sandbox.
-   - Persists after reboot: only if `frogue-gallery/` is not deleted.
-   - Revert: `rmdir /s /q frogue-gallery` (see CLEANUP.md).
+## Earlier environment history
 
-2. **Project-local Python venv created** — `frogue-gallery/.venv/`
-   - Command: `uv venv --python "C:/Users/joelf/AppData/Local/Programs/Python/Python314/python.exe" .venv`
-   - Reason: isolated Python for dev/test tooling; packages (if any) never
-     touch global site-packages.
-   - **No Python interpreter was downloaded** (`UV_PYTHON_DOWNLOADS=never`);
-     the venv is a copy-link of the pre-existing 3.14.7 install.
-   - Persists after reboot: with the project dir. Revert: delete `.venv/`.
+The project already had .venv/, node_modules and caches. The previous detailed
+ledger is preserved in docs/history/SYSTEM_CHANGES-pre-astra.md. Those entries
+describe earlier work; do not attribute them to this pass.
 
-3. **uv cache redirected to the project** — `frogue-gallery/.cache/uv/`
-   - Mechanism: `UV_CACHE_DIR` set as a **shell-session export only**
-     (no Windows/user/system environment variable was modified).
-   - Persists after reboot: with the project dir; the env var itself does not.
-   - Revert: delete `.cache/`.
-
-4. **Git repository initialized** — `frogue-gallery/.git/`
-   - Command: `git init -b main`
-   - Repo-local identity set (`user.name`/`user.email` in
-     `frogue-gallery/.git/config` only). **Global Git configuration was not
-     modified** — the user's existing global identity remains the fallback for
-     all other repos.
-   - No remotes, no pushes, no GitHub repos, no authentication.
-   - Revert: delete `.git/`.
-
-5. **Temporary local dev server (during testing only)** —
-   `python -m http.server 8765 --bind 127.0.0.1` run from `frogue-gallery/`,
-   loopback-only, non-privileged port, killed after each testing session.
-   No firewall changes, no service, no startup entry.
-
-   **Documented launch workflow** (the DoD #1 boot path): from `frogue-gallery/`,
-   run the server above, then open `http://127.0.0.1:8765/index.html` in any
-   modern browser. Click once anywhere to unlock audio; press **Enter** (or click
-   "Begin Expedition") to start. No build step, no packages, no network fetches.
-
-6. **User-level Hermes context hardening** —
-   `C:\Users\joelf\AppData\Local\hermes\config.yaml` was minimally updated
-   on 2026-08-30 using Hermes' own supported configuration command. The
-   existing `custom:ninfer` provider, `qwen-local` model, NInfer endpoint,
-   authentication reference, and 65,536-token context were preserved. The
-   changes bound model output, context compression, file reads, and tool
-   output for safer local-Qwen sessions. After a fixed-prompt audit, the CLI
-   toolset was narrowed to `terminal`, `file`, `browser`, and `todo`; these
-   retain local coding, process, browser-test, and task-state capabilities
-   while removing unrelated schemas that consumed Qwen's context before work
-   began. No secret was copied into this repo.
-   - Latest pre-toolset backup: `C:\Users\joelf\AppData\Local\hermes\config.yaml.backup-20260830-185157`
-   - Revert: close Hermes, replace `config.yaml` with that backup, and reopen
-     Hermes. See `CLEANUP.md`.
-
-## Explicitly NOT done
-
-- No Administrator/UAC elevation, ever.
-- No system services, scheduled tasks, startup entries, or background
-  processes created.
-- No Windows Defender, firewall, registry, execution policy, or trust-store
-  changes.
-- No drivers, GPU/CUDA/firmware changes, no WSL/Hyper-V/Docker changes.
-- No global or user-level environment variable changes (PATH untouched).
-- No system-wide packages installed (no `pip install`, no `npm install -g`).
-- No browsers, browser binaries, or game assets downloaded.
-- The existing Hermes + NInfer + Qwen stack was not touched in any way.
-- No cloud APIs or external LLM calls.
-
-## Final statement
-
-> **No system-level changes were made.** All project-specific tools,
-> environments, caches, source files, and generated artifacts are contained
-> within `frogue-gallery/`. (uv and Python were pre-existing and used as-is;
-> the only session-scoped state — the uv cache env var — disappears with the
-> shell.)
+See CLEANUP.md for precise project-local cleanup boundaries.

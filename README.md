@@ -1,131 +1,103 @@
 # Frogue Gallery
 
-A cozy action roguelite about a tiny frog painter with a magical paintbrush,
-exploring a watercolor swamp. **Painting is the game** — the brush is weapon,
-movement tool, and world-editing device at once. Colors change *how* you
-approach a situation, not just the damage numbers: the world starts washed out
-gray, and every stroke restores a little of its color.
+A tiny frog paints a gray swamp back to life. Burn pursuers with crimson,
+freeze a diving fly with cobalt, grow a little pond into a living painting,
+and bring home a postcard made from your own brush strokes.
 
-A target expedition is a 15–20 minute run: Title → Atelier (build) → a
-5400-pixel journey through 4 named zones with checkpoints → a final boss.
+**Astra Vertical Slice — completed development milestone, 2026-09-26.**
+The compatibility identifiers remain game 1.0.0 / save schema 12.
 
-## Running it
+## Play locally
 
-No build step, no package manager, no dependencies — just a browser with
-Canvas 2D and ES modules.
+With Node.js 22 or newer installed, run from this directory:
 
-```
-python -m http.server 8765 --bind 127.0.0.1
+```sh
+node scripts/dev.mjs
 ```
 
-then open <http://127.0.0.1:8765>. (Or open `index.html` directly — any local
-file server works; the game is loopback-only and uses `localStorage` as its
-only persistence, keys prefixed `frogue_gallery_`.)
+Open [Frogue Gallery](http://127.0.0.1:8765). Ctrl+C stops the server.
+If that port is occupied, use `node scripts/dev.mjs --port 8766`.
+The server binds only to your computer and disables stale development caches.
+There is no install step or runtime dependency. Use HTTP, not a double-click
+on `index.html`: the game loads JavaScript modules.
+
+Alternative: `python -m http.server 8765 --bind 127.0.0.1`.
+The Node server additionally restricts served files to the game itself.
+
+## First expedition
+
+Press Enter. Walk east to **First Light**, the small gray pond near the start.
+Select the numbered colors and hold paint on each circle. Water, lilies and
+fireflies appear as you work. Completing it heals you, saves a sketchbook page,
+and teaches **brush-hop**: hold paint while hopping to leave a defensive wake.
+Two more living studies await along the swamp.
+
+The optional guided practice on the title teaches each pigment and the
+three-color boss awakening. H opens the Field Guide; J opens your sketchbook.
+Both pause the action. Every expedition can leave a keepsake, even a defeat.
 
 ## Controls
 
-**Keyboard + mouse** (the primary scheme):
+| Action | Keyboard / mouse | Standard gamepad |
+|---|---|---|
+| Move | WASD / arrows | Left stick |
+| Aim / paint | Mouse / hold left button | Right stick / hold RT |
+| Charged splash | Hold right button; release when full | Hold B; release |
+| Hop / earned brush-hop | Space / hold paint + Space | RB / RT + RB |
+| Red / blue / green | 1 / 2 / 3 | A / X / Y |
+| Dry brush | 4 | LT |
+| Lantern, in the Reeds | L | LB |
+| Pause / sketchbook | P or Esc / J | Start / Back |
+| Guide / mute | H or ? / M | Guide available from pause |
+| Menu navigation | Mouse / displayed shortcuts | D-pad, A confirm, B back |
 
-- **WASD / arrow keys** — move
-- **Mouse aim + hold left button** — paint with the selected pigment
-- **Hold right mouse** — charge a Splash burst, release to fire
-- **Space** — hop (brief i-frames)
-- **1 / 2 / 3** — select pigment: **Crimson** (red: big damage + burn, ignores
-  armor) / **Cobalt** (blue: slow, second coat within 1s freezes) / **Moss**
-  (green: light damage, heals the frog, roots ground enemies, restores swamp
-  color)
-- **4** — **dry brush** (no pigment: light damage, no status — it cleans enemy
-  status and restores color fastest; it never runs out, so you can never
-  softlock)
-- **H or ?** — Field Guide (in-run reference: controls, pigments, enemies,
-  boss counterplay; pauses the run)
-- **P** — pause · **M** — mute
+Paint is unlimited. Colored orbs are banked currency for Atelier paintings
+and upgrades; they are not brush ammunition. Red burns, blue slows/freezes,
+green roots and heals, and dry clears status and restores color.
 
-**Title screen:** **Enter / Space** — begin expedition · **A** — Atelier ·
-**G / N / B** — Gentle / Normal / Bold · **O** — Options · **C** — Curator
-Challenge (appears after your first victory) · **R** — Beneath the Reeds
-(appears after a victory).
+## What's included
 
-**Gamepad** (optional, raw Gamepad API, no drivers): plug in a pad and it
-engages automatically (Auto/Off toggle in Options). Left stick moves; **A**
-confirm / **1** Crimson · **X** **2** Cobalt · **Y** **3** Moss · **RB** hop ·
-**B** charge Splash (hold/release) · **LB** lantern (in the Reeds); in menus
-**A** confirm, **B** back, D-pad navigates. A quiet idle pad disengages after
-6s so it never fights your keyboard.
+- Three living field studies, an earned brush-hop and a cosmetic signature.
+- An eight-page sketchbook containing sampled real strokes; save a 1600×960
+  PNG postcard from any page.
+- Three biomes, six boss archetypes, named encounter zones, checkpoints,
+  enemies with pigment counters, lantern play, NG+, and optional Wander runs.
+- Atelier paintings and two-slot builds, upgrades, collections and local
+  Curator Challenges.
+- Paper panels, procedural watercolor scenery, synthesized music and sound.
+- Gentle / Normal / Bold difficulty; music/SFX and presentation settings;
+  browser-local saves and JSON export/import.
 
-**Options panel** (O): music and SFX volume, screen shake, low-HP vignette,
-paper grain, Wandering Expeditions, Gamepad Auto/Off, and a paste-based Save
-export/import (loopback-only — no file downloads).
+Designed for a desktop browser with mouse/keyboard or a standard controller.
+No touch controls. Saves belong to the browser and site origin; export them
+before moving to a different URL.
 
-## What's in the game
+## Develop, verify, distribute
 
-**The expedition.** Cross the swamp (Reed Flats → Slick Hollow → Bramble
-Thicket → Gray Shore and beyond) through waves of Mud Beetles, Mosquitos,
-Grumpy Toads, armored Mud Turtles, and sound-hunting Blind Crag Frogs, with
-checkpoints, pigment orbs, and zone set-pieces. Pigments interact: red fire
-spreads through vegetation, blue on an already-slowed enemy freezes it solid,
-green grows reeds that block enemies.
-
-**Paintings = the build.** A 10-painting catalog bought with banked pigment,
-**2 equip slots** (loadout tension), named synergy pairs, and per-painting
-upgrades (pigment capacity / brush power / vitality). The Atelier is the
-between-run economy, with characters who talk back.
-
-**Six bosses.** The Great Gray Heron (first time), the Great Green Heron (NG+),
-the Gilded Heron (NG+ cycle 3+, its plume absorbs your green healing), the
-Silt Wyrm (Beneath the Reeds), The Hollow Warden (a Wander expedition's apex),
-and the Umbral Wyrm (the NG+ Reeds' apex). Herons fight the signature
-paint-to-awaken mechanic: accumulate three hues to turn them vulnerable.
-
-**New Game+ / gold.** Victory unlocks deeper cycles: escalating difficulty, a
-gold-pigment economy with gold-tier paintings, player-chosen expedition
-modifiers, a "Master" tier at cycle 4+, and a seeded daily Curator Challenge
-with a top-5 score file.
-
-**Beneath the Reeds (R on the title).** A victory-gated descent into the
-flooded lower swamp where darkness is a rule: your paper lantern (**L**
-in-run) rewrites the encounters — Wisp, Serpent, and Leech instead of the
-surface trio — with the Silt Wyrm below.
-
-**The Wander (D4, off by default).** A bounded procedural expedition variant:
-the terrain stays the same hand-tuned painting, but the encounter content is
-sampled from a seeded stream inside a hand-tuned pacing envelope. A seed card
-shows you what you're walking into.
-
-**The Full Collection.** The meta pays off: the Gallery Wall tracks your
-progress (X / 10 paintings, Y / 6 bosses). Collecting every painting and
-defeating every boss mints a permanent "capstone" gallery bonus — the museum
-keeps you better — and the title screen wears a gilded badge.
-
-## Architecture
-
-Vanilla JS ES modules + Canvas 2D + Web Audio. **Zero dependencies, no build
-step, no assets** — all art is procedural (watercolor-style canvas drawing),
-all audio is synthesized (no audio files). The rule logic (balance, save
-schema + migrations, economy, pacing) lives in pure, browser-free
-`src/logic.js`, imported by the headless test suite (`tests/smoke.mjs`, plus
-pacing probes `tests/pace.mjs`, `tests/humance.mjs`, `tests/ngpace.mjs`,
-`tests/reedspace.mjs`, `tests/wandpace.mjs`, `tests/bosspace.mjs`).
-
-The game runs loopback-only: browser `localStorage` is the only persistence;
-there are no network calls, no servers, and no cloud services.
-
-## Layout
-
+```sh
+node scripts/check.mjs             # smoke, nine pacing gates, balance, UI/audio, package
+node scripts/build.mjs             # dist/frogue-gallery/ + dist/frogue-gallery.zip
+node scripts/dev.mjs --dist        # play the exact distribution
+node scripts/check.mjs --browser   # adds browser journeys, 36 frames and effects stress
 ```
-index.html          entry point (Canvas 2D, ES module boot)
-src/game.js         frame loop, state machine, HUD/screens
-src/player.js       the frog: movement, pigment paint, damage, death
-src/enemies.js      the enemy archetypes + bosses
-src/logic.js        PURE rule logic: save schema, migrations, balance, economy
-src/save.js         thin localStorage adapter over the logic.js schema
-src/world.js        the swamp: zones, checkpoints, pigments, decor
-src/paint.js        wet-paint brush physics
-src/particles.js    splash/ink particles
-src/ui.js           paper-styled canvas UI primitives
-src/audio.js        Web Audio synth: SFX + ambient
-src/math.js         vector/geometry helpers
-src/input.js        keyboard + mouse capture
-tests/              headless smoke suite + pacing probes
-docs/               design, roadmap, decisions, status
-```
+
+The first three commands use only Node's standard library. Optional browser
+checks use **playwright-core 1.63.0** and installed Chromium/Chrome/Edge.
+For a fresh test machine only:
+`npm install --no-save --package-lock=false playwright-core@1.63.0`.
+Set `CHROME_PATH` if browser discovery cannot find your executable.
+This tooling is never included in the game or ZIP.
+
+The ZIP is ready for an HTML5 itch.io upload. **No public deployment was
+performed.** See [deployment choices and upload steps](docs/DEPLOYMENT.md).
+
+## Continue development
+
+Read [PROJECT_STATE.md](PROJECT_STATE.md), then
+[the Astra handoff](docs/ASTRA_HANDOFF.md).
+
+- [Current implementation and architecture](docs/CURRENT_STATE.md)
+- [Current game design](docs/GAME_DESIGN.md)
+- [Milestones](docs/ROADMAP.md) and [executable Qwen backlog](docs/QWEN_BACKLOG.md)
+- [Validation and its limits](docs/VALIDATION.md)
+- [Durable agent rules](AGENTS.md)

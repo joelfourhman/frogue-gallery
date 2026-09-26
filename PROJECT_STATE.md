@@ -1,68 +1,82 @@
-# Project state — Astra Vertical Slice
+# Project state — Astra Vertical Slice complete
 
-Updated 2026-09-26. The Astra feature/stabilization slice is implemented and
-verified. Packaging and the final Qwen documentation are being finalized.
-This user-authorized development cycle supersedes the old v1.10 feature freeze.
-Prior logs are retained in docs/history/PROJECT_STATE-pre-astra.md.
+Updated 2026-09-26. The major development pass is complete: implemented,
+stabilized, browser-tested, packaged and documented. The current handoff is
+docs/ASTRA_HANDOFF.md; the exact next expansion task is **Q1** in
+docs/QWEN_BACKLOG.md. No feature work remains pending for this milestone.
 
-## Implemented checkpoints
+## What shipped
 
-- Controls/fly repair committed as 46f5912. Responsive canvas and pointer
-  mapping; stationary aimed hop + 120ms buffer; release-to-fire splash;
-  input cleanup; tutorial/menu/crash fixes.
-- Three living field studies, first-study sanctuary, permanent brush-hop,
-  three-study cosmetic signature, eight-page actual-stroke sketchbook and
-  local 1600×960 postcard export.
-- Seven guided lessons now complete without damage or single-color softlocks.
-  Retraining freezes surrounding danger. Controller right-stick aim / RT
-  paint, Start pause / Back sketchbook; accurate controller title hints.
-- Clear pigment effects and hop readiness in the HUD; corrected title/menu
-  overlap, zero-volume persistence, tutorial rendering and pause behavior.
-- Additive validated save fields; SAVE_VERSION 12 / GAME_VERSION 1.0.0 held.
+- Three living field studies: First Light, Rain Choir and Borrowed Sky.
+- First-study shelter, earned colored brush-hop and a cosmetic signature.
+- Eight-page sketchbook of actual sampled strokes, illustrated study memories
+  and local 1600×960 PNG export.
+- Fair fly tell/dart/recovery and blue interruption; aimed stationary hop,
+  120ms input buffer, reliable splash release and physical-input cleanup.
+- Responsive canvas/pointer mapping, controller aim/paint, readable HUD,
+  safe guided practice/retraining and defeat/restart/victory transitions.
+- Visible Silt/Umbral geometry, readable cached lantern lighting, an Umbral
+  arena inside world bounds, corrected Atelier/end-screen layout.
+- Local server, enforced test command, deterministic static ZIP, current
+  design/state docs and a concrete Qwen continuation plan.
 
-## Balance and measurements
+Code checkpoints: 46f5912 controls/fly repairs; 43b3b0a studio/sketchbook;
+48eea42 final visual stabilization. Delivery tooling/docs are the subsequent
+commit. Prior planning logs are preserved in docs/history and Git c1ea26b.
 
-Mosquito movement multiplier 40 → 1; previously produced thousands of px/s.
-New tell/dart/recover durations 0.60 / 0.30 / 0.85 seconds; blue interrupts.
-Welcome red 5 → 6 (blue 9, green 5): retains by-zone-3 two-painting
-affordability after the corrected fly path changed seeded orb collection.
+## Balance record
 
-Hollow Warden HP 52,000 → 50,000; timing windows unchanged. A newly enforced
-2–4 minute gate exposed the old six-seed range 3.93–4.03m. New range
-3.54–3.90m. The band was not widened. Baseline and final balance telemetry
-both have no flags; the level-0 pressure curve remains 1.22/1.64/1.76/2.20,
-charged single-target splash ratio 0.84×, and two-painting affordability YES.
+| Change | Before → after | Why |
+|---|---|---|
+| Fly movement multiplier | 40 → 1 | Remove extreme pursuit speed |
+| Fly tell/dart/recover | New 0.60/0.30/0.85s cycle | Readable committed attacks and escape |
+| Welcome red | 5 → 6 (blue 9, green 5 unchanged) | Preserve by-zone-3 buying power after corrected fly movement |
+| Warden HP | 52,000 → 50,000 | All six estimates fit original 2–4m band (3.93–4.03 → 3.54–3.90m) |
+| Umbral surfaceY | 1500 → 1240 | Leave 260px below the maw inside a 1500px world; estimate 3.90 → 3.73m |
 
-Full smoke, nine seeded pacing probes, balance, UI, SFX and music pass.
-Normal estimates 17.2m analytical / 18.3m mixed measured+analytic; Reeds22.2m;
-NG+19.5m; Black Reeds25.8m; Umbral3.73m; Wander16.9–17.8m /
-Reeds21.6–22.7m. These are bot/models, not human playtest durations.
+Baseline and final balance telemetry: no flags. Pressure curve at level 0:
+1.22/1.64/1.76/2.20. Charged single-target splash ratio 0.84×. Cheapest
+two-painting loadout affordable by zone 3. SAVE_VERSION 12 / GAME_VERSION 1.0.0
+remain unchanged; new save fields are optional and normalized.
 
-Source and packaged Chromium journeys pass: study + PNG, save reload,
-640/960/1920 layouts, seven lessons, real full-HP boss victory (god mode
-used for that state test), defeat/restart. 36 rendered legacy scenes pass;
-visual checks include new study, book, PNG and end states.
-Effects stress includes 24 brush wakes; bounded pools pass.
+## Verification
 
-## Final visual audit
+`node scripts/check.mjs --browser` — all 19 entries pass.
+Smoke ends ALL SMOKE TESTS PASSED. Nine pacing probes in band:
+Normal 17.2m analytical / 18.3m mixed measured+analytic; Reeds 22.2m; NG+ 19.5m;
+Warden 3.54–3.90m; Black Reeds 25.8m; Umbral 3.73m;
+Wander 16.9–17.8m / Reeds 21.6–22.7m.
 
-The Silt/Umbral renderers treated [x,y] arrays as objects, silently producing
-NaN geometry. Both now use tuple coordinates; smoke exercises finite drawing
-coordinates across surfaced, transit and telegraph states. The lantern now
-cuts a viewing circle through a reused darkness canvas with a cached sprite,
-so creature art remains readable without an additive yellow wash.
+Source/dist journeys verify real brush study progression and PNG export,
+all seven lessons, save reload, 640/960/1920 layouts, full-HP boss victory
+and defeat/restart. God mode is used only for the isolated boss journey.
+36 render scenes pass; final changed frames were visually inspected.
+Effects stress: 203 legacy juice elements within 220 plus 24 capped brush wakes;
+peak/ceiling/sustained CPU submission p95: 1.10/1.30/1.60ms.
+These are bot/model and CPU measurements, not human duration or displayed FPS.
+Full detail and limitations: docs/VALIDATION.md.
 
-Umbral surfaceY 1500 → 1240 leaves 260px of world below the maw (world
-height is 1500), fixing a visibly clipped arena and adding movement room.
-Umbral estimate 3.90 → 3.73m, inside 2.5–4; Black Reeds remains 25.8m.
-No HP/damage/window change for this fix. Atelier copy/currency layout,
-defeat recap, dark HUD contrast, lantern/stock overlap and boss names fixed.
-Full integrated check: all 19 entries pass, including source/dist journeys,
-36 frames and effects stress. Peak/ceiling/sustained p95 submission:
-1.10/1.30/1.60ms; these are CPU timings, not displayed FPS.
+## Run and distribute
 
-## Immediate next action
+```sh
+node scripts/dev.mjs
+node scripts/check.mjs --browser
+node scripts/build.mjs
+node scripts/dev.mjs --dist
+```
 
-Finish the delivery tooling/docs checkpoint, run its final integrated check,
-commit it, and provide the build + Qwen handoff. Do not add more gameplay
-systems to this milestone. No hosting/publication is authorized for this pass.
+Ready artifact: dist/frogue-gallery.zip (15 runtime files, approximately 924KiB).
+Hash/source file list: dist/manifest.json.
+Current local preview: http://127.0.0.1:8766.
+No public deployment/account changes. docs/DEPLOYMENT.md recommends the
+HTML5 itch.io path and records alternatives.
+
+## Next session
+
+Implement **Q1 — Make study definitions aware of biomes and reward groups**,
+preserving current swamp behavior before Q2 adds Reeds content. The roadmap
+primarily expands the completed slice. Do not revive historical next actions.
+
+No known reproducible game-breaking issue remains in exercised paths.
+Human friend feedback, physical controllers, Firefox/Safari and hosted iframe
+behavior remain unverified. No touch UI, mid-run resume or cloud persistence.

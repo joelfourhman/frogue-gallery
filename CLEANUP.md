@@ -1,70 +1,40 @@
-# CLEANUP.md — Frogue Gallery
+# Local data and generated files
 
-How to remove everything this project created and restore the machine to its
-prior state.
+## Stop development servers
 
-## 1. Stop any running local server
+Press Ctrl+C in the terminal running `node scripts/dev.mjs` (or the older
+Python server). Stop only the server process belonging to this project.
+Do not kill every Node/Python process on the machine.
 
-If a dev server is running (only ever `python -m http.server 8765 --bind
-127.0.0.1`, loopback-only):
+The Astra browser tests own free-port servers and close them at completion.
+The local preview left for this task uses127.0.0.1:8766.
 
-- Close its terminal window / press `Ctrl+C`, or
-- `taskkill /F /IM python.exe` — **only if** you are sure the only Python
-  process is the Frogue dev server (check Task Manager first).
+## Generated directories
 
-## 2. Erase game saves (browser)
+These are ignored by Git and may be regenerated:
+- dist/: runtime folder, upload ZIP and manifest; `node scripts/build.mjs`.
+- .cache/checks/: text logs and JSON check report.
+- .cache/astra-logs/: this development pass's earlier diagnostic logs.
+- tests/.out/astra/: browser screenshots, postcard and report.
+- tests/frames/astra/: staged render screenshots and manifest.
+- node_modules/: optional browser test tooling; no game runtime dependency.
 
-All persistent browser data uses the `frogue_gallery_` prefix.
+Older .venv/, .cache/uv/, .tools/ and test outputs may belong to previous work.
+Consult SYSTEM_CHANGES.md and history before removing them. They were not
+installed by the Astra pass.
 
-- **In-game (recommended):** Title screen → bottom-left **"erase save data"** link →
-  click it a second time within 3 seconds to confirm. This wipes the
-  progress save (`frogue_gallery_save`); your audio/mute options
-  (`frogue_gallery_options`) are kept.
-- **Manual:** DevTools → Application → Local Storage → `http://127.0.0.1:8765`
-  → delete keys:
-  - `frogue_gallery_save` — main progress (bank, paintings, loadout, upgrades, flags)
-  - `frogue_gallery_options` — volume / mute / display settings
+To clean generated data, inspect the exact resolved directory inside this
+repository and delete that directory only. Never build deletion paths from
+unvalidated strings or use a broad process-kill command.
 
-  (If the game was opened from `file://`, the same keys live under that origin.)
+## Browser data
 
-## 3. Delete the project
+Options offers JSON save export/import, including study progress and the
+sketchbook. Export before intentionally erasing data or moving origins.
+The title's erase-save affordance requires a second confirmation click.
+Browser storage keys use `frogue_gallery_`; each host/port/profile is separate.
+Deleting localStorage is irreversible unless you retained an export.
+PNG postcards are ordinary downloaded files and are unaffected by erasing a save.
 
-```powershell
-# from C:\Users\joelf\projects\hermes_ninfer_stack\workspace
-rmdir /s /q frogue-gallery
-```
-
-This removes in one motion:
-
-- all source code and docs
-- `.venv/` (the project-local Python environment)
-- `.cache/uv/` (the project-local uv cache; the shell env var that pointed at
-  it is already gone)
-- `.tools/` (unused — uv turned out to be pre-installed, so no project-local
-  uv was needed)
-- `.git/` (the local-only repository)
-
-## 4. Optional: restore the pre-hardening Hermes configuration
-
-This recovery task adjusted only supported user-level context/output limits
-and selected a lean local-coding toolset.
-To undo those settings, close Hermes Desktop and run with the existing Python:
-
-```text
-python -c "import shutil; shutil.copy2(r'C:\Users\joelf\AppData\Local\hermes\config.yaml.backup-20260830-185157', r'C:\Users\joelf\AppData\Local\hermes\config.yaml')"
-```
-
-Then reopen Hermes Desktop. This restores the complete pre-hardening config;
-do not hand-edit or print the configuration because it may reference secrets.
-
-## What this does NOT remove (and why nothing else exists)
-
-- **No** uv was installed by this mission — it was pre-existing at
-  `C:\Users\joelf\AppData\Local\hermes\bin\uv` and is *not* part of the
-  project. Do not delete it.
-- **No** global Python packages were installed.
-- **No** Node/npm packages were installed.
-- **No** environment variables, services, tasks, or startup entries were
-  created.
-
-After steps 1–3 the machine is back to its prior state.
+No hosting resources, services, scheduled tasks or remote accounts were
+created by this pass. There is no cloud cleanup required.

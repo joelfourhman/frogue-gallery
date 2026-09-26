@@ -1,40 +1,9 @@
-// tests/perf.mjs — v1.10 C4: the WORST-CASE frame-time audit (dev-only).
-//
-// v1.9's presentation layers (mist + fireflies + lighting + hitstop + droplets
-// + ink bursts + kill bursts + particles) were each P10-checked IN ISOLATION
-// (smoke stages 59c / 107 / 108 / 109 / 110 / 111). C4 measures them ALL AT
-// ONCE at the single worst frame: a Reeds boss arena mid-awaken (bloom wash +
-// saturation surge) with a minion wave, a charged splash at full power, the
-// boss kill-burst, the environmental ambient layer on-screen, and the
-// particle system near its cap.
-//
-// It boots the real game over loopback on a FREE PORT (never 8765), on the
-// sanctioned dev tooling (playwright-core; no runtime dep for the game), and
-// stages the composite worst case in-page against window.__game. It reports
-// TWO P10 signals:
-//
-//   (1) the COUNT invariant (the hard P10 budget — machine-independent):
-//       the COMBINED on-screen paint juice at that exact composite frame
-//       (inkBurst + droplets + ink + wet + trails, the same pools the smoke
-//       L1 stage 109 asserts) stays <= 220. This is the "unbounded juice"
-//       gate: if the composite frame ever pushes the draw work past the P10
-//       particle budget, this fails.
-//
-//   (2) the TIME signal (the spike detector): the wall-clock cost of
-//       _drawAll() at the static peak frame, plus a sustained 1-s decay pass
-//       (pools aging out), reported as mean/p95/max ms + fps-equivalent, for
-//       BOTH the peak and a quiet baseline (same world, zero juice). Because
-//       the headless raster is swiftshader (software — a conservative UPPER
-//       bound on draw cost), the gate is a RELATIVE one: the peak frame must
-//       not blow up more than PEAK_RATIO_QUIET x the quiet frame (an
-//       unbounded pool or an accidental O(n^2) draw path would), and the
-//       sustained decay must come back down (the worst frame is a transient
-//       spike, not a new plateau). The absolute ms are reported for the
-//       before/after record (they are a software-raster bound, not a GPU
-//       number — the real-GPU fps evidence is the P10 60.2 fps probe).
-//
-// Determinism: Math.random is seeded (mulberry32) + rAF frozen, so the staged
-// state and the measured frames are reproducible.
+// Worst-case effects regression, using installed Chromium and playwright-core.
+// The real composite checks the 220 on-screen paint-juice budget. A separate
+// synthetic ceiling fills every pool to its cap, including 24 brush wakes.
+// Timings measure CPU calls to _drawAll, not GPU completion or displayed FPS.
+// Relative p95 gates detect cost explosions; object caps are machine-independent.
+// Seeded scenes, isolated browser storage and a free loopback port; never 8765.
 'use strict';
 import { chromium } from 'playwright-core';
 import http from 'node:http';
@@ -42,10 +11,10 @@ import net from 'node:net';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
+import { browserPath } from '../scripts/browser.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CHROME = path.join(homedir(), '.agent-browser', 'browsers', 'chrome-152.0.7977.82', 'chrome.exe');
+const CHROME = browserPath();
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json' };
 
 // ---- the P10 budget + the spike thresholds ----
@@ -141,6 +110,7 @@ console.log('[perf] booted:', JSON.stringify(boot));
 //   C. runs a SUSTAINED decay pass (the pools age out) and times it;
 //   D. returns the pool counts at the peak (the P10 count-invariant input).
 const result = await page.evaluate(async ({ PEAK_FRAMES, SUSTAINED_FRAMES }) => {
+  const { STUDIO } = await import('/src/logic.js');
   const G = window.__game;
   const m = await import('/src/enemies.js');
   G.__modsEnemy = m.spawnEnemy;
@@ -272,11 +242,14 @@ const result = await page.evaluate(async ({ PEAK_FRAMES, SUSTAINED_FRAMES }) => 
   // read the composite peak counts BEFORE the timed pass (the draw doesn't
   // mutate the pools — paint.update / particles.update do, and we drive those
   // in the sustained pass, not here).
+  G.studio.wakes = Array.from({ length: STUDIO.wakeCap }, (_, i) => ({ x: G.player.x + i * 3, y: G.player.y, t: STUDIO.wakeLife, pigment: ['red', 'blue', 'green'][i % 3], id: i }));
   const peakCounts = {
+    brushWakes: G.studio.wakes.length,
     inkBurst: G.paint.inkBurst.length, droplets: G.paint.droplets.length,
     ink: G.paint.ink.length, wet: G.paint.wet.length, trails: G.paint.trails.length,
     combinedJuice: combinedJuice(), particles: activeParticles(), ambientPool: ambientOn(),
   };
+  const peak = timeFrames(PEAK_FRAMES);
 
   // ---- the SYNTHETIC CEILING (all pools at their hard cap at once): the
   //     theoretical maximum on-screen juice. Not a real frame (no single game
@@ -312,7 +285,6 @@ const result = await page.evaluate(async ({ PEAK_FRAMES, SUSTAINED_FRAMES }) => 
   catch (e) { ceilingStats = { mean: NaN, p95: NaN, max: NaN, err: String(e && e.message || e) }; }
 
   // time the STATIC PEAK frame (the real composite worst case)
-  const peak = timeFrames(PEAK_FRAMES);
 
   // ---- C. the SUSTAINED decay pass: the pools age out over ~1s ----
   const sustained = [];
@@ -321,6 +293,7 @@ const result = await page.evaluate(async ({ PEAK_FRAMES, SUSTAINED_FRAMES }) => 
     const t0 = performance.now();
     G.paint.update(1 / 60);        // the real pool aging (droplets fall, ink decays, ...)
     G.particles.update(1 / 60);    // the real particle aging
+    G.studio.update(1 / 60);
     G._drawAll();
     sustained.push(performance.now() - t0);
     const c = combinedJuice(); if (c > combinedPeakSeen) combinedPeakSeen = c;
@@ -337,8 +310,8 @@ const result = await page.evaluate(async ({ PEAK_FRAMES, SUSTAINED_FRAMES }) => 
 }, { PEAK_FRAMES, SUSTAINED_FRAMES });
 
 // ---- host-side report + gates ----
-const fmt = (s) => `mean=${s.mean.toFixed(2)} p95=${s.p95.toFixed(2)} max=${s.max.toFixed(2)} ms (fps≈${(1000 / s.mean).toFixed(0)})`;
-console.log('[perf] canvas ' + result.canvas.w + 'x' + result.canvas.h + ' (swiftshader software raster — a draw-cost UPPER bound)');
+const fmt = (s) => `mean=${s.mean.toFixed(2)} p95=${s.p95.toFixed(2)} max=${s.max.toFixed(2)} ms`;
+console.log('[perf] canvas ' + result.canvas.w + 'x' + result.canvas.h + ' (CPU draw submission in headless Chromium; not GPU time or displayed FPS)');
 console.log('[perf] environmental layer: ' + result.diagAmb.pool + '-pool, ' + result.diagAmb.densest + ' on-screen at the densest region (co-located in the timed frame)');
 console.log('[perf] QUIET baseline     : ' + fmt(result.quiet));
 console.log('[perf] PEAK (real worst)  : ' + fmt(result.peak));

@@ -7,8 +7,9 @@ live status/next-action file; this file holds only durable instructions.
 
 Frogue Gallery is a small, polished browser game: a tiny frog painter with a
 magical paintbrush exploring a watercolor swamp. Vanilla JS + Canvas 2D +
-Web Audio. No frameworks, no build step, no package manager, no network
-dependencies. Browser localStorage is the only persistence (keys prefixed
+Web Audio. No frameworks, required build step, or runtime package/network
+dependencies. Optional Node scripts package and test the static game.
+Browser localStorage is the only persistence (keys prefixed
 `frogue_gallery_`).
 
 **The repository is the source of truth.** Docs and chat history can drift;
@@ -33,6 +34,8 @@ src/world.js        3 biomes (swamp 5400px / Reeds / Black Reeds), 4 zones,
                     the bounded Wander content generator (default OFF),
                     checkpoints, pigments, decor
 src/paint.js        wet-paint brush physics + status fields (swipe/splash)
+src/studio.js       living field studies, brush-hop wake, actual-stroke
+                    sketchbook and local PNG export (rules in logic.js)
 src/particles.js    splash/ink particle system
 src/ui.js           paper-styled canvas UI primitives
 src/audio.js        Web Audio synth: SFX + per-biome ambient themes
@@ -53,11 +56,21 @@ tests/balance.mjs   v1.10 M1 balance-telemetry probe (per-enemy TTK × pigment,
                     zone-pressure curve, charged-splash value, pigment
                     economy, flagged imbalances) — the retune baseline
 tests/sfx.mjs,tests/music.mjs,tests/ui.mjs  dev-only audio/UI probes
-tests/frames.mjs    frame-evidence harness (dev-only playwright-core, 35
+tests/frames.mjs    frame-evidence harness (dev-only playwright-core, 36
                     seeded scenes, free port — never 8765)
 tests/headless.mjs  minimal headless boot check
-docs/design.md      design pillars and mechanics
-docs/ROADMAP.md     milestones (v1.10 "The Tuned Swamp" is active)
+tests/slice.mjs     Astra regression assertions, called by smoke.mjs
+tests/vertical-slice.mjs  real Chromium opening/lessons/book/end/restart journey
+tests/package.mjs  deterministic ZIP and runtime-only server checks
+scripts/dev.mjs    dependency-free loopback server (no caching)
+scripts/build.mjs  static runtime folder + deterministic upload ZIP
+scripts/check.mjs  smoke, nine enforced pace gates, balance, UI/audio, package;
+                    --browser adds source/dist journeys, 36 frames and perf
+docs/GAME_DESIGN.md current design pillars and mechanics
+docs/CURRENT_STATE.md  implemented architecture, systems and limitations
+docs/ASTRA_HANDOFF.md  completed Astra milestone and exact next task
+docs/QWEN_BACKLOG.md   executable expansion tasks
+docs/ROADMAP.md     post-Astra milestones (Milestone 0 complete)
 docs/DECISIONS.md   consequential decisions log
 docs/PROJECT_STATUS.md   current milestone, bugs, debt, risks
 ```
@@ -67,6 +80,9 @@ docs/PROJECT_STATUS.md   current milestone, bugs, debt, risks
 | Action | Command |
 |---|---|
 | Run the game | `python -m http.server 8765 --bind 127.0.0.1` in the repo root → http://127.0.0.1:8765 (loopback only, never 0.0.0.0) |
+| Preferred local server | `node scripts/dev.mjs` (same loopback URL; no cache, runtime paths only) |
+| All required gates | `node scripts/check.mjs`; add `--browser` for real-browser validation |
+| Build distributable | `node scripts/build.mjs` → `dist/frogue-gallery.zip`; verify with `node scripts/dev.mjs --dist` |
 | Run all tests | `node tests/smoke.mjs` (~111 stages; must end `ALL SMOKE TESTS PASSED`) |
 | Run pacing probes | the 9 probes: `node tests/{pace,humance,bosspace,reedspace,wardpace,blackpace,umbrapace,ngpace,wandpace}.mjs` — every one must stay IN band |
 | Run balance telemetry | `node tests/balance.mjs` (v1.10 M1 baseline; re-run after B1–B4 for the deltas) |
@@ -98,7 +114,7 @@ docs/PROJECT_STATUS.md   current milestone, bugs, debt, risks
 - **Every feature/fix ships with a smoke-test stage or assertion** where
   practical; the smoke suite is the project's only CI.
 
-## The v1.10 contract (was byte-identity)
+## Balance contract (established in v1.10)
 
 v1.6–v1.9 gated on **byte-identity**: `logic.js` untouched, so tuning stayed
 frozen and the probes were pure regression checks. v1.10 "The Tuned Swamp" is
@@ -112,9 +128,11 @@ change. It instead gates on:
    economy) are fixed and the re-run shows the deltas.
 3. **Smoke stays green after every commit** (`ALL SMOKE TESTS PASSED`).
 
-`SAVE_VERSION` still stays at 12 and `GAME_VERSION` at 1.0.0 (a retune is not
-a save-migration or a version bump). See `docs/ROADMAP.md` §v1.10 for the
-M1 → B1–B4 → C1–C4 → D1–D2 → E1 plan.
+`SAVE_VERSION` stays at 12 and `GAME_VERSION` at 1.0.0. The Astra milestone
+adds optional validated save fields without a version bump. The completed
+retune plan is archived in `docs/history/ROADMAP-pre-astra.md`; current work
+lives in `docs/ROADMAP.md` and `docs/QWEN_BACKLOG.md`. Do not revive old
+next-action notes. Pacing models are not human playtest measurements.
 
 ## Definition of done (per work item)
 
@@ -128,7 +146,7 @@ M1 → B1–B4 → C1–C4 → D1–D2 → E1 plan.
 
 All 12 items in MISSION.md — verified satisfied in the 2026-09-05 final
 audit (the 1.0.0 release). Active scope now lives in `docs/ROADMAP.md`
-(v1.10 "The Tuned Swamp").
+(post-Astra expansion; Milestone 0 complete).
 
 ## Boundaries
 

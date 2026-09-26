@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Frogue Gallery</title>
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #efe3cc; overflow: hidden; }
   body { display: flex; align-items: center; justify-content: center; }
@@ -14,6 +15,7 @@
 </style>
 </head>
 <body>
+<noscript>Frogue Gallery needs JavaScript enabled to paint the swamp.</noscript>
 <div id="wrap">
   <canvas id="game" width="1280" height="800" tabindex="0" aria-label="Frogue Gallery. WASD to move, mouse to paint, Space to hop. Enter to begin."></canvas>
   <div id="fallback" hidden>
@@ -22,12 +24,12 @@
   </div>
 </div>
 <script type="module">
-  import { Game } from './src/game.js';
   try {
+    const { Game } = await import('./src/game.js');
     const canvas = document.getElementById('game');
     const game = new Game(canvas);
     game.start();
-    window.__game = game; // debug / dev-tooling handle (no UI surface)
+    if (['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)) window.__game = game;
   } catch (e) {
     console.error('Frogue Gallery failed to boot', e);
     document.getElementById('game').hidden = true;

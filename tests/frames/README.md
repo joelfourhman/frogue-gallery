@@ -1,3 +1,13 @@
+# Astra evidence — 2026-09-26
+
+Run `node scripts/check.mjs --browser` for all 36 staged scenes under
+`tests/frames/astra/`, plus the real source/dist journeys under
+`tests/.out/astra/`. See `docs/VALIDATION.md` for coverage and visual findings.
+The final audit includes finite-coordinate checks for Silt/Umbral rendering
+and corrected lantern staging. The historical index below remains reference.
+
+---
+
 # v1.9 Frame Evidence — Baseline Set (T0)
 
 This directory holds the **before/after frame evidence** for the v1.9 quality

@@ -23,7 +23,7 @@ import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
+import { browserPath } from '../scripts/browser.mjs';
 
 // This file lives in <repo>/tests/, so the repo root is one level up. Resolve
 // it from the script's own location (not cwd) so it works from any directory.
@@ -44,7 +44,7 @@ const OUT_DIR = path.resolve(ROOT, argFlag('--out') || path.join('tests', 'frame
 const SCENE_FILTER = argFlag('--scenes') ? argFlag('--scenes').split(',').map(s => s.trim()).filter(Boolean) : null;
 const MIN_FRAMES = argFlag('--min') != null ? parseInt(argFlag('--min'), 10) : 20;
 const FRAMES_DIR = OUT_DIR;
-const CHROME = path.join(homedir(), '.agent-browser', 'browsers', 'chrome-152.0.7977.82', 'chrome.exe');
+const CHROME = browserPath();
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json' };
 
 // ---------- free port (NEVER 8765) ----------
@@ -87,8 +87,8 @@ const browser = await chromium.launch({
   args: ['--no-sandbox', '--disable-gpu', '--use-gl=swiftshader', '--window-size=1280,800'],
 });
 const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
-page.on('pageerror', (e) => console.log('[page-fatal]', String(e)));
 const pageErrors = [];
+page.on('pageerror', (e) => { pageErrors.push(String(e)); console.log('[page-fatal]', String(e)); });
 page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text()); });
 
 // Freeze the auto rAF loop + seed Math.random BEFORE the module boots, and
@@ -156,25 +156,27 @@ await page.addInitScript(() => {
     const base = G.heron || { hue: { red: 0, blue: 0, green: 0 }, hitFlash: 0, diveH: 0, facing: -1, flying: 0, _intro: 0 };
     const w = G.world.w;
     // arena water line (SILT_WYRM/UMBRAL surfaceY); head x at the active point.
-    const surfY = variant === 'umbra' ? 1500 : 780;
+    const surfY = variant === 'umbra' ? 1240 : 780;
     const arenaX = w - 600;
     const h = Object.assign({}, base, {
       x: arenaX, y: surfY, phase: phase || 'surfaced', phaseT: 4,
       surfIdx: surfIdx != null ? surfIdx : 0, awakened: !!awakened,
       awakenedT: awakened ? 1.2 : 0, hue: { red: 0, blue: 0, green: 0 },
-      hitFlash: 0, diving: false, sinking: false,
+      hitFlash: 0, diving: false, sinking: false, _intro: 0,
     });
     if (variant === 'wyrm') { h.kind = 'wyrm'; h.wyrm = true; h.warden = h.umbra = h.green = h.gilded = false; }
     else if (variant === 'warden') { h.kind = 'warden'; h.warden = true; h.wyrm = h.umbra = h.green = h.gilded = false; h.tasteFactor = 1; }
     else if (variant === 'umbra') { h.kind = 'umbra'; h.umbra = true; h.wyrm = h.warden = h.green = h.gilded = false; h._transitFromX = w - 900; }
     else { h.wyrm = h.warden = h.umbra = false; if (variant === 'green') { h.green = true; h.gilded = false; } if (variant === 'gilded') { h.gilded = true; h.green = false; } }
     if (variant === 'gilded') h.plumeT = 0.8; // the gold-plume phase (visible tell)
-    const maxHp = { gray: 30000, green: 36000, gilded: 42000, wyrm: 48000, warden: 52000, umbra: 60000 }[variant] || 30000;
+    const maxHp = { gray: 30000, green: 36000, gilded: 42000, wyrm: 48000, warden: 50000, umbra: 60000 }[variant] || 30000;
     h.maxHp = maxHp; h.hp = Math.round(maxHp * (hpFrac != null ? hpFrac : 0.7));
     if (awakened) { h.awakened = true; h.awakenedT = 1.2; h.hp = Math.round(maxHp * 0.1); }
     G.heron = h;
     // frame the arena: frog to the left, camera centered on the boss.
     G.player.x = w - 900; G.player.y = surfY - 20; G.player.alive = true;
+    if (variant === 'umbra') G.player.x = w - 1000;
+    if (G.lanternReeds) { G.lantern.lit = true; G.lantern.fuel = 1; G._updateLantern(0, G.player); }
     G.cam.x = arenaX - 250; G.cam.y = surfY; G.zoom = 1; G.shake = 0;
     if (awakened) G._bloom = { x: arenaX, y: surfY, t: 0.5, dur: 1.4 };
     G.enemies = []; G.orbs = [];
@@ -710,7 +712,7 @@ for (const m of manifest) {
   console.log(`${m.err ? 'FAIL' : (ok.includes(m) ? 'OK  ' : 'LOW ')}  ${m.name}  ${m.size ? (m.size / 1024).toFixed(0) + ' KB' : ''}  ${stat}`);
 }
 console.log(`\n${ok.length}/${manifest.length} frames non-trivial (std>=2, >=30KB); ${failed.length} failed`);
-if (pageErrors.length) console.log('[page errors]', pageErrors.slice(0, 10));
+if (pageErrors.length) { console.log('[page errors]', pageErrors.slice(0, 10)); process.exit(2); }
 if (manifest.length && ok.length < Math.min(MIN_FRAMES, manifest.length)) {
   console.log(`FRAME SET INCOMPLETE (<${Math.min(MIN_FRAMES, manifest.length)} of ${manifest.length} frames non-trivial)`);
   process.exit(2);

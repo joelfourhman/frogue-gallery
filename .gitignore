@@ -16,6 +16,7 @@ desktop.ini
 
 # ---- Node tooling (session-local; game itself is zero-dependency) ----
 node_modules/
+dist/
 
 # ---- Test artifacts (headless playtest driver screenshots) ----
 tests/.out/
