@@ -35,7 +35,7 @@ charged single-target splash ratio 0.84×, and two-painting affordability YES.
 
 Full smoke, nine seeded pacing probes, balance, UI, SFX and music pass.
 Normal estimates 17.2m analytical / 18.3m mixed measured+analytic; Reeds22.2m;
-NG+19.5m; Black Reeds25.8m; Umbral3.90m; Wander16.9–17.8m /
+NG+19.5m; Black Reeds25.8m; Umbral3.73m; Wander16.9–17.8m /
 Reeds21.6–22.7m. These are bot/models, not human playtest durations.
 
 Source and packaged Chromium journeys pass: study + PNG, save reload,
@@ -43,6 +43,23 @@ Source and packaged Chromium journeys pass: study + PNG, save reload,
 used for that state test), defeat/restart. 36 rendered legacy scenes pass;
 visual checks include new study, book, PNG and end states.
 Effects stress includes 24 brush wakes; bounded pools pass.
+
+## Final visual audit
+
+The Silt/Umbral renderers treated [x,y] arrays as objects, silently producing
+NaN geometry. Both now use tuple coordinates; smoke exercises finite drawing
+coordinates across surfaced, transit and telegraph states. The lantern now
+cuts a viewing circle through a reused darkness canvas with a cached sprite,
+so creature art remains readable without an additive yellow wash.
+
+Umbral surfaceY 1500 → 1240 leaves 260px of world below the maw (world
+height is 1500), fixing a visibly clipped arena and adding movement room.
+Umbral estimate 3.90 → 3.73m, inside 2.5–4; Black Reeds remains 25.8m.
+No HP/damage/window change for this fix. Atelier copy/currency layout,
+defeat recap, dark HUD contrast, lantern/stock overlap and boss names fixed.
+Full integrated check: all 19 entries pass, including source/dist journeys,
+36 frames and effects stress. Peak/ceiling/sustained p95 submission:
+1.10/1.30/1.60ms; these are CPU timings, not displayed FPS.
 
 ## Immediate next action
 

@@ -3327,13 +3327,13 @@ console.log('== stage 53: v1.3 M15 G4 — gold UI + ledger completion ==');
   drawn.length = 0; frames(3);
   let joined = drawn.join('\u0001');
   assert(joined.includes('gold 0'), 'G4(a): the atelier header renders the gold balance ("gold 0") on a fresh save');
-  assert(/a meta pigment/.test(joined), 'G4(a): the cycle-0 header readout explains gold is a meta pigment (earned from boss defeats / synergies / the 100-orb run)');
+  assert(/meta pigment/.test(joined) && /spend in NG\+/.test(joined), 'G4(a): the compact cycle-0 header explains gold and its NG+ spending gate');
   // now an NG+ save with 70 gold → the readout switches to the Gilded-Frame hint
   gA.save.ngCycle = 1; gA.save.gold = 70;
   drawn.length = 0; frames(3);
   joined = drawn.join('\u0001');
   assert(joined.includes('gold 70'), 'G4(a): the atelier header renders "gold 70" for an NG+ save');
-  assert(/spend 50g in the Curator/.test(joined), 'G4(a): the NG+ header readout hints at what the gold buys (the Gilded Frame, 50g)');
+  assert(/Curator.*Gilded Frame 50g/.test(joined), 'G4(a): the compact NG+ header names the purchase location, frame and price');
 
   // ---- (a2) the "Next Expedition" prompt (modifier picker) shows the readout ----
   // A returning NG+ player (victory earned, ngCycle 1 — the Next Expedition
@@ -6146,8 +6146,9 @@ console.log('== stage 83: v1.6 R1 — THE REEDS BIOME shell + THE LANTERN (victo
   });
   gR._lanternSprite = null; gR._drawReedsLight(ctx2, { x: gR.player.x - 640, y: gR.player.y - 400, scale: 1 });
   const baked = gR._lanternSprite !== null;
+  const mask = gR._lanternMask;
   gR._drawReedsLight(ctx2, { x: gR.player.x - 640, y: gR.player.y - 400, scale: 1 }); // second frame: reuse the cache
-  assert(baked && imgDraws === 2, `R1: the Reeds light render is a single cached-sprite drawImage per frame (got ${imgDraws} across 2 frames — cached, not per-pixel)`);
+  assert(baked && imgDraws === 4 && mask === gR._lanternMask, `R1: Reeds light reuses its darkness mask and glow sprite (${imgDraws} draws across 2 frames, no per-pixel work)`);
   assert(radialGrads <= 1, `R1: the light sprite is baked at most ONCE (radial gradients created: ${radialGrads}) — the cached-cheap invariant`);
 
   // ---- (g) the CANDLE FUEL HUD readout RENDERS (fillText/arc recording) for a

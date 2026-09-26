@@ -1892,19 +1892,11 @@ _drawAtelier(ctx) {
     // available gold + a hint of what it buys (a pure read of save.gold).
     // Sits between the subtitle and the bank strip; the bank strip moves down
     // a touch (96→104) to make room. No new mechanics.
-    {
-      const ro = this._goldReadout();
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx - ctx.measureText(ro.text).width / 2 - 46, 93, 6, 0, TAU);
-      ctx.fillStyle = '#d9a520'; ctx.fill();
-      ctx.lineWidth = 1.5; ctx.strokeStyle = INK; ctx.stroke();
-      ctx.restore();
-      centerText(ctx, ro.text, cx, 93, uiFont(UI.sizes.small, { weight: 700 }), '#c9922a', 0.95);
-    }
+    const goldHint = this.save.ngCycle >= 1 ? "Curator's Ledger · Gilded Frame 50g" : 'meta pigment · spend in NG+';
+    centerText(ctx, `gold ${this.save.gold || 0} · ${goldHint}`, cx + 240, 94, uiFont(UI.sizes.small), '#f4d397', 0.95);
 
     // bank strip with loadout preview
-    const stripW = 640, stripH = 40, sx = cx - stripW / 2, sy = 104;
+    const stripW = 760, stripH = 40, sx = cx - stripW / 2, sy = 104;
     ctx.save();
     ctx.fillStyle = 'rgba(244,234,216,0.92)';
     ctx.strokeStyle = INK;
@@ -2459,13 +2451,13 @@ _drawAtelier(ctx) {
       const c = paperPanel(ctx, px, py, pw, ph, { seed: 120 });
       centerText(c, 'Welcome to the Atelier', cx, py + 40, uiFont(UI.sizes.h1Sm, { weight: 700 }), INK, 1);
       const lines = [
-        'Between your runs, spent and gathered pigments settle into the bank above.',
-        'Studio upgrades are training for the frog — permanent, kept even after a defeat.',
-        'Paintings are bought once, then hung: up to 2 at a time, and a hung painting is a real bonus on future runs.',
-        'Ready when you are — Depart sends you back out to the swamp.',
+        'Gathered pigments become your bank between expeditions.',
+        'Buy upgrades here. They stay with you, even after a defeat.',
+        'Buy a painting once, then hang up to two for useful bonuses.',
+        'Begin Expedition starts a fresh journey with your chosen build.',
       ];
       lines.forEach((ln, i) => centerText(c, ln, cx, py + 84 + i * 32, uiFont(UI.sizes.bodyLg), INK, 0.85));
-      centerText(c, 'press 1 / 2 / 3 to browse the shelves, paintings, and gallery — any action closes this note', cx, py + ph - 24, uiFont(UI.sizes.small, { italic: true }), INK, 0.55);
+      centerText(c, '1 / 2 / 3 browse the tabs · any action closes this note', cx, py + ph - 24, uiFont(UI.sizes.small, { italic: true }), INK, 0.75);
       paperEnd(ctx);
     }
 
@@ -2503,7 +2495,7 @@ _drawAtelier(ctx) {
     ctx.roundRect(l.x, l.y, l.w, l.h, 17);
     ctx.fill(); ctx.stroke();
     ctx.restore();
-    centerText(ctx, '← back to the pond', l.x + l.w / 2, l.y + l.h / 2 + 1, uiFont(UI.sizes.body), '#fdf6e9', 0.9);
+    centerText(ctx, '← back to the pond', l.x + l.w / 2, l.y + l.h / 2 + 1, uiFont(UI.sizes.body), INK, 0.9);
     // M2: the "Encore" viewing-screen entry (a paper chip, right of Depart).
     const en = g.encore;
     ctx.save();
@@ -2515,7 +2507,7 @@ _drawAtelier(ctx) {
     ctx.roundRect(en.x, en.y, en.w, en.h, 17);
     ctx.fill(); ctx.stroke();
     ctx.restore();
-    centerText(ctx, 'Encore — the gallery wall', en.x + en.w / 2, en.y + en.h / 2 + 1, uiFont(UI.sizes.body), '#fdf6e9', 0.9);
+    centerText(ctx, 'Encore — the gallery wall', en.x + en.w / 2, en.y + en.h / 2 + 1, uiFont(UI.sizes.body), INK, 0.9);
     centerText(ctx, 'Enter — depart the studio   ·   Esc — return to the pond', cx, d.y + d.h + 16, uiFont(UI.sizes.xsmall, { italic: true }), '#fdf6e9', 0.55);
   }
 
@@ -5783,9 +5775,9 @@ _drawAtelier(ctx) {
     let headX;
     if (h.phase === 'transit') {
       const frac = 1 - Math.max(0, Math.min(1, (h.phaseT || 0) / (SILT_WYRM.transit * (h.awakened ? 0.62 : 1.0))));
-      headX = prev.x + (cur.x - prev.x) * frac;
+      headX = prev[0] + (cur[0] - prev[0]) * frac;
     } else {
-      headX = cur.x;
+      headX = cur[0];
     }
     const surfacing = h.phase === 'surfaced';
     const sinking = !!h.sinking;
@@ -5907,12 +5899,12 @@ _drawAtelier(ctx) {
     // transit it slithers from where it left (_transitFromX) toward the next.
     let headX;
     if (phase === 'transit') {
-      const fromX = (h._transitFromX != null) ? h._transitFromX : prev.x;
+      const fromX = (h._transitFromX != null) ? h._transitFromX : prev[0];
       const transitDur = UMBRA_WYRM.transit * (h.awakened ? 0.6 : 1.0) * (phase2 ? UMBRA_WYRM.transitDeep : 1.0);
       const prog = 1 - Math.max(0, Math.min(1, (h.phaseT || 0) / (transitDur || 1)));
-      headX = fromX + (cur.x - fromX) * prog;
+      headX = fromX + (cur[0] - fromX) * prog;
     } else {
-      headX = cur.x;
+      headX = cur[0];
     }
     const surfacing = phase === 'surfaced';
     const sinking = !!h.sinking;
@@ -6230,51 +6222,36 @@ _drawAtelier(ctx) {
   // unlit ~ the short ambient radius). No per-pixel work (no
   // getImageData/putImageData), so P10 stays green.
   _drawReedsLight(ctx, v) {
-    const p = this.player;
-    const cw = ctx.canvas.width, ch = ctx.canvas.height;
-    const scale = v.scale;
-    // world -> screen (the camera transform maps (world - view.xy) * scale).
-    const sx = (p.x - v.x) * scale;
-    const sy = (p.y - v.y) * scale;
-    // (a) the darkness wash — the deeper-swamp near-black. A flat fill (one
-    // rect, no gradient) so it is cheap; the light below carves the visible
-    // area out of it.
-    ctx.save();
-    ctx.fillStyle = 'rgba(6,8,14,0.86)';
-    ctx.fillRect(0, 0, cw, ch);
-    // (b) the lantern light: the cached sprite scaled to the eased radius.
-    // Lit: the eased radius (a full wick reaches the full sprite; a dying wick
-    // shrinks toward the floor). Unlit: a SHORT ambient radius (LANTERN.min
-    // floor) drawn dimmer — the "short visibility" of an unlit lantern.
+    const p = this.player, cw = ctx.canvas.width, ch = ctx.canvas.height;
+    const sx = (p.x - v.x) * v.scale, sy = (p.y - v.y) * v.scale;
     const lit = this.lantern && this.lantern.lit && (this._lanternEasedR || 0) > 0;
-    const worldR = lit ? this._lanternEasedR : (LANTERN.minRadius * 0.6);
-    const cutR = worldR * scale;
-    if (cutR > 1) {
-      if (!this._lanternSprite) {
-        const d = Math.ceil(LANTERN.lightRadius * 2);
-        const sp = document.createElement('canvas');
-        sp.width = d; sp.height = d;
-        const sc = sp.getContext('2d');
-        const R = LANTERN.lightRadius;
-        const g = sc.createRadialGradient(R, R, 0, R, R, R);
-        // warm paper-lantern core (the lantern's glow) easing to transparent.
-        g.addColorStop(0.0, 'rgba(255,216,150,0.95)');
-        g.addColorStop(0.3, 'rgba(246,200,126,0.72)');
-        g.addColorStop(0.65, 'rgba(150,120,80,0.26)');
-        g.addColorStop(1.0, 'rgba(20,20,30,0)');
-        sc.fillStyle = g;
-        sc.fillRect(0, 0, d, d);
-        this._lanternSprite = sp;
-      }
-      const size = cutR * 2;
-      // A low-fuel or unlit light is dimmer (globalAlpha), a full wick bright.
-      const bright = lit ? 0.75 + 0.25 * (this.lantern.fuel || 0) : 0.45;
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = bright;
-      ctx.drawImage(this._lanternSprite, sx - cutR, sy - cutR, size, size);
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
+    const radius = (lit ? this._lanternEasedR : LANTERN.minRadius * 0.6) * v.scale;
+    if (!this._lanternSprite) {
+      const d = Math.ceil(LANTERN.lightRadius * 2), sp = document.createElement('canvas');
+      sp.width = d; sp.height = d;
+      const sc = sp.getContext('2d'), R = LANTERN.lightRadius;
+      const light = sc.createRadialGradient(R, R, 0, R, R, R);
+      light.addColorStop(0, 'rgba(255,216,150,0.98)');
+      light.addColorStop(0.3, 'rgba(246,200,126,0.85)');
+      light.addColorStop(0.65, 'rgba(150,120,80,0.4)');
+      light.addColorStop(1, 'rgba(20,20,30,0)');
+      sc.fillStyle = light; sc.fillRect(0, 0, d, d);
+      this._lanternSprite = sp;
     }
+    // Cut light out of a reused darkness layer. Drawing additive yellow over
+    // an opaque dark wash hid the creatures instead of revealing their color.
+    if (!this._lanternMask) this._lanternMask = document.createElement('canvas');
+    const mask = this._lanternMask;
+    if (mask.width !== cw || mask.height !== ch) { mask.width = cw; mask.height = ch; }
+    const mc = mask.getContext('2d');
+    mc.clearRect(0, 0, cw, ch); mc.globalCompositeOperation = 'source-over';
+    mc.fillStyle = 'rgba(6,8,14,0.86)'; mc.fillRect(0, 0, cw, ch);
+    mc.globalCompositeOperation = 'destination-out'; mc.globalAlpha = lit ? 1 : 0.4;
+    mc.drawImage(this._lanternSprite, sx - radius, sy - radius, radius * 2, radius * 2);
+    mc.globalAlpha = 1; mc.globalCompositeOperation = 'source-over';
+    ctx.save(); ctx.drawImage(mask, 0, 0);
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = lit ? 0.06 : 0.02;
+    ctx.drawImage(this._lanternSprite, sx - radius, sy - radius, radius * 2, radius * 2);
     ctx.restore();
   }
 
@@ -6440,7 +6417,7 @@ _drawAtelier(ctx) {
     // banners render last so they sit above every screen (incl. the title,
     // where the erase-save confirm banner appears)
     this._drawZoneTint(ctx);
-    this._drawBanners(ctx);
+    if (this.state !== 'end') this._drawBanners(ctx);
     // W2 (v1.6): the gamepad UI overlays — the title "pad connected" chip + the
     // focus-cursor highlight over the focused menu button. Drawn above the
     // screens so the cursor is visible on the highlighted button.
@@ -6728,6 +6705,7 @@ _drawAtelier(ctx) {
     // saturation (gray -> full color). It is a HUD read of `worldColorSat()`,
     // so it always matches the terrain the frog is literally painting.
     const rev = this.revealProgress();
+    this._paperChip(ctx, this.cw - 218, 8, 204, 84, 4);
     const barH = 5, barW = this.cw;
     ctx.save();
     // track: desaturated gray (the "un-restored" swamp)
@@ -6797,7 +6775,7 @@ _drawAtelier(ctx) {
     // Reads the pure orbStreakState() so it always matches the scoring.
     const ss = orbStreakState(this.orbStreak);
     if (ss.streak > 0) {
-      const chipW = 78, chipH = 22, cx = this.cw - chipW - 14, cy = 14;
+      const chipW = 78, chipH = 22, cx = this.cw - chipW - 14, cy = 142;
       ctx.save();
       ctx.globalAlpha = ss.active ? 0.95 : 0.7;
       this._paperChip(ctx, cx, cy, chipW, chipH, 6);
@@ -6815,7 +6793,7 @@ _drawAtelier(ctx) {
     // lit state is a tiny lit flame / a grayed-out "out" when unlit. A dim,
     // quiet "L" key hint sits at the right so the player learns the toggle. ----
     if (this.lanternReeds && this.lantern) {
-      const chipW = 150, chipH = 24, cx2 = this.cw - chipW - 14, cy2 = 44;
+      const chipW = 150, chipH = 24, cx2 = this.cw - chipW - 14, cy2 = 108;
       const lit = !!this.lantern.lit;
       const fuel = Math.max(0, Math.min(1, this.lantern.fuel));
       const low = lit && fuel < 0.25;   // a dying wick reads red
@@ -6944,7 +6922,7 @@ _drawAtelier(ctx) {
     ctx.fillStyle = '#d8d3bb'; ctx.fillRect(hopX + 12, hopY + 23, 122, 6);
     ctx.fillStyle = '#62845b'; ctx.fillRect(hopX + 12, hopY + 23, 122 * clamp(1 - p.hopCd / (t.hopCooldown || 0.7), 0, 1), 6);
     centerText(ctx, p.hopCd > 0 ? 'catching a breath' : this.studio?.unlocked ? 'hold paint for a wake' : 'ready to leap', hopX + 73, hopY + 39, uiFont(9, { italic: true }), INK, 0.7);
-    centerText(ctx, 'H · field guide     J · sketchbook', this.cw - 148, this.ch - 20, uiFont(12), INK, 0.8);
+    centerText(ctx, 'H · field guide     J · sketchbook', this.cw - 148, this.ch - 20, uiFont(12), this.lanternReeds ? '#f3ead7' : INK, 0.8);
 
     const h = this.heron;
     if (h && h._intro <= 0 && h.hp > 0 && h.flying <= 0) {
@@ -6955,7 +6933,8 @@ _drawAtelier(ctx) {
       ctx.restore();
       const frac = Math.max(0, h.hp / h.maxHp);
       ctx.save();
-      centerText(ctx, h.warden ? 'THE HOLLOW WARDEN' : 'THE GREAT GRAY HERON', this.cw / 2, by + 4, uiFont(UI.sizes.small, { weight: 700 }), INK, 0.85);
+      const bossName = h.warden ? 'THE HOLLOW WARDEN' : h.umbra ? 'THE UMBRAL WYRM' : h.wyrm ? 'THE SILT WYRM' : h.gilded ? 'THE GILDED HERON' : h.green ? 'THE GREAT GREEN HERON' : 'THE GREAT GRAY HERON';
+      centerText(ctx, bossName, this.cw / 2, by + 4, uiFont(UI.sizes.small, { weight: 700 }), INK, 0.85);
       ctx.fillStyle = 'rgba(43,35,32,0.18)';
       this._blobRect(ctx, bx, by + 12, bw, 12, 1);
       ctx.fill();
@@ -7642,7 +7621,7 @@ _drawAtelier(ctx) {
     paperEnd(ctx);
 
     // start button (visual; Enter/Space handled in _updateTitle).
-    // DoD #2: "Continue" when a valid save exists, "New Game" otherwise —
+    // Progress survives between expeditions; the active run does not resume.
     // a returning player should see the difference without reading the footer.
     const b = this.save.bank;
     const hasProgress = this.save.stats.expeditions > 0 || this.save.owned.length > 0 ||
@@ -7651,7 +7630,7 @@ _drawAtelier(ctx) {
         // L3: the primary actions breathe in as a staggered step (step 1) after the title.
         ctx.save();
         ctx.globalAlpha = titleItemAlpha(this._titleShowT, 1);
-        uiButton(ctx, g.bx, g.by, g.bw, g.bh, hasProgress ? 'Continue Expedition' : 'Begin Expedition', this._mouseIn(g.bx, g.by, g.bw, g.bh), false, { seed: 5, size: 20, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
+        uiButton(ctx, g.bx, g.by, g.bw, g.bh, hasProgress ? 'New Expedition' : 'Begin Expedition', this._mouseIn(g.bx, g.by, g.bw, g.bh), false, { seed: 5, size: 20, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
         // T1 (v1.2 M13): the guided first expedition — shown only to a fresh
         // save (no finished run, never skipped). Clicking it begins a low-stakes
         // teaching run on the opening zone instead of the timed expedition.
@@ -7726,7 +7705,7 @@ _drawAtelier(ctx) {
           const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
           centerText(ctx, `best run — ${what}`, cx, g.aby + g.abh + 30 + fpush, uiFont(UI.sizes.body, { weight: 700 }), '#e8c86a', 0.95);
         }
-        centerText(ctx, 'G/N/B to set difficulty · M to mute · A for the atelier · R for the Reeds · "New Game" = erase save (bottom left)', cx, g.aby + g.abh + (br ? 48 : 30) + fpush, uiFont(UI.sizes.small), '#fdf6e9', 0.5);
+        centerText(ctx, 'G/N/B to set difficulty · M to mute · A for the atelier · R for the Reeds · J for your sketchbook', cx, g.aby + g.abh + (br ? 48 : 30) + fpush, uiFont(UI.sizes.small), '#fdf6e9', 0.5);
         // erase-save link (bottom-left; two-click confirm, see _updateTitle)
         const ex = 16, ey = this.ch - 40;
         const armed = (this.now - (this._eraseArm || -99)) < 3;
@@ -8223,7 +8202,7 @@ _drawAtelier(ctx) {
     // (paperPanel + gilded double border + _drawPaintingMotif) + the painting
     // data. The reveal animates on endT, so early frames show nothing.
     const exh = victory ? (this.save.loadout || []).map(id => PAINTINGS.find(p => p.id === id)).filter(Boolean) : [];
-    let bankY = 250;
+    let bankY = victory ? 250 : 272;
     if (exh.length > 0) {
       const reveal = clamp((this.endT - 0.4) / 0.9, 0, 1);
       if (reveal > 0.02) {
@@ -8260,14 +8239,14 @@ _drawAtelier(ctx) {
     const b = this.save.bank;
     centerText(c, `Bank — red ${b.red} · blue ${b.blue} · green ${b.green}`, cx, py + bankY, uiFont(UI.sizes.bodyLg, { weight: 700 }), INK, 0.9);
     const s = this.save.stats;
-    const statsY = victory ? 374 : 274;
+    const statsY = victory ? 374 : 300;
     centerText(c, `expeditions ${s.expeditions} · victories ${s.victories} · herons painted ${s.heronsPainted}`, cx, py + statsY, uiFont(UI.sizes.label), INK, 0.65);
 
     // best run
     const br = this.save.bestRun;
     if (br) {
       const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
-      centerText(c, `best run — ${what}`, cx, py + (victory ? 396 : 296), uiFont(UI.sizes.label, { weight: 700 }), INK, 0.8);
+      centerText(c, `best run — ${what}`, cx, py + (victory ? 396 : 322), uiFont(UI.sizes.label, { weight: 700 }), INK, 0.8);
     }
 
     // spend hint / challenge reward block. On a challenge victory the spend
@@ -8289,7 +8268,7 @@ _drawAtelier(ctx) {
         centerText(c, 'the best list is already at its top-5 — beat your best to file again', cx, py + 456, uiFont(UI.sizes.small, { italic: true }), INK, 0.6);
       }
     } else {
-        centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + (victory ? 420 : 320), uiFont(UI.sizes.small, { italic: true }), INK, 0.55);
+        centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + (victory ? 420 : 346), uiFont(UI.sizes.small, { italic: true }), INK, 0.55);
     }
 
     // C2 (v1.3 M16): the "Season" summary (VICTORY ONLY, NOT a challenge) — a
@@ -8333,7 +8312,7 @@ _drawAtelier(ctx) {
         ctx.roundRect(lx, ly, lw, lh, 17);
         ctx.fill(); ctx.stroke();
         ctx.restore();
-        centerText(ctx, 'return to the pond (Esc)', cx, ly + lh / 2 + 1, uiFont(UI.sizes.label), '#fdf6e9', 0.9);
+        centerText(ctx, 'return to the pond (Esc)', cx, ly + lh / 2 + 1, uiFont(UI.sizes.label), INK, 0.9);
         // N4 (v1.3 M14): the expedition-modifier picker overlays the end screen.
         if (this._modPrompt) this._drawModPrompt(ctx);
       }

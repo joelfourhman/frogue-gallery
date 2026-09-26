@@ -1774,7 +1774,7 @@ export function wardenFuelSiphon(warden, lantern, dt) {
 export const UMBRA_WYRM = {
   kind: 'umbra',
   hp: 60000,                    // ~60k HP — one tier above the Silt Wyrm's 48k
-  surfaceY: 1500,               // the flooded lower-bank line it surfaces on (the Silt Wyrm's)
+  surfaceY: 1240,               // flooded lower bank, with 260px below the maw inside the 1500px world
   surfacePoints: 4,             // 4 maw points (it pairs two of them — the DUAL maw)
   transit: 0.85,               // a BRIEF transit — the "faster twin": the body only ducks briefly between breaches (vs the Silt Wyrm's 1.8)
   transitDeep: 0.7,             // the "deep dark" phase transit multiplier (faster still)

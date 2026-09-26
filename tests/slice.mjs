@@ -1,7 +1,7 @@
 // Integrated with smoke.mjs so these checks use its seeded real-Game harness.
 import { Player } from '../src/player.js';
 import { Input } from '../src/input.js';
-import { freshSave, makeTuning, MOSQUITO_FLIGHT, STUDIO, studyNode, paintStudy, normalizeSketchbook, migrateSave, migrateOptions, fileSketch } from '../src/logic.js';
+import { freshSave, makeTuning, MOSQUITO_FLIGHT, STUDIO, UMBRA_WYRM, studyNode, paintStudy, normalizeSketchbook, migrateSave, migrateOptions, fileSketch } from '../src/logic.js';
 import { FieldStudio, bookLayout, drawPostcard } from '../src/studio.js';
 import { spawnEnemy } from '../src/enemies.js';
 
@@ -58,6 +58,20 @@ export function testSlice({ Game, makeCanvas, assert }) {
   g.world.worldColorSat = () => 0.25;
   g._drawAll();
   assert(true, 'first victory cinematic renders its saturation reveal without const assignment crash');
+  const badDraw = [];
+  const finiteCtx = new Proxy(g.ctx, { get(target, name) {
+    const value = target[name];
+    return typeof value === 'function' ? (...args) => {
+      if (args.some(a => typeof a === 'number' && !Number.isFinite(a))) badDraw.push(name);
+      return value.apply(target, args);
+    } : value;
+  }, set(target, name, value) { target[name] = value; return true; } });
+  for (const phase of ['surfaced', 'transit', 'telegraph', 'dual-telegraph']) {
+    const h = { ...g.heron, phase, phaseT: 1, surfIdx: 1, hp: 200, maxHp: 1000, awakened: true, sinking: 0 };
+    g._drawWyrm(finiteCtx, h, 1); g._drawUmbra(finiteCtx, h, 1);
+  }
+  assert(badDraw.length === 0, 'Silt and Umbral bodies/tells use finite tuple coordinates instead of invisible NaN geometry');
+  assert(UMBRA_WYRM.surfaceY <= g.world.h - 200, 'Umbral arena leaves visible movement room below its maw inside the world');
 
   console.log('== Astra: living studies, brush-hop and real stroke keepsakes ==');
   g.save = freshSave(); g._beginExpedition(); g.input.reset();
