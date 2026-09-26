@@ -7684,7 +7684,7 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
   const lay = g98._optionsLayout();
   assert(lay.wander && lay.wander.w > 0 && lay.wander.h > 0, 'D4: the options layout exposes a "Wandering Expeditions" toggle row');
   g98._drawOptions(rec98);
-  assert(drawn98.some(s => s.includes('Wandering Expeditions')), 'D4: the Options panel draws the "Wandering Expeditions" label');
+  assert(drawn98.some(s => s.includes('Wander · shuffled encounters')), 'D4: the Options panel draws the "Wandering Expeditions" label');
   // default OFF for a fresh options blob (freshOptions / a legacy blob without the field).
   assert(G98.Game.prototype !== undefined && g98.options.wander === false, 'D4: options.wander defaults OFF (fresh options)');
 
@@ -7777,7 +7777,7 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
 //     Silt-Wyrm language); siphons lantern fuel while LIT (stopping
 //     when unlit / empty); the 3-hue awaken works through the EXISTING
 //     paintBoss/bossStep path; its aggression is taste-seeded (Feast
-//     > Quiet). HP in the ~52k class (the Wander apex, above the
+//     > Quiet). HP in the ~50k class (the Wander apex, above the
 //     Silt-Wyrm's 48k).
 // ====================================================================
 {
@@ -7788,8 +7788,8 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
   // options blob; a default-OFF cycle-0 run in (a) below must NOT inherit it).
   try { (globalThis.localStorage || {}).setItem('frogue_gallery_options', JSON.stringify(L1.freshOptions())); } catch {}
   const W = F1.WARDEN, T1 = F1.makeTuning();
-  // ---- (0) the boss constant: the 5th archetype, 52k HP (the Wander apex) ----
-  assert(W.kind === 'warden' && W.hp === 52000, 'F1: the Hollow Warden is declared (kind warden, 52k HP — the Wander apex, above the Silt Wyrm 48k)');
+  // ---- (0) the boss constant: the 5th archetype, 50k HP (the Wander apex) ----
+  assert(W.kind === 'warden' && W.hp === 50000, 'F1: the Hollow Warden is declared (kind warden, 50k HP — the Wander apex, above the Silt Wyrm 48k)');
   assert(W.surfacePoints === 3 && W.telegraph > 0 && W.mawOpen > 0 && W.mawClosed > 0, 'F1: 3 telegraphed maw points on the arena line (a ~1.5s ripple-ring tell; a maw-open paintable window + a maw-closed invulnerable window)');
   assert(W.awakenNeed.red === 45 && W.awakenNeed.blue === 45 && W.awakenNeed.green === 45, 'F1: the SAME 3-hue awaken rhythm as the herons / wyrm (45/45/45)');
   assert(W.siphonRate > 0 && Math.abs(W.siphonRate - 1 / 60) < 1e-4, 'F1: the siphon rate drains a full wick in ~60s (base; taste-scaled to 45s feast / 75s quiet)');
@@ -7807,7 +7807,7 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
   const gW1 = new G1.Game(makeCanvas()); gW1.start(); gW1._quitToTitle();
   gW1.save = vSave; gW1.options.wander = true; gW1._beginExpedition();
   assert(gW1.wanderActive === true, 'F1 (setup): a Wander expedition is active');
-  assert(gW1.heron && gW1.heron.warden === true && gW1.heron.kind === 'warden' && gW1.heron.hp === W.hp, 'F1: a WANDER expedition spawns THE HOLLOW WARDEN as its end boss (the 5th archetype, 52k HP)');
+  assert(gW1.heron && gW1.heron.warden === true && gW1.heron.kind === 'warden' && gW1.heron.hp === W.hp, 'F1: a WANDER expedition spawns THE HOLLOW WARDEN as its end boss (the 5th archetype, 50k HP)');
   assert(!gW1.heron.wyrm && !gW1.heron.flying, 'F1: the Warden is its OWN archetype (not the wyrm, not a flying heron)');
   // a hand-tuned CYCLE-0 SWAMP run (Wander OFF) still spawns the gray heron — NOT the Warden.
   const gS1 = new G1.Game(makeCanvas()); gS1.start(); gS1._quitToTitle();
@@ -7916,7 +7916,7 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
   }
   assert(true, 'F1: the pale draw path (the maw-head + the slithering pale body-line, capped segments; the ripple-ring maw tell) renders headless without throwing (P10 allocation-safe)');
 
-  console.log('ok — F1: THE HOLLOW WARDEN — the 5th boss ARCHETYPE (the deferred "5th boss / more Reeds depth" item, the Wander-apex). It spawns ONLY at the end of a WANDER expedition (a hand-tuned cycle-0 / NG+ / Reeds run never meets it — byte-identical when Wander OFF, the Warden branch is a pure additive). A PALE, lantern-eating creature: while the lantern is LIT it SIPHONS candle fuel (a full wick in ~60s base, taste-scaled to 45s feast / 75s quiet; it STOPS when unlit or empty, and the wick auto-extinguishes); it is INVULNERABLE except while its MAW is OPEN (a telegraphed window reusing the Silt-Wyrm ripple-ring language). The 3-hue awaken STILL applies through the EXISTING paintBoss/bossStep path (the same awaken latch fires; the awaken speeds the cadence 0.62×). Its aggression is SEED-BIASED by the Wander taste (Feast > Quiet: the feast maw opens more often + siphons faster). HP in the ~52k class (the Wander apex, above the Silt Wyrm 48k); a distinct pale palette + a low rumble SFX; defeat ends the Wander run in victory like a heron / wyrm defeat.');
+  console.log('ok — F1: THE HOLLOW WARDEN — the 5th boss ARCHETYPE (the deferred "5th boss / more Reeds depth" item, the Wander-apex). It spawns ONLY at the end of a WANDER expedition (a hand-tuned cycle-0 / NG+ / Reeds run never meets it — byte-identical when Wander OFF, the Warden branch is a pure additive). A PALE, lantern-eating creature: while the lantern is LIT it SIPHONS candle fuel (a full wick in ~60s base, taste-scaled to 45s feast / 75s quiet; it STOPS when unlit or empty, and the wick auto-extinguishes); it is INVULNERABLE except while its MAW is OPEN (a telegraphed window reusing the Silt-Wyrm ripple-ring language). The 3-hue awaken STILL applies through the EXISTING paintBoss/bossStep path (the same awaken latch fires; the awaken speeds the cadence 0.62×). Its aggression is SEED-BIASED by the Wander taste (Feast > Quiet: the feast maw opens more often + siphons faster). HP in the ~50k class (the Wander apex, above the Silt Wyrm 48k); a distinct pale palette + a low rumble SFX; defeat ends the Wander run in victory like a heron / wyrm defeat.');
 }
 
 // ====================================================================

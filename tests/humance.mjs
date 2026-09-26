@@ -21,6 +21,7 @@
 // Flags: HUMAN_SEED=<n>  different human seed (default 1337)
 //        HUMAN_DEBUG=1   per-second HP/position trace
 'use strict';
+import './seed.mjs';
 
 // ------------------------------------------------------------------ RNG
 function mulberry32(seed) {

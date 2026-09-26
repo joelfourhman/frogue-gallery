@@ -12,7 +12,7 @@ export class Input {
     // the player is physically holding. Zero behavioral change for the
     // keyboard/mouse paths — `keys`/`kb` are driven exactly as before.
     this._phys = new Set();
-    this.mouse = { x: 0, y: 0, worldX: 0, worldY: 0, lDown: false, rDown: false, lPressed: false, rPressed: false, rReleased: false, wheel: 0, _physR: false };
+    this.mouse = { x: 0, y: 0, worldX: 0, worldY: 0, lDown: false, rDown: false, lPressed: false, rPressed: false, rReleased: false, wheel: 0, _physR: false, _physL: false };
     this.dragging = null;        // P9: name of the UI element being dragged (or null)
     this.chars = [];             // Q3 (v1.6): printable chars typed THIS frame — the
     // paste field reads them while `_fieldFocus` is true. Consumed by
@@ -51,11 +51,11 @@ export class Input {
     };
     this._md = (e) => {
       this._mm(e);
-      if (e.button === 0) { this.mouse.lDown = true; this.mouse.lPressed = true; }
+      if (e.button === 0) { this.mouse.lDown = true; this.mouse.lPressed = true; this.mouse._physL = true; }
       if (e.button === 2) { this.mouse.rDown = true; this.mouse.rPressed = true; this.mouse._physR = true; } // W1: physical RMB (the pad feed checks this)
     };
     this._mu = (e) => {
-      if (e.button === 0) this.mouse.lDown = false;
+      if (e.button === 0) { this.mouse.lDown = false; this.mouse._physL = false; }
       if (e.button === 2) { this.mouse.rReleased = this.mouse.rDown; this.mouse.rDown = false; this.mouse._physR = false; }
     };
     this._cm = (e) => e.preventDefault();
@@ -72,7 +72,7 @@ export class Input {
   // view = { x, y (world coords of screen top-left), scale, w, h }
   reset() {
     this.keys.clear(); this.kb.clear(); this._phys.clear();
-    Object.assign(this.mouse, { lDown: false, rDown: false, lPressed: false, rPressed: false, rReleased: false, _physR: false, wheel: 0 });
+    Object.assign(this.mouse, { lDown: false, rDown: false, lPressed: false, rPressed: false, rReleased: false, _physR: false, _physL: false, wheel: 0 });
     this.dragging = null; this.chars.length = 0;
   }
   setView(view) { this._view = view; }

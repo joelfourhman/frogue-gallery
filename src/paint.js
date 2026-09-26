@@ -280,6 +280,7 @@ export class Paint {
 
     // write the stroke into the world paint layer (environmental residue)
     this.world.paintSwipe(p.x, p.y, a, R, pig);
+    this.onStroke?.({ kind: 'swipe', x: p.x, y: p.y, a, range: R, pigment: pig });
     // visual ribbon — J2 (v1.9): a tapered wet-stroke swipe that bows into a
     // curve and lingers ~0.4s (up from 0.28s) so the brush reads as wet. The
     // trail object now carries the curve control point (`cx`/`cy`); the push is
@@ -354,6 +355,7 @@ export class Paint {
     // v1.4: dry splash is the strongest single world-restore action.
     this._restoreAcc = (this._restoreAcc || 0) + (pig === 'dry' ? 0.04 : 0.025);
     this.world.paintSplash(p.x, p.y, R, pig);
+    this.onStroke?.({ kind: 'splash', x: p.x, y: p.y, a: p.aimA, range: R, pigment: pig });
     // S3 (v1.4): a pigment-colored splash voice (wet "splat" + a per-pigment
     // signature) replaces the plain generic splat.
     // S1 (v1.9): the CHARGED big burst gets its own voice — `charge-splash`

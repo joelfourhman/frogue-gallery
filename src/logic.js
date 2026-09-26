@@ -43,6 +43,69 @@ export function mosquitoStep(e, dt, player) {
 }
 
 // ---------------------------------------------------------------- enemies
+// Field studio rules: optional finite content; studio.js owns the presentation.
+export const FIELD_STUDIES = [
+  { id: 'first-light', name: 'First Light', x: 640, y: 750, motif: 'pond',
+    colors: ['blue', 'green', 'red'], verbs: ['Wake the water', 'Grow the lilies', 'Light the fireflies'] },
+  { id: 'rain-choir', name: 'The Rain Choir', x: 2300, y: 720, motif: 'rain',
+    colors: ['green', 'blue', 'red'], verbs: ['Raise the reeds', 'Invite the rain', 'Tune the bells'] },
+  { id: 'borrowed-sky', name: 'A Borrowed Sky', x: 3940, y: 760, motif: 'sky',
+    colors: ['red', 'blue', 'green'], verbs: ['Warm the horizon', 'Reflect the sky', 'Give it wings'] },
+];
+export const STUDIO = Object.freeze({ coats: 3, nodeRadius: 25, wakeLife: 1.25, wakeRadius: 27, wakeCap: 24, strokeCap: 180, pageCap: 8 });
+export function studyNode(study, step = study.step || 0) {
+  const offsets = [[-62, 16], [0, -28], [62, 16]];
+  const xy = offsets[Math.min(2, step)];
+  return { x: study.x + xy[0], y: study.y + xy[1], pigment: study.colors[Math.min(2, step)] };
+}
+export function strokeTouches(stroke, x, y, radius = STUDIO.nodeRadius) {
+  const d = Math.hypot(x - stroke.x, y - stroke.y);
+  if (d > stroke.range + radius) return false;
+  if (stroke.kind === 'splash') return true;
+  const angle = Math.atan2(y - stroke.y, x - stroke.x) - stroke.a;
+  const diff = Math.atan2(Math.sin(angle), Math.cos(angle));
+  return Math.abs(diff) <= 0.5 + Math.asin(Math.min(1, radius / Math.max(d, 1)));
+}
+export function paintStudy(study, stroke) {
+  if (study.step >= 3 || stroke.kind === 'hop') return false;
+  const node = studyNode(study);
+  if (node.pigment !== stroke.pigment || !strokeTouches(stroke, node.x, node.y)) return false;
+  study.coats = (study.coats || 0) + 1;
+  if (study.coats >= STUDIO.coats) { study.coats = 0; study.step++; }
+  return true;
+}
+export function brushWakeStatus(pigment, enemy) {
+  if (pigment === 'red') return { type: 'burn', t: 0.65, max: 0.65 };
+  if (pigment === 'blue') return { type: 'slow', t: 0.85, max: 0.85 };
+  if (pigment === 'green' && !enemy.fly) return { type: 'root', t: 0.45, max: 0.45 };
+  return null;
+}
+export function normalizeStudio(raw) {
+  const completed = FIELD_STUDIES.filter(s => Array.isArray(raw?.completed) && raw.completed.includes(s.id)).map(s => s.id);
+  return { completed };
+}
+const finiteBound = (n, min, max) => typeof n === 'number' && Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : min;
+export function normalizeSketchbook(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(-STUDIO.pageCap).filter(p => p && typeof p === 'object' && Array.isArray(p.strokes)).map(p => ({
+    id: String(p.id || '').slice(0, 48),
+    seed: Math.round(finiteBound(p.seed, 0, 2147483647)),
+    title: String(p.title || 'An afternoon in the swamp').slice(0, 64),
+    biome: ['swamp', 'reeds', 'blackReeds'].includes(p.biome) ? p.biome : 'swamp',
+    result: ['study', 'victory', 'defeat', 'unfinished'].includes(p.result) ? p.result : 'unfinished',
+    seconds: Math.round(finiteBound(p.seconds, 0, 86400)),
+    studies: normalizeStudio({ completed: p.studies }).completed,
+    strokes: p.strokes.slice(0, STUDIO.strokeCap).filter(s => Array.isArray(s) && s.length === 6 && s.every(Number.isFinite))
+      .map(s => [Math.round(finiteBound(s[0], 0, 1000)), Math.round(finiteBound(s[1], 0, 1000)), Math.round(finiteBound(s[2], 0, 1000)), Math.round(finiteBound(s[3], 0, 1000)), Math.round(finiteBound(s[4], 0, 3)), Math.round(finiteBound(s[5], 1, 30))]),
+  }));
+}
+export function fileSketch(save, page) {
+  const pages = normalizeSketchbook([page]);
+  if (!pages.length || !pages[0].strokes.length) return false;
+  save.sketchbook = normalizeSketchbook([...(save.sketchbook || []).filter(p => p.id !== pages[0].id), pages[0]]);
+  return true;
+}
+
 export const ENEMIES = {
   beetle: {
     id: 'beetle', name: 'Mud Beetle', hp: 36, speed: 40, dmg: 6, radius: 16,
@@ -1555,7 +1618,7 @@ export function wyrmSurfacePoint(h, surfIdx, worldW) {
 // Wander apex). Wander-mode only (Wander OFF never selects it).
 export const WARDEN = {
   kind: 'warden',               // the 5th boss archetype (vs gray/green/gilded/wyrm)
-  hp: 52000,                    // 52k — above the wyrm's 48k (the Wander apex)
+  hp: 50000,                    // 50k — above the wyrm's 48k (the Wander apex)
   awakenNeed: { red: 45, blue: 45, green: 45 }, // the SAME 3-hue rhythm as the herons / wyrm
   strikeDmg: 12,                // the maw-strike's damage (a big hit, dodgeable — same as the wyrm)
   strikeReach: 220,             // a frog within this of the surface point is hit
@@ -2819,6 +2882,8 @@ export function ngUnlocked(save) {
 
 export function freshSave() {
   return {
+    studio: { completed: [] },
+    sketchbook: [],
     saveVersion: SAVE_VERSION,
     bank: { red: 0, blue: 0, green: 0 },
     owned: [],            // painting ids
@@ -3042,6 +3107,8 @@ export function migrateSave(raw) {
   // v10 save with no field, the real seed for a v11 save). The v10->v11
   // migration step re-normalizes defensively on the way up.
   out.wanderSeed = normalizeWanderSeed(raw.wanderSeed);
+  out.studio = normalizeStudio(raw.studio);
+  out.sketchbook = normalizeSketchbook(raw.sketchbook);
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks
@@ -3156,14 +3223,15 @@ export function freshOptions() {
 export function migrateOptions(raw) {
   const o = freshOptions();
   if (raw && typeof raw === 'object') {
-    const v = Math.min(1, Math.max(0, Number(raw.volume) || 0.7));
+    const volume = (value, fallback) => value !== null && value !== undefined && Number.isFinite(Number(value)) ? Math.min(1, Math.max(0, Number(value))) : fallback;
+    const v = volume(raw.volume, o.volume);
     o.volume = v;
     o.muted = !!raw.muted;
     o.difficulty = (DIFFICULTIES[raw.difficulty] ? raw.difficulty : 'normal');
     // P9: new split volumes. If a field is present, honor it; otherwise seed
     // from the legacy master `volume` so a pre-P9 save keeps its old level.
-    o.musicVol = raw.musicVol !== undefined ? Math.min(1, Math.max(0, Number(raw.musicVol))) : v;
-    o.sfxVol = raw.sfxVol !== undefined ? Math.min(1, Math.max(0, Number(raw.sfxVol))) : v;
+    o.musicVol = volume(raw.musicVol, v);
+    o.sfxVol = volume(raw.sfxVol, v);
     // shake / vignette: default on; only an explicit false turns them off.
     o.shake = raw.shake !== false;
     o.vignette = raw.vignette !== false;

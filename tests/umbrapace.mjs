@@ -16,6 +16,7 @@
 // Wyrm / heron probes use — one methodology across every boss probe).
 // Run: node tests/umbrapace.mjs
 'use strict';
+import './seed.mjs';
 const windowListeners = {};
 const windowStub = { addEventListener: (t, fn) => { (windowListeners[t] ||= []).push(fn); }, removeEventListener() {} };
 function makeCtx(cv) {

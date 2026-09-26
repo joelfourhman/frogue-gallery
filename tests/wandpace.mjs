@@ -32,6 +32,7 @@
 //        WANDER_VERBOSE=1    (per-seed figures)
 
 'use strict';
+import './seed.mjs';
 
 // ---------------- DOM / canvas stubs (identical to the other probes) --------
 const windowListeners = {};

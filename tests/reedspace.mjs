@@ -30,6 +30,7 @@
 //        REEDS_DEBUG=1   per-second trace
 
 'use strict';
+import './seed.mjs';
 
 // ------------------------------------------------------------------ RNG
 function mulberry32(seed) {

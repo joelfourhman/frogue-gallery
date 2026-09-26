@@ -4,6 +4,7 @@
 // learning, wandering, missed swipes), so this is a floor on run length.
 // Run: node tests/pace.mjs
 'use strict';
+import './seed.mjs';
 const windowListeners = {};
 const windowStub = {
   addEventListener(t, fn) { (windowListeners[t] ||= []).push(fn); },

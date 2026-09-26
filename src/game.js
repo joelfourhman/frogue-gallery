@@ -7,6 +7,7 @@ import { Player } from './player.js';
 import { Paint } from './paint.js';
 import { spawnEnemy, drawEnemy } from './enemies.js';
 import { Input } from './input.js';
+import { FieldStudio, sketchbookButton, bookLayout, drawSketchbook, exportPostcard } from './studio.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
@@ -220,11 +221,11 @@ const TUTORIAL_PHASES = [
   // a first-timer can land the stroke without chasing it across the swamp).
   // Each goal advances only when the player actually causes the real effect.
   { phase: 'learn', pigment: 'red',   enemy: 'beetle',   drill: 'burn',
-    chip: 'Paint the beetle with RED — watch it catch fire and burn away', done: 'The beetle burned away — red is your fire pigment.' },
+    chip: '1 · Hold paint on the beetle. Crimson burns.', done: 'The beetle burned away — red is your fire pigment.' },
   { phase: 'learn', pigment: 'blue',  enemy: 'mosquito', drill: 'freeze',
-    chip: 'Paint the mosquito with BLUE — freeze it solid in mid-air', done: 'Frozen solid — blue freezes flies on the spot.' },
+    chip: '2 · Paint the fly twice. Cobalt slows, then freezes.', done: 'Frozen solid — blue freezes flies on the spot.' },
   { phase: 'learn', pigment: 'green', enemy: 'toad',     drill: 'root',
-    chip: 'Paint the toad with GREEN — root it in place and mend yourself', done: 'Rooted to the spot — green holds a target still and mends your wounds.' },
+    chip: '3 · Paint the toad. Moss roots it and heals you.', done: 'Rooted to the spot — green holds a target still and mends your wounds.' },
   // T2 — the interactive pigment drills: the SAME three effects as an explicit
   // per-pigment "do it" check, a LATER phase of this same guided run. The
   // advancement predicate reads the enemy's REAL status/death (a beetle that
@@ -233,18 +234,18 @@ const TUTORIAL_PHASES = [
   // to save.tutorialDrills so T3/T4 "Watch me" retraining can reference which
   // drills were completed.
   { phase: 'drills', pigment: 'red',   enemy: 'beetle',   drill: 'burn',
-    chip: 'Do it: burn a beetle with RED until it dies — prove the fire', done: 'Bolt drilled ✓ — the beetle died from your red burn.' },
+    chip: '1 · Burn this beetle. Hold left-click and aim at it.', done: 'Bolt drilled ✓ — the beetle died from your red burn.' },
   { phase: 'drills', pigment: 'blue',  enemy: 'mosquito', drill: 'freeze',
-    chip: 'Do it: freeze a mosquito with BLUE until it stops — prove the ice', done: 'Frozen drilled ✓ — the mosquito is locked solid.' },
+    chip: '2 · Freeze this fly. Keep painting until it stops.', done: 'Frozen drilled ✓ — the mosquito is locked solid.' },
   { phase: 'drills', pigment: 'green', enemy: 'toad',     drill: 'root',
-    chip: 'Do it: root a toad with GREEN until it stops — prove the grip', done: 'Rooted drilled ✓ — the toad is nailed to the spot.' },
+    chip: '3 · Root this toad. Moss gives you breathing room.', done: 'Rooted drilled ✓ — the toad is nailed to the spot.' },
   // T3 — the final teaching beat: a low-HP "sketch" heron. It reuses the real
   // heron's bossStep + 3-hue awaken machinery at a few-hundred-HP scale so the
   // 30k-HP fight is a "known pattern", not a surprise. One goal — paint all
   // three hues to AWAKEN it (the 3-hue awaken loop). Completing it records
   // save.tutorialDrills.awaken=true; skipping the tutorial leaves it undone.
   { phase: 'sketch', pigment: 'red', drill: 'awaken',
-    chip: 'Face the sketch heron — paint RED, BLUE, and GREEN to wake it',
+    chip: 'Paint the heron with 1, then 2, then 3 to wake it.',
     done: 'The sketch heron wakes and blooms — you know its 3-hue rhythm now.' },
 ];
 
@@ -451,6 +452,28 @@ export class Game {
     });
   }
 
+  _openSketchbook() {
+    if (this.state === 'expedition') this.studio?.archive('unfinished');
+    this._bookOpen = true;
+    this._bookIndex = Math.max(0, (this.save.sketchbook || []).length - 1);
+    this.input.reset(); this.sfx('ui');
+  }
+
+  _closeSketchbook() { this._bookOpen = false; this.input.reset(); this.sfx('ui-back'); }
+
+  _updateSketchbook() {
+    const input = this.input, b = bookLayout(this), n = (this.save.sketchbook || []).length;
+    if (input.pressed('j') || input.pressed('escape')) { this._closeSketchbook(); return; }
+    let action = input.pressed('arrowleft') ? 'prev' : input.pressed('arrowright') ? 'next' : null;
+    if (input.mouse.lPressed) for (const key of ['prev', 'next', 'export', 'close']) {
+      const r = b[key]; if (this._mouseIn(r.x, r.y, r.w, r.h)) action = key;
+    }
+    if (action === 'prev') this._bookIndex = Math.max(0, this._bookIndex - 1);
+    if (action === 'next') this._bookIndex = Math.max(0, Math.min(n - 1, this._bookIndex + 1));
+    if (action === 'export') exportPostcard(this);
+    if (action === 'close') this._closeSketchbook();
+  }
+
   start() {
     this.last = performance.now();
     const frame = (t) => {
@@ -523,7 +546,7 @@ export class Game {
       gp.connected = true; gp.id = id;
       // Any axis/button activity this frame keeps the feed engaged.
       const ax = (pad.axes || [0, 0]);
-      const dxa = Math.abs(ax[GAMEPAD_MAP.axes.x] || 0), dya = Math.abs(ax[GAMEPAD_MAP.axes.y] || 0);
+      const dxa = Math.max(Math.abs(ax[0] || 0), Math.abs(ax[2] || 0)), dya = Math.max(Math.abs(ax[1] || 0), Math.abs(ax[3] || 0));
       let active = dxa > GAMEPAD_MAP.deadzone || dya > GAMEPAD_MAP.deadzone;
       if (!active) { const bs = pad.buttons || []; for (let i = 0; i < bs.length; i++) if (bs[i] && bs[i].pressed) { active = true; break; } }
       if (active || !wasConnected) gp.lastActiveMs = now; // fresh connect counts
@@ -550,7 +573,7 @@ export class Game {
     // a menu shouldn't be dropped mid-choice). This split is what keeps W1's
     // in-run keys from leaking into the menus (space would Start the game,
     // 1/2/3 would switch atelier tabs, a would open the Atelier from the title).
-    const inRun = this.state === 'expedition' && !this.dying && !this.paused && !this.help;
+    const inRun = this.state === 'expedition' && !this.dying && !this.paused && !this.help && !this._bookOpen;
     if (inRun) {
       // Recency gate: a stale in-run pad disengages + releases its keys.
       if (!gamepadActive(this.options, pad, now, gp.lastActiveMs, GAMEPAD_INACTIVITY_MS)) {
@@ -623,6 +646,7 @@ export class Game {
   // of precedence (an open overlay owns the focus).
   _gpMenuList() {
     const g = this;
+    if (g._bookOpen) { const b = bookLayout(g); return { id: 'sketchbook', list: [b.prev, b.next, b.export, b.close] }; }
     if (g.state === 'title') {
       if (g.optionsOpen) {
         const o = g._optionsLayout();
@@ -642,7 +666,7 @@ export class Game {
       items.push({ rect: { x: t.abx, y: t.aby, w: t.abw, h: t.abh } });          // Atelier
       items.push({ rect: { x: t.ox, y: t.oy, w: t.ow, h: t.oh } });              // Options
       if (t.reeds) items.push({ rect: t.reeds });                                // Beneath the Reeds
-      return { id: 'title', list: items.map((i) => i.rect) };
+      return { id: 'title', list: [...items.map((i) => i.rect), sketchbookButton(g)] };
     }
     if (g.state === 'expedition') {
       if (g.help) {
@@ -656,6 +680,7 @@ export class Game {
         return { id: 'pause', list: [
           { x: px, y: py0 + 164, w: pw, h: 44 },   // Resume
           { x: px, y: py0 + 216, w: pw, h: 44 },   // Quit to the Pond
+          sketchbookButton(g),
         ] };
       }
       return null;   // active in-run: no menu focus (W1 feed is active)
@@ -665,13 +690,13 @@ export class Game {
       const items = [ b.primary ];
       if (b.ng) items.push(b.ng);
       items.push(b.ret);
-      return { id: 'end', list: items };
+      return { id: 'end', list: [...items, sketchbookButton(g)] };
     }
     if (g.state === 'atelier') {
       if (g._encoreOpen) return { id: 'atelier', list: [] };   // Encore owns input
       const rows = g._atelierRows();
       const focus = rows.filter((r) => r.enabled !== false && r.focus !== false);
-      return { id: 'atelier', list: focus };
+      return { id: 'atelier', list: [...focus, sketchbookButton(g)] };
     }
     return null;
   }
@@ -679,6 +704,7 @@ export class Game {
   // W2: B backs out one level, per the current state.
   _gpMenuBack() {
     const g = this;
+    if (g._bookOpen) { g._closeSketchbook(); return; }
     if (g.state === 'title' && g.optionsOpen) { g._closeOptions(); g.sfx('ui-back'); return; }
     if (g.state === 'expedition' && g.help) { g.help = false; g.sfx('ui-back'); return; }
     if (g.state === 'expedition' && g.paused) { g.paused = false; g.sfx('ui'); return; }   // B resumes
@@ -756,6 +782,18 @@ export class Game {
     this._gpDriveBtn(btn(5), 'hop');    // RB -> hop (' ')
     this._gpDriveBtn(btn(4), 'lantern'); // LB -> lantern ('l'; no-op off-Reeds)
     // Hold to charge, release to fire. Physical mouse ownership wins.
+    this._gpDriveBtn(btn(9), 'pause');
+    this._gpDriveBtn(btn(8), 'book');
+    this._gpDriveBtn(btn(6), 'dry');
+    const aimX = axes[2] || 0, aimY = axes[3] || 0;
+    if (this.player && !inp.mouse._physL && Math.hypot(aimX, aimY) > dz) {
+      const v = this._view(), mag = Math.hypot(aimX, aimY);
+      inp.mouse.x = (this.player.x + aimX / mag * 120 - v.x) * v.scale;
+      inp.mouse.y = (this.player.y + aimY / mag * 120 - v.y) * v.scale;
+      inp.setView(v); inp.update(); gp.lastActiveMs = now;
+    }
+    if (btn(7) && !inp.mouse._physL) { inp.mouse.lDown = true; gp.paintOwned = true; }
+    else if (gp.paintOwned) { if (!inp.mouse._physL) inp.mouse.lDown = false; gp.paintOwned = false; }
     const splashHeld = btn(M.splash);
     const physR = inp.mouse._physR;
     const feedHolds = splashHeld && !physR;
@@ -810,7 +848,7 @@ export class Game {
   // kb entry (keyboard wins trivially: it IS the same key event).
   _gpDriveBtn(pressed, tag) {
     const inp = this.input, was = this._gp.was;
-    const key = { pig1: '1', pig2: '2', pig3: '3', hop: ' ', lantern: 'l' }[tag];
+    const key = { pig1: '1', pig2: '2', pig3: '3', hop: ' ', lantern: 'l', pause: 'p', book: 'j', dry: '4' }[tag];
     if (pressed && !was[tag]) {
       // Keyboard always wins on the same action: if the player is physically
       // holding this key, the feed writes nothing (the keyboard's own kb edge
@@ -828,13 +866,14 @@ export class Game {
   // Keys the physical keyboard holds (input._phys) are never touched.
   _gpClearOwned() {
     const inp = this.input, was = this._gp.was;
+    if (this._gp.paintOwned) { if (!inp.mouse._physL) inp.mouse.lDown = false; this._gp.paintOwned = false; }
     const phys = inp._phys;
     const drop = (k, owned) => { if (owned && !phys.has(k)) inp.keys.delete(k); };
     const m = was.move;
     drop('a', m.a); drop('d', m.d); drop('w', m.w); drop('s', m.s);
     was.move.a = was.move.d = was.move.w = was.move.s = false;
-    const bk = { pig1: '1', pig2: '2', pig3: '3', hop: ' ', lantern: 'l' };
-    for (const t of ['pig1', 'pig2', 'pig3', 'hop', 'lantern']) if (was[t]) { drop(bk[t], was[t]); was[t] = false; }
+    const bk = { pig1: '1', pig2: '2', pig3: '3', hop: ' ', lantern: 'l', pause: 'p', book: 'j', dry: '4' };
+    for (const t of ['pig1', 'pig2', 'pig3', 'hop', 'lantern', 'pause', 'book', 'dry']) if (was[t]) { drop(bk[t], was[t]); was[t] = false; }
     if (was.splash) { if (!inp.mouse._physR) inp.mouse.rDown = false; was.splash = false; }
   }
 
@@ -881,7 +920,16 @@ export class Game {
     const dt = clamp((t - this.last) / 1000, 0, 0.05);
     this.last = t;
     this.now = t / 1000;
-    this._pollGamepad();   // W1: feed BEFORE any update reads input (kb/keys/mouse)
+    this._pollGamepad();
+    if (this._bookOpen) {
+      this._updateSketchbook(); this._drawAll(); this.input.endFrame(); return;
+    }
+    const bookButton = sketchbookButton(this);
+    const bookMenu = (this.state !== 'expedition' || this.paused) && !this.optionsOpen && !this._encoreOpen && !this._modPrompt && !this._seedCard && !this._cine;
+    if (!this.input._fieldFocus && !this.optionsOpen && !this._cine && !this._modPrompt && !this._seedCard && !this._encoreOpen &&
+        (this.input.pressed('j') || (bookMenu && this.input.mouse.lPressed && this._mouseIn(bookButton.x, bookButton.y, bookButton.w, bookButton.h)))) {
+      this._openSketchbook(); this._drawAll(); this.input.endFrame(); return;
+    }
     this.shake *= Math.exp(-5.5 * dt);
     this.zoom = approach(this.zoom, this.zoomTarget, 10, dt);
     // J2 (v1.4): advance/expire the hit-stop on REAL time (never sim time).
@@ -1196,6 +1244,9 @@ export class Game {
   }
 
   _quitToTitle() {
+    if (this.state === 'expedition') this.studio?.archive('unfinished');
+    this._bookOpen = false;
+    this.input.reset();
     this.state = 'title';
     this.paused = false;
     this.optionsOpen = false;
@@ -3242,7 +3293,7 @@ _drawAtelier(ctx) {
         { at: 0.3, dur: 5.5, text: 'WASD to move — aim the brush with your mouse' },
         { at: 7, dur: 5.5, text: 'Hold left-click to paint — it hurts bugs and colors the swamp' },
         { at: 14, dur: 6.5, text: 'Pigments: 1 red burns · 2 blue chills · 3 green heals (stand in fresh moss)' },
-        { at: 22, dur: 6.5, text: 'Hold right-click to charge a splash — space-hop to dodge' },
+        { at: 22, dur: 6.5, text: 'Hold right-click to charge, release to splash. Space hops out of danger.' },
         { at: 30, dur: 6.0, text: 'Paint the swamp back to color… the gray arrow marks the Great Gray Heron' },
       ];
       this._tutI = 0;
@@ -3271,6 +3322,11 @@ _drawAtelier(ctx) {
     // button only appears when tutorialEligible(save) is true, and this guard
     // keeps the guided path out of play even if it is ever called otherwise.
     if (guided && tutorialEligible(this.save)) this._startTutorial();
+    this.studio = new FieldStudio(this);
+    this.paint.onStroke = stroke => this.studio.onStroke(stroke);
+    this._bookOpen = false;
+    this._hopWas = false;
+    this.input.reset();
   }
 
   // ================= T1/T2 (v1.2 M13): the guided first expedition ==========
@@ -3493,6 +3549,8 @@ _drawAtelier(ctx) {
         h.x = this.tutorial.targetPos.x; h.y = this.tutorial.targetPos.y; h._now = this.now;
       }
       if (h && h.awakened) this._tutorialAdvance();
+      // A held single color must never kill this three-hue practice partner.
+      else if (h) h.hp = Math.max(1, h.hp);
       return;
     }
     // keep the target in reach (low-stakes: pinned near the starting point)
@@ -3650,7 +3708,7 @@ _drawAtelier(ctx) {
     // ----- named expedition zones (P5): banner + staged spawn + rest checkpoint -----
     if (p.alive) {
       const _zones = this.zones || ZONES;   // D1 (v1.7): the run's zone CONTENT (hand-tuned ZONES by default; the Wander layout when options.wander)
-      while (this._zoneI < _zones.length && p.x >= this.world.w * _zones[this._zoneI].x) {
+      while (!this._tutorialActive() && this._zoneI < _zones.length && p.x >= this.world.w * _zones[this._zoneI].x) {
         const z = _zones[this._zoneI++];
         this._zoneBeat(z);
       }
@@ -3700,6 +3758,7 @@ _drawAtelier(ctx) {
     p._plumeSuppress = !!(this.heron && this.heron.gilded && !this.heron.flying
       && this.heron._intro <= 0 && this.heron.plumeT > 0);
     p.update(dt, this.input, this.tuning, this.world, this._view());
+    if (this._tutorialActive()) p.iframes = Math.max(p.iframes, 0.08);
     // S2 (v1.9): the LOW-HP uneasy ostinato — a sparse, high, uneasy layer that
     // SWELLS IN when the frog drops below ~30% HP and fades out above it. A
     // single per-frame boolean comparison (presentation/audio only; never
@@ -3714,6 +3773,7 @@ _drawAtelier(ctx) {
     // effect — a cycle-0 run has no leech to peel.
     this._hopStart = p.hopT > 0 && !this._hopWas;
     this._hopWas = p.hopT > 0;
+    this.studio?.update(dt);
     // R1 (v1.6): THE LANTERN (Reeds variant only). The L key toggles the paper
     // lantern; the pure lanternTick drains the candle fuel (and auto-snuffs an
     // empty lantern) and refills it at nearby fireflies / lantern-rest spots.
@@ -3755,13 +3815,13 @@ _drawAtelier(ctx) {
     this.paint.update(dt);
     // E3 (v1.2 M10): Bold-only zone hazards (root/slow) apply after movement so
     // they gate the *next* frame's speed. No-op on Gentle/Normal (no hazards).
-    this._updateHazards(dt);
+    if (!this._tutorialActive()) this._updateHazards(dt);
     // E2 (v1.2 M10): advance the zone's weather/tide phase (banner, live tuning
     // multiplier, fade-out). Informational — it never blocks or punishes.
-    this._updateWeather(dt);
+    if (!this._tutorialActive()) this._updateWeather(dt);
     // K3 (v1.5 M3): drive the Storm Surge set-piece (final stretch). Non-blocking
     // and never feeds runT — a pure side-channel off its own clock.
-    this._updateSurge(dt);
+    if (!this._tutorialActive()) this._updateSurge(dt);
     // every stroke you paint gives the swamp a little color back (core fantasy)
     const restore = this.paint.restoreAcc;
     if (restore > 0) {
@@ -3912,9 +3972,10 @@ _drawAtelier(ctx) {
     // R3 (v1.6): the Reeds bestiary's per-frame touch-up (wisp light refresh +
     // leech cling-on-contact / hop-off). Reeds-only — a cycle-0 run's enemy list
     // has no wisp/serpent/leech, so this is a no-op there (byte-identical).
-    if (this.world.reedsVariant) this._bestiaryTick(dt, p);
+    if (this.world.reedsVariant && !this._tutorialActive()) this._bestiaryTick(dt, p);
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
+      if (this._tutorialActive() && e !== this.tutorial.target) continue;
       if (!e.dead && p.alive) {
         const dx = e.x - p.x, dy = e.y - p.y;
         const far = dx * dx + dy * dy > CULL2;
@@ -3945,6 +4006,9 @@ _drawAtelier(ctx) {
     // The target is held by reference (survives the splice above), so its
     // death/status is read live — a brush stroke alone never advances it.
     if (tut && !tut.done && p.alive) this._tutorialTick();
+
+    // Retraining is a quiet lesson even when entered during a boss fight.
+    if (this._tutorialActive()) { this._updateSketchHeron(dt); return; }
 
     if (this.dying) {
       this.world.update(dt);
@@ -4431,6 +4495,7 @@ _drawAtelier(ctx) {
   }
 
   _spawnWave(dt) {
+    if (this._tutorialActive() || this.studio?.sheltered()) return;
     this.spawnT -= dt;
     if (this.spawnT > 0) return;
     const t = this.runT;
@@ -4740,6 +4805,7 @@ _drawAtelier(ctx) {
 
   _endRun(kind) {
     if (this.state === 'end') return;
+    this.studio?.archive(kind);
     this.state = 'end';
     this.endKind = kind;
     // A1: remember the outcome so the atelier's one-liner can react to it
@@ -6291,6 +6357,7 @@ _drawAtelier(ctx) {
     // ripple over painted water. Drawn UNDER the wet marks so the stroke sits
     // on top of its landing (draw-only; the "painted soil darkens / water
     // ripples" that makes the paint LANDING visible, not just the arc).
+    if (this.state === 'expedition' || this.state === 'end') this.studio?.draw(ctx, v, this.now);
     this.paint && this.paint.drawInk(ctx);
     // J1 (v1.4): short-lived wet residue marks sit on the surface, under the
     // active stroke and all entities (draw-only; never affects logic).
@@ -6307,6 +6374,7 @@ _drawAtelier(ctx) {
     this.paint && this.paint.drawDroplets(ctx);
     if (this.state === 'expedition' || this.state === 'end') {
       if (this.heron) (this.heron.warden ? this._drawWarden(ctx, this.heron, this.now) : (this.heron.umbra ? this._drawUmbra(ctx, this.heron, this.now) : (this.heron.wyrm ? this._drawWyrm(ctx, this.heron, this.now) : this._drawHeron(ctx, this.heron, this.now)))); // F1: Warden / G2: Umbral Wyrm / R4: Silt Wyrm / heron
+      if (this.sketchHeron) this._drawHeron(ctx, this.sketchHeron, this.now);
       if (this.midHeron) this._drawHeron(ctx, this.midHeron, this.now); // E1: Painted Heron
       for (const e of this.enemies) drawEnemy(ctx, e, this.now);
       this._drawHazards(ctx, drawSatFinal); // E3: Bold-only zone hazards
@@ -6357,6 +6425,7 @@ _drawAtelier(ctx) {
     }
     // T1 (v1.2 M13): the on-screen goal chip + SKIP button for the guided first
     // expedition (rendered above the HUD so it reads as the active instruction).
+    if (this.state === 'expedition') this.studio?.drawHint(ctx);
     if (this.state === 'expedition' && this.tutorial && !this.tutorial.done) this._drawTutorialChip(ctx);
     if (this.state === 'title') this._drawTitle(ctx);
     if (this.state === 'title' && this.optionsOpen) this._drawOptions(ctx);
@@ -6375,6 +6444,10 @@ _drawAtelier(ctx) {
     // W2 (v1.6): the gamepad UI overlays — the title "pad connected" chip + the
     // focus-cursor highlight over the focused menu button. Drawn above the
     // screens so the cursor is visible on the highlighted button.
+    if (!this.optionsOpen && !this._encoreOpen && !this._modPrompt && !this._seedCard && !this._cine && (this.state !== 'expedition' || this.paused)) {
+      const b = sketchbookButton(this);
+      uiButton(ctx, b.x, b.y, b.w, b.h, 'Sketchbook  [J]', this._mouseIn(b.x, b.y, b.w, b.h), false, { seed: 93, size: 14 });
+    }
     this._drawGpFocus(ctx);
     this._drawGpChip(ctx);
 
@@ -6431,6 +6504,7 @@ _drawAtelier(ctx) {
     // on top of every screen. Pure presentation — no gameplay, no persistence
     // beyond the options toggle; skipped entirely when the option is off.
     this._drawGrain(ctx);
+    if (this._bookOpen) { drawSketchbook(this, ctx); this._drawGpFocus(ctx); }
 
     // J2 (v1.4): the boss-defeat white flash — a brief screen-wide white wash
     // that peaks on the defeat frame and fades over ~0.3s. Pure presentation
@@ -6812,9 +6886,7 @@ _drawAtelier(ctx) {
       ctx.arc(x + 27, y + 13, 2.6, 0, TAU);
       ctx.fill();
       // stock pips
-      const n = Math.min(t.capacity, this.stock[c]);
-      const pr = 2.6;
-      drawPips(ctx, x + 12, y + 36, pr, Math.min(8, t.capacity), n, pig.color);
+      centerText(ctx, ['BURN', 'FREEZE', 'MEND', 'CLEAR'][i], x + 30, y + 38, uiFont(9, { weight: 700 }), INK, 0.8);
       ctx.restore();
     }
 
@@ -6843,7 +6915,7 @@ _drawAtelier(ctx) {
       }
     }
     ctx.globalAlpha = 1;
-    centerText(ctx, 'hold right-click', bx + bw / 2, by + 39, uiFont(UI.sizes.micro, { italic: true }), INK, 0.5);
+    centerText(ctx, chg >= 1 ? 'release to splash!' : 'hold right-click', bx + bw / 2, by + 39, uiFont(UI.sizes.micro, { italic: true }), INK, 0.5);
     ctx.restore();
 
     // ---- score + collected (top-right) ----
@@ -6866,6 +6938,14 @@ _drawAtelier(ctx) {
     ctx.restore();
 
     // ---- boss bar (top-center, once the heron is live) ----
+    const hopX = 422, hopY = 52;
+    this._paperChip(ctx, hopX, hopY, 146, 44, 13);
+    centerText(ctx, this.studio?.unlocked ? 'BRUSH-HOP · Space' : 'HOP · Space', hopX + 73, hopY + 14, uiFont(11, { weight: 700 }), INK);
+    ctx.fillStyle = '#d8d3bb'; ctx.fillRect(hopX + 12, hopY + 23, 122, 6);
+    ctx.fillStyle = '#62845b'; ctx.fillRect(hopX + 12, hopY + 23, 122 * clamp(1 - p.hopCd / (t.hopCooldown || 0.7), 0, 1), 6);
+    centerText(ctx, p.hopCd > 0 ? 'catching a breath' : this.studio?.unlocked ? 'hold paint for a wake' : 'ready to leap', hopX + 73, hopY + 39, uiFont(9, { italic: true }), INK, 0.7);
+    centerText(ctx, 'H · field guide     J · sketchbook', this.cw - 148, this.ch - 20, uiFont(12), INK, 0.8);
+
     const h = this.heron;
     if (h && h._intro <= 0 && h.hp > 0 && h.flying <= 0) {
       const bw = 420, bx = (this.cw - bw) / 2, by = 16;
@@ -7028,7 +7108,7 @@ _drawAtelier(ctx) {
     const rowW = (challShow ? chw + cgap : 0) + 200 + cgap + 200;
     const rowX = cx - rowW / 2;
     const aby2 = dy + dH + 8, abw2 = 200, abh2 = 44;
-    const abx2 = rowX, ox2 = rowX + (challShow ? chw + cgap : 0) + 200 + cgap;
+    const abx2 = rowX + (challShow ? chw + cgap : 0), ox2 = rowX + (challShow ? chw + cgap : 0) + 200 + cgap;
     const ow2 = 200, oh2 = abh2;
     const abx = abx2, aby = aby2, abw = abw2, abh = abh2, ox = ox2, ow = ow2, oh = oh2;
     const chall = challShow ? { x: rowX, y: aby2, w: chw, h: chh } : null;
@@ -7351,7 +7431,7 @@ _drawAtelier(ctx) {
     // D4 (v1.7): the "Wandering Expeditions" toggle (default OFF). A FIFTH row,
     // the same P9 machinery as the other toggles — clicking it flips
     // options.wander and persists to the options blob.
-    this._drawToggle(c, g.wander, 'Wandering Expeditions', this.options.wander);
+    this._drawToggle(c, g.wander, 'Wander · shuffled encounters', this.options.wander);
     // W1 (v1.6 Module W): the "Gamepad: Auto / Off" row. A two-state pill:
     // Auto (engages while a pad is connected + active) vs Off (feed skipped).
     this._drawGpad(c, g.gpad, this.options.gamepad);
@@ -7368,7 +7448,7 @@ _drawAtelier(ctx) {
   _drawSaveSection(c, g, m) {
     c.save();
     // the section header
-    centerText(c, 'Save', g.trackX, g.saveHead, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.9);
+    centerText(c, 'Save backup · copy or paste below', g.trackX, g.saveHead, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.9);
     centerText(c, 'copy · paste · carry your gallery', g.trackX + g.trackW, g.saveHead, uiFont(UI.sizes.xsmall, { italic: true }), INK, 0.55);
     const hotE = this._mouseIn(g.export.x, g.export.y, g.export.w, g.export.h);
     const hotI = this._mouseIn(g.import.x, g.import.y, g.import.w, g.import.h);
@@ -7505,8 +7585,8 @@ _drawAtelier(ctx) {
     ctx.translate(cx, 200);                    // pivot near the title text
     ctx.scale(1 + swell, 1 + swell);
     ctx.translate(-cx, -200);
-    outlineText(ctx, 'Frogue Gallery', cx, 190 + bob, uiFont(UI.sizes.mega, { weight: 700 }), '#f4ead8', INK, 10);
-    centerText(ctx, 'a cozy action roguelite about a tiny frog painter', cx, 248 + bob, uiFont(UI.sizes.titlePlus, { italic: true }), '#fdf6e9', 0.92);
+    outlineText(ctx, 'Frogue Gallery', cx, 150 + bob, uiFont(UI.sizes.mega, { weight: 700 }), '#f4ead8', INK, 10);
+    centerText(ctx, 'a tiny frog. a fading swamp. a painting of your own.', cx, 204 + bob, uiFont(UI.sizes.titlePlus, { italic: true }), '#fdf6e9', 0.92);
     ctx.restore();
 
     // H2 (v1.8): the title-screen "collection complete" badge — a small gilded
@@ -7515,7 +7595,7 @@ _drawAtelier(ctx) {
     // no run time, no input. A non-complete save draws nothing here (the title
     // layout is untouched), so a first-time player sees the unchanged title.
     if (this.save.galleryComplete && galleryCompletion(this.save)) {
-      const bw2 = 250, bh2 = 30, bx2 = cx - bw2 / 2, by2 = 268 + bob;
+      const bw2 = 250, bh2 = 30, bx2 = cx - bw2 / 2, by2 = 220 + bob;
       const bc = paperPanel(ctx, bx2, by2, bw2, bh2, { seed: 77, fill: '#f7edcf' });
       bc.save();
       bc.lineWidth = 2; bc.strokeStyle = '#b8912e';
@@ -7539,7 +7619,14 @@ _drawAtelier(ctx) {
     const c = paperPanel(ctx, px, py, pw, ph, { seed: 11 });
     centerText(c, 'The swamp is fading to gray.', cx, py + 34, uiFont(UI.sizes.subPlus, { weight: 600 }));
     centerText(c, 'Paint it back to color — then face the Great Gray Heron.', cx, py + 58, uiFont(UI.sizes.subPlus, { weight: 600 }));
-    const rows = [
+    const rows = this._gp.connected ? [
+      ['Move / Aim', 'left stick / right stick'],
+      ['Paint', 'hold RT · LT selects dry brush'],
+      ['Splash burst', 'hold B, release when charged'],
+      ['Dodge hop', 'RB · hold RT for a learned brush-hop'],
+      ['Pigments', 'A red · X blue · Y green'],
+      ['Pause / Book', 'Start / Back'],
+    ] : [
       ['Move', 'WASD / arrow keys'],
       ['Paint', 'hold left mouse, aim with the cursor'],
       ['Splash burst', 'hold right mouse, release'],
@@ -7768,7 +7855,7 @@ _drawAtelier(ctx) {
     }
 
     // footer
-    centerText(c, 'WASD / arrows to move  ·  Space to hop (brief invulnerability)  ·  P to pause  ·  M to mute', g.cx, g.py + g.ph - 22, uiFont(UI.sizes.label, { italic: true }), INK, 0.6);
+    centerText(c, this._gp.connected ? 'Left stick move · Right stick aim · RT paint · RB hop · B splash · Start pause · Back sketchbook' : 'WASD / arrows move · Space hop · J sketchbook · P pause · M mute', g.cx, g.py + g.ph - 22, uiFont(UI.sizes.label, { italic: true }), INK, 0.6);
     // T4 (v1.2 M13): the "Watch me" retraining band — replay a single pigment
     // drill or the sketch-heron phase on demand (opt-in; never auto-enters, and
     // the replay is a frozen aside that never counts toward the timed run).

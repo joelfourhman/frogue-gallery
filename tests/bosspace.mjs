@@ -2,6 +2,7 @@
 // bot (builds red+blue+green hue to trigger the 2× awaken window, as a human
 // would). Prints the fight time so bossMaxHp can be set for target pacing.
 'use strict';
+import './seed.mjs';
 const windowListeners = {};
 const windowStub = { addEventListener(t, fn) { (windowListeners[t] ||= []).push(fn); }, removeEventListener() {} };
 function makeCtx(canvas) {
@@ -66,5 +67,6 @@ while (h.hp > 0 && !h.flying && guard < 60 * 900) {
   p.x = h.x - 50; p.y = h.y - 40; p.iframes = 99;
 }
 const fight = game.runT - t0;
+if (h.hp > 0 && !h.flying) throw new Error('Heron fight reached its cap without a victory');
 console.log(`heron fight (hp ${game.tuning.bossMaxHp}, 3-hue cycling, 2.5s/pigment): ${fight.toFixed(1)}s = ${(fight / 60).toFixed(2)} min`);
 console.log(`  (human adds dodging + misses → ×~1.6 → ~${(fight / 60 * 1.6).toFixed(1)} min)`);

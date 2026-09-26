@@ -28,6 +28,7 @@
 // layout, the real umbrStep boss state machine).
 // Run: node tests/blackpace.mjs
 'use strict';
+import './seed.mjs';
 const windowListeners = {};
 const windowStub = { addEventListener: (t, fn) => { (windowListeners[t] ||= []).push(fn); }, removeEventListener() {} };
 function makeCtx(cv) {
