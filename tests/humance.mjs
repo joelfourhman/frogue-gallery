@@ -170,7 +170,7 @@ game.heron._intro = 0; // skip the reveal for timing
 const bodyY = () => game.heron.y - (game.heron.diveH || 0);
 const b0 = game.runT;
 let bossFrames = 0;
-const MAXBOSS = Math.ceil(60 * 1800); // 30 min cap
+const MAXBOSS = Math.ceil(60 * 300); // 5 min cap; a failed fight must fail the probe
 while (!game.heron.flying && game.heron.hp > 0 && bossFrames < MAXBOSS) {
   const h = game.heron;
   const bx = pl().x, by = pl().y;
@@ -183,7 +183,9 @@ while (!game.heron.flying && game.heron.hp > 0 && bossFrames < MAXBOSS) {
     game.input.mouse.lDown = false;
   } else {
     // hold at brush range and paint (imperfect aim: re-aim with noise each frame)
-    const tx = h.x - (bx > h.x ? 80 : -80);
+    const tx = h.x + (bx > h.x ? 80 : -80);
+    const ty = bodyY() - 20;
+    if (Math.abs(by - ty) > 18) game.input.keys.add(ty > by ? 's' : 'w');
     if (Math.abs(bx - tx) > 24) game.input.keys.add(tx > bx ? 'd' : 'a');
     const v = game._view();
     game.input.mouse.x = (h.x + r(-24, 24) - v.x) * v.scale;
@@ -233,3 +235,4 @@ console.log('     analytic 136s — the two methods agree).');
 console.log('');
 console.log('  target: 15-20 min. A full-run value in/near that band means the');
 console.log('  target holds on Normal. First runs run longer (learning curve).');
+if (!won || fullEstimate / 60 < 15 || fullEstimate / 60 > 20) throw new Error('Human pacing failed: must win and finish IN the 15–20 minute band');

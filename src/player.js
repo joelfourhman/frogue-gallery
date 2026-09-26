@@ -15,6 +15,7 @@ export class Player {
     this.facing = 1;
     this.pigment = 'red';
     this.hopT = 0;          // 0..1 while hopping
+    this.hopBuffer = 0;
     this.hopCd = 0;         // PT3: stamina gap before the next hop (fly-fairness)
     this.hopDir = [1, 0];
     this.iframes = 0;
@@ -70,7 +71,9 @@ export class Player {
 
     // hop / dodge (Space). PT3 (M7.5 fly-fairness): gated on a stamina cooldown
     // (hopCd) so mashing Space no longer chains into near-continuous i-frames.
-    if (input.pressed(' ') && this.hopT <= 0 && this.hopCd <= 0 && this.alive) {
+    this.hopBuffer = input.pressed(' ') ? 0.12 : Math.max(0, this.hopBuffer - dt);
+    if (this.hopBuffer > 0 && this.hopT <= 0 && this.hopCd <= 0 && this.alive) {
+      this.hopBuffer = 0;
       let [hx, hy] = mv;
       if (!hx && !hy) { hx = Math.cos(this.aimA); hy = Math.sin(this.aimA); }
       this.hopDir = [hx, hy];
@@ -121,8 +124,9 @@ export class Player {
       this._reedsPockets = world.reedsPockets || null;
     }
     if (this.rootT > 0) spd = 0;
-    this.vx = lerp(this.vx, mv[0] * spd, 1 - Math.exp(-14 * dt));
-    this.vy = lerp(this.vy, mv[1] * spd, 1 - Math.exp(-14 * dt));
+    const direction = this.hopT > 0.04 ? this.hopDir : mv;
+    this.vx = lerp(this.vx, direction[0] * spd, 1 - Math.exp(-14 * dt));
+    this.vy = lerp(this.vy, direction[1] * spd, 1 - Math.exp(-14 * dt));
     this.x += this.vx * dt;
     this.y += this.vy * dt;
     const [cx, cy] = world.collideCircle(this.x, this.y, this.r);

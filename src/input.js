@@ -12,7 +12,7 @@ export class Input {
     // the player is physically holding. Zero behavioral change for the
     // keyboard/mouse paths — `keys`/`kb` are driven exactly as before.
     this._phys = new Set();
-    this.mouse = { x: 0, y: 0, worldX: 0, worldY: 0, lDown: false, rDown: false, lPressed: false, rPressed: false, wheel: 0, _physR: false };
+    this.mouse = { x: 0, y: 0, worldX: 0, worldY: 0, lDown: false, rDown: false, lPressed: false, rPressed: false, rReleased: false, wheel: 0, _physR: false };
     this.dragging = null;        // P9: name of the UI element being dragged (or null)
     this.chars = [];             // Q3 (v1.6): printable chars typed THIS frame — the
     // paste field reads them while `_fieldFocus` is true. Consumed by
@@ -41,12 +41,13 @@ export class Input {
     this._ku = (e) => { const k = e.key.toLowerCase(); this.keys.delete(k); this._phys.delete(k); };
     window.addEventListener('keydown', this._kd);
     window.addEventListener('keyup', this._ku);
-    window.addEventListener('blur', () => { this.keys.clear(); this._phys.clear(); this.mouse.lDown = false; this.mouse.rDown = false; });
+    this._blur = () => this.reset();
+    window.addEventListener('blur', this._blur);
 
     this._mm = (e) => {
       const r = cv.getBoundingClientRect();
-      this.mouse.x = e.clientX - r.left;
-      this.mouse.y = e.clientY - r.top;
+      this.mouse.x = (e.clientX - r.left) * cv.width / (r.width || cv.width);
+      this.mouse.y = (e.clientY - r.top) * cv.height / (r.height || cv.height);
     };
     this._md = (e) => {
       this._mm(e);
@@ -55,7 +56,7 @@ export class Input {
     };
     this._mu = (e) => {
       if (e.button === 0) this.mouse.lDown = false;
-      if (e.button === 2) { this.mouse.rDown = false; this.mouse._physR = false; }
+      if (e.button === 2) { this.mouse.rReleased = this.mouse.rDown; this.mouse.rDown = false; this.mouse._physR = false; }
     };
     this._cm = (e) => e.preventDefault();
     this._wh = (e) => { this.mouse.wheel += Math.sign(e.deltaY); };
@@ -69,6 +70,11 @@ export class Input {
 
   // Camera transform: screen <-> world.
   // view = { x, y (world coords of screen top-left), scale, w, h }
+  reset() {
+    this.keys.clear(); this.kb.clear(); this._phys.clear();
+    Object.assign(this.mouse, { lDown: false, rDown: false, lPressed: false, rPressed: false, rReleased: false, _physR: false, wheel: 0 });
+    this.dragging = null; this.chars.length = 0;
+  }
   setView(view) { this._view = view; }
   update() {
     const v = this._view;
@@ -92,6 +98,7 @@ export class Input {
     this.kb.clear();
     this.mouse.lPressed = false;
     this.mouse.rPressed = false;
+    this.mouse.rReleased = false;
     this.mouse.wheel = 0;
     this.chars.length = 0;      // Q3 (v1.6): consumed the frame's typed chars
   }

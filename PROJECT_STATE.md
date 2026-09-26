@@ -1,3 +1,42 @@
+# Astra development pass — active (2026-09-26)
+
+The current user request supersedes the older v1.10 no-new-features scope.
+Baseline: c1ea26b, clean checkout, full smoke green, balance no flags.
+
+## Checkpoint 1 — controls and fair encounters
+
+Implemented: responsive letterboxing + correct pointer scaling; stationary
+hop now uses its computed aim direction, with a 120ms input buffer; charged
+splash fires on release on mouse/controller; blur clears stale input;
+completed tutorial allows pause/help; wrong-color lesson kills respawn;
+retraining cleans up its target and restores the boss's actual intro timer;
+pause controller hitboxes match the rendered buttons; victory cinematic
+no longer assigns to a const (a real crash in the saturation reveal).
+
+Mosquito chase multiplier **40 → 1**. It now gives **0.60s** warning, commits
+to **0.30s** of flight, then recovers **0.85s**. Blue interrupts the strike.
+The old movement produced thousands of pixels/second despite modest base
+stats. Damage and HP unchanged. Welcome red **5 → 6** (blue 9, green 5):
+the corrected flies changed the seeded income sample; +1 red preserves the
+M1 two-painting affordability target by zone 3. No version bumps.
+
+Validation: smoke + new slice regression stages green. Nine pacing probes
+run: analytical Normal 17.1m; repaired human probe 18.3m; NG+ 19.4m;
+Wander 16.9–17.8m / Reeds 21.6–22.7m. Other boss/biome probes retain their
+historical bands (Warden uses its historical rounded ~4.1m tolerance).
+Human probe previously reached its cap with a full-HP boss and still
+reported a plausible time; it now follows both axes, stays on one side of
+the boss, and FAILS unless it actually wins within 15–20m. This fixes the
+measurement; it does not relax its target.
+
+NEXT: implement living field studies, brush-hop progression, and a real
+stroke sketchbook. Then browser playthrough, stabilization, packaging,
+current-design docs and Qwen handoff. This checkpoint is not completion.
+
+---
+
+## Historical project log (superseded next-action notes below)
+
 # Project State
 
 _Pm note (2026-09-05):_ this file is the live next-action tracker (kept per

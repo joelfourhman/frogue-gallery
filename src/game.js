@@ -652,10 +652,10 @@ export class Game {
         return { id: 'help', list: items };
       }
       if (g.paused) {
-        const cx = g.cw / 2, cy = g.ch / 2, pw = 340, px = cx - pw / 2, py0 = cy - 130;
+        const cx = g.cw / 2, cy = g.ch / 2, pw = 340, px = cx - pw / 2, py0 = cy - 160;
         return { id: 'pause', list: [
-          { x: px, y: py0 + 108, w: pw, h: 44 },   // Resume
-          { x: px, y: py0 + 160, w: pw, h: 44 },   // Quit to the Pond
+          { x: px, y: py0 + 164, w: pw, h: 44 },   // Resume
+          { x: px, y: py0 + 216, w: pw, h: 44 },   // Quit to the Pond
         ] };
       }
       return null;   // active in-run: no menu focus (W1 feed is active)
@@ -755,19 +755,12 @@ export class Game {
     this._gpDriveBtn(btn(3), 'pig3');   // Y -> green ('3')
     this._gpDriveBtn(btn(5), 'hop');    // RB -> hop (' ')
     this._gpDriveBtn(btn(4), 'lantern'); // LB -> lantern ('l'; no-op off-Reeds)
-    // ---- splash charge: hold-to-charge / press-at-full-to-fire ----
-    // The REAL mouse contract (verified against the RMB handlers): holding
-    // RMB sets rDown and charges; releasing does NOT fire (rPressed is false on
-    // the release frame — the game's fire check is `rPressed && charge >= 1`);
-    // a PRESS edge while the charge is already full fires + resets it. The feed
-    // mirrors that exactly: B held -> rDown (charge accumulates); B released ->
-    // drop rDown (no fire); a B press edge -> rPressed (fires iff already full).
-    // The feed owns rDown only while the mouse is not physically on RMB (mouse
-    // always wins — input.mouse._physR, set on physical RMB down).
+    // Hold to charge, release to fire. Physical mouse ownership wins.
     const splashHeld = btn(M.splash);
     const physR = inp.mouse._physR;
     const feedHolds = splashHeld && !physR;
-    if (feedHolds && !gp.was.splash) inp.mouse.rPressed = true; // press edge (mouse contract)
+    if (feedHolds && !gp.was.splash) inp.mouse.rPressed = true;
+    if (!feedHolds && gp.was.splash && !physR) inp.mouse.rReleased = true;
     if (feedHolds) {
       gp.lastActiveMs = now;
       inp.mouse.rDown = true;
@@ -925,7 +918,7 @@ export class Game {
     if (this._freezeFrames > 0) { this._freezeFrames = 0; simDt = 0; }
 
     // ambient systems always tick (title backdrop stays alive)
-    this.world.update(simDt);
+    this.world.update(this.state === 'expedition' && (this.paused || this.help) ? 0 : simDt);
     this.particles.update(simDt);
     for (let i = this.banners.length - 1; i >= 0; i--) {
       const b = this.banners[i];
@@ -3311,7 +3304,7 @@ _drawAtelier(ctx) {
     const p = this.player;
     const pos = { x: p.x + 52, y: p.y - 10 };
     const e = spawnEnemy(ph.enemy, pos.x, pos.y, this.tuning);
-    e.vx = 0; e.vy = 0;
+    e.vx = 0; e.vy = 0; e._practice = true;
     this.enemies.push(e);
     this.tutorial.target = e;
     this.tutorial.targetPos = pos;
@@ -3457,6 +3450,8 @@ _drawAtelier(ctx) {
   // T4 (v1.2 M13): end a "Watch me" retrain replay — resume the timed run at the
   // exact value it was frozen at (so the replay never inflates the run length).
   _endRetrain() {
+    const target = this.tutorial && this.tutorial.target;
+    this.enemies = this.enemies.filter(e => e !== target);
     this.tutorial = null;
     this.sketchHeron = null;
     this._sketchDefeated = false;
@@ -3465,7 +3460,7 @@ _drawAtelier(ctx) {
     // deferred — a retrain must never snap the boss awake the moment it ends.
     if (this.heron) {
       const ri = (typeof this._retrainIntro === 'number') ? this._retrainIntro : 999;
-      this.heron._intro = ri > 0 ? ri : 999;
+      this.heron._intro = ri;
     }
     this.addBanner('Lesson replayed. Back to the swamp.', 2.6, this.ch * 0.3);
     this.sfx('ui-back');
@@ -3506,6 +3501,11 @@ _drawAtelier(ctx) {
       e.x = t.targetPos.x; e.y = t.targetPos.y; e.vx = 0; e.vy = 0; e._now = this.now;
     }
     if (e && tutorialDrillSatisfied(ph.drill, e)) this._tutorialAdvance();
+    else if (e && (e.dead || e.hp <= 0)) {
+      this.enemies = this.enemies.filter(enemy => enemy !== e);
+      this._tutorialSpawnTarget();
+      this.addBanner('Try this color: ' + ph.pigment + '. Your practice partner is ready again.', 2.5);
+    }
   }
 
   // Geometry shared by the chip drawing and the skip-button hit test (so the
@@ -3545,8 +3545,10 @@ _drawAtelier(ctx) {
 
     // goal text
     const textX = swX + swR + 10;
-    const textMaxW = w - (skip.x - x) - (textX - x) - 12;
-    centerText(ctx, ph.chip, textX + textMaxW / 2, y + h / 2, uiFont(UI.sizes.small), INK, 0.88);
+    const textMaxW = skip.x - textX - 12;
+    ctx.font = uiFont(UI.sizes.small);
+    ctx.fillStyle = INK; ctx.textAlign = 'left';
+    this._wrapHelp(ctx, ph.chip, textX, y + 32, textMaxW, 16);
 
     // step counter (e.g. "1/3")
     const total = TUTORIAL_PHASES.length;
@@ -3604,7 +3606,7 @@ _drawAtelier(ctx) {
     // ----- pause toggle (open only; menu input lives in the frame router) -----
     // While the tutorial runs these are suppressed (Escape skips instead of
     // pausing; the run stays focused on the on-screen goal chip).
-    if (!tut) {
+    if (!tut || tut.done) {
       if (this.input.pressed('p')) {
         this.paused = !this.paused;
         // S1 (v1.9): dedicated pause open/close (the panel slides+fade either
@@ -3871,7 +3873,7 @@ _drawAtelier(ctx) {
         }
       }
     }
-    if (this.input.mouse.rPressed && p.splashCharge >= 1) {
+    if ((this.input.mouse.rReleased || this.input.mouse.rPressed) && p.splashCharge >= 1 && this.paint.splashCd <= 0) {
       const spHits = this.paint.trySplash(targetList);
       this.addShake(8);
       // J1 (v1.9): the CHARGED-splat hit-stop — a longer ~110 ms dip when the
@@ -6232,7 +6234,7 @@ _drawAtelier(ctx) {
     // DRAW-ONLY modulation of the worldColorSat read (never writes world state),
     // so the color-reveal single-source-of-truth invariant is preserved and the
     // swell only affects the title backdrop (every other screen is untouched).
-    const drawSatFinal = (this.state === 'title')
+    let drawSatFinal = (this.state === 'title')
       ? clamp(titleColorSat(this.titleT), 0, 1)
       : drawSat;
     // M1 (v1.4): the first-victory cinematic beat BLOOMS the world to full

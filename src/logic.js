@@ -22,6 +22,26 @@ export const PIGMENTS = {
 };
 export const PIGMENT_ORDER = ['red', 'blue', 'green', 'dry'];
 
+// A fly commits to a visible target before striking. Seconds, world pixels.
+export const MOSQUITO_FLIGHT = Object.freeze({ range: 155, tell: 0.6, dart: 0.3, recover: 0.85, speed: 2.1 });
+export function mosquitoStep(e, dt, player) {
+  if (e.status && ['freeze', 'root', 'dizzy', 'slow'].includes(e.status.type)) {
+    e.flight = 'recover'; e.flightT = MOSQUITO_FLIGHT.recover;
+    return;
+  }
+  e.flightT = Math.max(0, (e.flightT || 0) - dt);
+  if (!e.flight) e.flight = 'approach';
+  if (e.flight === 'approach' && Math.hypot(e.x - player.x, e.y - player.y) <= MOSQUITO_FLIGHT.range) {
+    e.flight = 'tell'; e.flightT = MOSQUITO_FLIGHT.tell;
+    const d = Math.hypot(player.x - e.x, player.y - e.y) || 1;
+    e.dartX = (player.x - e.x) / d; e.dartY = (player.y - e.y) / d;
+  } else if (e.flightT <= 0) {
+    if (e.flight === 'tell') { e.flight = 'dart'; e.flightT = MOSQUITO_FLIGHT.dart; }
+    else if (e.flight === 'dart') { e.flight = 'recover'; e.flightT = MOSQUITO_FLIGHT.recover; }
+    else if (e.flight === 'recover') e.flight = 'approach';
+  }
+}
+
 // ---------------------------------------------------------------- enemies
 export const ENEMIES = {
   beetle: {
@@ -2151,7 +2171,7 @@ export function costArray(costObj) {
 // +3 blue / +1 green gives real margin so the player can take the cheapest
 // 2-slot loadout AND still pick a 3rd painting (zone 3) or a first upgrade
 // level (zone 4). One-time (gated by the welcomeGranted flag).
-export const WELCOME_GRANT = { red: 5, blue: 9, green: 5 };
+export const WELCOME_GRANT = { red: 6, blue: 9, green: 5 };
 export function applyWelcomeGrant(save) {
   if (!save || !save.flags || save.flags.welcomeGranted) return save;
   save.flags.welcomeGranted = true;

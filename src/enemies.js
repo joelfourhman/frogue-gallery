@@ -3,7 +3,7 @@
 // them is handled by paint.js. Enemies here own movement + contact attacks.
 'use strict';
 import { TAU, clamp, dist, lerp } from './math.js';
-import { ENEMIES, stepStatus, physicalDamage, lightFactor, REEDS_BESTIARY, wispBlinded, leechDrain, PIGMENTS } from './logic.js';
+import { ENEMIES, stepStatus, physicalDamage, lightFactor, REEDS_BESTIARY, wispBlinded, leechDrain, PIGMENTS, MOSQUITO_FLIGHT, mosquitoStep } from './logic.js';
 import { UI, uiFont } from './ui.js';
 
 // ------------------------------------------------------------------
@@ -405,7 +405,7 @@ export class Enemy {
     let ax = 0, ay = 0;
     if (!stunned && !asleep && player.alive) {
       const d = dist(this.x, this.y, player.x, player.y);
-      const want = this.fly ? 40 : (d < 260 ? 1 : 0.55);
+      const want = this.fly ? 1 : (d < 260 ? 1 : 0.55);
       if (d > 1) { ax = (player.x - this.x) / d * want; ay = (player.y - this.y) / d * want; }
     }
     // wander drift
@@ -423,6 +423,11 @@ export class Enemy {
       ax += (px / m) * w; ay += (py / m) * w;
     }
 
+    if (this.kind === 'mosquito') {
+      mosquitoStep(this, dt, player);
+      if (this.flight === 'tell' || this.flight === 'recover') { ax = 0; ay = 0; this.vx = 0; this.vy = 0; }
+      if (this.flight === 'dart') { ax = this.dartX * MOSQUITO_FLIGHT.speed; ay = this.dartY * MOSQUITO_FLIGHT.speed; }
+    }
     const k = this.fly ? 5 : 8;
     this.vx = lerp(this.vx, ax * spd, 1 - Math.exp(-k * dt));
     this.vy = lerp(this.vy, ay * spd, 1 - Math.exp(-k * dt));
@@ -440,7 +445,7 @@ export class Enemy {
     }
 
     // --- contact attack
-    if (!stunned && !asleep && this.attackCd <= 0 && player.alive && player.iframes <= 0) {
+    if (!this._practice && !stunned && !asleep && (this.kind !== 'mosquito' || this.flight === 'dart') && this.attackCd <= 0 && player.alive && player.iframes <= 0) {
       const d = dist(this.x, this.y, player.x, player.y);
       if (d < this.r + player.r + 2) {
         this.attackCd = 0.9;
@@ -458,6 +463,13 @@ export function spawnEnemy(kind, x, y, tuning) {
 
 // ------------------------------------------------------------------- draw
 export function drawEnemy(ctx, e, now) {
+  if (e.kind === 'mosquito' && e.flight === 'tell' && !e.dead) {
+    ctx.save(); ctx.strokeStyle = '#aa492c'; ctx.lineWidth = 2.5;
+    ctx.setLineDash([5, 6]); ctx.beginPath();
+    ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + e.dartX * 95, e.y + e.dartY * 95); ctx.stroke();
+    ctx.setLineDash([]); ctx.beginPath(); ctx.arc(e.x, e.y, 21 + e.flightT * 14, 0, TAU); ctx.stroke();
+    ctx.restore();
+  }
   const bobY = e.fly ? Math.sin(now * 3 + e._seed) * 5 : 0;
   const y = e.y - (e.fly ? 18 : 0) + bobY;
   const flash = e.hitFlash > 0 ? 1 : 0;

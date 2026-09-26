@@ -6858,10 +6858,8 @@ console.log('== stage 89: v1.6 W1 — GAMEPAD INPUT-ABSTRACTION LAYER (raw Gamep
   assert(gS.paint.splashCd === 0, 'W1: holding (never releasing) does NOT fire the splash (rPressed was only the initial press edge, at charge ~0 — mirrors the mouse)');
   pad.buttons[1].pressed = false;    // release alone does not fire
   frames(2);
-  assert(gS.paint.splashCd === 0, 'W1: releasing the B button alone does NOT fire the splash (release has no rPressed — byte-identical to the mouse RMB)');
-  pad.buttons[1].pressed = true;     // re-press at full -> rPressed edge -> fire
-  frames(1);
-  assert(gS.paint.splashCd > 0, 'W1: re-pressing B at full charge FIRES the splash (splashCooldown armed — press-at-full-to-fire mirrors the mouse)');
+  assert(gS.paint.splashCd > 0, 'W1: releasing B fires the charged splash, matching the displayed controls');
+  assert(gS.input.mouse.rReleased === false, 'W1: the release edge is consumed after the frame');
   assert(gS.player.splashCharge === 0, 'W1: the fired splash resets the charge (trySplash consumes it — the mouse contract)');
   pad.buttons[1].pressed = false;
   gS.state = 'title';
@@ -9119,5 +9117,7 @@ console.log('== stage 111: v1.9 T3 L3 — enemy liveness (seeded, presentation-o
   console.log('ok — L3: enemy liveness. Distinct SEEDED telegraphs (the beetle LOWERS — a crouch + a dirt "dig" tell; the toad INFLATES — a body puff; the mosquito WIDENS its weave — extra horizontal sway), a PANIC state (a freshly-painted, not-frozen creature briefly DARTS away a few px, fading as the tint decays), and small behaviors (a toad LICKS the paint off its own back between attacks; a wisp DRIFTS AWAY from the lit lantern). All are PRESENTATION-ONLY draw-state computed in l3Draw (a pure, allocation-free function of e._seed/tintT/_light/now) — the collision body (e.x/e.y/r), hp, damage, status, death timing, and the seeded RNG stream are NEVER touched, and the A/B swipe proves the dart/lick never changes a hit or a kill. The P10 AI-cull is unaffected (l3Draw feeds no movement). No tuning / logic.js number moves.');
 }
 
+const { testSlice } = await import('./slice.mjs');
+testSlice({ Game, makeCanvas, assert });
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
