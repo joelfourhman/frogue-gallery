@@ -60,14 +60,24 @@ export const FIELD_STUDIES = [
   { id: 'lantern-garden', name: 'The Lantern Garden', x: 3300, y: 780, motif: 'lantern',
     colors: ['green', 'blue', 'red'], verbs: ['Grow the stems', 'String the dew', 'Wake the moths'],
     biome: 'reeds', group: 'reeds' },
+  // Q3: the second REEDS study. Another fixed, optional discovery, earlier in
+  // the descent: on the banks (y < REEDS_FLOOD_FLOOR 900), below gravity
+  // pocket 1 (y < 480 ends above it), ~500 px from the nearest rest stones
+  // and ~3950 px short of the Silt Wyrm arena (x >= 5100).
+  { id: 'echo-pool', name: 'The Echo Pool', x: 1150, y: 720, motif: 'echo',
+    colors: ['blue', 'red', 'green'], verbs: ['Ring the ripples', 'Light the stars', 'Set the birds loose'],
+    biome: 'reeds', group: 'reeds' },
 ];
 // Q1: explicit completion reward groups. The swamp gold postcard seal and
 // golden-lily banner require EXACTLY these registered IDs — never "three
 // completions" — so studies registered later (Reeds in Q2) cannot break or
 // dilute the swamp reward.
+// Q3: the reeds group earns its cosmetic postcard BORDER only when BOTH reeds
+// studies are complete — the group is the border, and the order of completion
+// does not matter.
 export const STUDY_GROUPS = Object.freeze({
   swamp: Object.freeze({ biome: 'swamp', required: ['first-light', 'rain-choir', 'borrowed-sky'] }),
-  reeds: Object.freeze({ biome: 'reeds', required: ['lantern-garden'] }),
+  reeds: Object.freeze({ biome: 'reeds', required: ['lantern-garden', 'echo-pool'] }),
 });
 // Q1: pure selector by biome and mode. Challenge and wander runs never carry
 // living studies; every other mode carries exactly the definitions registered

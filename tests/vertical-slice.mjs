@@ -116,22 +116,44 @@ try {
     g._closeSketchbook();
     g.save.flags.reedsUnlocked = true;
     g._beginExpedition(false, { reeds: true });
-    const s = g.studio.studies.find(st => st.id === 'lantern-garden');
-    if (!s) throw new Error('the Lantern Garden is missing from a normal Reeds expedition');
-    for (let k = 0; k < 3; k++) {
-      const n = studyNode(s);
-      g.player.x = n.x - 40; g.player.y = n.y; g.player.pigment = n.pigment; g.player.aimA = 0;
-      for (let j = 0; j < 3; j++) { g.paint.swipeCd = 0; g.player.swipeT = 0; g.paint.trySwipe([]); }
+    const reedsStudies = g.studio.studies.filter(st => st.biome === 'reeds');
+    if (reedsStudies.length !== 2) throw new Error('both reeds studies must exist in a normal Reeds expedition: ' + reedsStudies.map(s => s.id).join(','));
+    for (const s of reedsStudies) {
+      for (let k = 0; k < 3; k++) {
+        const n = studyNode(s);
+        g.player.x = n.x - 40; g.player.y = n.y; g.player.pigment = n.pigment; g.player.aimA = 0;
+        for (let j = 0; j < 3; j++) { g.paint.swipeCd = 0; g.player.swipeT = 0; g.paint.trySwipe([]); }
+      }
     }
-    g.banners = []; g.cam.x = g.player.x; g.cam.y = g.player.y; g._drawAll();
     const p = g.save.sketchbook[g.save.sketchbook.length - 1];
-    return { step: s.step, x: s.x, y: s.y, completed: g.save.studio.completed,
+    return { steps: reedsStudies.map(s => s.step), x: reedsStudies[0].x, y: reedsStudies[0].y,
+      poolX: reedsStudies[1].x, poolY: reedsStudies[1].y,
+      borderBanner: g.banners.some(b => b.text.includes('border')),
+      completed: g.save.studio.completed,
       page: p ? { biome: p.biome, studies: p.studies } : null };
   });
-  assert.equal(garden.step, 3);
+  assert.deepEqual(garden.steps, [3, 3]);
   assert.equal(garden.x, 3300); assert.equal(garden.y, 780);
-  assert(garden.completed.includes('lantern-garden') && garden.completed.includes('first-light'));
-  assert(garden.page && garden.page.biome === 'reeds' && garden.page.studies.includes('lantern-garden'));
+  assert.equal(garden.poolX, 1150); assert.equal(garden.poolY, 720);
+  assert(garden.borderBanner, 'the reeds border is announced once both reeds studies are complete');
+  assert(garden.completed.includes('lantern-garden') && garden.completed.includes('echo-pool') && garden.completed.includes('first-light'));
+  assert(garden.page && garden.page.biome === 'reeds' && garden.page.studies.includes('lantern-garden') && garden.page.studies.includes('echo-pool'));
+  // The reeds border must be visible: the bordered postcard frame differs in
+  // real pixels from the same page without the border.
+  const borderPx = await page.evaluate(async () => {
+    const g = window.__game, { drawPostcard } = await import('./src/studio.js');
+    const c = document.createElement('canvas'); c.width = 1000; c.height = 600;
+    const ctx = c.getContext('2d');
+    const page = g.save.sketchbook[g.save.sketchbook.length - 1];
+    ctx.clearRect(0, 0, 1000, 600);
+    drawPostcard(ctx, page, 0, 0, 1000, 600, false, false);
+    const flat = Array.from(ctx.getImageData(500, 13, 4, 1).data);
+    ctx.clearRect(0, 0, 1000, 600);
+    drawPostcard(ctx, page, 0, 0, 1000, 600, false, true);
+    const bord = Array.from(ctx.getImageData(500, 13, 4, 1).data);
+    return { differs: flat.some((v, i) => v !== bord[i]) };
+  });
+  assert(borderPx.differs, 'the reeds border changes the postcard frame pixels');
   report.push({ lanternGarden: garden });
   await page.keyboard.press('j'); await tick(1);
   await page.evaluate(() => { const g = window.__game; g._bookIndex = g.save.sketchbook.length - 1; g._drawAll(); });

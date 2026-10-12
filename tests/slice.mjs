@@ -147,16 +147,19 @@ export function testSlice({ Game, makeCanvas, assert }) {
     'the swamp gold signature requires exactly its three registered IDs');
   assert(studyRewardEarned(['first-light', 'rain-choir', 'borrowed-sky', 'lantern-garden']),
     'future registered IDs cannot strip the three swamp flags of their gold signature');
-  assert(studyRewardEarned(['lantern-garden'], 'reeds') && !studyRewardEarned(['first-light'], 'reeds')
-    && !studyRewardEarned([], 'reeds') && STUDY_GROUPS.reeds.required.join(',') === 'lantern-garden',
-    'the reeds reward group is earned only by its own registered ID');
+  assert(studyRewardEarned(['lantern-garden', 'echo-pool'], 'reeds') && studyRewardEarned(['echo-pool', 'lantern-garden'], 'reeds')
+    && !studyRewardEarned(['lantern-garden'], 'reeds') && !studyRewardEarned(['echo-pool'], 'reeds')
+    && !studyRewardEarned(['first-light', 'rain-choir', 'borrowed-sky', 'lantern-garden'], 'reeds')
+    && studyRewardEarned(['first-light', 'rain-choir', 'borrowed-sky', 'lantern-garden', 'echo-pool'], 'reeds')
+    && STUDY_GROUPS.reeds.required.join(',') === 'lantern-garden,echo-pool',
+    'the reeds border group is earned only by BOTH reeds IDs, in any completion order, and never by swamp IDs');
   const two = freshSave(); two.studio.completed = ['first-light', 'rain-choir'];
   const rt = migrateSave(JSON.parse(JSON.stringify(two)));
   assert(rt.studio.completed.join(',') === 'first-light,rain-choir' && rt.saveVersion === 12,
     'partial swamp progress round-trips through schema 12 unchanged');
   g.runBiome = 'reeds'; g.studio = new FieldStudio(g);
-  assert(g.studio.studies.length === 1 && g.studio.studies[0].id === 'lantern-garden' && g.studio.unlocked,
-    'a normal Reeds run carries the Lantern Garden, and earned brush-hop stays available in non-challenge modes');
+  assert(g.studio.studies.length === 2 && g.studio.studies[0].id === 'lantern-garden' && g.studio.studies[1].id === 'echo-pool' && g.studio.unlocked,
+    'a normal Reeds run carries both reeds studies in play order, and earned brush-hop stays available in non-challenge modes');
   g.challenge = { mode: 'challenge', loadout: [], seed: 123 }; g.studio = new FieldStudio(g);
   assert(g.studio.studies.length === 0, 'challenge Reeds runs never carry living studies');
   g.challenge = null; g.options.wander = true; g.studio = new FieldStudio(g);
@@ -178,8 +181,8 @@ export function testSlice({ Game, makeCanvas, assert }) {
     for (let coat = 0; coat < STUDIO.coats; coat++) { g.player.swipeT = 0; g.paint.swipeCd = 0; g.paint.trySwipe([]); }
     assert(garden.step === stage + 1, 'actual paint strokes transform the Lantern Garden stage ' + (stage + 1));
   }
-  assert(g.save.studio.completed.includes('lantern-garden') && studyRewardEarned(g.save.studio.completed, 'reeds'),
-    'the garden completion persists and earns the reeds reward group');
+  assert(g.save.studio.completed.includes('lantern-garden') && !studyRewardEarned(g.save.studio.completed, 'reeds'),
+    'the garden completion persists but the reeds border waits for both reeds studies');
   const gpage = g.save.sketchbook[g.save.sketchbook.length - 1];
   assert(gpage.biome === 'reeds' && gpage.studies.includes('lantern-garden'),
     'the archived reeds page keeps the garden as its living memory');
@@ -187,6 +190,38 @@ export function testSlice({ Game, makeCanvas, assert }) {
   const rt2 = migrateSave(JSON.parse(JSON.stringify(g.save)));
   assert(rt2.studio.completed.includes('lantern-garden') && rt2.sketchbook.some(p => p.studies.includes('lantern-garden')),
     'garden completion and its postcard memory survive a save round-trip');
+  g.runBiome = 'swamp';
+
+  console.log('== Astra Q3: the Echo Pool and the reeds postcard border ==');
+  const pool = FIELD_STUDIES.find(s => s.id === 'echo-pool');
+  assert(pool.x === 1150 && pool.y === 720 && pool.colors.join(',') === 'blue,red,green' && pool.biome === 'reeds',
+    'the Echo Pool sits at its fixed early-descent spot asking blue, then red, then green');
+  assert(studiesForBiome('reeds').map(s => s.id).join(',') === 'lantern-garden,echo-pool',
+    'the reeds selector returns both reeds studies in play order');
+  // Pool first on a fresh save: the border must NOT earn until the garden too.
+  g.runBiome = 'reeds'; g.save = freshSave(); g.studio = new FieldStudio(g);
+  const poolFirst = g.studio.studies[1], gardenFirst = g.studio.studies[0];
+  for (const st of [poolFirst, gardenFirst]) {
+    for (let stage = 0; stage < 3; stage++) {
+      const target = studyNode(st);
+      g.player.x = target.x - 40; g.player.y = target.y; g.player.aimA = 0; g.player.pigment = target.pigment;
+      for (let coat = 0; coat < STUDIO.coats; coat++) { g.player.swipeT = 0; g.paint.swipeCd = 0; g.paint.trySwipe([]); }
+      assert(st.step === stage + 1, 'actual paint strokes transform ' + st.name + ' stage ' + (stage + 1));
+    }
+  }
+  const borderBanners = g.banners.filter(b => b.text.includes('border'));
+  const lilyBanners = g.banners.filter(b => b.text.includes('golden lily'));
+  assert(studyRewardEarned(g.save.studio.completed, 'reeds') && borderBanners.length === 1 && lilyBanners.length === 0,
+    'pool-first order earns the reeds border exactly once, with no swamp lily re-announcement');
+  const ppage = g.save.sketchbook[g.save.sketchbook.length - 1];
+  assert(ppage.studies.includes('echo-pool') && ppage.studies.includes('lantern-garden'),
+    'the late page keeps both reeds studies as its living memories');
+  drawPostcard(g.ctx, ppage, 0, 0, 1000, 600, false);
+  g.ctx.clearRect(0, 0, 1000, 600);
+  drawPostcard(g.ctx, ppage, 0, 0, 1000, 600, false, true);
+  const rt3 = migrateSave(JSON.parse(JSON.stringify(g.save)));
+  assert(rt3.studio.completed.includes('lantern-garden') && rt3.studio.completed.includes('echo-pool') && studyRewardEarned(rt3.studio.completed, 'reeds'),
+    'both reeds completions round-trip and keep the border earned after migration');
   g.runBiome = 'swamp';
   const pad = { axes: [0, 0, 1, 0], buttons: Array.from({ length: 16 }, () => ({ pressed: false })) };
   pad.buttons[7].pressed = true;

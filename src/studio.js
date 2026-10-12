@@ -63,7 +63,15 @@ export class FieldStudio {
         g.sfx('awaken-bloom');
         g.addBanner(study.name + ' comes alive. A page is saved in your sketchbook.', 4.2, 186);
         if (!wasUnlocked) g.addBanner('Brush-hop learned! Hold paint + Space to leave a colored wake.', 5.5, 224);
-        else if (studyRewardEarned(g.save.studio.completed, 'swamp')) g.addBanner('Three field studies — your signature now wears a golden lily.', 4.5, 224);
+        else {
+          // Q3: a reward-group banner fires EXACTLY once — on the completion
+          // that first satisfies the group. `before` is the completed list
+          // minus the study that just finished, so later studies in another
+          // biome can never re-announce an already-earned group.
+          const before = g.save.studio.completed.filter(id => id !== study.id);
+          if (studyRewardEarned(g.save.studio.completed, 'swamp') && !studyRewardEarned(before, 'swamp')) g.addBanner('Three field studies — your signature now wears a golden lily.', 4.5, 224);
+          else if (studyRewardEarned(g.save.studio.completed, 'reeds') && !studyRewardEarned(before, 'reeds')) g.addBanner('The Reeds remember you — your postcards now wear a woven reed border.', 4.5, 224);
+        }
         this.archive('study', study.name);
       }
       break;
@@ -200,6 +208,30 @@ export function drawLivingStudy(ctx, s, now) {
       ctx.strokeStyle = '#37655b'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(x - 8, y - 4); ctx.quadraticCurveTo(x, y + 7, x + 8, y - 4); ctx.stroke();
     }
+  } else if (s.motif === 'echo') {
+    // Q3: The Echo Pool — blue rings the ripples outward, red lights reflected
+    // stars on the water, and green sets the water birds loose above it.
+    // Bounded: 4 rings + 7 stars + 3 birds, no allocations.
+    if (!blue) {
+      ctx.strokeStyle = '#8a9a94'; ctx.lineWidth = 2; ctx.globalAlpha = 0.3;
+      ctx.beginPath(); ctx.ellipse(0, 8, 34, 13, 0, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    if (blue) for (let i = 0; i < 4; i++) {
+      const r = 18 + ((now * 26 + i * 22) % 88);
+      ctx.strokeStyle = '#7fb7d9'; ctx.lineWidth = 2; ctx.globalAlpha = Math.max(0.05, 0.55 - r / 160);
+      ctx.beginPath(); ctx.ellipse(0, 8, r, r * 0.4, 0, 0, TAU); ctx.stroke();
+    }
+    if (red) for (let i = 0; i < 7; i++) {
+      const x = -85 + i * 27, y = -4 + Math.sin(i * 2.7) * 16;
+      ctx.fillStyle = '#f6d38a'; ctx.globalAlpha = 0.5 + Math.sin(now * 2.4 + i) * 0.35;
+      ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x + 2, y - 1); ctx.lineTo(x + 6, y); ctx.lineTo(x + 2, y + 1); ctx.lineTo(x, y + 5); ctx.lineTo(x - 2, y + 1); ctx.lineTo(x - 6, y); ctx.lineTo(x - 2, y - 1); ctx.closePath(); ctx.fill();
+    }
+    if (green) for (let i = 0; i < 3; i++) {
+      const x = -60 + i * 55, y = -46 + Math.sin(now * 1.8 + i * 2) * 6;
+      ctx.strokeStyle = '#37655b'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(x - 10, y); ctx.quadraticCurveTo(x - 3, y - 9, x, y - 2); ctx.quadraticCurveTo(x + 3, y - 9, x + 10, y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   } else {
     for (let i = 0; i < 7; i++) {
       const x = -100 + i * 31, y = Math.sin(i * 3) * 25 + 22;
@@ -233,9 +265,19 @@ export function bookLayout(g) {
     export: { x: x + 595, y: y + 610, w: 215, h: 38 }, close: { x: x + 850, y: y + 610, w: 180, h: 38 } };
 }
 
-export function drawPostcard(ctx, page, x, y, w, h, signed = false) {
+export function drawPostcard(ctx, page, x, y, w, h, signed = false, bordered = false) {
   ctx.save(); ctx.translate(x, y); ctx.scale(w / 1000, h / 600);
   ctx.fillStyle = '#efe4cb'; ctx.fillRect(0, 0, 1000, 600);
+  if (bordered) {
+    // Q3: the reeds border — a woven double frame + corner knots, cosmetic
+    // only. Drawn first so the card content sits inside it.
+    ctx.strokeStyle = '#2f6a4f'; ctx.lineWidth = 3; ctx.strokeRect(12, 12, 976, 576);
+    ctx.strokeStyle = '#527552'; ctx.lineWidth = 1.5; ctx.strokeRect(18, 18, 964, 564);
+    ctx.fillStyle = '#2f6a4f';
+    for (const [cx, cy] of [[12, 12], [988, 12], [12, 588], [988, 588]]) {
+      ctx.beginPath(); ctx.moveTo(cx, cy - 7); ctx.lineTo(cx + 7, cy); ctx.lineTo(cx, cy + 7); ctx.lineTo(cx - 7, cy); ctx.closePath(); ctx.fill();
+    }
+  }
   const reeds = page.biome !== 'swamp';
   ctx.fillStyle = reeds ? '#567477' : '#b3c7ad'; ctx.fillRect(24, 24, 952, 482);
   ctx.save(); ctx.beginPath(); ctx.rect(24, 24, 952, 482); ctx.clip();
@@ -294,7 +336,8 @@ export function drawSketchbook(g, ctx) {
   c.textAlign = 'left'; c.fillStyle = '#304b45'; c.font = uiFont(18, { weight: 700 }); c.fillText('Living studies', b.x + 34, b.y + 144);
   FIELD_STUDIES.forEach((s, i) => {
     const done = (g.save.studio?.completed || []).includes(s.id);
-    c.fillStyle = done ? '#3f7551' : '#7b796a'; c.font = uiFont(16); c.fillText((done ? '✓ ' : '○ ') + s.name, b.x + 34, b.y + 183 + i * 38);
+    const gap = FIELD_STUDIES.length > 3 ? 33 : 38;   // Q3: five rows fit the panel
+    c.fillStyle = done ? '#3f7551' : '#7b796a'; c.font = uiFont(16); c.fillText((done ? '✓ ' : '○ ') + s.name, b.x + 34, b.y + 183 + i * gap);
   });
   c.font = uiFont(14); c.fillStyle = '#665f50';
   const lines = (g.save.studio?.completed.length || 0) > 0
@@ -302,7 +345,7 @@ export function drawSketchbook(g, ctx) {
     : ['Find First Light near', 'the start of the swamp.', 'Paint its three circles', 'to learn the brush-hop.'];
   lines.forEach((line, i) => c.fillText(line, b.x + 34, b.y + 350 + i * 25));
   if (page) {
-    drawPostcard(c, page, b.x + 270, b.y + 125, 760, 456, studyRewardEarned(g.save.studio?.completed || []));
+    drawPostcard(c, page, b.x + 270, b.y + 125, 760, 456, studyRewardEarned(g.save.studio?.completed || [], 'swamp'), studyRewardEarned(g.save.studio?.completed || [], 'reeds'));
     centerText(c, `Page ${g._bookIndex + 1} / ${pages.length} · latest eight expeditions kept`, b.x + 650, b.y + 595, uiFont(12), '#665f50');
   } else {
     centerText(c, 'Your first page is still waiting.', b.x + 660, b.y + 300, uiFont(25, { italic: true }), '#53654b');
@@ -319,7 +362,7 @@ export function exportPostcard(g) {
   const page = g.save.sketchbook?.[g._bookIndex];
   if (!page) return;
   const canvas = document.createElement('canvas'); canvas.width = 1600; canvas.height = 960;
-  drawPostcard(canvas.getContext('2d'), page, 0, 0, 1600, 960, studyRewardEarned(g.save.studio?.completed || []));
+  drawPostcard(canvas.getContext('2d'), page, 0, 0, 1600, 960, studyRewardEarned(g.save.studio?.completed || [], 'swamp'), studyRewardEarned(g.save.studio?.completed || [], 'reeds'));
   canvas.toBlob(blob => {
     if (!blob) return;
     const url = URL.createObjectURL(blob), a = document.createElement('a');
