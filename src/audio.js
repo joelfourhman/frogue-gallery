@@ -1453,6 +1453,16 @@ export class AudioSys {
         this._noise(t + 0.1, 0.8, 'bandpass', 4000, 2.5, 0.08); // airy shimmer
         break;
       }
+      // Q5 (Astra): the PAINTED CROSSING takes a coat — the bramble parts with
+      // a soft woody "shhk" (a bandpass noise sweep down, like a brush through
+      // dry stems) under a low leafy thud. Reuses the existing _tone/_noise
+      // voices, no new assets.
+      case 'crossing-part': {
+        this._noise(t, 0.42, 'bandpass', 1600, 2.2, 0.20);        // the brush-through
+        this._tone(t + 0.05, 'sine', 98, 65, 0.4, 0.16);          // the leafy thud
+        this._tone(t + 0.12, 'triangle', 392, 523.25, 0.3, 0.06); // a small bright lift
+        break;
+      }
       case 'victory': {
         const notes = [523, 659, 784, 1046];
         notes.forEach((f, i) => this._tone(t + i * 0.14, 'triangle', f, f, 0.3, 0.25));

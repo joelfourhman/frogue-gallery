@@ -110,6 +110,7 @@ export const CROSSING = Object.freeze({
   blobOffsets: Object.freeze([-105, -35, 35, 105]),  // 70px pitch < 2r → continuous wall
   corridorY: 700,                                    // main-route test anchor (south end)
   pocketY: 300,                                      // detour-side test anchor (north end)
+  zoneR: 90,                                         // effect zone radius (current slow / bramble sting)
   currentFactor: 0.72,                               // blue: slows (the flood factor)
   brambleDamage: 3,                                  // red: one small entry hit
 });
@@ -135,6 +136,33 @@ export function crossingDamageOnEntry(state) { return state === 'bramble' ? CROS
 export function crossingSolids(state) {
   if (state !== 'unpainted') return [];
   return CROSSING.blobOffsets.map(dx => ({ x: CROSSING.x + dx, y: CROSSING.y, r: CROSSING.r }));
+}
+// Q5: the crossing's EFFECT ZONE — the circle around the mouth where the
+// painted state's effect applies (the current slows movement, the bramble
+// stings on entry). Pure geometry; the state's semantics stay above.
+export function inCrossingZone(x, y) {
+  const dx = x - CROSSING.x, dy = y - CROSSING.y;
+  return dx * dx + dy * dy <= CROSSING.zoneR * CROSSING.zoneR;
+}
+// Q5: does a stroke REACH the crossing mouth? A stroke is the segment from
+// (x, y) in direction a, length range (a swipe or splash from the player).
+// True when the segment comes within the mouth radius + the brush's reach
+// margin (26px, the wet-stroke width) of the mouth center. A missing pigment
+// or geometry is a clean no-op (the dry brush never repaints the wall).
+export function strokeTouchesCrossing(stroke, margin = 26) {
+  const s = stroke || null;
+  if (!s || s.pigment === 'dry' || s.pigment === undefined || s.pigment === null) return false;
+  const x0 = Number(s.x), y0 = Number(s.y), a = Number(s.a), range = Number(s.range);
+  if (!Number.isFinite(x0) || !Number.isFinite(y0) || !Number.isFinite(a) || !Number.isFinite(range)) return false;
+  const x1 = x0 + Math.cos(a) * range, y1 = y0 + Math.sin(a) * range;
+  const dx = x1 - x0, dy = y1 - y0;
+  const l2 = dx * dx + dy * dy;
+  let t = l2 > 0 ? ((CROSSING.x - x0) * dx + (CROSSING.y - y0) * dy) / l2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const px = x0 + t * dx, py = y0 + t * dy;
+  const ex = CROSSING.x - px, ey = CROSSING.y - py;
+  const reach = CROSSING.r + margin;
+  return ex * ex + ey * ey <= reach * reach;
 }
 export const STUDIO = Object.freeze({ coats: 3, nodeRadius: 25, wakeLife: 1.25, wakeRadius: 27, wakeCap: 24, strokeCap: 180, pageCap: 8 });
 export function studyNode(study, step = study.step || 0) {
@@ -926,6 +954,12 @@ export function reedsUnlocked(save) {
 // R5 (v1.6 Module R): normalize the reedsUnlocked gate flag to a boolean.
 // Every pre-v1.6 save (no field) loads FALSE — nobody backfills access.
 export function normalizeReedsUnlocked(raw) {
+  return !!raw;
+}
+// Q5 (Astra): carry the PAINTED CROSSING's one-time postcard-stamp latch
+// forward (false for a legacy save with no field, the real boolean for a
+// save that painted the crossing). Mirrors normalizeReedsUnlocked.
+export function normalizeCrossingPainted(raw) {
   return !!raw;
 }
 
@@ -2973,7 +3007,7 @@ export function freshSave() {
     owned: [],            // painting ids
     loadout: [],          // up to 2 painting ids
     upgrades: { capacity: 0, power: 0, vitality: 0 },
-    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false, tutorialSkipped: false, reedsUnlocked: false, reedsVictory: false, bossDefeats: [] },
+    flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false, tutorialSkipped: false, reedsUnlocked: false, reedsVictory: false, crossingPainted: false, bossDefeats: [] },
     stats: { expeditions: 0, victories: 0, deaths: 0, heronsPainted: 0, treasures: 0 },
     bestRun: null,        // {pigments, time, cleared}
     galleryBonus: 0,      // A4 (v1.2 M9): 'Rehung Frame' prestige-lite level
@@ -3187,6 +3221,12 @@ export function migrateSave(raw) {
   // (mirroring reedsUnlocked). No SAVE_VERSION bump — the field lives on the
   // EXISTING save.flags object, which is already serialized wholesale.
   out.flags.reedsVictory = normalizeReedsVictory(raw.flags && raw.flags.reedsVictory);
+  // Q5 (Astra): carry THE PAINTED CROSSING's postcard-stamp latch forward
+  // (false for a legacy save with no field, the real boolean for a save that
+  // painted the crossing). No SAVE_VERSION bump — the field lives on the
+  // EXISTING save.flags object, which is already serialized wholesale
+  // (mirroring reedsUnlocked / reedsVictory).
+  out.flags.crossingPainted = normalizeCrossingPainted(raw.flags && raw.flags.crossingPainted);
   // D1 (v1.7): carry THE WANDER's last-seed latch forward (0 for a legacy
   // v10 save with no field, the real seed for a v11 save). The v10->v11
   // migration step re-normalizes defensively on the way up.

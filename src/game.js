@@ -11,7 +11,7 @@ import { FieldStudio, sketchbookButton, bookLayout, drawSketchbook, exportPostca
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste, BOSS_IDS, galleryCompletion, galleryCompletionProgress, capstoneLevel, galleryBonusTotal, GAME_VERSION } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste, BOSS_IDS, galleryCompletion, galleryCompletionProgress, capstoneLevel, galleryBonusTotal, GAME_VERSION, CROSSING, strokeTouchesCrossing, inCrossingZone } from './logic.js';
 import { UI, uiFont, INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -3315,7 +3315,7 @@ _drawAtelier(ctx) {
     // keeps the guided path out of play even if it is ever called otherwise.
     if (guided && tutorialEligible(this.save)) this._startTutorial();
     this.studio = new FieldStudio(this);
-    this.paint.onStroke = stroke => this.studio.onStroke(stroke);
+    this.paint.onStroke = stroke => { this.studio.onStroke(stroke); this._paintCrossingStroke(stroke); };
     this._bookOpen = false;
     this._hopWas = false;
     this.input.reset();
@@ -3750,6 +3750,17 @@ _drawAtelier(ctx) {
     p._plumeSuppress = !!(this.heron && this.heron.gilded && !this.heron.flying
       && this.heron._intro <= 0 && this.heron.plumeT > 0);
     p.update(dt, this.input, this.tuning, this.world, this._view());
+    // Q5 (Astra): the painted crossing's BRAMBLE — a red-painted mouth stings
+    // ONCE when the frog enters the crossing's effect zone (a small hit; latched
+    // per entry so a standing frog is not bled, and the way itself is never
+    // blocked). A no-op unless the world's crossing is actually 'bramble'.
+    if (this.world.crossingState === 'bramble' && inCrossingZone(p.x, p.y)) {
+      if (!p._crossingSting) {
+        p._crossingSting = true;
+        p.hurt(CROSSING.brambleDamage * (this.tuning.dmgTakenMult || 1), this.tuning);
+        this.sfx('hurt');
+      }
+    } else if (p._crossingSting) p._crossingSting = false;
     if (this._tutorialActive()) p.iframes = Math.max(p.iframes, 0.08);
     // S2 (v1.9): the LOW-HP uneasy ostinato — a sparse, high, uneasy layer that
     // SWELLS IN when the frog drops below ~30% HP and fades out above it. A
@@ -4484,6 +4495,29 @@ _drawAtelier(ctx) {
   _noiseEvent(x, y) {
     if (!this.enemies) return;
     for (const e of this.enemies) { if (e.wakeNoise) e.wakeNoise(x, y); }
+  }
+
+  // Q5 (Astra): the real paint action — a swipe/splash whose reach touches
+  // the crossing's mouth repaints it with the stroke's pigment. The pure
+  // transition + the transition-only collision rebuild live in world
+  // (paintCrossing); this routes the stroke, plays the beat, and latches the
+  // one-time postcard stamp (save.flags.crossingPainted — no SAVE_VERSION
+  // bump; the field lives on the existing flags object). A dry brush or a
+  // no-op pigment changes nothing.
+  _paintCrossingStroke(stroke) {
+    const w = this.world;
+    if (!w || !strokeTouchesCrossing(stroke)) return;
+    const next = w.paintCrossing(stroke.pigment);
+    if (!next) return;
+    const first = !this.save.flags.crossingPainted;
+    this.save.flags.crossingPainted = true;
+    SaveSys.save(this.save);
+    this.sfx('crossing-part');
+    const note = next === 'crossing' ? 'the bramble parts — a safe crossing'
+      : next === 'current' ? 'water fills the gap — a slow current'
+      : 'thorns wake — the crossing stings';
+    this.addBanner('The crossing takes your paint: ' + note + '.', 4.4, 150);
+    if (first) this.addBanner('Your postcards now wear the crossing\'s stamp.', 4.4, 185);
   }
 
   _spawnWave(dt) {
@@ -6310,7 +6344,7 @@ _drawAtelier(ctx) {
     // base-swamp run gains the faint glow and a Reeds run renders exactly as
     // before; no tuning / runT / logic.js number moves.
     this.world.drawSwampLightPools(ctx, v, this.now);
-    this.world.drawProps(ctx, v, drawSatFinal, this.now);
+    this.world.drawProps(ctx, v, drawSatFinal, this.now, this.player ? this.player.x : undefined, this.player ? this.player.y : undefined);
     this.world.drawObstacles(ctx, v, drawSatFinal);
     // L1 (v1.9): the ENVIRONMENTAL LIFE layer — the living-world ambient
     // elements (surface ripples on the water bands, drifting pollen (swamp),

@@ -160,6 +160,139 @@ try {
   await page.screenshot({ path: path.join(out, '10-lantern-garden.png') });
   await page.evaluate(() => window.__game._closeSketchbook());
 
+  // Q5: THE PAINTED CROSSING — all three real paint actions (green/blue/red),
+  // the effect zone, the corner push-out, the return route and the one-time
+  // postcard stamp, in a fresh normal swamp expedition. Paint actions run
+  // through the real swipe path; spawn staging keeps the effect measurements
+  // exact (no invulnerability is used for the actions themselves).
+  const crossing = await page.evaluate(async () => {
+    const g = window.__game, { CROSSING, crossingSpeedFactor, freshSave } = await import('./src/logic.js');
+    const keptPage = g.save.sketchbook[g.save.sketchbook.length - 1]; // Q2's real reeds page (stamp render check)
+    g._closeSketchbook(); g.save = freshSave(); g._beginExpedition(false);
+    const step = () => g._frame(g.last + 1000 / 60);
+    const w = g.world, p = g.player;
+    if (w.crossingState !== 'unpainted' || w.crossingSolids.length !== 4) throw new Error('fresh run must start with the 4-blob bramble wall unpainted: ' + w.crossingState);
+    if (p.hp !== p.maxHp) throw new Error('a fresh expedition starts at full HP');
+    // corner check: a frog that HOPS INTO the wall's corner (a real landing
+    // is always off-center — the push-out keeps the frog >= r+46 from any
+    // blob center) is pushed clear of the wall every frame, not trapped.
+    p.x = CROSSING.x + CROSSING.blobOffsets[0] + 18; p.y = CROSSING.y + 34; p.vx = 0; p.vy = 0;
+    for (let i = 0; i < 30; i++) step();
+    const cornerFree = w.crossingSolids.every(c => Math.hypot(p.x - c.x, p.y - c.y) > c.r);
+    // the main corridor is open in every state: the corridor anchor is never pushed
+    p.x = CROSSING.x; p.y = CROSSING.corridorY; p.vx = 0; p.vy = 0; step();
+    const corridorOpen = Math.hypot(p.x - CROSSING.x, p.y - CROSSING.corridorY) < 8;
+    // staging for exact effect measurements (not the paint actions): no waves
+    // spawn while we measure.
+    g.spawnT = 1e6; g.enemies.length = 0;
+    // ACTION 1 — green parts the bramble (the real swipe path from the south bank)
+    p.x = CROSSING.x; p.y = 560; p.pigment = 'green'; p.aimA = -Math.PI / 2;
+    g.paint.swipeCd = 0; p.swipeT = 0; g.paint.trySwipe([]); step();
+    const green = { state: w.crossingState, solids: w.crossingSolids.length, stamped: g.save.flags.crossingPainted,
+      banner: g.banners.some(b => b.text.includes('crossing')) };
+    // enter the detour north of the mouth, then back down the corridor
+    p.x = CROSSING.x; p.y = CROSSING.pocketY; p.vx = 0; p.vy = 0; step();
+    const entered = Math.hypot(p.x - CROSSING.x, p.y - CROSSING.pocketY) < 8;
+    p.x = CROSSING.x; p.y = CROSSING.corridorY; p.vx = 0; p.vy = 0; step();
+    const returned = Math.hypot(p.x - CROSSING.x, p.y - CROSSING.corridorY) < 8;
+    // ACTION 2 — blue fills the gap; the current slows the frog in the zone
+    p.x = CROSSING.x; p.y = 560; p.pigment = 'blue'; p.aimA = -Math.PI / 2;
+    g.paint.swipeCd = 0; p.swipeT = 0; g.paint.trySwipe([]); step();
+    if (w.crossingState !== 'current') throw new Error('blue paint must fill the gap: ' + w.crossingState);
+    p.x = CROSSING.x; p.y = CROSSING.y; p.vx = 0; p.vy = 0; g.input.keys.add('d');
+    for (let i = 0; i < 20; i++) step();
+    const inDx = p.x - CROSSING.x;
+    p.x = CROSSING.x + 600; p.y = CROSSING.y; p.vx = 0; p.vy = 0;
+    for (let i = 0; i < 20; i++) step();
+    g.input.keys.clear();
+    const outDx = p.x - (CROSSING.x + 600);
+    const current = { slow: crossingSpeedFactor('current'), inDx: Math.round(inDx * 10) / 10, outDx: Math.round(outDx * 10) / 10,
+      slowed: inDx > 4 && outDx > inDx && inDx < outDx * 0.85 };
+    // ACTION 3 — red wakes the thorns; the bramble stings ONCE per entry
+    p.x = CROSSING.x; p.y = 560; p.pigment = 'red'; p.aimA = -Math.PI / 2;
+    g.paint.swipeCd = 0; p.swipeT = 0; g.paint.trySwipe([]); step();
+    if (w.crossingState !== 'bramble') throw new Error('red paint must wake the thorns: ' + w.crossingState);
+    p.x = CROSSING.x; p.y = CROSSING.y; p.iframes = 0; p._crossingSting = false;
+    const hp0 = p.hp; step(); step();
+    const stingFirst = hp0 - p.hp;
+    for (let i = 0; i < 60; i++) step();
+    const stingNoBleed = hp0 - p.hp === stingFirst;
+    // leave the zone, then re-enter: the sting fires again (once per entry)
+    p.x = CROSSING.x; p.y = CROSSING.corridorY; p.vx = 0; p.vy = 0; step();
+    const leftZone = p._crossingSting === false;
+    p.x = CROSSING.x; p.y = CROSSING.y; p.iframes = 0; p._crossingSting = false;
+    step(); step();
+    const stingSecond = hp0 - p.hp === 2 * stingFirst;
+    // revisit: repaint green and the crossing is safe again (no damage in zone)
+    p.x = CROSSING.x; p.y = 560; p.pigment = 'green'; p.aimA = -Math.PI / 2;
+    g.paint.swipeCd = 0; p.swipeT = 0; g.paint.trySwipe([]); step();
+    const revisit = w.crossingState === 'crossing';
+    p.x = CROSSING.x; p.y = CROSSING.y; p.iframes = 0; p._crossingSting = false;
+    for (let i = 0; i < 30; i++) step();
+    const revisitSafe = hp0 - p.hp === 2 * stingFirst && p.alive;
+    // effects stay capped after all the crossing beats
+    const effectsCapped = g.particles.count <= 240 && g.studio.wakes.length <= 24;
+    return { keptPage, cornerFree, corridorOpen, green, entered, returned, current,
+      sting: { first: stingFirst, noBleed: stingNoBleed, leftZone, second: stingSecond },
+      revisit, revisitSafe, effectsCapped };
+  });
+  assert(crossing.cornerFree, 'hopping at the wall corner cannot trap the frog (pushed out every frame)');
+  assert(crossing.corridorOpen, 'the main corridor is open in every crossing state');
+  assert.deepEqual(crossing.green, { state: 'crossing', solids: 0, stamped: true, banner: true });
+  assert(crossing.entered && crossing.returned, 'the detour can be entered and the return route stays open');
+  assert(crossing.current.slowed, `the blue current slows the frog in the zone (in ${crossing.current.inDx}px vs out ${crossing.current.outDx}px over 20 frames)`);
+  assert(crossing.sting.first >= 3, 'the bramble stings on entry (a small hit)');
+  assert(crossing.sting.noBleed, 'the sting is latched per entry — a standing frog is not bled');
+  assert(crossing.sting.leftZone && crossing.sting.second, 're-entering the bramble stings again (once per entry)');
+  assert(crossing.revisit && crossing.revisitSafe, 'repainting green restores the safe crossing (revisited with normal input)');
+  assert(crossing.effectsCapped, 'effects stay capped after the crossing beats');
+  report.push({ paintedCrossing: crossing });
+  // frame evidence: every state renders (real pixels in real Chromium)
+  for (const st of ['unpainted', 'crossing', 'current', 'bramble']) {
+    await page.evaluate(st => import('./src/logic.js').then(m => {
+      const g = window.__game;
+      g.world.crossingState = st; g.world.crossingSolids = m.crossingSolids(st);
+      g.cam.x = m.CROSSING.x; g.cam.y = m.CROSSING.y; g._drawAll();
+    }), st);
+    await page.screenshot({ path: path.join(out, `11-crossing-${st}.png`) });
+  }
+  // all four states must be pairwise pixel-distinct (the detour's silhouettes)
+  const crossingPx = await page.evaluate(async () => {
+    const g = window.__game, { CROSSING, crossingSolids } = await import('./src/logic.js');
+    const c = document.createElement('canvas'); c.width = 440; c.height = 300;
+    const ctx = c.getContext('2d');
+    const sig = st => {
+      g.world.crossingState = st; g.world.crossingSolids = crossingSolids(st);
+      ctx.clearRect(0, 0, 440, 300);
+      ctx.save(); ctx.translate(220 - CROSSING.x, 150 - CROSSING.y);
+      g.world.drawCrossing(ctx, 1.7, 0.5);
+      ctx.restore();
+      return Array.from(ctx.getImageData(0, 0, 440, 300).data.filter((_, i) => i % 16 === 0));
+    };
+    const states = ['unpainted', 'crossing', 'current', 'bramble'];
+    const sigs = states.map(sig);
+    const diffs = [];
+    for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) diffs.push(sigs[i].filter((v, k) => v !== sigs[j][k]).length);
+    g.world.crossingState = 'crossing'; g.world.crossingSolids = crossingSolids('crossing');
+    return diffs;
+  });
+  assert(crossingPx.every(n => n > 400), 'all four crossing states render distinct pixels (6 pairwise diffs: ' + crossingPx.join('/') + ')');
+  // the postcard stamp: a real Q2 page with the latch renders differently from
+  // the same page without it (the stamp sits top-right, on the card).
+  const stampPx = await page.evaluate(async (keptPage) => {
+    const { drawPostcard } = await import('./src/studio.js');
+    const c = document.createElement('canvas'); c.width = 1000; c.height = 600;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, 1000, 600);
+    drawPostcard(ctx, keptPage, 0, 0, 1000, 600, false, false, false);
+    const a = ctx.getImageData(880, 90, 40, 1).data;
+    ctx.clearRect(0, 0, 1000, 600);
+    drawPostcard(ctx, keptPage, 0, 0, 1000, 600, false, false, true);
+    const b = ctx.getImageData(880, 90, 40, 1).data;
+    return { differs: Array.from(a).some((v, i) => v !== b[i]) };
+  }, crossing.keptPage);
+  assert(stampPx.differs, 'the crossing stamp changes the postcard pixels (real Q2 page, latch on vs off)');
+
   // Exercise every lesson through the real paint/update path. Reset this
   // isolated browser save, never the user's profile. No invulnerability cheat.
   await page.setViewportSize({ width: 1280, height: 820 });

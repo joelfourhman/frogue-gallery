@@ -9187,5 +9187,53 @@ console.log('== stage 112: Q4 (Astra) — the painted crossing (pure state machi
   assert(JSON.stringify(reeds.crossingSolids.map(o => [o.x, o.y]).sort((a, b) => a[0] - b[0])) === JSON.stringify([[2195, 460], [2265, 460], [2335, 460], [2405, 460]]), 'the Reeds mouth matches the fixed geometry');
 }
 
+console.log('== stage 113: Q5 (Astra) — the crossing loop (effect zone, stroke reach, stamp latch) ==');
+{
+  const { CROSSING, inCrossingZone, strokeTouchesCrossing, normalizeCrossingPainted, freshSave, migrateSave } = await import('../src/logic.js');
+
+  // -- the effect zone ------------------------------------------------------
+  assert(inCrossingZone(CROSSING.x, CROSSING.y) === true, 'the mouth center is inside the zone');
+  assert(inCrossingZone(CROSSING.x, CROSSING.y + CROSSING.zoneR) === true, 'the zone edge is inside (closed boundary)');
+  assert(inCrossingZone(CROSSING.x, CROSSING.y + CROSSING.zoneR + 1) === false, 'just past the zone is outside');
+  assert(inCrossingZone(CROSSING.x, CROSSING.corridorY) === false, 'the corridor anchor (main route) is outside the zone');
+  // the corridor main-route anchor must never be inside the zone (the main
+  // passage is open in every state, including the effect zone's effects).
+  assert(Math.abs(CROSSING.corridorY - CROSSING.y) > CROSSING.zoneR, 'the zone does not reach the main route');
+
+  // -- stroke reach (the real paint action's geometry) ----------------------
+  // a swipe from the south bank aiming north at the mouth reaches it
+  assert(strokeTouchesCrossing({ x: CROSSING.x, y: 560, a: -Math.PI / 2, range: 74, pigment: 'green' }) === true, 'a south-bank north swipe reaches the mouth');
+  // ... and from the pocket side aiming south
+  assert(strokeTouchesCrossing({ x: CROSSING.x, y: 360, a: Math.PI / 2, range: 74, pigment: 'blue' }) === true, 'a pocket-side south swipe reaches the mouth');
+  // a swipe far from the mouth does not reach it
+  assert(strokeTouchesCrossing({ x: CROSSING.x - 600, y: 560, a: -Math.PI / 2, range: 74, pigment: 'green' }) === false, 'a swipe 600px west does not reach the mouth');
+  // a swipe aimed AWAY from the mouth does not reach it
+  assert(strokeTouchesCrossing({ x: CROSSING.x, y: 560, a: Math.PI / 2, range: 74, pigment: 'red' }) === false, 'a south-bank south swipe (away) does not reach the mouth');
+  // the dry brush never repaints the wall, even point-blank
+  assert(strokeTouchesCrossing({ x: CROSSING.x, y: CROSSING.y, a: 0, range: 74, pigment: 'dry' }) === false, 'the dry brush never touches the crossing');
+  // malformed strokes are clean no-ops
+  assert(strokeTouchesCrossing(null) === false, 'a null stroke is a no-op');
+  assert(strokeTouchesCrossing({ x: NaN, y: 460, a: 0, range: 74, pigment: 'green' }) === false, 'a non-finite stroke is a no-op');
+  assert(strokeTouchesCrossing({ x: CROSSING.x, y: 560, a: -Math.PI / 2, range: 74 }) === false, 'a pigment-less stroke is a no-op');
+
+  // -- the stamp latch (persistent, no SAVE_VERSION bump) --------------------
+  assert(normalizeCrossingPainted(true) === true, 'a painted latch survives migration');
+  assert(normalizeCrossingPainted(false) === false, 'an unpainted latch survives migration');
+  assert(normalizeCrossingPainted(undefined) === false, 'a legacy save (no field) defaults unpainted');
+  assert(normalizeCrossingPainted('truthy-garbage') === true, 'a non-boolean latch normalizes to a boolean');
+  const fresh = freshSave();
+  assert(fresh.flags && fresh.flags.crossingPainted === false, 'a fresh save starts unpainted');
+  // a save that painted the crossing keeps the latch through a full
+  // round-trip (migrateSave is the loader's normalization path).
+  const painted = freshSave(); painted.flags.crossingPainted = true;
+  const roundTrip = migrateSave(JSON.parse(JSON.stringify(painted)));
+  assert(roundTrip._case === 'migrated', 'a painted save round-trips cleanly');
+  assert(roundTrip.flags.crossingPainted === true, 'the stamp latch survives the round-trip');
+  // a legacy save (no crossingPainted field at all) loads unpainted
+  const legacy = freshSave(); delete legacy.flags.crossingPainted;
+  const legacyIn = migrateSave(JSON.parse(JSON.stringify(legacy)));
+  assert(legacyIn._case === 'migrated' && legacyIn.flags.crossingPainted === false, 'a legacy save loads the latch as unpainted');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

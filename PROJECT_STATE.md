@@ -1,11 +1,79 @@
-# Project state — Astra Q1–Q4 complete (registry, studies, painted crossing)
+# Project state — Astra Q1–Q5 complete (registry, studies, painted crossing loop)
 
-Updated 2026-10-12. **Q4 is implemented and verified**: the painted crossing
-is a pure state machine (green crossing / blue current / red bramble) with
-bounded collision data rebuilt only on transitions, the main corridor open in
-every state, and spawn validation respecting the new solid. Milestone 2's
-collision-safe foundation is in. The exact next task is **Q5 — build and
-illustrate one complete side loop** in docs/QWEN_BACKLOG.md.
+Updated 2026-10-12. **Q5 is implemented and verified**: the painted crossing is
+now a playable side loop — the three real paint actions (green crossing /
+blue current / red bramble) are wired to the stroke path, the effect zone
+slows and stings the frog, the detour can be entered, completed, left and
+revisited with normal input, and the first paint latches a one-time postcard
+stamp. Milestone 2's side loop is done. The exact next task is **Q6 —
+preserve two pinned sketchbook pages** in docs/QWEN_BACKLOG.md.
+
+## Q5 record (2026-10-12)
+
+- `src/logic.js`: `CROSSING.zoneR` (90px effect zone; the main route sits
+  240px from the mouth, so the effects never reach the corridor),
+  `inCrossingZone` (closed disc), `strokeTouchesCrossing` (stroke segment vs
+  mouth radius + 26px reach margin; dry/null/non-finite/pigment-less strokes
+  are clean no-ops), and `normalizeCrossingPainted` +
+  `freshSave().flags.crossingPainted` + the `migrateSave` per-field carry
+  (false for legacy saves; NO SAVE_VERSION bump — the field lives on the
+  existing flags object, mirroring reedsUnlocked/reedsVictory).
+- `src/player.js`: the blue current slows the frog to 0.72× while inside the
+  zone (a no-op unless the world's crossing is actually 'current').
+- `src/game.js`: `_paintCrossingStroke` routes real swipes/splashes to
+  `world.paintCrossing` (transition SFX + banner + the one-time stamp latch
+  `save.flags.crossingPainted`, persisted immediately; "postcards now wear
+  the crossing's stamp" banner on the first transition only). Bramble sting:
+  a red-painted mouth stings ONCE when the frog enters the zone (3×
+  dmgTakenMult), latched per entry so a standing frog is not bled; the way
+  itself is never blocked. The frog's position feeds `drawProps` for the
+  nearby hint.
+- `src/audio.js`: the 'crossing-part' beat — a brush-through bandpass sweep
+  down under a low leafy thud plus a small bright lift (reuses the existing
+  _tone/_noise voices, no new assets).
+- `src/studio.js`: the postcard STAMP — a perforated 'CROSSING' postage stamp
+  (the leafy arch over a water line) in the card's top-right corner once the
+  latch is set (sketchbook view + 1600×960 PNG export; cosmetic, bounded).
+- `src/world.js`: `drawCrossing` — the four state silhouettes (unpainted:
+  thorny wall with a breathing "paintable" pulse; crossing: a safe leafy
+  arch with soft light rays; current: blue water with drifting flow marks
+  and ripples; bramble: red thorns with a warning pulse) plus the nearby
+  hint. Draw-only, P10-culled like every other prop, bounded elements, no
+  allocations, seed-independent (the mouth is fixed by design).
+- Tests: smoke stage 113 — 21 assertions (zone geometry incl. the main-route
+  exclusion, the stroke-reach truth table incl. dry/null/non-finite/
+  pigment-less no-ops, latch normalization + the migrateSave round-trip +
+  legacy load). Fixed a WIP defect found in verification: the round-trip
+  assertions were written against `validateSaveBlob`'s `{ok, save}` shape,
+  but `migrateSave` returns the save itself — they now assert
+  `_case === 'migrated'` (the stronger, correct check).
+- Browser journey (tests/vertical-slice.mjs, real Chromium, fresh normal
+  swamp expedition, real swipe path): a corner hop landing off-center in
+  the wall's corner is pushed out every frame and never trapped (an
+  exactly-centered landing is unreachable in play — the push-out keeps the
+  frog ≥ r+46 from any blob center); the corridor anchor is never pushed in
+  any state (main passage open); green (solids 4→0, stamp latch + banner);
+  the detour entered and the return route left; blue (the frog measured
+  44.8px vs 70.9px over 20 frames in-zone vs out — the current slows);
+  red (3 HP sting on entry, no bleed while standing, stings again on
+  re-entry — once per entry); repaint green (safe revisit, no damage).
+  Effects stay capped after all the crossing beats (particles ≤ 240 pool,
+  brush wakes ≤ 24).
+- Frame evidence: four state screenshots (tests/.out/astra/
+  11-crossing-{unpainted,crossing,current,bramble}.png) + six pairwise
+  pixel diffs of the four states (each > 400 distinct samples — all partial
+  states render) + a postcard stamp pixel diff on a real Q2 page (latch on
+  vs off).
+- Pacing gate: all nine probes IN band, unchanged from the Q4 baseline
+  (Normal 17.2m analytic / 18.3m measured; Reeds 22.2m; Warden 3.5–3.9m;
+  Black Reeds 25.8m; Umbral 3.73m; NG+ 19.5m; Wander 16.9–17.8m /
+  Wander×Reeds 21.6–22.7m) — the crossing is optional content and the
+  corridor stays open, so the pacing models do not change.
+- SAVE_VERSION stays 12, GAME_VERSION 1.0.0. Q5 keeps the crossing
+  OPTIONAL by design: no mandatory route lock, no new economy; the loop is
+  discoverable through the wall's paintable pulse and the nearby hint.
+- Note: this session has no vision tool, so the four crossing frames are
+  verified by the pairwise pixel assertions above rather than by eye.
 
 ## Q4 record (2026-10-12)
 
@@ -196,16 +264,14 @@ HTML5 itch.io path and records alternatives.
 
 ## Next session
 
-Implement **Q5 — build and illustrate one complete side loop** (Milestone 2):
-one small detour near the Rain Choir with visible interactable silhouettes and
-a postcard stamp. Wire the real paint actions to `world.paintCrossing`
-(green crossing / blue current / red bramble), apply the current slowdown and
-bramble entry damage in game.js, draw the wall and its painted states in
-world.js. No mandatory route lock or new economy. Acceptance: a player can
-enter, complete, leave and revisit with normal input; hopping at corners
-cannot trap the frog; all partial states render. Tests: browser journey for
-all three actions and return, capped effects, frame evidence and the full
-pacing gate. Do not revive historical next actions.
+Implement **Q6 — preserve two pinned sketchbook pages** (Milestone 3,
+docs/QWEN_BACKLOG.md): optional pinned-ID metadata, maximum two pinned plus
+eight rolling pages. Bounded normalization, deterministic eviction, clear UI.
+Unpinning returns a page to the normal retention policy. Acceptance: repeated
+filing never duplicates a page; pins survive twenty new expeditions and save
+reload; total artwork remains below 80 KiB. Tests: retention across
+pin/unpin/re-file orders, malformed/legacy imports, mouse/controller focus
+and state suspension. Do not revive historical next actions.
 
 No known reproducible game-breaking issue remains in exercised paths.
 Human friend feedback, physical controllers, Firefox/Safari and hosted iframe

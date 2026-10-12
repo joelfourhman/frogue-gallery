@@ -265,7 +265,7 @@ export function bookLayout(g) {
     export: { x: x + 595, y: y + 610, w: 215, h: 38 }, close: { x: x + 850, y: y + 610, w: 180, h: 38 } };
 }
 
-export function drawPostcard(ctx, page, x, y, w, h, signed = false, bordered = false) {
+export function drawPostcard(ctx, page, x, y, w, h, signed = false, bordered = false, stamped = false) {
   ctx.save(); ctx.translate(x, y); ctx.scale(w / 1000, h / 600);
   ctx.fillStyle = '#efe4cb'; ctx.fillRect(0, 0, 1000, 600);
   if (bordered) {
@@ -320,6 +320,29 @@ export function drawPostcard(ctx, page, x, y, w, h, signed = false, bordered = f
   }
   ctx.restore();
   ctx.strokeStyle = '#766047'; ctx.lineWidth = 3; ctx.strokeRect(24, 24, 952, 482);
+  if (stamped) {
+    // Q5: the crossing's STAMP — a perforated postage stamp in the card's
+    // top-right corner: the leafy arch (the safe crossing) over a water line,
+    // with 'CROSSING' beneath. Cosmetic only; drawn after the frame so it
+    // sits crisp on the card. Bounded: 2 arcs + 3 leaves + 1 line + text.
+    ctx.save(); ctx.translate(852, 34);
+    ctx.fillStyle = '#f6efdb'; ctx.fillRect(0, 0, 100, 118);
+    ctx.strokeStyle = '#8a6f4d'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.strokeRect(4, 4, 92, 110); ctx.setLineDash([]);
+    ctx.strokeStyle = '#4a6d43'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(16, 62); ctx.quadraticCurveTo(38, 26, 50, 24); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(84, 62); ctx.quadraticCurveTo(62, 26, 50, 24); ctx.stroke();
+    ctx.fillStyle = '#5b8952';
+    for (let i = 0; i < 3; i++) {
+      const a = -Math.PI / 2 + (i - 1) * 0.55;
+      ctx.beginPath(); ctx.ellipse(50 + Math.cos(a) * 20, 38 + Math.sin(a) * 15, 8, 3.6, a + 0.5, 0, TAU); ctx.fill();
+    }
+    ctx.strokeStyle = '#468caa'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(24, 74); ctx.quadraticCurveTo(50, 81, 76, 74); ctx.stroke();
+    ctx.font = uiFont(13, { weight: 700 }); ctx.fillStyle = '#6b5a3e'; ctx.textAlign = 'center';
+    ctx.fillText('CROSSING', 50, 97);
+    ctx.restore();
+  }
   ctx.font = uiFont(25, { italic: true }); ctx.fillStyle = '#364d43'; ctx.textAlign = 'center'; ctx.fillText(page.title, 500, 545, 920);
   centerText(ctx, `${page.strokes.length} remembered strokes · ${page.studies.length} living ${page.studies.length === 1 ? 'study' : 'studies'} · ${page.result === 'unfinished' ? 'in progress' : page.result}`, 500, 574, uiFont(14), '#645e50');
   ctx.textAlign = 'right'; ctx.font = uiFont(16, { italic: true }); ctx.fillStyle = signed ? '#a87825' : '#53654b';
@@ -345,7 +368,7 @@ export function drawSketchbook(g, ctx) {
     : ['Find First Light near', 'the start of the swamp.', 'Paint its three circles', 'to learn the brush-hop.'];
   lines.forEach((line, i) => c.fillText(line, b.x + 34, b.y + 350 + i * 25));
   if (page) {
-    drawPostcard(c, page, b.x + 270, b.y + 125, 760, 456, studyRewardEarned(g.save.studio?.completed || [], 'swamp'), studyRewardEarned(g.save.studio?.completed || [], 'reeds'));
+    drawPostcard(c, page, b.x + 270, b.y + 125, 760, 456, studyRewardEarned(g.save.studio?.completed || [], 'swamp'), studyRewardEarned(g.save.studio?.completed || [], 'reeds'), !!(g.save.flags && g.save.flags.crossingPainted));
     centerText(c, `Page ${g._bookIndex + 1} / ${pages.length} · latest eight expeditions kept`, b.x + 650, b.y + 595, uiFont(12), '#665f50');
   } else {
     centerText(c, 'Your first page is still waiting.', b.x + 660, b.y + 300, uiFont(25, { italic: true }), '#53654b');
@@ -362,7 +385,7 @@ export function exportPostcard(g) {
   const page = g.save.sketchbook?.[g._bookIndex];
   if (!page) return;
   const canvas = document.createElement('canvas'); canvas.width = 1600; canvas.height = 960;
-  drawPostcard(canvas.getContext('2d'), page, 0, 0, 1600, 960, studyRewardEarned(g.save.studio?.completed || [], 'swamp'), studyRewardEarned(g.save.studio?.completed || [], 'reeds'));
+  drawPostcard(canvas.getContext('2d'), page, 0, 0, 1600, 960, studyRewardEarned(g.save.studio?.completed || [], 'swamp'), studyRewardEarned(g.save.studio?.completed || [], 'reeds'), !!(g.save.flags && g.save.flags.crossingPainted));
   canvas.toBlob(blob => {
     if (!blob) return;
     const url = URL.createObjectURL(blob), a = document.createElement('a');

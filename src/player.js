@@ -2,7 +2,7 @@
 'use strict';
 import { TAU, clamp, lerp, dist, traceBlob, wobble } from './math.js';
 import { INK, sat } from './ui.js';
-import { PIGMENTS, hopLift, inGravityPocket, floodedWaterFactor, REEDS_POCKETS, REEDS_FLOOD_FLOOR } from './logic.js';
+import { PIGMENTS, hopLift, inGravityPocket, floodedWaterFactor, REEDS_POCKETS, REEDS_FLOOD_FLOOR, crossingSpeedFactor, inCrossingZone } from './logic.js';
 
 export class Player {
   constructor(x, y, tuning) {
@@ -124,6 +124,13 @@ export class Player {
       this._reedsPockets = world.reedsPockets || null;
     }
     if (this.rootT > 0) spd = 0;
+    // Q5 (Astra): the painted crossing's CURRENT — a blue-painted mouth slows
+    // movement while the frog is inside the crossing's effect zone (the pure
+    // crossingSpeedFactor: 0.72 in the current, 1.0 otherwise — and this
+    // line is a no-op unless the world's crossing is actually 'current').
+    if (world && world.crossingState === 'current' && inCrossingZone(this.x, this.y)) {
+      spd *= crossingSpeedFactor(world.crossingState);
+    }
     const direction = this.hopT > 0.04 ? this.hopDir : mv;
     this.vx = lerp(this.vx, direction[0] * spd, 1 - Math.exp(-14 * dt));
     this.vy = lerp(this.vy, direction[1] * spd, 1 - Math.exp(-14 * dt));

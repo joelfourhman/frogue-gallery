@@ -1,8 +1,8 @@
 // world.js — the swamp: terrain, paint layer, vegetation, soil, reeds.
 'use strict';
 import { traceBlob, wobble, clamp, dist2, TAU, mulberry32 } from './math.js';
-import { INK, sat, mixColor } from './ui.js';
-import { REEDS_WIDTH, REEDS_DARK_WIDTH, REEDS_POCKETS, REEDS_FLOOD_FLOOR, REEDS_FLOOD_FACTOR, REEDS_DARK_POCKETS, REEDS_DARK_FLOOD_FLOOR, REEDS_DARK_FLOOD_FACTOR, REEDS_DARK_BESTIARY_DENSITY, crossingTransition, crossingSolids } from './logic.js';
+import { INK, sat, mixColor, centerText, uiFont } from './ui.js';
+import { REEDS_WIDTH, REEDS_DARK_WIDTH, REEDS_POCKETS, REEDS_FLOOD_FLOOR, REEDS_FLOOD_FACTOR, REEDS_DARK_POCKETS, REEDS_DARK_FLOOD_FLOOR, REEDS_DARK_FLOOD_FACTOR, REEDS_DARK_BESTIARY_DENSITY, CROSSING, crossingTransition, crossingSolids } from './logic.js';
 
 const WSCALE = 0.5; // paint layer resolution factor
 
@@ -1065,7 +1065,7 @@ export class World {
     ctx.restore();
   }
 
-  drawProps(ctx, view, colorSat, now) {
+  drawProps(ctx, view, colorSat, now, px, py) {
     // vegetation, reeds, lily pads — in world space (caller applies the single
     // camera transform). No inner camera transform.
     // P10: cull to the visible world rect (off-screen = invisible; zero visual change).
@@ -1226,6 +1226,115 @@ export class World {
       gl++;
     }
     ctx.globalAlpha = 1;
+
+    // Q5 (Astra): the painted crossing — the bramble wall at the detour
+    // mouth (a fixed world prop; pure draw-time, so P10 culls it like every
+    // other prop). `px`/`py` (optional) are the frog's position for the
+    // nearby hint; a headless caller omits them and the hint is skipped.
+    if (this.crossingState && inView(CROSSING.x, CROSSING.y)) {
+      this.drawCrossing(ctx, now, colorSat, px, py);
+    }
+  }
+
+  // Q5 (Astra): render the painted crossing in its current state. Draw-time
+  // only (no per-frame state change): fixed geometry, bounded elements
+  // (≤ 4 blobs + ≤ 10 accents per state, no allocations), seeded-free (the
+  // mouth is seed-independent by design). States: 'unpainted' (the thorny
+  // bramble wall, still solid), 'crossing' (the bramble parts — a safe leafy
+  // arch), 'current' (blue water filling the gap, with slow flow), 'bramble'
+  // (red thorns waking across the mouth). The frog's position (optional)
+  // gates the nearby hint, mirroring the field studies' hint.
+  drawCrossing(ctx, now, colorSat, px, py) {
+    ctx.save();
+    ctx.translate(CROSSING.x, CROSSING.y);
+    // the detour's ground wash — a slightly deeper water pocket behind the
+    // mouth, so the loop reads as a place you go TO, not a random wall.
+    ctx.fillStyle = 'rgba(58,92,80,0.30)';
+    ctx.beginPath(); ctx.ellipse(0, -46, 200, 104, 0, 0, TAU); ctx.fill();
+    const st = this.crossingState;
+    if (st === 'unpainted') {
+      // the thorny bramble wall (matches the solid's geometry: 4 blobs,
+      // 70px pitch) — dark, dense, and faintly shimmering to read as
+      // "paintable".
+      ctx.fillStyle = sat('#3d4f35', colorSat);
+      for (let i = 0; i < 4; i++) {
+        const bx = CROSSING.blobOffsets[i];
+        ctx.beginPath(); ctx.ellipse(bx, 0, 40, 30, 0, 0, TAU); ctx.fill();
+      }
+      ctx.strokeStyle = sat('#2c3a26', colorSat); ctx.lineWidth = 2;
+      for (let i = 0; i < 9; i++) {
+        const tx = -112 + i * 28, tw = wobble(i + 5, 7, 6);
+        ctx.beginPath(); ctx.moveTo(tx, 14); ctx.lineTo(tx + tw, -16 + wobble(i, 3, 8)); ctx.stroke();
+      }
+      // the "paintable" pulse — a faint cream ring that breathes (draw-only).
+      ctx.strokeStyle = '#f4e9c8'; ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.14 + 0.10 * (0.5 + 0.5 * Math.sin(now * 2));
+      ctx.beginPath(); ctx.ellipse(0, 0, 132, 44, 0, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else if (st === 'crossing') {
+      // the bramble PARTS — a safe leafy arch over an open gap.
+      ctx.strokeStyle = sat('#4a5d3d', colorSat); ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-150, 20); ctx.quadraticCurveTo(-96, -58, -30, -66); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(150, 20); ctx.quadraticCurveTo(96, -58, 30, -66); ctx.stroke();
+      ctx.fillStyle = sat('#5b8952', colorSat);
+      for (let i = 0; i < 6; i++) {
+        const a = -Math.PI / 2 + (i - 2.5) * 0.30, sway = Math.sin(now * 1.2 + i) * 3;
+        const lx = Math.cos(a) * 78 + sway, ly = -14 + Math.sin(a) * 52;
+        ctx.beginPath(); ctx.ellipse(lx, ly, 13, 5.5, a + 0.5, 0, TAU); ctx.fill();
+      }
+      // soft light through the open gap (draw-only, bounded 3 rays).
+      ctx.strokeStyle = '#f6ecc9'; ctx.lineWidth = 3;
+      for (let i = 0; i < 3; i++) {
+        ctx.globalAlpha = 0.16 + 0.10 * (0.5 + 0.5 * Math.sin(now * 1.5 + i * 1.4));
+        ctx.beginPath(); ctx.moveTo(-52 + i * 52, -48); ctx.lineTo(-38 + i * 52, 30); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    } else if (st === 'current') {
+      // water fills the gap — a slow blue current with drifting flow marks.
+      ctx.fillStyle = sat('#5f93b5', colorSat);
+      ctx.beginPath(); ctx.ellipse(0, 2, 132, 40, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#bcd9e6'; ctx.lineWidth = 2.5;
+      for (let i = 0; i < 5; i++) {
+        const fx = ((now * 34 + i * 57) % 264) - 132;
+        const fy = Math.sin(i * 2.1) * 24;
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath(); ctx.moveTo(fx - 14, fy); ctx.quadraticCurveTo(fx, fy - 5, fx + 14, fy); ctx.stroke();
+      }
+      for (let i = 0; i < 3; i++) {
+        const rr = 16 + ((now * 22 + i * 33) % 78);
+        ctx.globalAlpha = Math.max(0.04, 0.4 - rr / 190);
+        ctx.beginPath(); ctx.ellipse(0, 2, rr, rr * 0.36, 0, 0, TAU); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      // 'bramble' — red thorns wake across the mouth (passable, but they
+      // sting). A warning pulse keeps the hazard readable.
+      ctx.strokeStyle = sat('#7c3a2c', colorSat); ctx.lineWidth = 3; ctx.lineCap = 'round';
+      for (let i = 0; i < 8; i++) {
+        const tx = -105 + i * 30, th = 30 + wobble(i, 9, 12);
+        ctx.beginPath(); ctx.moveTo(tx, 26); ctx.lineTo(tx + wobble(i, 4, 10), 26 - th); ctx.stroke();
+      }
+      ctx.strokeStyle = '#e07856'; ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.18 + 0.14 * (0.5 + 0.5 * Math.sin(now * 3));
+      ctx.beginPath(); ctx.ellipse(0, 0, 128, 42, 0, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // the nearby hint (the frog's position is optional — a headless caller
+    // omits it and the hint is skipped, mirroring the field studies).
+    if (px !== undefined && py !== undefined) {
+      const dx = px - CROSSING.x, dy = py - CROSSING.y;
+      if (dx * dx + dy * dy < 300 * 300) {
+        ctx.globalAlpha = 0.92;
+        centerText(ctx, st === 'unpainted' ? 'Paint the bramble wall' : 'The painted crossing', 0, -118, uiFont(15, { weight: 700 }), INK);
+        const sub = st === 'unpainted' ? '1 green parts it · 2 blue current · 3 red thorns'
+          : st === 'crossing' ? 'a safe crossing — your postcards wear its stamp'
+          : st === 'current' ? 'a slow current — moving through here is slower'
+          : 'thorns wake — the crossing stings · repaint to change it';
+        centerText(ctx, sub, 0, -99, uiFont(12), '#2f4640');
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.restore();
   }
 
   drawObstacles(ctx, view, colorSat) {
