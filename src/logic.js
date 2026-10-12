@@ -164,7 +164,7 @@ export function strokeTouchesCrossing(stroke, margin = 26) {
   const reach = CROSSING.r + margin;
   return ex * ex + ey * ey <= reach * reach;
 }
-export const STUDIO = Object.freeze({ coats: 3, nodeRadius: 25, wakeLife: 1.25, wakeRadius: 27, wakeCap: 24, strokeCap: 180, pageCap: 8 });
+export const STUDIO = Object.freeze({ coats: 3, nodeRadius: 25, wakeLife: 1.25, wakeRadius: 27, wakeCap: 24, strokeCap: 180, pageCap: 8, pinCap: 2 });
 export function studyNode(study, step = study.step || 0) {
   const offsets = [[-62, 16], [0, -28], [62, 16]];
   const xy = offsets[Math.min(2, step)];
@@ -197,9 +197,41 @@ export function normalizeStudio(raw) {
   return { completed };
 }
 const finiteBound = (n, min, max) => typeof n === 'number' && Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : min;
-export function normalizeSketchbook(raw) {
+// Q6: the PINNED SKETCHBOOK pages — at most STUDIO.pinCap (2) page ids that
+// never age out of the rolling pageCap window. Optional validated save field
+// (no SAVE_VERSION bump): the id list lives on the EXISTING save object,
+// mirroring the flags-object pattern. Bounded normalization: a non-array or
+// garbled field degrades to [], ids are string-coerced + deduped, and the
+// list is capped at pinCap (the FIRST two wins — a corrupt blob can never
+// carry more than two pins forward).
+export function normalizeSketchPins(raw) {
   if (!Array.isArray(raw)) return [];
-  return raw.slice(-STUDIO.pageCap).filter(p => p && typeof p === 'object' && Array.isArray(p.strokes)).map(p => ({
+  const out = [];
+  for (const v of raw) {
+    const id = String(v ?? '').slice(0, 48);
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out.slice(0, STUDIO.pinCap);
+}
+export function normalizeSketchbook(raw, pins = []) {
+  if (!Array.isArray(raw)) return [];
+  // Pinned pages keep their slot no matter how old they are; the rolling
+  // window (pageCap) counts ONLY non-pinned pages, taken from the NEWEST end
+  // (raw is in recency order: oldest first). Deterministic eviction: with
+  // two pins and eight rolling pages, the OLDEST non-pinned page leaves —
+  // a pinned page is never evicted by the window. (Backward compatible:
+  // no pins → exactly the old last-pageCap behavior.)
+  const pinSet = new Set(normalizeSketchPins(pins));
+  const keepIdx = new Set();
+  let rolling = 0;
+  for (let i = raw.length - 1; i >= 0; i--) {
+    const p = raw[i];
+    if (!p || typeof p !== 'object' || !Array.isArray(p.strokes)) continue;
+    const id = String(p.id || '').slice(0, 48);
+    if (pinSet.has(id)) { keepIdx.add(i); continue; }
+    if (rolling < STUDIO.pageCap) { rolling++; keepIdx.add(i); }
+  }
+  return raw.filter((p, i) => keepIdx.has(i)).map(p => ({
     id: String(p.id || '').slice(0, 48),
     seed: Math.round(finiteBound(p.seed, 0, 2147483647)),
     title: String(p.title || 'An afternoon in the swamp').slice(0, 64),
@@ -212,9 +244,30 @@ export function normalizeSketchbook(raw) {
   }));
 }
 export function fileSketch(save, page) {
-  const pages = normalizeSketchbook([page]);
+  const pins = normalizeSketchPins(save.sketchPins);
+  const pages = normalizeSketchbook([page], pins);
   if (!pages.length || !pages[0].strokes.length) return false;
-  save.sketchbook = normalizeSketchbook([...(save.sketchbook || []).filter(p => p.id !== pages[0].id), pages[0]]);
+  save.sketchbook = normalizeSketchbook([...(save.sketchbook || []).filter(p => p.id !== pages[0].id), pages[0]], pins);
+  return true;
+}
+// Q6: PIN a page — idempotent, capped at pinCap, and only for pages actually
+// in the book (a pin for a missing id is a clean no-op). Returns true when
+// the pin was ADDED (so the caller can announce it), false otherwise.
+export function pinSketchPage(save, id) {
+  const page = (save.sketchbook || []).find(p => p.id === String(id || ''));
+  if (!page) return false;
+  const pins = normalizeSketchPins(save.sketchPins);
+  if (pins.includes(page.id) || pins.length >= STUDIO.pinCap) return false;
+  save.sketchPins = [...pins, page.id];
+  return true;
+}
+// Q6: UNPIN a page — returns it to the normal retention policy (the rolling
+// window may evict it on the next filing). Clean no-op when not pinned.
+export function unpinSketchPage(save, id) {
+  const pins = normalizeSketchPins(save.sketchPins);
+  const idx = pins.indexOf(String(id || ''));
+  if (idx < 0) return false;
+  save.sketchPins = pins.filter((_, i) => i !== idx);
   return true;
 }
 
@@ -3002,6 +3055,7 @@ export function freshSave() {
   return {
     studio: { completed: [] },
     sketchbook: [],
+    sketchPins: [],       // Q6: at most 2 pinned sketchbook page ids (never age out)
     saveVersion: SAVE_VERSION,
     bank: { red: 0, blue: 0, green: 0 },
     owned: [],            // painting ids
@@ -3232,7 +3286,17 @@ export function migrateSave(raw) {
   // migration step re-normalizes defensively on the way up.
   out.wanderSeed = normalizeWanderSeed(raw.wanderSeed);
   out.studio = normalizeStudio(raw.studio);
-  out.sketchbook = normalizeSketchbook(raw.sketchbook);
+  // Q6: carry the PINNED sketchbook pages ([] for a legacy save with no field,
+  // the real ids for a save with pins). Must be a per-field carry (like
+  // galleryBonus/gildedFrame) — the version-migration chain is a no-op on a
+  // same-version reload, so without this a pinned page would lose its pin on
+  // the next load. The book is normalized WITH the pins (a pinned page keeps
+  // its slot against the rolling window), then the pin list is pruned to ids
+  // that actually survived in the book (a stale/corrupt pin is dropped, never
+  // a crash). No SAVE_VERSION bump — optional validated field.
+  const rawPins = normalizeSketchPins(raw.sketchPins);
+  out.sketchbook = normalizeSketchbook(raw.sketchbook, rawPins);
+  out.sketchPins = rawPins.filter(id => out.sketchbook.some(p => p.id === id));
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks

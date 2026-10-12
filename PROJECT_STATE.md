@@ -1,12 +1,39 @@
 # Project state — Astra Q1–Q5 complete (registry, studies, painted crossing loop)
 
-Updated 2026-10-12. **Q5 is implemented and verified**: the painted crossing is
-now a playable side loop — the three real paint actions (green crossing /
-blue current / red bramble) are wired to the stroke path, the effect zone
-slows and stings the frog, the detour can be entered, completed, left and
-revisited with normal input, and the first paint latches a one-time postcard
-stamp. Milestone 2's side loop is done. The exact next task is **Q6 —
-preserve two pinned sketchbook pages** in docs/QWEN_BACKLOG.md.
+Updated 2026-10-12. **Q6 is IN FLIGHT** (pure core committed, UI pending):
+pinned sketchbook pages — at most 2 pinned page ids that never age out of the
+rolling 8-page window. The pure retention rules, pin/unpin actions, and the
+save carry are implemented and verified (smoke stage 114, 35 assertions
+green; no-pin behavior byte-identical to the old eviction). **Exact next
+action: the sketchbook UI** — a pin/unpin button in the book's focus list
+(mouse + keyboard, cap banner when 2 pins are set), then the Q6 record +
+full gate + commit. The crossing loop (Q5) remains complete and verified
+above; the next backlog task after Q6 is Q7 (docs/QWEN_BACKLOG.md).
+
+## Q6 record (2026-10-12, in flight)
+
+- `src/logic.js` (pure, committed as the checkpoint): `STUDIO.pinCap: 2`;
+  `normalizeSketchPins` (non-array/garbage → [], string-coerced ids, deduped,
+  capped at 2 — first two win); `normalizeSketchbook(raw, pins)` — pinned
+  pages keep their slot against the rolling window (pageCap 8 counts ONLY
+  non-pinned pages, taken from the newest end; no pins = the old
+  last-pageCap behavior, asserted unchanged); `pinSketchPage` /
+  `unpinSketchPage` (idempotent, capped, no-op-safe, missing-id-safe);
+  `freshSave().sketchPins: []` and the `migrateSave` per-field carry with
+  stale-pin pruning (the book normalizes WITH the pins, then pins are pruned
+  to ids that survived). NO SAVE_VERSION bump (optional validated field,
+  mirroring the flags-object pattern).
+- Tests: new smoke stage 114 — 35 assertions (pin-cap truth table, 20-filing
+  retention with a pinned survivor + deterministic non-pinned eviction, cap
+  refusal at 2, idempotent re-pin, unpin restores normal retention,
+  re-filing never duplicates (pinned or not), migration round-trip keeps
+  pins, legacy load → [], garbled/stale imports degrade safely, full-cap
+  artwork 29,152 bytes < 80 KiB). Full smoke: ALL SMOKE TESTS PASSED.
+- Pending (1/2 → 2/2): the pin/unpin UI in the sketchbook (studio.js
+  bookLayout + drawSketchbook, game.js focus/input wiring + cap banner),
+  the Q6 verification record (browser check for the button's focus path),
+  the full 19-gate check, and the Q6 commit. SAVE_VERSION stays 12,
+  GAME_VERSION 1.0.0.
 
 ## Q5 record (2026-10-12)
 

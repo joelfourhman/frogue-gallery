@@ -9235,5 +9235,92 @@ console.log('== stage 113: Q5 (Astra) — the crossing loop (effect zone, stroke
   assert(legacyIn._case === 'migrated' && legacyIn.flags.crossingPainted === false, 'a legacy save loads the latch as unpainted');
 }
 
+console.log('== stage 114: Q6 (Astra) — pinned sketchbook pages (cap, retention, migration) ==');
+{
+  const { STUDIO, normalizeSketchPins, normalizeSketchbook, fileSketch, pinSketchPage, unpinSketchPage, freshSave, migrateSave } = await import('../src/logic.js');
+  assert(STUDIO.pinCap === 2, 'the pin cap is exactly 2');
+  const page = (id, strokes = 3) => ({ id, seed: 1, title: 'T ' + id, biome: 'swamp', result: 'victory', seconds: 100, studies: [],
+    strokes: Array.from({ length: strokes }, (_, i) => [i + 1, i + 1, i + 1, i + 1, 1, 5]) });
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const fresh = freshSave();
+  assert(Array.isArray(fresh.sketchPins) && fresh.sketchPins.length === 0, 'a fresh save starts with no pins');
+
+  // -- normalizeSketchPins truth table --------------------------------------
+  assert(eq(normalizeSketchPins(undefined), []), 'a missing field normalizes to []');
+  assert(eq(normalizeSketchPins('junk'), []), 'a non-array field normalizes to []');
+  assert(eq(normalizeSketchPins(null), []), 'null normalizes to []');
+  assert(eq(normalizeSketchPins(['a', 'b', 'c']), ['a', 'b']), 'more than pinCap ids cap at the FIRST two');
+  assert(eq(normalizeSketchPins(['a', 'a', 'b']), ['a', 'b']), 'duplicate ids are deduped');
+  assert(eq(normalizeSketchPins([123, '', 'x']), ['123', 'x']), 'ids are string-coerced and empties dropped');
+  assert(eq(normalizeSketchPins([null, undefined, 7]), ['7']), 'garbage entries degrade, never crash');
+
+  // -- backward compatibility: no pins = the old last-pageCap behavior ------
+  const ten = Array.from({ length: 10 }, (_, i) => page('p' + i));
+  const noPin = normalizeSketchbook(ten);
+  assert(noPin.length === 8, 'without pins the book keeps the last pageCap pages (old behavior)');
+  assert(noPin[0].id === 'p2', '... and the oldest two are evicted (unchanged eviction)');
+
+  // -- pin retention across twenty filings ----------------------------------
+  const s1 = freshSave();
+  for (const id of ['a', 'b', 'c']) fileSketch(s1, page(id));
+  assert(pinSketchPage(s1, 'a') === true, 'pinning an existing page succeeds');
+  for (let i = 0; i < 17; i++) fileSketch(s1, page('d' + i));   // 20 total filings
+  assert(s1.sketchbook.length === 9, 'the book holds 2 slots of pins + 8 rolling (here 1 pin + 8)');
+  assert(s1.sketchbook.some(p => p.id === 'a'), 'a pinned page survives twenty new expeditions');
+  assert(!s1.sketchbook.some(p => p.id === 'b'), 'the oldest NON-pinned page is evicted first (deterministic)');
+  assert(eq(s1.sketchPins, ['a']), 'the pin list is untouched by filings');
+
+  // -- cap + idempotence + no-ops -------------------------------------------
+  const s2 = freshSave();
+  for (const id of ['x', 'y', 'z']) fileSketch(s2, page(id));
+  assert(pinSketchPage(s2, 'x') === true && pinSketchPage(s2, 'y') === true, 'the first two pins succeed');
+  assert(pinSketchPage(s2, 'z') === false, 'a third pin is refused at the cap');
+  assert(pinSketchPage(s2, 'x') === false, 're-pinning a pinned page is a no-op (idempotent)');
+  assert(pinSketchPage(s2, 'no-such-page') === false, 'a pin for a missing page is a clean no-op');
+  assert(eq(s2.sketchPins, ['x', 'y']), 'the pin list stays exactly at the cap');
+
+  // -- unpin restores the normal retention policy ----------------------------
+  assert(unpinSketchPage(s2, 'x') === true, 'unpinning a pinned page succeeds');
+  assert(unpinSketchPage(s2, 'x') === false, 'unpinning again is a clean no-op');
+  assert(unpinSketchPage(s2, 'nope') === false, 'unpinning an unpinned page is a clean no-op');
+  for (let i = 0; i < 8; i++) fileSketch(s2, page('n' + i));
+  assert(!s2.sketchbook.some(p => p.id === 'x'), 'an unpinned page can be evicted by the rolling window');
+  assert(s2.sketchbook.some(p => p.id === 'y'), 'the still-pinned page survives the same filings');
+
+  // -- re-filing never duplicates (pinned or not) ----------------------------
+  const s3 = freshSave();
+  fileSketch(s3, page('dup')); pinSketchPage(s3, 'dup');
+  fileSketch(s3, page('dup'));
+  assert(s3.sketchbook.filter(p => p.id === 'dup').length === 1, 'repeated filing never duplicates a page');
+  assert(eq(s3.sketchPins, ['dup']), '... and the pin survives the re-file (content replaced, pin kept)');
+
+  // -- migration: pins survive the loader round-trip -------------------------
+  const s4 = freshSave();
+  fileSketch(s4, page('keep1')); fileSketch(s4, page('keep2'));
+  pinSketchPage(s4, 'keep1'); pinSketchPage(s4, 'keep2');
+  const rt = migrateSave(JSON.parse(JSON.stringify(s4)));
+  assert(rt._case === 'migrated', 'a pinned save round-trips cleanly');
+  assert(eq(rt.sketchPins, ['keep1', 'keep2']), 'the pins survive the round-trip (loader path)');
+  assert(rt.sketchbook.length === 2 && rt.sketchbook.some(p => p.id === 'keep1'), 'the pinned pages survive with them');
+  const legacy2 = freshSave(); delete legacy2.sketchPins; fileSketch(legacy2, page('old'));
+  const legIn = migrateSave(JSON.parse(JSON.stringify(legacy2)));
+  assert(legIn._case === 'migrated' && legIn.sketchPins.length === 0, 'a legacy save (no field) loads with no pins');
+  const corrupt = freshSave(); fileSketch(corrupt, page('ok'));
+  corrupt.sketchPins = ['missing-id', 'ok', 'ok', 'extra'];
+  const corrIn = migrateSave(JSON.parse(JSON.stringify(corrupt)));
+  assert(eq(corrIn.sketchPins, ['ok']), 'stale pins are pruned to ids that exist in the book (deduped)');
+  const corrupt2 = freshSave(); fileSketch(corrupt2, page('ok2'));
+  corrupt2.sketchPins = 'garbage';
+  const corrIn2 = migrateSave(JSON.parse(JSON.stringify(corrupt2)));
+  assert(eq(corrIn2.sketchPins, []), 'a garbled pin field loads as [] (refuse-safe)');
+
+  // -- total artwork stays bounded (< 80 KiB at the caps) --------------------
+  const s5 = freshSave();
+  for (let i = 0; i < 8; i++) fileSketch(s5, page('cap' + i, STUDIO.strokeCap));
+  pinSketchPage(s5, 'cap0'); pinSketchPage(s5, 'cap1');
+  const bytes = JSON.stringify(s5.sketchbook).length + JSON.stringify(s5.sketchPins).length;
+  assert(bytes < 80 * 1024, `full-cap artwork is ${bytes} bytes (< 80 KiB)`);
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);
