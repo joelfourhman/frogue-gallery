@@ -1,6 +1,6 @@
 // Living field studies, a bounded brush wake, and the player's own sketchbook.
 // Rule data/validation lives in logic.js. This module has no network or assets.
-import { FIELD_STUDIES, STUDIO, PIGMENTS, PIGMENT_ORDER, studyNode, paintStudy, brushWakeStatus, normalizeStudio, fileSketch } from './logic.js';
+import { FIELD_STUDIES, STUDIO, PIGMENTS, PIGMENT_ORDER, studyNode, paintStudy, brushWakeStatus, normalizeStudio, fileSketch, studiesForBiome, studyRewardEarned } from './logic.js';
 import { SaveSys } from './save.js';
 import { clamp, TAU } from './math.js';
 import { INK, uiButton, centerText, uiFont, paperPanel, paperEnd } from './ui.js';
@@ -12,8 +12,8 @@ export class FieldStudio {
   constructor(game) {
     this.game = game;
     game.save.studio = normalizeStudio(game.save.studio);
-    this.studies = game.runBiome === 'swamp' && !game.challenge && !game.options.wander
-      ? FIELD_STUDIES.map(s => ({ ...s, step: 0, coats: 0, bloom: 0 })) : [];
+    this.studies = studiesForBiome(game.runBiome, { challenge: !!game.challenge, wander: !!game.options.wander })
+      .map(s => ({ ...s, step: 0, coats: 0, bloom: 0 }));
     this.strokes = []; this.seen = 0; this.wakes = []; this.hopId = 0; this.wakeT = 0;
     this.id = `${game.runSeed}-${game.save.stats.expeditions}`;
   }
@@ -63,7 +63,7 @@ export class FieldStudio {
         g.sfx('awaken-bloom');
         g.addBanner(study.name + ' comes alive. A page is saved in your sketchbook.', 4.2, 186);
         if (!wasUnlocked) g.addBanner('Brush-hop learned! Hold paint + Space to leave a colored wake.', 5.5, 224);
-        else if (g.save.studio.completed.length === 3) g.addBanner('Three field studies — your signature now wears a golden lily.', 4.5, 224);
+        else if (studyRewardEarned(g.save.studio.completed, 'swamp')) g.addBanner('Three field studies — your signature now wears a golden lily.', 4.5, 224);
         this.archive('study', study.name);
       }
       break;
@@ -211,7 +211,7 @@ export function bookLayout(g) {
     export: { x: x + 595, y: y + 610, w: 215, h: 38 }, close: { x: x + 850, y: y + 610, w: 180, h: 38 } };
 }
 
-export function drawPostcard(ctx, page, x, y, w, h, completed = 0) {
+export function drawPostcard(ctx, page, x, y, w, h, signed = false) {
   ctx.save(); ctx.translate(x, y); ctx.scale(w / 1000, h / 600);
   ctx.fillStyle = '#efe4cb'; ctx.fillRect(0, 0, 1000, 600);
   const reeds = page.biome !== 'swamp';
@@ -258,8 +258,8 @@ export function drawPostcard(ctx, page, x, y, w, h, completed = 0) {
   ctx.strokeStyle = '#766047'; ctx.lineWidth = 3; ctx.strokeRect(24, 24, 952, 482);
   ctx.font = uiFont(25, { italic: true }); ctx.fillStyle = '#364d43'; ctx.textAlign = 'center'; ctx.fillText(page.title, 500, 545, 920);
   centerText(ctx, `${page.strokes.length} remembered strokes · ${page.studies.length} living ${page.studies.length === 1 ? 'study' : 'studies'} · ${page.result === 'unfinished' ? 'in progress' : page.result}`, 500, 574, uiFont(14), '#645e50');
-  ctx.textAlign = 'right'; ctx.font = uiFont(16, { italic: true }); ctx.fillStyle = completed === 3 ? '#a87825' : '#53654b';
-  ctx.fillText(completed === 3 ? '✦ Frogue' : 'Frogue', 950, 484);
+  ctx.textAlign = 'right'; ctx.font = uiFont(16, { italic: true }); ctx.fillStyle = signed ? '#a87825' : '#53654b';
+  ctx.fillText(signed ? '✦ Frogue' : 'Frogue', 950, 484);
   ctx.restore();
 }
 
@@ -280,7 +280,7 @@ export function drawSketchbook(g, ctx) {
     : ['Find First Light near', 'the start of the swamp.', 'Paint its three circles', 'to learn the brush-hop.'];
   lines.forEach((line, i) => c.fillText(line, b.x + 34, b.y + 350 + i * 25));
   if (page) {
-    drawPostcard(c, page, b.x + 270, b.y + 125, 760, 456, g.save.studio?.completed.length || 0);
+    drawPostcard(c, page, b.x + 270, b.y + 125, 760, 456, studyRewardEarned(g.save.studio?.completed || []));
     centerText(c, `Page ${g._bookIndex + 1} / ${pages.length} · latest eight expeditions kept`, b.x + 650, b.y + 595, uiFont(12), '#665f50');
   } else {
     centerText(c, 'Your first page is still waiting.', b.x + 660, b.y + 300, uiFont(25, { italic: true }), '#53654b');
@@ -297,7 +297,7 @@ export function exportPostcard(g) {
   const page = g.save.sketchbook?.[g._bookIndex];
   if (!page) return;
   const canvas = document.createElement('canvas'); canvas.width = 1600; canvas.height = 960;
-  drawPostcard(canvas.getContext('2d'), page, 0, 0, 1600, 960, g.save.studio?.completed.length || 0);
+  drawPostcard(canvas.getContext('2d'), page, 0, 0, 1600, 960, studyRewardEarned(g.save.studio?.completed || []));
   canvas.toBlob(blob => {
     if (!blob) return;
     const url = URL.createObjectURL(blob), a = document.createElement('a');

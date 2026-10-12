@@ -1,9 +1,31 @@
-# Project state — Astra Vertical Slice complete
+# Project state — Astra Q1 complete (biome/reward-group study registry)
 
-Updated 2026-09-26. The major development pass is complete: implemented,
-stabilized, browser-tested, packaged and documented. The current handoff is
-docs/ASTRA_HANDOFF.md; the exact next expansion task is **Q1** in
-docs/QWEN_BACKLOG.md. No feature work remains pending for this milestone.
+Updated 2026-10-12. **Q1 is implemented and verified**: study definitions are
+now biome/reward-group aware, the swamp gold reward is pinned to an explicit
+required-ID group, and Reeds carries zero living studies until Q2. The exact
+next task is **Q2 — implement Lantern Garden end to end** in
+docs/QWEN_BACKLOG.md.
+
+## Q1 record (2026-10-12)
+
+- `src/logic.js`: each `FIELD_STUDIES` entry now names `biome: 'swamp'` and
+  `group: 'swamp'` (IDs, names, positions, pigment orders, verbs unchanged).
+  New pure exports: `STUDY_GROUPS` (swamp requires exactly
+  first-light + rain-choir + borrowed-sky), `studiesForBiome(biome,
+  {challenge, wander})` (challenge/wander always yield none), and
+  `studyRewardEarned(completed, group)`.
+- `src/studio.js`: the studio instance builds from the pure selector instead
+  of a hardcoded `runBiome === 'swamp'`; the golden-lily banner and the gold
+  postcard seal (drawPostcard's `signed` flag) now use `studyRewardEarned`
+  instead of `completed.length === 3`, so later-registered study IDs (Q2/Q3)
+  cannot break or dilute the swamp reward.
+- `tests/slice.mjs`: 11 new Q1 assertions — definition stability, selector
+  truth table (swamp/reeds/blackReeds/unknown × normal/challenge/wander),
+  reward-group truth table, future-ID immunity, schema-12 partial-progress
+  round-trip, Reeds zero-studies + brush-hop preserved, wander exclusion,
+  default swamp restore.
+- Behavior on the current swamp: unchanged (same three scenes, same reward
+  trigger, same postcard seal). SAVE_VERSION stays 12, GAME_VERSION 1.0.0.
 
 ## What shipped
 
@@ -73,9 +95,13 @@ HTML5 itch.io path and records alternatives.
 
 ## Next session
 
-Implement **Q1 — Make study definitions aware of biomes and reward groups**,
-preserving current swamp behavior before Q2 adds Reeds content. The roadmap
-primarily expands the completed slice. Do not revive historical next actions.
+Implement **Q2 — Implement Lantern Garden end to end** (first optional
+painting discovery in ordinary Reeds): one fixed safe location, green→blue→red
+coats via the existing stroke hook and caps, stems/dew/moths presentation,
+one completion message, persistent completion + postcard memory. Q1's
+`studiesForBiome`/`STUDY_GROUPS` are the extension points: register the new
+definition with `biome: 'reeds'` and a new reward group; keep zero swamp or
+challenge leaks. Do not revive historical next actions.
 
 No known reproducible game-breaking issue remains in exercised paths.
 Human friend feedback, physical controllers, Firefox/Safari and hosted iframe

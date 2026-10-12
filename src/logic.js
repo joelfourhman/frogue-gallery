@@ -46,12 +46,36 @@ export function mosquitoStep(e, dt, player) {
 // Field studio rules: optional finite content; studio.js owns the presentation.
 export const FIELD_STUDIES = [
   { id: 'first-light', name: 'First Light', x: 640, y: 750, motif: 'pond',
-    colors: ['blue', 'green', 'red'], verbs: ['Wake the water', 'Grow the lilies', 'Light the fireflies'] },
+    colors: ['blue', 'green', 'red'], verbs: ['Wake the water', 'Grow the lilies', 'Light the fireflies'],
+    biome: 'swamp', group: 'swamp' },
   { id: 'rain-choir', name: 'The Rain Choir', x: 2300, y: 720, motif: 'rain',
-    colors: ['green', 'blue', 'red'], verbs: ['Raise the reeds', 'Invite the rain', 'Tune the bells'] },
+    colors: ['green', 'blue', 'red'], verbs: ['Raise the reeds', 'Invite the rain', 'Tune the bells'],
+    biome: 'swamp', group: 'swamp' },
   { id: 'borrowed-sky', name: 'A Borrowed Sky', x: 3940, y: 760, motif: 'sky',
-    colors: ['red', 'blue', 'green'], verbs: ['Warm the horizon', 'Reflect the sky', 'Give it wings'] },
+    colors: ['red', 'blue', 'green'], verbs: ['Warm the horizon', 'Reflect the sky', 'Give it wings'],
+    biome: 'swamp', group: 'swamp' },
 ];
+// Q1: explicit completion reward groups. The swamp gold postcard seal and
+// golden-lily banner require EXACTLY these registered IDs — never "three
+// completions" — so studies registered later (Reeds in Q2) cannot break or
+// dilute the swamp reward.
+export const STUDY_GROUPS = Object.freeze({
+  swamp: Object.freeze({ biome: 'swamp', required: ['first-light', 'rain-choir', 'borrowed-sky'] }),
+});
+// Q1: pure selector by biome and mode. Challenge and wander runs never carry
+// living studies; every other mode carries exactly the definitions registered
+// for that biome (Reeds/Black Reeds get zero until Q2/Q3 register their own).
+export function studiesForBiome(biome, { challenge = false, wander = false } = {}) {
+  if (challenge || wander) return [];
+  return FIELD_STUDIES.filter(s => s.biome === biome);
+}
+// Q1: pure reward check — true only when every ID of the group is completed.
+export function studyRewardEarned(completed, group = 'swamp') {
+  const g = STUDY_GROUPS[group];
+  if (!g || !Array.isArray(completed)) return false;
+  const have = new Set(completed);
+  return g.required.every(id => have.has(id));
+}
 export const STUDIO = Object.freeze({ coats: 3, nodeRadius: 25, wakeLife: 1.25, wakeRadius: 27, wakeCap: 24, strokeCap: 180, pageCap: 8 });
 export function studyNode(study, step = study.step || 0) {
   const offsets = [[-62, 16], [0, -28], [62, 16]];

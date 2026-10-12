@@ -1,7 +1,7 @@
 // Integrated with smoke.mjs so these checks use its seeded real-Game harness.
 import { Player } from '../src/player.js';
 import { Input } from '../src/input.js';
-import { freshSave, makeTuning, MOSQUITO_FLIGHT, STUDIO, UMBRA_WYRM, studyNode, paintStudy, normalizeSketchbook, migrateSave, migrateOptions, fileSketch } from '../src/logic.js';
+import { freshSave, makeTuning, MOSQUITO_FLIGHT, STUDIO, UMBRA_WYRM, studyNode, paintStudy, normalizeSketchbook, migrateSave, migrateOptions, fileSketch, FIELD_STUDIES, STUDY_GROUPS, studiesForBiome, studyRewardEarned } from '../src/logic.js';
 import { FieldStudio, bookLayout, drawPostcard } from '../src/studio.js';
 import { spawnEnemy } from '../src/enemies.js';
 
@@ -115,7 +115,7 @@ export function testSlice({ Game, makeCanvas, assert }) {
   assert(g.save.sketchbook.length === STUDIO.pageCap && g.save.sketchbook[0].id === '12', 'sketchbook retains the latest eight expeditions');
   const bad = normalizeSketchbook([{ strokes: [[NaN, 0, 0, 0, 1, 2], [-50, 9000, 10, 20, 99, 900]], seconds: Infinity, title: 'x'.repeat(1000) }]);
   assert(bad[0].strokes.length === 1 && bad[0].strokes[0][0] === 0 && bad[0].strokes[0][4] === 3 && bad[0].seconds === 0 && bad[0].title.length === 64, 'malformed artwork is rejected or clamped before drawing');
-  drawPostcard(g.ctx, page, 0, 0, 1000, 600, 3);
+  drawPostcard(g.ctx, page, 0, 0, 1000, 600, true);
   g._openSketchbook(); const runT = g.runT; const hpBook = g.player.hp;
   g._frame(g.last + 50);
   assert(g.runT === runT && g.player.hp === hpBook, 'sketchbook suspends gameplay');
@@ -126,6 +126,37 @@ export function testSlice({ Game, makeCanvas, assert }) {
   g.challenge = { mode: 'challenge', loadout: [], seed: 123 }; g.studio = new FieldStudio(g);
   assert(g.studio.studies.length === 0 && !g.studio.unlocked, 'daily challenges exclude studio rewards for a fixed competitive loadout');
   g.challenge = null;
+
+  console.log('== Astra Q1: biome/mode-aware study registry and explicit reward groups ==');
+  assert(FIELD_STUDIES.map(s => s.id).join(',') === 'first-light,rain-choir,borrowed-sky', 'the three swamp study IDs stay unchanged');
+  assert(FIELD_STUDIES[0].x === 640 && FIELD_STUDIES[0].y === 750 && FIELD_STUDIES[0].colors.join(',') === 'blue,green,red'
+    && FIELD_STUDIES[1].x === 2300 && FIELD_STUDIES[1].y === 720 && FIELD_STUDIES[1].colors.join(',') === 'green,blue,red'
+    && FIELD_STUDIES[2].x === 3940 && FIELD_STUDIES[2].y === 760 && FIELD_STUDIES[2].colors.join(',') === 'red,blue,green',
+    'the three swamp study scenes keep their exact positions and pigment orders');
+  assert(FIELD_STUDIES.every(s => s.biome === 'swamp' && s.group === 'swamp')
+    && STUDY_GROUPS.swamp.required.join(',') === 'first-light,rain-choir,borrowed-sky',
+    'every registered study names its biome and group, and the swamp group pins its three required IDs');
+  assert(studiesForBiome('swamp').map(s => s.id).join(',') === 'first-light,rain-choir,borrowed-sky', 'the swamp selector returns its three studies in play order');
+  assert(studiesForBiome('reeds').length === 0 && studiesForBiome('blackReeds').length === 0 && studiesForBiome('nowhere').length === 0,
+    'unregistered biomes have zero living studies until Q2 registers theirs');
+  assert(studiesForBiome('swamp', { challenge: true }).length === 0 && studiesForBiome('swamp', { wander: true }).length === 0,
+    'challenge and wander modes never carry living studies');
+  assert(studyRewardEarned(['rain-choir', 'first-light', 'borrowed-sky']) && !studyRewardEarned(['first-light', 'rain-choir'])
+    && !studyRewardEarned([]) && !studyRewardEarned('bogus') && !studyRewardEarned(['first-light'], 'reeds'),
+    'the swamp gold signature requires exactly its three registered IDs');
+  assert(studyRewardEarned(['first-light', 'rain-choir', 'borrowed-sky', 'lantern-garden']),
+    'future registered IDs cannot strip the three swamp flags of their gold signature');
+  const two = freshSave(); two.studio.completed = ['first-light', 'rain-choir'];
+  const rt = migrateSave(JSON.parse(JSON.stringify(two)));
+  assert(rt.studio.completed.join(',') === 'first-light,rain-choir' && rt.saveVersion === 12,
+    'partial swamp progress round-trips through schema 12 unchanged');
+  g.runBiome = 'reeds'; g.studio = new FieldStudio(g);
+  assert(g.studio.studies.length === 0 && g.studio.unlocked,
+    'Reeds has zero living studies until Q2, and earned brush-hop stays available in non-challenge modes');
+  g.runBiome = 'swamp'; g.options.wander = true; g.studio = new FieldStudio(g);
+  assert(g.studio.studies.length === 0, 'wander mode carries no living studies');
+  g.options.wander = false; g.studio = new FieldStudio(g);
+  assert(g.studio.studies.length === 3 && g.studio.studies[0].id === 'first-light', 'swamp keeps its three studies in the default run mode');
   const pad = { axes: [0, 0, 1, 0], buttons: Array.from({ length: 16 }, () => ({ pressed: false })) };
   pad.buttons[7].pressed = true;
   g._gpWrite(pad, 500);
