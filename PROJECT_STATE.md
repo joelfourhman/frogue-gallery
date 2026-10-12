@@ -1,10 +1,37 @@
-# Project state — Astra Q1 complete (biome/reward-group study registry)
+# Project state — Astra Q1+Q2 complete (study registry + Lantern Garden)
 
-Updated 2026-10-12. **Q1 is implemented and verified**: study definitions are
-now biome/reward-group aware, the swamp gold reward is pinned to an explicit
-required-ID group, and Reeds carries zero living studies until Q2. The exact
-next task is **Q2 — implement Lantern Garden end to end** in
-docs/QWEN_BACKLOG.md.
+Updated 2026-10-12. **Q2 is implemented and verified**: the Lantern Garden
+paints end to end in ordinary Reeds (green→blue→red), persists, and exports as
+a postcard memory; Q1's biome/reward-group registry is the extension point it
+plugs into. The exact next task is **Q3 — add Echo Pool and its Reeds border
+reward** in docs/QWEN_BACKLOG.md.
+
+## Q2 record (2026-10-12)
+
+- `src/logic.js`: registered `lantern-garden` in `FIELD_STUDIES`
+  (`biome: 'reeds'`, `group: 'reeds'`, colors green→blue→red, fixed at
+  x=3300 y=780 — on the banks above the flood floor 900, ~460 px from the
+  nearest rest stone, ~1800 px short of the Silt Wyrm arena x>=5100) and added
+  the `reeds` reward group (required: exactly `lantern-garden`).
+- `src/studio.js`: new 'lantern' motif in `drawLivingStudy` — inert stems,
+  green leaves, blue dew-lights, red orbiting moths (bounded: 6+6+8 elements,
+  no allocations). All other Q1 plumbing (selector, stroke hook, archive,
+  postcard memory, sketchbook list) picked it up with no new code paths.
+- Tests: 9 new slice assertions (fixed spot + pigment order, wrong-pigment
+  rejection, 3-stage paint progression through real `trySwipe` strokes,
+  completion persistence + reeds reward group, reeds postcard page memory,
+  round-trip, Reeds selector truth table incl. challenge/wander exclusions)
+  and a real-browser vertical-slice stage: a fresh Reeds expedition
+  (`_beginExpedition(false, { reeds: true })`) with real strokes, no god mode.
+- Visual evidence: the four motif stages are pairwise pixel-distinct in
+  headless Chromium (sampled signatures differ; nonzero 9216/9247/9271/9271);
+  the journey screenshot is tests/.out/astra/10-lantern-garden.png.
+- Acceptance: painting changes all three stages (verified), completion
+  persists (save + reload asserted), the exported postcard shows the garden
+  memory (journey asserts page.studies includes lantern-garden), no swamp or
+  challenge leak (selector tests), Reeds pacing untouched (probe in band).
+  SAVE_VERSION stays 12, GAME_VERSION 1.0.0. Full check --browser: all 19
+  gates pass; dist rebuilt (15 files, 927 KiB).
 
 ## Q1 record (2026-10-12)
 
@@ -95,13 +122,14 @@ HTML5 itch.io path and records alternatives.
 
 ## Next session
 
-Implement **Q2 — Implement Lantern Garden end to end** (first optional
-painting discovery in ordinary Reeds): one fixed safe location, green→blue→red
-coats via the existing stroke hook and caps, stems/dew/moths presentation,
-one completion message, persistent completion + postcard memory. Q1's
-`studiesForBiome`/`STUDY_GROUPS` are the extension points: register the new
-definition with `biome: 'reeds'` and a new reward group; keep zero swamp or
-challenge leaks. Do not revive historical next actions.
+Implement **Q3 — add Echo Pool and its Reeds border reward** (second distinct
+Reeds subject: blue→red→green ripples/stars/birds at another safe fixed
+location). Both Reeds studies award a cosmetic border (needs exactly the
+reeds group; survives import/reload) — no combat stat change. Register the
+new definition with `biome: 'reeds'` in `FIELD_STUDIES`, extend the
+`reeds` required-ID group in `STUDY_GROUPS` (or add its own group), and add a
+pure border-eval function + postcard presentation. Keep the swamp gold
+signature working. Do not revive historical next actions.
 
 No known reproducible game-breaking issue remains in exercised paths.
 Human friend feedback, physical controllers, Firefox/Safari and hosted iframe

@@ -109,6 +109,35 @@ try {
   }
   report.push('Save reload and 640/960/1920 viewport bounds verified');
 
+  // Q2: The Lantern Garden — a real Reeds expedition with real paint strokes
+  // at its fixed banks spot (no god mode; the study is optional content).
+  const garden = await page.evaluate(async () => {
+    const g = window.__game, { studyNode } = await import('./src/logic.js');
+    g._closeSketchbook();
+    g.save.flags.reedsUnlocked = true;
+    g._beginExpedition(false, { reeds: true });
+    const s = g.studio.studies.find(st => st.id === 'lantern-garden');
+    if (!s) throw new Error('the Lantern Garden is missing from a normal Reeds expedition');
+    for (let k = 0; k < 3; k++) {
+      const n = studyNode(s);
+      g.player.x = n.x - 40; g.player.y = n.y; g.player.pigment = n.pigment; g.player.aimA = 0;
+      for (let j = 0; j < 3; j++) { g.paint.swipeCd = 0; g.player.swipeT = 0; g.paint.trySwipe([]); }
+    }
+    g.banners = []; g.cam.x = g.player.x; g.cam.y = g.player.y; g._drawAll();
+    const p = g.save.sketchbook[g.save.sketchbook.length - 1];
+    return { step: s.step, x: s.x, y: s.y, completed: g.save.studio.completed,
+      page: p ? { biome: p.biome, studies: p.studies } : null };
+  });
+  assert.equal(garden.step, 3);
+  assert.equal(garden.x, 3300); assert.equal(garden.y, 780);
+  assert(garden.completed.includes('lantern-garden') && garden.completed.includes('first-light'));
+  assert(garden.page && garden.page.biome === 'reeds' && garden.page.studies.includes('lantern-garden'));
+  report.push({ lanternGarden: garden });
+  await page.keyboard.press('j'); await tick(1);
+  await page.evaluate(() => { const g = window.__game; g._bookIndex = g.save.sketchbook.length - 1; g._drawAll(); });
+  await page.screenshot({ path: path.join(out, '10-lantern-garden.png') });
+  await page.evaluate(() => window.__game._closeSketchbook());
+
   // Exercise every lesson through the real paint/update path. Reset this
   // isolated browser save, never the user's profile. No invulnerability cheat.
   await page.setViewportSize({ width: 1280, height: 820 });

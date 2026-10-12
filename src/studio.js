@@ -170,7 +170,29 @@ export function drawLivingStudy(ctx, s, now) {
     ctx.beginPath(); ctx.ellipse(x, y + 10, 8 + ((now * 8 + i * 3) % 14), 3, 0, 0, TAU); ctx.stroke();
   }
   ctx.globalAlpha = 1;
-  if (s.motif === 'sky') {
+  if (s.motif === 'lantern') {
+    // Q2: The Lantern Garden — stems (green) lean up out of the dark water,
+    // blue strings dew-lights that glow between them, and red wakes the moths
+    // that orbit the glow. Bounded: 6 stems + 6 dew + 8 moths, no allocations.
+    ctx.strokeStyle = green ? '#4e7d52' : '#5c6156'; ctx.lineWidth = 3;
+    for (let i = 0; i < 6; i++) {
+      const x = -90 + i * 36, top = -58 + Math.sin(i * 2.3) * 10, sway = Math.sin(now * 0.8 + i) * 6;
+      ctx.beginPath(); ctx.moveTo(x, 30); ctx.quadraticCurveTo(x - 10, (30 + top) / 2, x + sway, top); ctx.stroke();
+      if (green) { ctx.fillStyle = '#5b8952'; ctx.beginPath(); ctx.ellipse(x + 5 + sway, top - 4, 9, 4, -0.5, 0, TAU); ctx.fill(); }
+    }
+    if (blue) for (let i = 0; i < 6; i++) {
+      const x = -90 + i * 36, y = -50 + Math.sin(i * 2.3) * 10;
+      ctx.fillStyle = '#bfe3f0'; ctx.globalAlpha = 0.7 + Math.sin(now * 2 + i * 1.7) * 0.3;
+      ctx.beginPath(); ctx.arc(x + Math.sin(now * 0.8 + i) * 6, y + 10, 3.4, 0, TAU); ctx.fill();
+    }
+    if (red) for (let i = 0; i < 8; i++) {
+      const a = now * 0.9 + i * 0.785, r = 46 + Math.sin(now * 1.6 + i * 2) * 22;
+      const x = Math.cos(a) * r, y = -8 + Math.sin(a) * r * 0.55;
+      ctx.fillStyle = '#f6e7c1'; ctx.globalAlpha = 0.5 + Math.sin(now * 3 + i) * 0.3;
+      ctx.beginPath(); ctx.ellipse(x, y, 4.5, 2.6, a, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  } else if (s.motif === 'sky') {
     ctx.fillStyle = red ? '#e6aa60' : '#b8b7a3';
     ctx.beginPath(); ctx.arc(35, -30, 30, 0, TAU); ctx.fill();
     if (green) for (let i = 0; i < 6; i++) {

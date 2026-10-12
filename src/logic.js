@@ -54,6 +54,12 @@ export const FIELD_STUDIES = [
   { id: 'borrowed-sky', name: 'A Borrowed Sky', x: 3940, y: 760, motif: 'sky',
     colors: ['red', 'blue', 'green'], verbs: ['Warm the horizon', 'Reflect the sky', 'Give it wings'],
     biome: 'swamp', group: 'swamp' },
+  // Q2: the first REEDS study. A fixed, optional discovery mid-descent: on the
+  // banks (y < REEDS_FLOOD_FLOOR 900), clear of every rest stone (nearest are
+  // ~460 px away) and ~1800 px short of the Silt Wyrm arena (x >= 5100).
+  { id: 'lantern-garden', name: 'The Lantern Garden', x: 3300, y: 780, motif: 'lantern',
+    colors: ['green', 'blue', 'red'], verbs: ['Grow the stems', 'String the dew', 'Wake the moths'],
+    biome: 'reeds', group: 'reeds' },
 ];
 // Q1: explicit completion reward groups. The swamp gold postcard seal and
 // golden-lily banner require EXACTLY these registered IDs — never "three
@@ -61,6 +67,7 @@ export const FIELD_STUDIES = [
 // dilute the swamp reward.
 export const STUDY_GROUPS = Object.freeze({
   swamp: Object.freeze({ biome: 'swamp', required: ['first-light', 'rain-choir', 'borrowed-sky'] }),
+  reeds: Object.freeze({ biome: 'reeds', required: ['lantern-garden'] }),
 });
 // Q1: pure selector by biome and mode. Challenge and wander runs never carry
 // living studies; every other mode carries exactly the definitions registered

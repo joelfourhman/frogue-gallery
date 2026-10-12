@@ -128,17 +128,18 @@ export function testSlice({ Game, makeCanvas, assert }) {
   g.challenge = null;
 
   console.log('== Astra Q1: biome/mode-aware study registry and explicit reward groups ==');
-  assert(FIELD_STUDIES.map(s => s.id).join(',') === 'first-light,rain-choir,borrowed-sky', 'the three swamp study IDs stay unchanged');
+  assert(FIELD_STUDIES.filter(s => s.biome === 'swamp').map(s => s.id).join(',') === 'first-light,rain-choir,borrowed-sky', 'the three swamp study IDs stay unchanged');
   assert(FIELD_STUDIES[0].x === 640 && FIELD_STUDIES[0].y === 750 && FIELD_STUDIES[0].colors.join(',') === 'blue,green,red'
     && FIELD_STUDIES[1].x === 2300 && FIELD_STUDIES[1].y === 720 && FIELD_STUDIES[1].colors.join(',') === 'green,blue,red'
     && FIELD_STUDIES[2].x === 3940 && FIELD_STUDIES[2].y === 760 && FIELD_STUDIES[2].colors.join(',') === 'red,blue,green',
     'the three swamp study scenes keep their exact positions and pigment orders');
-  assert(FIELD_STUDIES.every(s => s.biome === 'swamp' && s.group === 'swamp')
+  assert(FIELD_STUDIES.every(s => typeof s.biome === 'string' && s.group === s.biome)
+    && FIELD_STUDIES.filter(s => s.biome === 'swamp').length === 3
     && STUDY_GROUPS.swamp.required.join(',') === 'first-light,rain-choir,borrowed-sky',
     'every registered study names its biome and group, and the swamp group pins its three required IDs');
   assert(studiesForBiome('swamp').map(s => s.id).join(',') === 'first-light,rain-choir,borrowed-sky', 'the swamp selector returns its three studies in play order');
-  assert(studiesForBiome('reeds').length === 0 && studiesForBiome('blackReeds').length === 0 && studiesForBiome('nowhere').length === 0,
-    'unregistered biomes have zero living studies until Q2 registers theirs');
+  assert(studiesForBiome('blackReeds').length === 0 && studiesForBiome('nowhere').length === 0,
+    'biomes without registered studies have zero living studies');
   assert(studiesForBiome('swamp', { challenge: true }).length === 0 && studiesForBiome('swamp', { wander: true }).length === 0,
     'challenge and wander modes never carry living studies');
   assert(studyRewardEarned(['rain-choir', 'first-light', 'borrowed-sky']) && !studyRewardEarned(['first-light', 'rain-choir'])
@@ -146,17 +147,47 @@ export function testSlice({ Game, makeCanvas, assert }) {
     'the swamp gold signature requires exactly its three registered IDs');
   assert(studyRewardEarned(['first-light', 'rain-choir', 'borrowed-sky', 'lantern-garden']),
     'future registered IDs cannot strip the three swamp flags of their gold signature');
+  assert(studyRewardEarned(['lantern-garden'], 'reeds') && !studyRewardEarned(['first-light'], 'reeds')
+    && !studyRewardEarned([], 'reeds') && STUDY_GROUPS.reeds.required.join(',') === 'lantern-garden',
+    'the reeds reward group is earned only by its own registered ID');
   const two = freshSave(); two.studio.completed = ['first-light', 'rain-choir'];
   const rt = migrateSave(JSON.parse(JSON.stringify(two)));
   assert(rt.studio.completed.join(',') === 'first-light,rain-choir' && rt.saveVersion === 12,
     'partial swamp progress round-trips through schema 12 unchanged');
   g.runBiome = 'reeds'; g.studio = new FieldStudio(g);
-  assert(g.studio.studies.length === 0 && g.studio.unlocked,
-    'Reeds has zero living studies until Q2, and earned brush-hop stays available in non-challenge modes');
-  g.runBiome = 'swamp'; g.options.wander = true; g.studio = new FieldStudio(g);
-  assert(g.studio.studies.length === 0, 'wander mode carries no living studies');
-  g.options.wander = false; g.studio = new FieldStudio(g);
+  assert(g.studio.studies.length === 1 && g.studio.studies[0].id === 'lantern-garden' && g.studio.unlocked,
+    'a normal Reeds run carries the Lantern Garden, and earned brush-hop stays available in non-challenge modes');
+  g.challenge = { mode: 'challenge', loadout: [], seed: 123 }; g.studio = new FieldStudio(g);
+  assert(g.studio.studies.length === 0, 'challenge Reeds runs never carry living studies');
+  g.challenge = null; g.options.wander = true; g.studio = new FieldStudio(g);
+  assert(g.studio.studies.length === 0, 'wander Reeds runs never carry living studies');
+  g.options.wander = false; g.runBiome = 'swamp'; g.studio = new FieldStudio(g);
   assert(g.studio.studies.length === 3 && g.studio.studies[0].id === 'first-light', 'swamp keeps its three studies in the default run mode');
+
+  console.log('== Astra Q2: the Lantern Garden paints end to end in the Reeds ==');
+  g.runBiome = 'reeds'; g.studio = new FieldStudio(g);
+  const garden = g.studio.studies[0];
+  const gn = studyNode(garden);
+  assert(garden.x === 3300 && garden.y === 780 && garden.colors.join(',') === 'green,blue,red',
+    'the garden sits at its fixed banks spot asking green, then blue, then red');
+  assert(!paintStudy(garden, { x: gn.x - 40, y: gn.y, a: 0, range: 70, pigment: 'red', kind: 'swipe' }) && garden.coats === 0,
+    'a wrong-pigment stroke cannot start the garden');
+  for (let stage = 0; stage < 3; stage++) {
+    const target = studyNode(garden);
+    g.player.x = target.x - 40; g.player.y = target.y; g.player.aimA = 0; g.player.pigment = target.pigment;
+    for (let coat = 0; coat < STUDIO.coats; coat++) { g.player.swipeT = 0; g.paint.swipeCd = 0; g.paint.trySwipe([]); }
+    assert(garden.step === stage + 1, 'actual paint strokes transform the Lantern Garden stage ' + (stage + 1));
+  }
+  assert(g.save.studio.completed.includes('lantern-garden') && studyRewardEarned(g.save.studio.completed, 'reeds'),
+    'the garden completion persists and earns the reeds reward group');
+  const gpage = g.save.sketchbook[g.save.sketchbook.length - 1];
+  assert(gpage.biome === 'reeds' && gpage.studies.includes('lantern-garden'),
+    'the archived reeds page keeps the garden as its living memory');
+  drawPostcard(g.ctx, gpage, 0, 0, 1000, 600, false);
+  const rt2 = migrateSave(JSON.parse(JSON.stringify(g.save)));
+  assert(rt2.studio.completed.includes('lantern-garden') && rt2.sketchbook.some(p => p.studies.includes('lantern-garden')),
+    'garden completion and its postcard memory survive a save round-trip');
+  g.runBiome = 'swamp';
   const pad = { axes: [0, 0, 1, 0], buttons: Array.from({ length: 16 }, () => ({ pressed: false })) };
   pad.buttons[7].pressed = true;
   g._gpWrite(pad, 500);
