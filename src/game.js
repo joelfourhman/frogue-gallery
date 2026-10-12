@@ -11,7 +11,7 @@ import { FieldStudio, sketchbookButton, bookLayout, drawSketchbook, exportPostca
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste, BOSS_IDS, galleryCompletion, galleryCompletionProgress, capstoneLevel, galleryBonusTotal, GAME_VERSION, CROSSING, strokeTouchesCrossing, inCrossingZone } from './logic.js';
+import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste, BOSS_IDS, galleryCompletion, galleryCompletionProgress, capstoneLevel, galleryBonusTotal, GAME_VERSION, CROSSING, strokeTouchesCrossing, inCrossingZone, pinSketchPage, unpinSketchPage } from './logic.js';
 import { UI, uiFont, INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
 
 // A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
@@ -465,13 +465,32 @@ export class Game {
     const input = this.input, b = bookLayout(this), n = (this.save.sketchbook || []).length;
     if (input.pressed('j') || input.pressed('escape')) { this._closeSketchbook(); return; }
     let action = input.pressed('arrowleft') ? 'prev' : input.pressed('arrowright') ? 'next' : null;
-    if (input.mouse.lPressed) for (const key of ['prev', 'next', 'export', 'close']) {
+    if (input.mouse.lPressed) for (const key of ['prev', 'next', 'export', 'close', 'pin']) {
       const r = b[key]; if (this._mouseIn(r.x, r.y, r.w, r.h)) action = key;
     }
+    if (input.pressed('x')) action = 'pin';   // Q6: the pin toggle (a free key while the book is open)
     if (action === 'prev') this._bookIndex = Math.max(0, this._bookIndex - 1);
     if (action === 'next') this._bookIndex = Math.max(0, Math.min(n - 1, this._bookIndex + 1));
     if (action === 'export') exportPostcard(this);
     if (action === 'close') this._closeSketchbook();
+    if (action === 'pin') {
+      // Q6: pin/unpin the open page. The pure rules (cap of 2, idempotence,
+      // retention) live in logic.js; this is the interaction layer — the
+      // toggle persists immediately so a pinned page survives any reload.
+      const pg = (this.save.sketchbook || [])[this._bookIndex];
+      if (!pg) return;
+      if ((this.save.sketchPins || []).includes(pg.id)) {
+        unpinSketchPage(this.save, pg.id);
+        SaveSys.save(this.save); this.sfx('ui');
+        this.addBanner('Unpinned — this page joins the rolling eight again.', 3.6, 150);
+      } else if (pinSketchPage(this.save, pg.id)) {
+        SaveSys.save(this.save); this.sfx('ui');
+        this.addBanner('Pinned — this page will never age out of the sketchbook.', 3.6, 150);
+      } else {
+        this.sfx('ui');
+        this.addBanner('Two pages are pinned — unpin one first.', 3.6, 150);
+      }
+    }
   }
 
   start() {
@@ -646,7 +665,7 @@ export class Game {
   // of precedence (an open overlay owns the focus).
   _gpMenuList() {
     const g = this;
-    if (g._bookOpen) { const b = bookLayout(g); return { id: 'sketchbook', list: [b.prev, b.next, b.export, b.close] }; }
+    if (g._bookOpen) { const b = bookLayout(g); const pg = (g.save.sketchbook || [])[g._bookIndex]; return { id: 'sketchbook', list: [b.prev, b.next, b.export, b.close, ...(pg ? [b.pin] : [])] }; }
     if (g.state === 'title') {
       if (g.optionsOpen) {
         const o = g._optionsLayout();

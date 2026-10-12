@@ -1,14 +1,17 @@
 # Project state — Astra Q1–Q5 complete (registry, studies, painted crossing loop)
 
-Updated 2026-10-12. **Q6 is IN FLIGHT** (pure core committed, UI pending):
-pinned sketchbook pages — at most 2 pinned page ids that never age out of the
-rolling 8-page window. The pure retention rules, pin/unpin actions, and the
-save carry are implemented and verified (smoke stage 114, 35 assertions
-green; no-pin behavior byte-identical to the old eviction). **Exact next
-action: the sketchbook UI** — a pin/unpin button in the book's focus list
-(mouse + keyboard, cap banner when 2 pins are set), then the Q6 record +
-full gate + commit. The crossing loop (Q5) remains complete and verified
-above; the next backlog task after Q6 is Q7 (docs/QWEN_BACKLOG.md).
+Updated 2026-10-12. **Q6 is nearly complete** (core + UI both committed; the UI
+smoke stage + full gate are still to run): pinned sketchbook pages — at most 2
+pinned page ids that never age out of the rolling 8-page window. The pure
+retention rules (stage 114, 35 assertions green) AND the UI are implemented:
+a pin/unpin button above the postcard (mouse + X key + gamepad focus list), a
+brass pin glyph + PINNED caption on pinned pages, banners on pin/unpin/cap,
+immediate persistence. Full smoke green after the wiring. **Exact next action:
+smoke stage 115** — UI assertions driving the real Game headlessly (focus-list
+membership, X-key toggle, mouse-click toggle, cap banner, localStorage
+persistence) — then the full 19-gate check, then the Q6 closing commit. The
+crossing loop (Q5) remains complete and verified above; the next backlog task
+after Q6 is Q7 (docs/QWEN_BACKLOG.md).
 
 ## Q6 record (2026-10-12, in flight)
 
@@ -29,11 +32,22 @@ above; the next backlog task after Q6 is Q7 (docs/QWEN_BACKLOG.md).
   re-filing never duplicates (pinned or not), migration round-trip keeps
   pins, legacy load → [], garbled/stale imports degrade safely, full-cap
   artwork 29,152 bytes < 80 KiB). Full smoke: ALL SMOKE TESTS PASSED.
-- Pending (1/2 → 2/2): the pin/unpin UI in the sketchbook (studio.js
-  bookLayout + drawSketchbook, game.js focus/input wiring + cap banner),
-  the Q6 verification record (browser check for the button's focus path),
-  the full 19-gate check, and the Q6 commit. SAVE_VERSION stays 12,
-  GAME_VERSION 1.0.0.
+- **Done this session (committed):** the UI — `bookLayout().pin` (154×34,
+  top-right above the postcard); the button-row entry ('Pin page · X' /
+  'Unpin page · X', only drawn when a page is open); the brass pin glyph +
+  '· PINNED' caption on pinned pages; `_updateSketchbook` wiring (X key —
+  verified free — + mouse rect + the dispatch with pin/unpin/cap banners and
+  `SaveSys.save` on every toggle); and the sketchbook gamepad focus list now
+  includes the pin rect when a page is open. Smoke: ALL SMOKE TESTS PASSED
+  after the wiring.
+- **Remaining (→ complete):** smoke stage 115 driving the real Game
+  headlessly — `g._openSketchbook()`, assert the focus list contains the pin
+  rect, `g.input.kb.add('x')` + `g._updateSketchbook()` toggles the pin and
+  the (stub) localStorage save carries `sketchPins`, the 3rd pin is refused
+  with the 'Two pages are pinned' banner, a mouse `lPressed` on the pin rect
+  toggles too — plus an optional frame scene of the pinned book (T0
+  discipline), the full 19-gate check (foreground), and the Q6 closing
+  commit. SAVE_VERSION stays 12, GAME_VERSION 1.0.0.
 
 ## Q5 record (2026-10-12)
 

@@ -262,7 +262,11 @@ export function bookLayout(g) {
   const x = (g.cw - 1080) / 2, y = (g.ch - 680) / 2;
   return { x, y, w: 1080, h: 680,
     prev: { x: x + 280, y: y + 610, w: 135, h: 38 }, next: { x: x + 435, y: y + 610, w: 135, h: 38 },
-    export: { x: x + 595, y: y + 610, w: 215, h: 38 }, close: { x: x + 850, y: y + 610, w: 180, h: 38 } };
+    export: { x: x + 595, y: y + 610, w: 215, h: 38 }, close: { x: x + 850, y: y + 610, w: 180, h: 38 },
+    // Q6: the pin toggle — above the postcard's top-right corner (it acts on
+    // the open page, so it is only drawn/enabled when a page exists).
+    pin: { x: x + 876, y: y + 82, w: 154, h: 34 }
+  };
 }
 
 export function drawPostcard(ctx, page, x, y, w, h, signed = false, bordered = false, stamped = false) {
@@ -367,14 +371,29 @@ export function drawSketchbook(g, ctx) {
     ? ['Brush-hop learned', 'Hold paint + Space.', 'Red burns pursuers.', 'Blue interrupts flies.', 'Green roots ground bugs.']
     : ['Find First Light near', 'the start of the swamp.', 'Paint its three circles', 'to learn the brush-hop.'];
   lines.forEach((line, i) => c.fillText(line, b.x + 34, b.y + 350 + i * 25));
+  const pinned = !!page && (g.save.sketchPins || []).includes(page.id);
   if (page) {
     drawPostcard(c, page, b.x + 270, b.y + 125, 760, 456, studyRewardEarned(g.save.studio?.completed || [], 'swamp'), studyRewardEarned(g.save.studio?.completed || [], 'reeds'), !!(g.save.flags && g.save.flags.crossingPainted));
-    centerText(c, `Page ${g._bookIndex + 1} / ${pages.length} · latest eight expeditions kept`, b.x + 650, b.y + 595, uiFont(12), '#665f50');
+    // Q6: a pinned page gets a little brass pin stuck into the postcard's
+    // top-left corner + a word in the caption — unmistakable that this page
+    // will never age out of the book.
+    if (pinned) {
+      c.save(); c.translate(b.x + 292, b.y + 112);
+      c.strokeStyle = '#a87825'; c.lineWidth = 2.5; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(-7, 9); c.lineTo(2, -5); c.stroke();       // pin body
+      c.beginPath(); c.arc(3.5, -8, 4.5, 0, TAU); c.stroke();           // pin head
+      c.fillStyle = '#a87825';
+      c.beginPath(); c.arc(-7, 9, 2.4, 0, TAU); c.fill();               // where it's stuck
+      c.restore();
+    }
+    centerText(c, `Page ${g._bookIndex + 1} / ${pages.length} · latest eight expeditions kept` + (pinned ? ' · PINNED' : ''), b.x + 650, b.y + 595, uiFont(12), '#665f50');
   } else {
     centerText(c, 'Your first page is still waiting.', b.x + 660, b.y + 300, uiFont(25, { italic: true }), '#53654b');
     centerText(c, 'Paint a field study or finish an expedition to keep your strokes.', b.x + 660, b.y + 338, uiFont(15), '#665f50');
   }
-  for (const [key, label] of [['prev', '← Previous'], ['next', 'Next →'], ['export', 'Save postcard · PNG'], ['close', 'Close · J / Esc']]) {
+  const bookBtns = [['prev', '← Previous'], ['next', 'Next →'], ['export', 'Save postcard · PNG'], ['close', 'Close · J / Esc']];
+  if (page) bookBtns.push(['pin', pinned ? 'Unpin page · X' : 'Pin page · X']);   // Q6
+  for (const [key, label] of bookBtns) {
     const r = b[key], disabled = key !== 'close' && (!page || (key === 'prev' && g._bookIndex === 0) || (key === 'next' && g._bookIndex >= pages.length - 1));
     uiButton(ctx, r.x, r.y, r.w, r.h, label, g._mouseIn(r.x, r.y, r.w, r.h), disabled, { seed: 92, size: 14 });
   }
