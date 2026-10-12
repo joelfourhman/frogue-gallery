@@ -1,11 +1,49 @@
-# Project state — Astra Q1–Q3 complete (registry, Lantern Garden, Echo Pool)
+# Project state — Astra Q1–Q4 complete (registry, studies, painted crossing)
 
-Updated 2026-10-12. **Q3 is implemented and verified**: the Echo Pool paints
-end to end in ordinary Reeds (blue→red→green), and completing BOTH reeds
-studies earns the cosmetic woven-reed postcard border (exactly-once banner,
-order-independent, survives migration). Milestone 1's study content is now
-complete. The exact next task is **Q4 — model the optional painted crossing**
-in docs/QWEN_BACKLOG.md.
+Updated 2026-10-12. **Q4 is implemented and verified**: the painted crossing
+is a pure state machine (green crossing / blue current / red bramble) with
+bounded collision data rebuilt only on transitions, the main corridor open in
+every state, and spawn validation respecting the new solid. Milestone 2's
+collision-safe foundation is in. The exact next task is **Q5 — build and
+illustrate one complete side loop** in docs/QWEN_BACKLOG.md.
+
+## Q4 record (2026-10-12)
+
+- `src/logic.js`: pure crossing model — `CROSSING` (fixed mouth at x=2300
+  y=460, north of the central corridor, above the Rain Choir; 4 bramble
+  blobs, r=46, 70px pitch → continuous ~300px wall), `CROSSING_STATES`,
+  `crossingPigmentState` (green→crossing, blue→current, red→bramble,
+  anything else a no-op), `crossingTransition` (idempotent by construction),
+  `crossingPassable` (only 'unpainted' blocks), `crossingSpeedFactor`
+  (current = 0.72, the flood factor), `crossingDamageOnEntry` (bramble = 3),
+  and `crossingSolids` (bounded: 4 circles ONLY while unpainted — every
+  painted state is open, so no state can trap the frog and the main
+  corridor is never touched).
+- `src/world.js`: `build()` seeds `crossingState = 'unpainted'` +
+  `crossingSolids` (fixed, seed-independent; present in every variant
+  including the Reeds — the deeper painting keeps the same mouth).
+  `collideCircle` pushes out of the wall (the enemy-spawn validation path —
+  a spawn placed in the wall is cleared every frame). `paintCrossing(pigment)`
+  returns the new state on a real transition, null on a no-op, and rebuilds
+  the collision data ONLY on real transitions. `isValidSpawn(x, y, r)` is a
+  pure predicate (obstacles + wall; corridor reeds excluded on purpose).
+- Tests: new smoke stage 112 (37 assertions) — pure transition truth table
+  (incl. idempotence + dry/null no-ops), passability/return-path, speed and
+  damage values, the exact fixed wall geometry, both ends of the crossing
+  (mouth blocked while unpainted, corridor and detour anchors never pushed),
+  spawn validation (valid on the corridor, invalid in the wall, enemy
+  pushed out), transition-only rebuild (green→null on repeat,
+  green→current→bramble), restart cleanup (fresh world unpainted + wall
+  rebuilt), and the Reeds variant keeping the fixed geometry.
+- Acceptance: every state has a valid return path (painted states carry no
+  solids), repeated painting is idempotent (no rebuild), enemy spawn
+  validation respects the new solid (per-frame collideCircle + isValidSpawn),
+  main passage open in every state (asserted at the corridor anchor; all nine
+  pacing probes in band — the bot is never walled). SAVE_VERSION stays 12,
+  GAME_VERSION 1.0.0. Full check --browser: all 19 gates pass.
+- Q4 intentionally ships WITHOUT presentation or the stroke hook (those are
+  Q5: the detour, the silhouettes, the postcard stamp, and the real paint
+  actions in game.js).
 
 ## Q3 record (2026-10-12)
 
@@ -158,12 +196,16 @@ HTML5 itch.io path and records alternatives.
 
 ## Next session
 
-Implement **Q4 — model the optional painted crossing** (pure state
-transitions for green crossing / blue current / red bramble in logic.js +
-world.js): keep the main corridor open in every state, rebuild bounded
-collision data on transitions only, validate enemy spawns against the new
-solids. Milestone 1 is now COMPLETE (Q1–Q3) — Q4 is Milestone 2's
-collision-safe foundation. Do not revive historical next actions.
+Implement **Q5 — build and illustrate one complete side loop** (Milestone 2):
+one small detour near the Rain Choir with visible interactable silhouettes and
+a postcard stamp. Wire the real paint actions to `world.paintCrossing`
+(green crossing / blue current / red bramble), apply the current slowdown and
+bramble entry damage in game.js, draw the wall and its painted states in
+world.js. No mandatory route lock or new economy. Acceptance: a player can
+enter, complete, leave and revisit with normal input; hopping at corners
+cannot trap the frog; all partial states render. Tests: browser journey for
+all three actions and return, capped effects, frame evidence and the full
+pacing gate. Do not revive historical next actions.
 
 No known reproducible game-breaking issue remains in exercised paths.
 Human friend feedback, physical controllers, Firefox/Safari and hosted iframe

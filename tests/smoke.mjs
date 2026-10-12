@@ -9120,5 +9120,72 @@ console.log('== stage 111: v1.9 T3 L3 — enemy liveness (seeded, presentation-o
 
 const { testSlice } = await import('./slice.mjs');
 testSlice({ Game, makeCanvas, assert });
+console.log('== stage 112: Q4 (Astra) — the painted crossing (pure state machine, bounded collision, spawn validation) ==');
+{
+  const { CROSSING, crossingTransition, crossingPassable, crossingSpeedFactor, crossingDamageOnEntry, crossingSolids } = await import('../src/logic.js');
+  const { World } = await import('../src/world.js');
+  const { spawnEnemy } = await import('../src/enemies.js');
+  function rng() { let a = 246813579; return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ (t ^ t >>> 14); return ((t ^ t >>> 15) >>> 0) / 4294967296; }; }
+
+  // -- the pure state machine ------------------------------------------------
+  assert(crossingTransition('unpainted', 'green') === 'crossing', 'green paints the safe crossing');
+  assert(crossingTransition('unpainted', 'blue') === 'current', 'blue paints the current');
+  assert(crossingTransition('unpainted', 'red') === 'bramble', 'red paints the bramble');
+  assert(crossingTransition('unpainted', 'dry') === 'unpainted', 'dry/blank paint is a no-op');
+  assert(crossingTransition('unpainted', null) === 'unpainted', 'null pigment is a no-op');
+  assert(crossingTransition('crossing', 'green') === 'crossing', 'repeated green is idempotent');
+  assert(crossingTransition('current', 'red') === 'bramble', 'repainting crosses between states');
+  assert(crossingPassable('unpainted') === false, 'the wall blocks while unpainted');
+  assert(crossingPassable('crossing') && crossingPassable('current') && crossingPassable('bramble'), 'every painted state is passable (a valid return path)');
+  assert(crossingSpeedFactor('current') === CROSSING.currentFactor, 'the current slows (the flood factor)');
+  assert(crossingSpeedFactor('crossing') === 1, 'no slowdown outside the current');
+  assert(crossingDamageOnEntry('bramble') === CROSSING.brambleDamage, 'bramble hurts on entry');
+  assert(crossingDamageOnEntry('current') === 0, 'the current does not hurt');
+  // the bounded collision data
+  const wall = crossingSolids('unpainted');
+  assert(wall.length === 4, 'bounded: exactly 4 bramble blobs');
+  assert(JSON.stringify(wall.map(o => [o.x, o.y, o.r]).sort((a, b) => a[0] - b[0])) === JSON.stringify([[2195, 460, 46], [2265, 460, 46], [2335, 460, 46], [2405, 460, 46]]), 'fixed seed-independent wall geometry');
+  assert(['crossing', 'current', 'bramble'].every(s => crossingSolids(s).length === 0), 'every painted state is open (carries no solids)');
+
+  // -- world integration (obstacles cleared so ONLY the wall can push) ------
+  const world = new World(rng(), 42);
+  assert(world.crossingState === 'unpainted', 'the world starts unpainted');
+  assert(world.crossingSolids.length === 4, 'the wall is built at world build');
+  world.obstacles = [];
+  // both ends of the crossing: the wall blocks the mouth, never the corridor
+  // (main passage open) or the detour side (a valid return path both ways).
+  const [bx, by] = world.collideCircle(CROSSING.x, CROSSING.y, 14);
+  assert(Math.hypot(bx - CROSSING.x, by - CROSSING.y) > 10, 'the mouth is blocked while unpainted (circle pushed out)');
+  assert(JSON.stringify(world.collideCircle(CROSSING.x, CROSSING.corridorY, 14)) === JSON.stringify([CROSSING.x, CROSSING.corridorY]), 'main corridor open at the south end (main passage never closed)');
+  assert(JSON.stringify(world.collideCircle(CROSSING.x, CROSSING.pocketY, 14)) === JSON.stringify([CROSSING.x, CROSSING.pocketY]), 'detour end open at the north end (return path)');
+  // spawn validation respects the new solid
+  assert(world.isValidSpawn(CROSSING.x, CROSSING.corridorY), 'the corridor is a valid spawn point');
+  assert(!world.isValidSpawn(CROSSING.x, CROSSING.y), 'the wall mouth is NOT a valid spawn point');
+  // the wall blocks ENEMIES (collideCircle is the per-frame spawn path)
+  const foe = spawnEnemy('beetle', CROSSING.x, CROSSING.y, {});
+  const [fx, fy] = world.collideCircle(foe.x, foe.y, 12);
+  assert(Math.hypot(fx - CROSSING.x, fy - CROSSING.y) > 10, 'an enemy placed in the wall is pushed out (spawn validation respects the solid)');
+  // transitions rebuild the collision data ONLY when the state changes
+  assert(world.paintCrossing('green') === 'crossing', 'green transition');
+  assert(JSON.stringify(world.collideCircle(CROSSING.x, CROSSING.y, 14)) === JSON.stringify([CROSSING.x, CROSSING.y]), 'the mouth opens in both directions');
+  assert(world.paintCrossing('green') === null, 'repeated paint is a no-op (idempotent, no rebuild)');
+  assert(world.paintCrossing('blue') === 'current', 'cross to the current');
+  assert(world.paintCrossing('blue') === null, 'the current holds (idempotent)');
+  assert(world.paintCrossing('red') === 'bramble', 'cross to the bramble');
+  assert(world.crossingSolids.length === 0, 'painted states carry no solids (no trap)');
+  assert(JSON.stringify(world.collideCircle(CROSSING.x, CROSSING.y, 14)) === JSON.stringify([CROSSING.x, CROSSING.y]), 'the bramble mouth stays open (entry damage is Q5)');
+  assert(world.isValidSpawn(CROSSING.x, CROSSING.y), 'the painted mouth is a valid spawn point');
+  // restart cleanup: a fresh world starts unpainted with the full wall
+  const fresh = new World(rng(), 7);
+  fresh.obstacles = [];
+  assert(fresh.crossingState === 'unpainted', 'restart resets the crossing to unpainted');
+  assert(fresh.crossingSolids.length === 4, 'the wall is rebuilt on restart');
+  // the Reeds variant keeps the same mouth (the deeper painting has it too)
+  const reeds = new World(rng(), 99, { reeds: true });
+  assert(reeds.crossingState === 'unpainted', 'the Reeds crossing starts unpainted');
+  assert(reeds.crossingSolids.length === 4, 'the Reeds wall is built');
+  assert(JSON.stringify(reeds.crossingSolids.map(o => [o.x, o.y]).sort((a, b) => a[0] - b[0])) === JSON.stringify([[2195, 460], [2265, 460], [2335, 460], [2405, 460]]), 'the Reeds mouth matches the fixed geometry');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

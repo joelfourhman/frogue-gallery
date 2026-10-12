@@ -93,6 +93,49 @@ export function studyRewardEarned(completed, group = 'swamp') {
   const have = new Set(completed);
   return g.required.every(id => have.has(id));
 }
+
+// Q4 (Astra): THE PAINTED CROSSING — a pure state machine + bounded collision
+// data. A bramble wall blocks the mouth of the optional detour above the Rain
+// Choir (x 2300, y 460 — north of the central corridor, OFF the main
+// east-west route). Painting it changes its state; the MAIN CORRIDOR is never
+// touched by any state (the wall only spans the ~300px mouth), and every
+// painted state is passable in BOTH directions, so no state can ever trap
+// the frog (every state has a valid return path). The collision data is
+// bounded (4 circles max, only in the default state) and rebuilt ONLY when
+// the state actually changes (see World.paintCrossing).
+export const CROSSING_STATES = Object.freeze(['unpainted', 'crossing', 'current', 'bramble']);
+export const CROSSING = Object.freeze({
+  x: 2300, y: 460,                                   // mouth center
+  r: 46,                                             // bramble blob radius
+  blobOffsets: Object.freeze([-105, -35, 35, 105]),  // 70px pitch < 2r → continuous wall
+  corridorY: 700,                                    // main-route test anchor (south end)
+  pocketY: 300,                                      // detour-side test anchor (north end)
+  currentFactor: 0.72,                               // blue: slows (the flood factor)
+  brambleDamage: 3,                                  // red: one small entry hit
+});
+// The state a pigment paints (green → safe crossing, blue → current, red →
+// bramble; anything else, including dry/blank paint, is a no-op).
+export function crossingPigmentState(pigment) {
+  if (pigment === 'green') return 'crossing';
+  if (pigment === 'blue') return 'current';
+  if (pigment === 'red') return 'bramble';
+  return null;
+}
+// Pure transition: the pigment's state if it paints one, else the current
+// state. Idempotent by construction — repainting the same pigment is a no-op.
+export function crossingTransition(state, pigment) {
+  return crossingPigmentState(pigment) || state;
+}
+export function crossingPassable(state) { return state !== 'unpainted'; }
+export function crossingSpeedFactor(state) { return state === 'current' ? CROSSING.currentFactor : 1; }
+export function crossingDamageOnEntry(state) { return state === 'bramble' ? CROSSING.brambleDamage : 0; }
+// The bounded collision data for a state: only 'unpainted' carries solids
+// (the bramble wall). Every painted state is OPEN — the frog can always
+// return the way it came, and the main corridor stays open in every state.
+export function crossingSolids(state) {
+  if (state !== 'unpainted') return [];
+  return CROSSING.blobOffsets.map(dx => ({ x: CROSSING.x + dx, y: CROSSING.y, r: CROSSING.r }));
+}
 export const STUDIO = Object.freeze({ coats: 3, nodeRadius: 25, wakeLife: 1.25, wakeRadius: 27, wakeCap: 24, strokeCap: 180, pageCap: 8 });
 export function studyNode(study, step = study.step || 0) {
   const offsets = [[-62, 16], [0, -28], [62, 16]];

@@ -2,7 +2,7 @@
 'use strict';
 import { traceBlob, wobble, clamp, dist2, TAU, mulberry32 } from './math.js';
 import { INK, sat, mixColor } from './ui.js';
-import { REEDS_WIDTH, REEDS_DARK_WIDTH, REEDS_POCKETS, REEDS_FLOOD_FLOOR, REEDS_FLOOD_FACTOR, REEDS_DARK_POCKETS, REEDS_DARK_FLOOD_FLOOR, REEDS_DARK_FLOOD_FACTOR, REEDS_DARK_BESTIARY_DENSITY } from './logic.js';
+import { REEDS_WIDTH, REEDS_DARK_WIDTH, REEDS_POCKETS, REEDS_FLOOD_FLOOR, REEDS_FLOOD_FACTOR, REEDS_DARK_POCKETS, REEDS_DARK_FLOOD_FLOOR, REEDS_DARK_FLOOD_FACTOR, REEDS_DARK_BESTIARY_DENSITY, crossingTransition, crossingSolids } from './logic.js';
 
 const WSCALE = 0.5; // paint layer resolution factor
 
@@ -362,6 +362,14 @@ export class World {
       if (this.obstacles.some(o => dist2(o.x, o.y, x, y) < 140 * 140)) continue;
       this.obstacles.push({ x, y, r: 22 + rng() * 26, seed: (this.obstacles.length * 53) % 997, kind: rng() < 0.5 ? 0 : 1 });
     }
+    // Q4 (Astra): the painted crossing — a FIXED (seed-independent) bramble
+    // wall at the mouth of the Rain Choir detour (logic.js CROSSING). The pure
+    // state machine owns the semantics; only 'unpainted' carries solids, and
+    // the collision data is rebuilt ONLY when the state actually changes
+    // (paintCrossing). Present in every variant — the deeper paintings keep
+    // the same mouth.
+    this.crossingState = 'unpainted';
+    this.crossingSolids = crossingSolids(this.crossingState);
     // lily pads along the corridor + pockets
     const padSpots = [
       [300, 720], [1000, 760], [1700, 700], [2400, 760], [3100, 700], [3800, 760],
@@ -892,6 +900,19 @@ export class World {
         py = o.y + (dy / d) * min;
       }
     }
+    // Q4: the painted crossing's wall (only present while unpainted). Same
+    // push-out as obstacles — this is the enemy-spawn validation path too, so
+    // a spawn placed inside the wall is pushed clear of it every frame.
+    for (const o of this.crossingSolids) {
+      const dx = px - o.x, dy = py - o.y;
+      const d2 = dx * dx + dy * dy;
+      const min = o.r + r;
+      if (d2 < min * min && d2 > 0.001) {
+        const d = Math.sqrt(d2);
+        px = o.x + (dx / d) * min;
+        py = o.y + (dy / d) * min;
+      }
+    }
     if (!passReeds) {
       for (const rd of this.reeds) {
         if (rd.h < 0.5) continue;
@@ -908,6 +929,28 @@ export class World {
     px = clamp(px, r, this.w - r);
     py = clamp(py, r, this.h - r);
     return [px, py];
+  }
+
+  // Q4 (Astra): paint the crossing with a pigment (the stroke hook wires this
+  // in Q5; headless-testable now). Returns the NEW state on a real transition,
+  // null when the pigment is a no-op — the bounded collision data is rebuilt
+  // ONLY on real transitions (idempotent by construction).
+  paintCrossing(pigment) {
+    const next = crossingTransition(this.crossingState, pigment);
+    if (next === this.crossingState) return null;
+    this.crossingState = next;
+    this.crossingSolids = crossingSolids(next);
+    return next;
+  }
+
+  // Q4 (Astra): pure spawn validation — a point is valid when no solid
+  // (obstacle or crossing wall) overlaps an enemy-sized circle there. Grown
+  // reeds are excluded on purpose: enemies already walk through corridor
+  // reeds, and the crossing wall is the only new solid this adds.
+  isValidSpawn(x, y, r = 12) {
+    for (const o of this.obstacles) if (dist2(o.x, o.y, x, y) < (o.r + r) * (o.r + r)) return false;
+    for (const s of this.crossingSolids) if (dist2(s.x, s.y, x, y) < (s.r + r) * (s.r + r)) return false;
+    return true;
   }
 
   // ------------------------------------------------------------- rendering
