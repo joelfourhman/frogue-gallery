@@ -67,6 +67,22 @@ try {
   const frozen = await page.evaluate(() => window.__game.runT); await tick(180);
   assert.equal(await page.evaluate(() => window.__game.runT), frozen);
   await page.screenshot({ path: path.join(out, '03-sketchbook.png') });
+  // Q6: shipped pin UI through real browser key/mouse input; book suspends play.
+  await page.keyboard.press('x'); await tick(1);
+  assert.equal(await page.evaluate(() => window.__game.save.sketchPins.length), 1);
+  const clickBook = async key => {
+    const p = await page.evaluate(async key => {
+      const g = window.__game, { bookLayout } = await import('./src/studio.js'), r = bookLayout(g)[key];
+      const c = g.canvas.getBoundingClientRect();
+      return { x: c.left + (r.x + r.w / 2) * c.width / g.cw, y: c.top + (r.y + r.h / 2) * c.height / g.ch };
+    }, key);
+    await page.mouse.click(p.x, p.y); await tick(1);
+  };
+  await clickBook('pin');
+  assert.equal(await page.evaluate(() => window.__game.save.sketchPins.length), 0);
+  await page.keyboard.press('x'); await tick(1);
+  await page.screenshot({ path: path.join(out, '12-pinned-book.png') });
+  report.push('Q6 real keyboard/mouse pin toggles and expedition suspension');
   const exportRect = await page.evaluate(async () => {
     const { bookLayout } = await import('./src/studio.js'); const r = bookLayout(window.__game).export;
     const c = document.querySelector('canvas').getBoundingClientRect();

@@ -9322,5 +9322,23 @@ console.log('== stage 114: Q6 (Astra) — pinned sketchbook pages (cap, retentio
   assert(bytes < 80 * 1024, `full-cap artwork is ${bytes} bytes (< 80 KiB)`);
 }
 
+console.log('== stage 115: Q6 — real Game pin UI characterization ==');
+{
+  const { bookLayout } = await import('../src/studio.js');
+  const g = new Game(makeCanvas());
+  g.save.sketchbook = ['a', 'b', 'c'].map(id => ({ id, seed: 1, title: id, biome: 'swamp', result: 'study', studies: [], strokes: [[1, 1, 2, 2, 0, 5]] }));
+  g.save.sketchPins = []; g._openSketchbook();
+  const b = bookLayout(g), focus = g._gpMenuList();
+  assert(focus.list.some(r => r.x === b.pin.x && r.y === b.pin.y), 'controller focus contains pin');
+  const press = k => { g.input.reset(); g.input.kb.add(k); g._updateSketchbook(); };
+  press('x'); assert(g.save.sketchPins.includes('c'), 'X pins open page');
+  assert([...store.values()].some(v => { try { return JSON.parse(v).sketchPins?.includes('c'); } catch { return false; } }), 'pin persisted immediately');
+  g._bookIndex = 1; press('x'); g._bookIndex = 0; press('x');
+  assert(g.save.sketchPins.length === 2 && g.banners.some(b => b.text.includes('Two pages are pinned')), 'third pin refused with banner');
+  g._bookIndex = 2; g.input.reset(); Object.assign(g.input.mouse, { x: b.pin.x + 4, y: b.pin.y + 4, lPressed: true }); g._updateSketchbook();
+  assert(!g.save.sketchPins.includes('c'), 'mouse unpins');
+  press('escape'); assert(!g._bookOpen && !g.input.kb.size, 'closing clears input');
+}
+
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

@@ -1,4 +1,12 @@
-# Project state — Astra Q1–Q5 complete (registry, studies, painted crossing loop)
+# Project state — Q6 verified; Q7 personal exhibition in progress
+
+Q6 closed 2026-10-31: stage 115 characterizes the real Game pin UI (controller
+focus, X, mouse, cap banner, immediate localStorage persistence, input cleanup).
+Real Chromium source/dist journeys exercise key/mouse pin toggles and suspension;
+`node scripts/check.mjs --browser`: all 19 gates PASS. Q7 is next, per
+`docs/PLAN-exhibition.md`. Historical Q6 implementation notes below are retained.
+
+# Previous checkpoint — Astra Q1–Q5 complete (registry, studies, painted crossing loop)
 
 Updated 2026-10-12. **Q6 is nearly complete** (core + UI both committed; the UI
 smoke stage + full gate are still to run): pinned sketchbook pages — at most 2
