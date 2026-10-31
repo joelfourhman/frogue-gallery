@@ -1,4 +1,49 @@
-# Project state — Q8 rules complete; Q9 encounter in progress
+# Project state — Milestone 4 Q8/Q9 complete
+
+Q8 committed at **40baf4c** (2026-10-31): bounded pure rules, Enemy/Paint
+adapters, no live wave-table exposure; all 15 core gates PASS at closure,
+including nine pacing bands and balance. Q9 now completes the optional authored
+ordinary post-victory Reeds encounter at **(2650, 300)**, 450px north of the
+main corridor. One introduction per expedition; no swamp/Black Reeds/Wander/
+Challenge leak. Versions stay Game 1.0.0 / Save 12; no new runtime dependencies,
+combat tuning, publication, outreach, analytics or profile changes.
+
+Implemented: carried-lantern approach; >=600ms direction-locked amber tell;
+dash-only contact; blue swipe interruption/freeze; persistent green flower;
+safe glide/rest even after snuffing lantern; one +2 Cobalt reward with jar cap
+and bankable accounting; max two live moths. Open/pinched/swept/folded poses,
+22px green/blue instruction panel above darkness, bounded two-note SFX,
+short replacing callouts and explicit completed/reward cue.
+
+Verification: `node scripts/check.mjs --browser` **all 19 gates PASS**. Smoke
+stages 117/118, 24 seeded nook/path checks, malformed stroke/mode/cap/reward
+checks, source/dist actual-input guiding/600ms tell/dodge/green/blue/settlement,
+pause, darkness, freeze/root expiry, enemy/player death and input restart.
+Real frame signatures distinguish all four poses and both flower states;
+frames 16–22 plus synthesized WAVs and report in `tests/.out/astra/`.
+The journey remains at 10/10 HP without god mode. Ordinary wave timers and
+already-cleared zone reinforcements are staged for isolated encounter evidence;
+this is not a human playtest or proof of every mixed-wave encounter.
+
+RED/GREEN fixes include offscreen AI culling retaining stale dash/status,
+settled moth re-arming after owner death, green soil sprouting collision reeds,
+dim instruction text under the light mask, and the distant Silt Wyrm engaging
+on a 3.2s timer instead of arena entry. Silt now waits for its arena; actual-input
+arena entry still engages it. Reeds-apex camera framing no longer hides the frog
+while exploring away from the arena. No combat numbers or wave mixes changed.
+
+Final bands: Normal 17.2m / human 18.3m; heron 37.0s; Reeds 22.2m;
+Warden 3.54–3.90m; Black Reeds 25.6m; Umbral 3.73m; NG+ 19.5m;
+Wander 16.9–17.8m / Reeds 21.6–22.7m. Balance: none flagged.
+Details, evidence and limitations: `docs/VALIDATION-lantern-moth.md`.
+
+Next: Q8/Q9 mission is complete. Q10 human-playtest preparation may be scoped
+next; participant outreach and Q12 publication still require owner approval.
+Physical controller, Firefox/Safari and human enjoyment remain unverified.
+Discord commit pings could not be sent: exposed Discord tools have no send
+operation and no Discord credential is available in this execution environment.
+
+# Previous checkpoint — Q8 rules complete; Q9 encounter in progress
 
 Q8 closed 2026-10-31: pure bounded approach/tell/dash/settle rules,
 600ms direction-locked warning, dash-only contact, player-owned lantern lure,
@@ -340,9 +385,10 @@ HTML5 itch.io path and records alternatives.
 
 ## Next session
 
-The approved Q6/Q7 mission is complete. Q8/Q9 remain unimplemented backlog;
-human playtests (Q10) and publication still require their own scope/authorization.
-Do not revive historical next actions. See docs/VALIDATION.md for this pass.
+The approved Q8/Q9 mission is complete as recorded at the top of this file.
+Human playtests (Q10/Q11) and publication still require their own scope and
+authorization. Do not revive historical next actions. See the current
+`docs/VALIDATION-lantern-moth.md` evidence and limitations.
 
 No known reproducible game-breaking issue remains in exercised paths.
 Human friend feedback, physical controllers, Firefox/Safari and hosted iframe

@@ -68,3 +68,18 @@ paint._applyHits([painted],'blue','swipe');
 assert.equal(painted.mothPhase,'settle','actual landed blue paint cancels dash immediately');
 assert.equal(painted.mothFlowerTarget,flower); assert.equal(painted.status.type,'freeze');
 console.log('Q8 real Paint blue hit routes interruption before enemy update PASS');
+assert.equal(typeof L.mothEncounterAllowed,'function','Q9 authored mode selector exists');
+const allowed={ reeds:true, victory:true };
+assert.equal(L.mothEncounterAllowed(allowed),true);
+for(const opts of [{...allowed,reeds:false},{...allowed,victory:false},{...allowed,wander:true},{...allowed,challenge:true},{...allowed,blackReeds:true}]) assert.equal(L.mothEncounterAllowed(opts),false);
+assert.equal(L.MOTH_NOOK.x,2650); assert.equal(L.MOTH_NOOK.y,300);
+console.log('Q9 ordinary post-victory Reeds only; no swamp/Black/Wander/Challenge leak PASS');
+const resting=make(); resting.mothSettled=true;resting.mothPhase='settle';resting.mothRewarded=true;
+L.mothStep(resting,.1,{...light,alive:false});L.mothStep(resting,.1,light);
+assert.equal(resting.mothPhase,'settle','death/reacquisition cannot re-arm an already settled moth');
+for(const phase of ['tell','dash']) {
+  const a=make();a.mothPhase=phase;a.mothT=.4;L.mothStep(a,.1,{...light,lit:false});
+  assert.equal(a.mothPhase,'approach');assert.equal(L.mothContact(a),false);
+}
+const long=make();L.mothStep(long,9,light);assert.equal(long.mothT,.6);
+L.mothStep(long,9,light);assert.equal(long.mothPhase,'tell','long frames cannot skip the visible warning');

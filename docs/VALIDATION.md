@@ -1,5 +1,11 @@
 # Validation — Astra Vertical Slice
 
+## Lantern moth follow-up — 2026-10-31 (Q8/Q9)
+
+Milestone 4 is complete. See `docs/VALIDATION-lantern-moth.md` for the rule/
+live integration coverage, actual-input source/dist encounter evidence, frame/
+SFX artifacts, cleanup regressions, all 19 gates and remaining limits.
+
 ## Personal exhibition follow-up — 2026-10-31 (Q6/Q7)
 
 `node scripts/check.mjs --browser`: all 19 gates PASS, including all nine

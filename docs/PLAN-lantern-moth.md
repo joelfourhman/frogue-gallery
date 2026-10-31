@@ -1,5 +1,9 @@
 # Lantern moth encounter — execution plan
 
+**Completed 2026-10-31.** Q8 rules: `40baf4c`. Q9 authored encounter and final
+acceptance: `docs/VALIDATION-lantern-moth.md`; all 19 browser/core gates pass.
+The plan below is retained as the original scope, not unfinished next actions.
+
 Authorized by Joel's "Keep going" after Q6/Q7 completion. Baseline: 3865f5a.
 
 ## Goal and order

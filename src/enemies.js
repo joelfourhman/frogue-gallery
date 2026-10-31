@@ -485,8 +485,45 @@ export function spawnEnemy(kind, x, y, tuning) {
   return new Enemy(kind, x, y, tuning);
 }
 
+// Four bounded silhouettes: open lantern wings, amber pinched warning,
+// swept committed dash, folded safe rest. No random draws or particle pool.
+function drawMoth(ctx, e, now) {
+  const tell = e.mothPhase === 'tell', dash = e.mothPhase === 'dash';
+  const resting = e.mothPhase === 'settle';
+  ctx.save(); ctx.translate(e.x, e.y);
+  if (tell) {
+    const dx = e.mothDX || 0, dy = e.mothDY || 0;
+    ctx.strokeStyle = '#ffd58b'; ctx.lineWidth = 3;
+    ctx.setLineDash([7, 5]); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(dx * 116, dy * 116); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(dx * 116 - dy * 10 - dx * 14, dy * 116 + dx * 10 - dy * 14);
+    ctx.lineTo(dx * 116, dy * 116); ctx.lineTo(dx * 116 + dy * 10 - dx * 14, dy * 116 - dx * 10 - dy * 14); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 27 + 6 * (1 - e.mothT / LANTERN_MOTH.tell), 0, TAU); ctx.stroke();
+  }
+  ctx.translate(0, e.mothSettled ? -6 : -18 + Math.sin(now * 5 + e._seed) * 3);
+  if (dash) ctx.rotate(Math.atan2(e.mothDY, e.mothDX) + Math.PI / 2);
+  const frozen = e.status?.type === 'freeze';
+  const wing = e.mothSettled ? 7 : resting ? 12 : tell ? 15 : dash ? 10 : 24;
+  const long = dash ? 26 : resting ? 15 : 20;
+  ctx.globalAlpha = 0.18; ctx.fillStyle = tell ? '#ffb75c' : '#f8dca4';
+  ctx.beginPath(); ctx.ellipse(0, 0, wing + 12, long + 10, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.lineWidth = 1.8; ctx.strokeStyle = '#493c37';
+  for (let side = -1; side <= 1; side += 2) {
+    ctx.fillStyle = e.hitFlash > 0 ? '#fffdf0' : frozen ? '#bce6f6' : tell ? '#e6a75a' : resting ? '#a9cba1' : '#efdab4';
+    ctx.beginPath(); ctx.ellipse(side * wing * 0.65, 0, wing, long, side * (dash ? -0.25 : 0.4), 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#8b7863'; ctx.beginPath(); ctx.ellipse(side * wing, -3, 3, 5, side * 0.4, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(side * 3, 8); ctx.lineTo(side * wing, -12); ctx.stroke();
+  }
+  ctx.fillStyle = '#fff0c8'; ctx.beginPath(); ctx.ellipse(0, 0, 5, 16, 0, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-2, -12); ctx.lineTo(-8, -23); ctx.moveTo(2, -12); ctx.lineTo(8, -23); ctx.stroke();
+  if (e.mothSettled) {
+    ctx.font = uiFont(12); ctx.fillStyle = '#e7f2d8'; ctx.textAlign = 'center'; ctx.fillText('resting', 0, -31);
+  }
+  ctx.restore();
+}
+
 // ------------------------------------------------------------------- draw
 export function drawEnemy(ctx, e, now) {
+  if (e.kind === 'moth') { drawMoth(ctx, e, now); return; }
   if (e.kind === 'mosquito' && e.flight === 'tell' && !e.dead) {
     ctx.save(); ctx.strokeStyle = '#aa492c'; ctx.lineWidth = 2.5;
     ctx.setLineDash([5, 6]); ctx.beginPath();

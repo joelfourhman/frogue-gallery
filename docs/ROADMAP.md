@@ -139,7 +139,11 @@ Milestone 0; may follow Milestone 1 without waiting for the side loop.
 ### Suggested implementation order
 Retention rules → pin/rename UI → title-screen frame → export/reload/limits audit.
 
-## Milestone 4 — The lantern moth encounter
+## Milestone 4 — The lantern moth encounter — COMPLETE (2026-10-31)
+
+Delivered Q8/Q9: optional ordinary post-victory Reeds nook, bounded fair attacks,
+actual green/blue settlement, one pigment reward, readable poses and synth cues.
+Acceptance evidence and limits: `docs/VALIDATION-lantern-moth.md`.
 
 ### Goal
 Add a readable enemy interaction where guiding a creature is more useful than

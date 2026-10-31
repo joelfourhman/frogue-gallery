@@ -75,6 +75,7 @@ assert(au.sfxBus._connections.length === 1, 'S1: the sfxBus is connected into th
 // voice must terminate on sfxBus. A name with no case (typo/missing) schedules
 // ZERO, so it is caught by both the ">= 1 voice" and the bogus-name checks.
 const S1_BANK = [
+  'moth-tell', 'moth-settle',
   // the paint verb (the core action) — base voices + the charged big + the
   // surface-aware layer lives INSIDE these (opt.surface), so the name list is
   // the base set.

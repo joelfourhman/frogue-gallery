@@ -1457,6 +1457,18 @@ export class AudioSys {
       // a soft woody "shhk" (a bandpass noise sweep down, like a brush through
       // dry stems) under a low leafy thud. Reuses the existing _tone/_noise
       // voices, no new assets.
+      // One quiet two-note wing motif: rise to announce the locked dash,
+      // descend into a flower. Existing capped SFX bus, no assets/loop voices.
+      case 'moth-tell': {
+        this._tone(t, 'sine', 392, 440, 0.16, 0.07);
+        this._tone(t + 0.18, 'triangle', 523.25, 587.33, 0.20, 0.045);
+        break;
+      }
+      case 'moth-settle': {
+        this._tone(t, 'sine', 587.33, 523.25, 0.2, 0.065);
+        this._tone(t + 0.18, 'triangle', 440, 392, 0.32, 0.045);
+        break;
+      }
       case 'crossing-part': {
         this._noise(t, 0.42, 'bandpass', 1600, 2.2, 0.20);        // the brush-through
         this._tone(t + 0.05, 'sine', 98, 65, 0.4, 0.16);          // the leafy thud

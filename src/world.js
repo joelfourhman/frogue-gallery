@@ -2,7 +2,7 @@
 'use strict';
 import { traceBlob, wobble, clamp, dist2, TAU, mulberry32 } from './math.js';
 import { INK, sat, mixColor, centerText, uiFont } from './ui.js';
-import { REEDS_WIDTH, REEDS_DARK_WIDTH, REEDS_POCKETS, REEDS_FLOOD_FLOOR, REEDS_FLOOD_FACTOR, REEDS_DARK_POCKETS, REEDS_DARK_FLOOD_FLOOR, REEDS_DARK_FLOOD_FACTOR, REEDS_DARK_BESTIARY_DENSITY, CROSSING, crossingTransition, crossingSolids } from './logic.js';
+import { REEDS_WIDTH, REEDS_DARK_WIDTH, REEDS_POCKETS, REEDS_FLOOD_FLOOR, REEDS_FLOOD_FACTOR, REEDS_DARK_POCKETS, REEDS_DARK_FLOOD_FLOOR, REEDS_DARK_FLOOD_FACTOR, REEDS_DARK_BESTIARY_DENSITY, CROSSING, crossingTransition, crossingSolids, MOTH_NOOK, strokeTouches } from './logic.js';
 
 const WSCALE = 0.5; // paint layer resolution factor
 
@@ -239,6 +239,33 @@ export class World {
     this.pctx = this.paintCanvas.getContext('2d');
     this.pigmentGrid = new Map(); // key -> {red,blue,green,age}
     this.cell = 60;
+  }
+
+  // A small authored dead-end nook, enabled only by Game's mode gate. Clear
+  // its landing circle and narrow return path AFTER generation: other worlds
+  // and the shared seeded terrain stream remain untouched.
+  enableMothEncounter() {
+    this.mothFlower = { x: MOTH_NOOK.x, y: MOTH_NOOK.y, green: false, started: false };
+    const outside = o => {
+      const r = o.r || 12;
+      const inNook = Math.hypot(o.x - MOTH_NOOK.x, o.y - MOTH_NOOK.y) < MOTH_NOOK.homeRadius + r + 25;
+      const inPath = Math.abs(o.x - MOTH_NOOK.x) < 65 + r && o.y > MOTH_NOOK.y && o.y < 770;
+      return !inNook && !inPath;
+    };
+    this.obstacles = this.obstacles.filter(outside);
+    // Green must bloom the authored flower, not grow a collision reed across
+    // the settlement/return path on an unlucky procedural soil patch.
+    this.soil = this.soil.filter(outside);
+    this.reeds = this.reeds.filter(outside);
+  }
+
+  paintMothFlower(stroke) {
+    const f = this.mothFlower;
+    if (!f || f.green || !stroke || stroke.pigment !== 'green' || !['swipe', 'splash'].includes(stroke.kind)
+        || ![stroke.x, stroke.y, stroke.a, stroke.range].every(Number.isFinite) || stroke.range < 0
+        || !strokeTouches(stroke, f.x, f.y, 25)) return false;
+    f.green = true;
+    return true;
   }
 
   build() {
@@ -1231,9 +1258,48 @@ export class World {
     // mouth (a fixed world prop; pure draw-time, so P10 culls it like every
     // other prop). `px`/`py` (optional) are the frog's position for the
     // nearby hint; a headless caller omits them and the hint is skipped.
+    if (this.mothFlower && (inView(this.mothFlower.x, this.mothFlower.y) || inView(this.mothFlower.x, this.mothFlower.y + 310))) {
+      this.drawMothFlower(ctx, now, px, py);
+    }
     if (this.crossingState && inView(CROSSING.x, CROSSING.y)) {
       this.drawCrossing(ctx, now, colorSat, px, py);
     }
+  }
+
+  drawMothFlower(ctx, now, px, py) {
+    const f = this.mothFlower;
+    if (!f) return;
+    ctx.save(); ctx.translate(f.x, f.y);
+    ctx.fillStyle = 'rgba(122,161,117,0.14)'; ctx.beginPath();ctx.ellipse(0, 0, 138, 72, 0, 0, TAU);ctx.fill();
+    // A quiet path and sign point off the main corridor, never block it.
+    ctx.fillStyle = '#92ae91';
+    for (let i=0;i<5;i++) { ctx.beginPath();ctx.ellipse((i%2 ? -8 : 8),90+i*42,3,6,0,0,TAU);ctx.fill(); }
+    ctx.fillStyle = '#e8e3cb';ctx.fillRect(-92,288,184,31);
+    ctx.strokeStyle = '#596451';ctx.lineWidth=1.5;ctx.strokeRect(-92,288,184,31);
+    ctx.font=uiFont(14);ctx.textAlign='center';ctx.fillStyle='#354f43';ctx.fillText('↑ Lantern moth nook',0,309);
+    ctx.strokeStyle='#9ac87b';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,30);ctx.lineTo(0,-5);ctx.stroke();
+    ctx.fillStyle='#6b9b61';ctx.beginPath();ctx.ellipse(-12,16,15,5,-.4,0,TAU);ctx.ellipse(12,12,15,5,.4,0,TAU);ctx.fill();
+    ctx.lineWidth=2;ctx.strokeStyle=f.green ? '#c5ecc0' : '#8faf83';
+    ctx.beginPath();ctx.arc(0,-7,35+Math.sin(now*3)*2,0,TAU);ctx.stroke();
+    for(let i=0;i<5;i++) {
+      const a=i/5*TAU, r=f.green ? 20 : 7;
+      ctx.fillStyle=f.green ? '#abdb8d' : '#aca995';ctx.beginPath();ctx.ellipse(Math.cos(a)*r, -7+Math.sin(a)*r, f.green ? 16 : 7, f.green ? 10 : 12, a,0,TAU);ctx.fill();ctx.stroke();
+    }
+    ctx.fillStyle=f.green ? '#f6df9d' : '#6d7d60';ctx.beginPath();ctx.arc(0,-7,f.green ? 8 : 5,0,TAU);ctx.fill();
+    ctx.restore();
+  }
+
+  // Instructional text is drawn after the darkness pass by Game, so the
+  // counter remains discoverable at low fuel without lighting extra terrain.
+  drawMothHint(ctx, px, py) {
+    const f = this.mothFlower;
+    if (!f || !Number.isFinite(px) || Math.hypot(px-f.x,py-f.y)>=280) return;
+    ctx.save(); ctx.translate(f.x, f.y);
+    ctx.fillStyle='rgba(18,35,29,0.98)';ctx.fillRect(-300,-116,600,72);
+    ctx.font=uiFont(22);ctx.fillStyle='#f5f8e9';ctx.textAlign='center';
+    ctx.fillText(f.resting ? 'Moth resting safely · +2 Cobalt' : f.green ? 'Flower ready · guide moth with lantern' : 'Paint flower GREEN · lure with lantern',0,-90);
+    ctx.fillStyle='#e1efff';ctx.fillText(f.resting ? 'A quiet thank-you · once per expedition' : 'BLUE moth near flower → safe rest +2 Cobalt',0,-62);
+    ctx.restore();
   }
 
   // Q5 (Astra): render the painted crossing in its current state. Draw-time

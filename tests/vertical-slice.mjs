@@ -476,6 +476,8 @@ try {
   assert.equal(await page.evaluate(() => window.__game.state), 'expedition');
   assert.equal(await page.evaluate(() => window.__game.player.alive && !window.__game.dying), true);
   report.push('Defeat, title return and fresh expedition restart verified');
+  const {mothBrowser}=await import('./moth-browser.mjs');
+  await mothBrowser({page,tick,out,report});
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(out, 'report.json'), JSON.stringify({ report, errors }, null, 2));
   console.log(JSON.stringify(report, null, 2));

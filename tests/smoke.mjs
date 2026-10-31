@@ -9347,5 +9347,69 @@ console.log('== stage 116: Q7 — bounded captions and explicit exhibition ==');
 await import('./exhibition.mjs');
 console.log('== stage 117: Q8 — bounded lantern moth rules and enemy/paint adapters ==');
 await import('./moth.mjs');
+console.log('== stage 118: Q9 — authored Reeds moth encounter, live stroke and reward ==');
+{
+  const L = await import('../src/logic.js');
+  const g = new Game(makeCanvas()); g.save.flags.heronDefeated = true;
+  g._beginExpedition(false, {reeds:true});
+  const f = g.world.mothFlower;
+  const {World}=await import('../src/world.js'),{mulberry32}=await import('../src/math.js');
+  for(let seed=1;seed<=24;seed++) {
+    const w=new World(mulberry32(seed),seed,{reeds:true});
+    w.soil.push({x:2654,y:300,r:50});w.enableMothEncounter();w.splat(2650,300,'green',10,true);
+    assert(!w.reeds.some(r=>Math.hypot(r.x-2650,r.y-300)<200),`seed ${seed}: green flower cannot sprout a blocking reed`);
+    for(let y=300;y<=740;y+=40) {
+      const pos=w.collideCircle(2650,y,18);
+      assert(Math.hypot(pos[0]-2650,pos[1]-y)<.01,`seed ${seed}: nook return path free at ${y}`);
+    }
+    for(let a=0;a<8;a++) {
+      const x=2650+Math.cos(a/8*Math.PI*2)*160,y=300+Math.sin(a/8*Math.PI*2)*160;
+      const pos=w.collideCircle(x,y,18);
+      assert(Math.hypot(pos[0]-x,pos[1]-y)<.01,`seed ${seed}: guiding/settle circle free`);
+    }
+  }
+  assert(f && f.x === 2650 && f.y === 300 && !f.green, 'ordinary post-victory Reeds has dormant flower');
+  const hints=[],hintCtx=makeCtx(makeCanvas());hintCtx.fillText=(text,x,y)=>{if(text.includes('GREEN')||text.includes('BLUE'))hints.push({text,y,font:hintCtx.font});};
+  g.world.drawMothHint(hintCtx,2650,350);
+  assert(hints.every(h=>h.font.includes('22px')),'flower hint uses readable 22px type before canvas downscaling');
+  assert(hints.length===2 && hints.every(h=>h.y < -50),'flower instructions sit above the flower, not across the downward dash lane');
+  assert(!g.enemies.some(e=>e.kind==='moth'), 'no moth on main route / beginning');
+  g.player.x=f.x-50; g.player.y=f.y; g.player.aimA=0; g.player.pigment='green';
+  g.paint.trySwipe([]); assert(f.green, 'actual green brush blooms flower');
+  assert(g.banners.at(-1).y>g.ch/2 && g.banners.at(-1).text.length<=40,'moth bloom callout stays clear of top HUD/zone messages');
+  g._mothEncounterTick();
+  const moth = g.enemies.find(e=>e.kind==='moth'); assert(moth, 'authored nook wakes one moth');
+  assert(g.banners.filter(b=>b.moth).length===1,'moth callouts replace their prior message instead of overlapping');
+  g._mothEncounterTick(); assert(g.enemies.filter(e=>e.kind==='moth').length===1,'introduction never respawns');
+  g.player.x=moth.x-50; g.player.y=moth.y; g.player.aimA=0; g.player.pigment='blue';
+  g.paint.swipeCd=0; g.player.swipeT=0; g.paint.trySwipe([moth]);
+  assert(moth.mothPhase==='settle' && moth.mothFlowerTarget===f, 'landed blue steers into green flower');
+  const before=g.collected.blue;g.stock.blue=g.tuning.capacity-1;
+  for(let i=0;i<240;i++) { g._bestiaryTick(1/60,g.player); moth.update(1/60,g.player,g.tuning,g.world,i/60); g._mothEncounterTick(); }
+  assert(moth.mothSettled && moth.mothRewarded, 'settles on safe flower');
+  assert(f.resting,'settled flower cue acknowledges completed interaction instead of asking for more blue');
+  assert(g.collected.blue===before+2, 'exactly +2 bankable blue');
+  assert(g.stock.blue===g.tuning.capacity,'settlement respects paint jar cap while preserving bankable pigment');
+  for(let i=0;i<30;i++) g._mothEncounterTick();
+  assert(g.collected.blue===before+2, 'no repeated reward');
+  g._beginExpedition(false,{reeds:true});
+  assert(!g.world.mothFlower.green && !g.world.mothFlower.started && !g.enemies.some(e=>e.kind==='moth'), 'restart resets in-run encounter');
+  const {spawnEnemy}=await import('../src/enemies.js');
+  g.enemies=[spawnEnemy('moth',2650,300,g.tuning),spawnEnemy('moth',2700,300,g.tuning)];g.player.x=2650;g.player.y=350;
+  g._mothEncounterTick();assert(!g.world.mothFlower.started && g.enemies.length===2,'authored live path enforces maximum two moths');
+  g.enemies[0].dead=true;g._mothEncounterTick();assert(g.enemies.filter(e=>!e.dead).length===2 && g.world.mothFlower.started,'cap frees one slot only after death');
+  g._beginExpedition(false,{reeds:true});
+  for(const stroke of [null,{kind:'hop',pigment:'green',x:2650,y:300,a:0,range:74},{kind:'swipe',pigment:'blue',x:2650,y:300,a:0,range:74},{kind:'swipe',pigment:'green',x:NaN,y:300,a:0,range:74},{kind:'swipe',pigment:'green',x:0,y:0,a:0,range:74}]) assert(!g.world.paintMothFlower(stroke),'invalid/wrong pigment/range cannot bloom flower');
+  g.player.x=2650;g.player.y=350;g._mothEncounterTick();
+  const off=g.enemies.find(e=>e.kind==='moth');off.mothPhase='dash';off.mothT=.3;
+  g.player.x=100;g.player.y=750;g.spawnT=999;g._updateExpedition(1/60);
+  assert(off.mothPhase==='approach','offscreen moth cancels stale dash instead of freezing under AI cull');
+  off.status={type:'root',t:.1};g._updateExpedition(.2);
+  assert(!off.status,'offscreen moth status expires');
+  g._beginExpedition(); assert(!g.world.mothFlower,'no swamp prop leak');
+  g.options.wander=true; g._beginExpedition(false,{reeds:true}); assert(!g.world.mothFlower,'no Wander leak');
+  g.options.wander=false; g.save.ngCycle=1; g.save.flags.reedsVictory=true;
+  g._beginExpedition(false,{reeds:true}); assert(!g.world.mothFlower,'no Black Reeds leak');
+}
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

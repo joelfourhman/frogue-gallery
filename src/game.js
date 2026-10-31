@@ -6,6 +6,7 @@ import { World } from './world.js';
 import { Player } from './player.js';
 import { Paint } from './paint.js';
 import { spawnEnemy, drawEnemy } from './enemies.js';
+import { MOTH_NOOK, mothEncounterAllowed, mothCanSpawn, mothReward } from './logic.js';
 import { Input } from './input.js';
 import { FieldStudio, sketchbookButton, bookLayout, drawSketchbook, exportPostcard, editPostcardTitle, finishPostcardTitle, drawPostcard } from './studio.js';
 import { exhibitSketchPage, studyRewardEarned } from './logic.js';
@@ -1249,7 +1250,11 @@ export class Game {
       this.cam.y = approach(this.cam.y, h.y, 6, dt);
       return;
     }
-    if (h && h.hp > 0 && !h.flying && h._intro <= 0) {
+    // Reeds apexes live in the final arena. Their intro clock can expire
+    // during exploration; that must not frame a distant boss and hide the
+    // frog/optional nook. Presentation only: no boss clock or combat changes.
+    const arenaFraming = !h || !(h.wyrm || h.warden || h.umbra) || p.x > this.world.w - 900;
+    if (h && h.hp > 0 && !h.flying && h._intro <= 0 && arenaFraming) {
       const hy = h.y - (h.diveH || 0) * 0.5;
       const mx = (p.x + h.x) / 2;
       const my = (p.y + hy) / 2;
@@ -2978,6 +2983,7 @@ _drawAtelier(ctx) {
       && !!(this.save.flags && this.save.flags.reedsVictory)
       && this.options.wander !== true;
     this.world = new World(mulberry32(seed), seed % 99991, { reeds: _isReeds, blackReeds: this.blackReeds });
+    if (mothEncounterAllowed({ reeds: _isReeds, victory: this.save.flags?.heronDefeated, blackReeds: this.blackReeds, wander: this.options.wander, challenge: !!_chal })) this.world.enableMothEncounter();
     // S2 (v1.9): the run's MUSIC biome — which per-biome zone-theme set the
     // melody layer plays. 'blackReeds' > 'reeds' > 'swamp' (the base run,
     // byte-identical). Presentation/audio only (never feeds runT).
@@ -3348,7 +3354,13 @@ _drawAtelier(ctx) {
     // keeps the guided path out of play even if it is ever called otherwise.
     if (guided && tutorialEligible(this.save)) this._startTutorial();
     this.studio = new FieldStudio(this);
-    this.paint.onStroke = stroke => { this.studio.onStroke(stroke); this._paintCrossingStroke(stroke); };
+    this.paint.onStroke = stroke => {
+      this.studio.onStroke(stroke); this._paintCrossingStroke(stroke);
+      if (this.world.paintMothFlower(stroke)) {
+        this.sfx('moth-settle');
+        this._mothBanner('Flower ready · brush moth BLUE');
+      }
+    };
     this._bookOpen = false;
     this._hopWas = false;
     this.input.reset();
@@ -4008,14 +4020,16 @@ _drawAtelier(ctx) {
     // R3 (v1.6): the Reeds bestiary's per-frame touch-up (wisp light refresh +
     // leech cling-on-contact / hop-off). Reeds-only — a cycle-0 run's enemy list
     // has no wisp/serpent/leech, so this is a no-op there (byte-identical).
-    if (this.world.reedsVariant && !this._tutorialActive()) this._bestiaryTick(dt, p);
+    if (this.world.reedsVariant && !this._tutorialActive()) { this._mothEncounterTick(); this._bestiaryTick(dt, p); }
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       if (this._tutorialActive() && e !== this.tutorial.target) continue;
       if (!e.dead && p.alive) {
         const dx = e.x - p.x, dy = e.y - p.y;
         const far = dx * dx + dy * dy > CULL2;
-        if (far && !(e.status && e.status.type === 'burn')) continue;
+        // At most two moths: keep their light/status clock alive offscreen so
+        // returning to the nook cannot resume an unseen, stale committed dash.
+        if (far && e.kind !== 'moth' && !(e.status && e.status.type === 'burn')) continue;
       }
       e.update(dt, p, this.tuning, this.world, this.now);
       // S1 (v1.9): the STATUS-OFF sting (the state drops on its own timer —
@@ -4100,8 +4114,9 @@ _drawAtelier(ctx) {
       }
     } else if (this.heron.wyrm) {
       const wyrmArena = p.x > this.world.w - 900;
-      if (this.heron._intro > 0) this.heron._intro -= dt;
-      if (wyrmArena && this.heron._intro > 0) this.heron._intro = 0;   // lapse on arena entry
+      // The reveal delay cannot substitute for entering the actual arena.
+      // Otherwise a 3.2s expiry starts distant boss cues during exploration.
+      if (wyrmArena && this.heron._intro > 0) this.heron._intro = 0;
       if (this.heron._intro <= 0 && !this._wyrmEngaged) {
         this._wyrmEngaged = true;
         this.sfx('wyrm-rumble');
@@ -4639,6 +4654,39 @@ _drawAtelier(ctx) {
   //   · wisp._light  — the lightFactor it receives (drives draw alpha + homing)
   //   · leech cling  — arm on contact (respecting the re-attach window), peel on
   //     HOP (one hop breaks the cling; a second leech can't latch for ~6s)
+  // One optional in-run introduction, never a wave-table entry. The nook is
+  // 450px above the corridor; leaving it removes the carried-light lure.
+  _mothBanner(text) {
+    this.banners = this.banners.filter(b => !b.moth);
+    this.banners.push({ text, t: 4, max: 4, y: this.ch - 110, moth: true });
+  }
+
+  _mothEncounterTick() {
+    const f = this.world.mothFlower, p = this.player;
+    if (!f || !p.alive || this._tutorialActive()) return;
+    if (!f.started && dist(p.x, p.y, f.x, f.y) <= MOTH_NOOK.wakeRadius && mothCanSpawn(this.enemies)) {
+      const e = spawnEnemy('moth', f.x + 90, f.y, this.tuning);
+      this.enemies.push(e); f.started = true;
+      this._mothBanner('Lantern moth nook · follow the light');
+    }
+    for (const e of this.enemies) {
+      if (e.kind !== 'moth' || e.dead) continue;
+      if (e.mothPhase !== e._mothSoundPhase) {
+        if (e.mothPhase === 'tell') this.sfx('moth-tell');
+        e._mothSoundPhase = e.mothPhase;
+      }
+      const reward = mothReward(e);
+      if (reward) {
+        f.resting = true;
+        this.stock.blue = Math.min(this.tuning.capacity, this.stock.blue + reward);
+        this.collected.blue += reward;
+        this.sfx('moth-settle');
+        this.paint.note(e.x, e.y - 32, '+2 blue · a quiet thank-you', 'blue');
+        this._mothBanner('+2 Cobalt · the moth rests safely');
+      }
+    }
+  }
+
   _bestiaryTick(dt, p) {
     const L = this.lantern;
     const cx = p.x, cy = p.y;   // the lantern is carried by the frog
@@ -4650,6 +4698,14 @@ _drawAtelier(ctx) {
     // keeps any pre-run context identical.
     const ltBest = this._lanternTuning || LANTERN;
     for (const e of this.enemies) {
+      if (e.kind === 'moth') {
+        const visible = lanternLightFactor(L, e.x, e.y, cx, cy, ltBest) > 0.01;
+        const inNook = dist(p.x, p.y, MOTH_NOOK.x, MOTH_NOOK.y) <= MOTH_NOOK.homeRadius;
+        // Reuse one light record; never let ambient sources own the lure.
+        const light = e.mothLight ||= { owner: 'player' };
+        light.x = cx; light.y = cy; light.alive = p.alive;
+        light.lit = visible && inNook;
+      }
       if (e.wisp) {
         // R3 (a): the wisp's lightFactor at ITS position (how much light it
         // actually gets) — drives its draw alpha + its lit-homing vs unlit-drift.
@@ -6461,6 +6517,10 @@ _drawAtelier(ctx) {
     // sets it, so its render is byte-identical.
     if ((this.state === 'expedition' || this.state === 'end') && this.lanternReeds && this.player) {
       this._drawReedsLight(ctx, v);
+    }
+    if (this.state === 'expedition' && this.world.mothFlower && this.player) {
+      ctx.save(); ctx.translate(-v.x * v.scale, -v.y * v.scale); ctx.scale(v.scale, v.scale);
+      this.world.drawMothHint(ctx, this.player.x, this.player.y); ctx.restore();
     }
     if (this.state === 'expedition' || this.state === 'end') {
       this._drawOffscreenHeronArrow(ctx, v);

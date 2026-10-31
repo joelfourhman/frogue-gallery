@@ -46,6 +46,10 @@ export function mosquitoStep(e, dt, player) {
 // lure; ambient fireflies/rest stones never acquire an attack target. A frame
 // crosses at most one boundary, so a long/resumed frame cannot skip the tell.
 export const LANTERN_MOTH = Object.freeze({ cap: 2, tell: 0.6, dash: 0.35, recover: 1.4, range: 145, speed: 62, dashSpeed: 330, flowerRange: 130, reward: 2 });
+export const MOTH_NOOK = Object.freeze({ x: 2650, y: 300, wakeRadius: 200, homeRadius: 210 });
+export function mothEncounterAllowed({ reeds, victory, blackReeds, wander, challenge } = {}) {
+  return !!reeds && !!victory && !blackReeds && !wander && !challenge;
+}
 export function mothCanSpawn(enemies) {
   return enemies.filter(e => e.kind === 'moth' && !e.dead).length < LANTERN_MOTH.cap;
 }
@@ -66,7 +70,7 @@ export function mothStep(e, dt, light) {
   dt = Math.max(0, Math.min(0.1, Number.isFinite(dt) ? dt : 0));
   e.mothPhase ||= 'approach';
   if (e.dead || e.hp <= 0 || !light?.alive) {
-    e.mothPhase = 'approach'; e.mothT = 0; e.mothBlue = false; e.mothFlowerTarget = null; return;
+    e.mothPhase = e.mothSettled ? 'settle' : 'approach'; e.mothT = 0; e.mothFlowerTarget = null; return;
   }
   const stunned = e.status && ['freeze', 'root', 'dizzy'].includes(e.status.type);
   if (stunned && (e.mothPhase === 'tell' || e.mothPhase === 'dash')) {

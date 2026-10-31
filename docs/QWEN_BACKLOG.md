@@ -98,7 +98,7 @@ Do not relax bands to hide a failure. No new runtime dependency.
   export screenshots, focus navigation and old-save defaults.
 - **Dependencies:** Q6.
 
-## Q8 [P2] — Implement bounded lantern-moth rules
+## Q8 [P2] — Implement bounded lantern-moth rules — COMPLETE (2026-10-31)
 - **Purpose:** A distinct and fair Reeds interaction for Milestone 4.
 - **Files:** src/logic.js, src/enemies.js, tests/smoke.mjs.
 - **Requirements:** Approach/tell/dash/settle states; ≥0.6s locked-direction
@@ -109,7 +109,10 @@ Do not relax bands to hide a failure. No new runtime dependency.
 - **Tests:** State transition matrix, caps, pigment interactions, reward latch.
 - **Dependencies:** Q1; Q9 required before exposing this feature.
 
-## Q9 [P2] — Place the moth encounter and teach the flower counter
+## Q9 [P2] — Place the moth encounter and teach the flower counter — COMPLETE (2026-10-31)
+
+Evidence for Q8/Q9: `docs/VALIDATION-lantern-moth.md`; smoke stages 117/118 and
+source/dist actual-input moth journeys are included in all 19 required gates.
 - **Purpose:** Turn Q8's isolated rules into a complete encounter.
 - **Files:** src/world.js, src/enemies.js, src/game.js, src/audio.js.
 - **Requirements:** One optional authored introduction in Reeds, three readable
