@@ -18,6 +18,12 @@ try {
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
   await page.addInitScript(() => {
+    // Pixel evidence uses deterministic CPU rasterization. GPU/readback mode
+    // transitions can differ by one channel value even on the same surface.
+    const getContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function(type, options) {
+      return getContext.call(this, type, type === '2d' ? { ...options, willReadFrequently: true } : options);
+    };
     window.requestAnimationFrame = () => 0;
     let seed = 7349;
     Math.random = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -83,6 +89,71 @@ try {
   await page.keyboard.press('x'); await tick(1);
   await page.screenshot({ path: path.join(out, '12-pinned-book.png') });
   report.push('Q6 real keyboard/mouse pin toggles and expedition suspension');
+  // Q7 vertical slice: native text ownership, confirm/cancel, explicit exhibit.
+  await clickBook('rename');
+  const titleInput = page.locator('input[aria-label="Postcard title"]');
+  await titleInput.fill('a'.repeat(80));
+  assert.equal(await titleInput.evaluate(el => Array.from(el.value).length), 48, 'editor bounds live input, not just the saved caption');
+  await titleInput.fill('🌿'.repeat(60));
+  assert.equal(await titleInput.evaluate(el => Array.from(el.value).length), 48);
+  await titleInput.fill('My xj swamp <3 🌿');
+  await page.keyboard.press('j'); await page.keyboard.press('x'); await page.keyboard.press('m'); await tick(1);
+  assert.equal(await page.evaluate(() => window.__game._bookOpen), true);
+  assert.equal(await page.evaluate(() => window.__game.save.sketchPins.length), 1);
+  await titleInput.fill('My little swamp 🌿');
+  await page.keyboard.press('Enter'); await tick(1);
+  assert.equal(await page.evaluate(() => window.__game.save.sketchbook[window.__game._bookIndex].title), 'My little swamp 🌿');
+  await clickBook('rename'); await titleInput.fill('Discard this');
+  await page.keyboard.press('Escape'); await tick(1);
+  assert.equal(await page.evaluate(() => window.__game.save.sketchbook[window.__game._bookIndex].title), 'My little swamp 🌿');
+  await clickBook('rename'); await titleInput.fill('Mouse cancellation'); await clickBook('cancel');
+  assert.equal(await page.evaluate(() => window.__game.save.sketchbook[window.__game._bookIndex].title), 'My little swamp 🌿');
+  await clickBook('rename'); await titleInput.fill('My little swamp 🌿'); await clickBook('confirm');
+  assert.equal(await titleInput.count(), 0);
+  await clickBook('exhibit');
+  assert.equal(await page.evaluate(() => window.__game.save.sketchExhibit === window.__game.save.sketchbook[window.__game._bookIndex].id), true);
+  await page.screenshot({ path: path.join(out, '13-named-book.png') });
+  // Exercise the actual Gamepad API polling -> D-pad focus -> A/B input path.
+  await page.setViewportSize({ width: 640, height: 480 }); await tick(1);
+  await page.evaluate(() => {
+    window.testPad = { id: 'exhibition test pad', axes: [0,0,0,0], buttons: Array.from({length:17},()=>({pressed:false,value:0})) };
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [window.testPad] });
+    const g = window.__game; g._gp.menu = null; g._gp.mi.sketchbook = 0;
+  });
+  const padPress = async button => {
+    await page.evaluate(b => { window.testPad.buttons[b] = {pressed:true,value:1}; }, button); await tick(1);
+    await page.evaluate(b => { window.testPad.buttons[b] = {pressed:false,value:0}; }, button); await tick(1);
+  };
+  await tick(1);
+  for (let i=0;i<4;i++) await padPress(13);
+  await padPress(0);
+  assert.equal(await page.evaluate(() => window.__game.save.sketchPins.length), 0);
+  assert.equal(await page.evaluate(() => window.__game.save.sketchExhibit), null);
+  await padPress(0);
+  assert.equal(await page.evaluate(() => window.__game.save.sketchPins.length), 1);
+  await padPress(13); await padPress(13); await padPress(0); // explicitly restore exhibit after re-pin
+  await padPress(12);
+  await padPress(0);
+  await titleInput.waitFor({ state: 'visible' });
+  const inputBounds = await titleInput.boundingBox();
+  assert(inputBounds.x >= 0 && inputBounds.y >= 0 && inputBounds.x + inputBounds.width <= 640 && inputBounds.y + inputBounds.height <= 480);
+  await titleInput.fill('Controller cancelled');
+  await page.screenshot({ path: path.join(out, '14-editor-640.png') });
+  await padPress(1);
+  assert.equal(await titleInput.count(), 0);
+  assert.equal(await page.evaluate(() => window.__game._bookOpen), true);
+  await padPress(0); await titleInput.fill('My little swamp 🌿'); await padPress(0);
+  assert.equal(await titleInput.count(), 0);
+  await padPress(13); await padPress(0); // exhibit removes; second A restores explicitly
+  assert.equal(await page.evaluate(() => window.__game.save.sketchExhibit), null);
+  await padPress(0);
+  assert.equal(await page.evaluate(() => !!window.__game.save.sketchExhibit), true);
+  for(let i=0;i<4;i++) await padPress(12);
+  const controllerDownload = page.waitForEvent('download');
+  await padPress(0);
+  await (await controllerDownload).saveAs(path.join(out,'controller-postcard.png'));
+  await page.evaluate(() => { window.testPad = null; }); await tick(1);
+  await page.setViewportSize({width:1280,height:820}); await tick(1);
   const exportRect = await page.evaluate(async () => {
     const { bookLayout } = await import('./src/studio.js'); const r = bookLayout(window.__game).export;
     const c = document.querySelector('canvas').getBoundingClientRect();
@@ -91,7 +162,25 @@ try {
   const downloadPromise = page.waitForEvent('download');
   await page.mouse.click(exportRect.x, exportRect.y); await tick(1);
   const download = await downloadPromise; await download.saveAs(path.join(out, 'postcard.png'));
+  assert.deepEqual(await fs.readFile(path.join(out,'controller-postcard.png')), await fs.readFile(path.join(out,'postcard.png')), 'mouse and controller export identical PNG bytes');
   assert((await fs.stat(path.join(out, 'postcard.png'))).size > 15000);
+  const exportPixels = await page.evaluate(async data => {
+    const { drawPostcard } = await import('./src/studio.js'), { studyRewardEarned } = await import('./src/logic.js');
+    const g = window.__game, p = g.save.sketchbook[g._bookIndex];
+    const image = new Image(); image.src = data; await image.decode();
+    const cv = document.createElement('canvas'); cv.width=1600; cv.height=960; const c=cv.getContext('2d');
+    c.drawImage(image,0,0); const actual=c.getImageData(0,0,1600,960).data;
+    drawPostcard(c,p,0,0,1600,960,studyRewardEarned(g.save.studio.completed,'swamp'),studyRewardEarned(g.save.studio.completed,'reeds'),!!g.save.flags.crossingPainted);
+    const expected=c.getImageData(0,0,1600,960).data;
+    let diff=0; for(let i=0;i<actual.length;i++) if(actual[i]!==expected[i]) diff++;
+    const caption=c.getImageData(0,820,1600,80).data.slice();
+    drawPostcard(c,{...p,title:'A different caption'},0,0,1600,960,studyRewardEarned(g.save.studio.completed,'swamp'),studyRewardEarned(g.save.studio.completed,'reeds'),!!g.save.flags.crossingPainted);
+    const changed=c.getImageData(0,820,1600,80).data;
+    let captionDiff=0; for(let i=0;i<caption.length;i++) if(caption[i]!==changed[i]) captionDiff++;
+    return {diff,captionDiff,width:image.width,height:image.height};
+  }, 'data:image/png;base64,' + (await fs.readFile(path.join(out,'postcard.png'))).toString('base64'));
+  assert.equal(exportPixels.diff,0); assert.equal(exportPixels.width,1600); assert.equal(exportPixels.height,960); assert(exportPixels.captionDiff>100);
+  report.push({exhibitionExportPixels:exportPixels});
   report.push('Postcard PNG exported successfully');
 
   // Staged entry points, real paint strokes: later studies and progression.
@@ -116,6 +205,26 @@ try {
   await page.reload(); await page.waitForFunction(() => window.__game, null, { polling: 50 }); await tick(100);
   assert.equal(await page.evaluate(() => window.__game.save.studio.completed.length), 3);
   assert.equal(await page.evaluate(() => window.__game.save.sketchbook.length), 1);
+  assert.equal(await page.evaluate(() => window.__game.save.sketchbook[0].title), 'My little swamp 🌿');
+  assert.equal(await page.evaluate(() => window.__game.save.sketchPins.includes(window.__game.save.sketchExhibit)), true);
+  const titlePixels = await page.evaluate(async () => {
+    const {drawPostcard}=await import('./src/studio.js'),{studyRewardEarned}=await import('./src/logic.js');
+    const g=window.__game; g.options.vignette=false; g.banners=[]; g._drawAll();
+    const c=g.canvas.getContext('2d'), before=c.getImageData(26,274,312,187).data.slice(), id=g.save.sketchExhibit;
+    const expected=document.createElement('canvas'); expected.width=g.cw; expected.height=g.ch;
+    drawPostcard(expected.getContext('2d'),g.save.sketchbook.find(p=>p.id===id),26,274,312,187.2,studyRewardEarned(g.save.studio.completed,'swamp'),studyRewardEarned(g.save.studio.completed,'reeds'),!!g.save.flags.crossingPainted);
+    const expectedPx=expected.getContext('2d').getImageData(26,274,312,187).data;
+    const mismatches=[]; let maxDelta=0, totalDiff=0;
+    for(let i=0;i<before.length;i++) if(before[i]!==expectedPx[i]) { totalDiff++; maxDelta=Math.max(maxDelta,Math.abs(before[i]-expectedPx[i])); if(mismatches.length<12) mismatches.push({x:Math.floor(i/4)%312,y:Math.floor(i/(312*4)),actual:before[i],expected:expectedPx[i]}); }
+    if(totalDiff) throw new Error('Title keepsake render mismatch '+JSON.stringify({totalDiff,maxDelta,mismatches,lineCap:c.lineCap,lineJoin:c.lineJoin,lineDash:c.getLineDash(),alpha:c.globalAlpha,composite:c.globalCompositeOperation}));
+    g.save.sketchExhibit=null; g._drawAll(); const after=c.getImageData(26,274,312,187).data;
+    let diff=0; for(let i=0;i<before.length;i++) if(before[i]!==after[i]) diff++;
+    g.save.sketchExhibit=id; g._drawAll(); return diff;
+  });
+  assert(titlePixels>1000,'explicit pinned keepsake actually renders on the title canvas');
+  await page.setViewportSize({width:640,height:480}); await tick(1);
+  await page.screenshot({path:path.join(out,'15-exhibition-title-640.png')});
+  report.push({titleKeepsakePixelDifference:titlePixels,controller:'D-pad to rename/exhibit, A open/save/toggle, B cancel, native input within 640x480'});
   await page.keyboard.press('j'); await tick(1);
   for (const [width, height] of [[960, 720], [1920, 1080], [640, 480]]) {
     await page.setViewportSize({ width, height }); await tick(1);

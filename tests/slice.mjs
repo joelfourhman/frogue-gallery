@@ -114,7 +114,7 @@ export function testSlice({ Game, makeCanvas, assert }) {
   for (let i = 0; i < 20; i++) fileSketch(g.save, { ...page, id: String(i) });
   assert(g.save.sketchbook.length === STUDIO.pageCap && g.save.sketchbook[0].id === '12', 'sketchbook retains the latest eight expeditions');
   const bad = normalizeSketchbook([{ strokes: [[NaN, 0, 0, 0, 1, 2], [-50, 9000, 10, 20, 99, 900]], seconds: Infinity, title: 'x'.repeat(1000) }]);
-  assert(bad[0].strokes.length === 1 && bad[0].strokes[0][0] === 0 && bad[0].strokes[0][4] === 3 && bad[0].seconds === 0 && bad[0].title.length === 64, 'malformed artwork is rejected or clamped before drawing');
+  assert(bad[0].strokes.length === 1 && bad[0].strokes[0][0] === 0 && bad[0].strokes[0][4] === 3 && bad[0].seconds === 0 && bad[0].title.length === 48, 'malformed artwork is rejected or clamped before drawing');
   drawPostcard(g.ctx, page, 0, 0, 1000, 600, true);
   g._openSketchbook(); const runT = g.runT; const hpBook = g.player.hp;
   g._frame(g.last + 50);

@@ -108,7 +108,7 @@ Milestone 1's study registry; Q4 before Q5.
 State/collision rules → one complete side loop → return-path/corner testing →
 stamp integration → visual and pacing verification.
 
-## Milestone 3 — Curate a small exhibition
+## Milestone 3 — Curate a small exhibition — COMPLETE (2026-10-31)
 
 ### Goal
 Let players deliberately keep and present favorite expedition art.

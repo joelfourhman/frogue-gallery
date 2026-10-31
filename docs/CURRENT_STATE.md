@@ -1,6 +1,6 @@
 # Current state — Astra Vertical Slice
 
-**2026-09-26.** The Astra development cycle is complete. This document describes
+**2026-10-31.** Astra and the Q6/Q7 personal exhibition are complete. This document describes
 the implementation. Future work lives in ROADMAP.md and QWEN_BACKLOG.md.
 The runtime version remains 1.0.0 and save version remains 12.
 
@@ -61,7 +61,8 @@ All three completion flags unlock the gold postcard signature.
 ## Sketchbook and saves
 
 J opens a paused sketchbook from a run or menu. It retains the latest eight
-expeditions, with up to 180 quantized strokes per page. Strokes come from
+unpinned expeditions plus at most two pinned pages, with up to 180 quantized
+strokes per page. X or the pin button toggles protection. Strokes come from
 actual successful brush actions and brush-hop marks, sampled with a
 deterministic reservoir as a run gets longer. This is an illustrated souvenir,
 not a pixel-perfect screenshot or combat replay.
@@ -69,9 +70,16 @@ not a pixel-perfect screenshot or combat replay.
 Pages are filed at study completion, opening the in-run book, quitting to the
 title, and the run ending. Re-filing the same expedition updates its page.
 The postcard combines real sampled marks with illustrations of completed
-studies. Export creates a local 1600×960 PNG; nothing is uploaded.
+studies. Name page opens a native plain-text editor (48 code points); Enter or
+Save title confirms, Esc/Cancel discards. Typing owns input, so J/X and gameplay
+shortcuts do not fire. Edited captions survive re-filing. Mouse and D-pad/A/B
+reach these controls; typing requires a keyboard or OS on-screen keyboard.
+Exhibit on title screen explicitly chooses a pinned page; remove or unpin clears
+it, with no automatic replacement. Book, title keepsake and local 1600×960 PNG
+share the postcard renderer and caption. Nothing is uploaded.
 
-Schema 12 gains optional `studio.completed` and `sketchbook` fields.
+Schema 12 has optional `studio.completed`, `sketchbook`, `sketchPins` and
+`sketchExhibit` fields, plus a page `named` flag for preserving edited captions.
 Old saves default to empty values; imported arrays, numbers, identifiers and
 titles are bounded before rendering. No mid-expedition resume is provided.
 Options retain volume zero correctly. Storage denial falls back to memory;
@@ -120,7 +128,7 @@ help study identification. Canvas UI has limited screen-reader support.
 - Physical controller hardware, Firefox, Safari and touch devices were not
   tested in this pass. No touch interface is implemented.
 - Saves are local to each origin/browser. Reload loses the active expedition;
-  saved progression and filed pages survive. Eight-page retention is explicit.
+  saved progression and filed pages survive. Eight rolling pages plus two pins.
 - The fixed studies do not adapt to Wander or appear in the two Reeds biomes.
 - game.js remains large and mixes orchestration, menus and boss presentation.
   Avoid broad refactors while adding content; extract a boundary only with tests.

@@ -1,27 +1,41 @@
-# Project state — Q6 verified; Q7 personal exhibition in progress
+# Project state — Q6/Q7 personal exhibition complete
 
 Q6 closed 2026-10-31: stage 115 characterizes the real Game pin UI (controller
 focus, X, mouse, cap banner, immediate localStorage persistence, input cleanup).
 Real Chromium source/dist journeys exercise key/mouse pin toggles and suspension;
-`node scripts/check.mjs --browser`: all 19 gates PASS. Q7 is next, per
-`docs/PLAN-exhibition.md`. Historical Q6 implementation notes below are retained.
+`node scripts/check.mjs --browser`: all 19 gates PASS.
+
+Q7 implemented 2026-10-31: 48-code-point plain-text captions, native text editor
+with explicit input ownership, mouse/controller save/cancel, explicit pinned-page
+title-screen exhibit/remove, and shared postcard rendering for book/title/PNG.
+Edited captions survive re-filing the same expedition; unpin clears the exhibit.
+Old/malformed saves default safely. Duplicate imported pinned IDs no longer bypass
+the ten-page cap; object-shaped IDs cannot throw during normalization. Versions
+remain Game 1.0.0 / Save 12; no combat, dependency or publication changes.
+
+Tests: stage 116 imports tests/exhibition.mjs; RED observed for missing rename,
+missing browser editor, duplicate-ID overflow and malformed object-ID migration,
+then GREEN. Final `node scripts/check.mjs --browser`: all 19 gates PASS;
+nine pacing bands unchanged, no balance flags. Full-cap escaped-Unicode artwork
+including pin/exhibit metadata: 57,333 UTF-8 bytes (< 81,920). Real Chromium
+source/dist journeys pass key/mouse editing/cancel,
+shortcut isolation, Gamepad API D-pad/A/B pin/name/exhibit/export at 640x480,
+save reload and actual downloaded PNG pixel identity with the shared renderer.
+Mouse/controller PNG downloads are byte-identical; title canvas keepsake pixels
+match the shared postcard renderer. Screens 12–15 in tests/.out/astra show the
+pinned/named book, 640px editor and title keepsake; reviewed for layout/readability.
+Physical controller hardware and Firefox/Safari remain unverified; text entry
+requires a keyboard or OS on-screen keyboard (no new controller alphabet picker).
+
+Next: Q8 is backlog only; this approved Q6/Q7 mission adds no moth encounter.
+Historical implementation records below are retained, not current next actions.
 
 # Previous checkpoint — Astra Q1–Q5 complete (registry, studies, painted crossing loop)
 
-Updated 2026-10-12. **Q6 is nearly complete** (core + UI both committed; the UI
-smoke stage + full gate are still to run): pinned sketchbook pages — at most 2
-pinned page ids that never age out of the rolling 8-page window. The pure
-retention rules (stage 114, 35 assertions green) AND the UI are implemented:
-a pin/unpin button above the postcard (mouse + X key + gamepad focus list), a
-brass pin glyph + PINNED caption on pinned pages, banners on pin/unpin/cap,
-immediate persistence. Full smoke green after the wiring. **Exact next action:
-smoke stage 115** — UI assertions driving the real Game headlessly (focus-list
-membership, X-key toggle, mouse-click toggle, cap banner, localStorage
-persistence) — then the full 19-gate check, then the Q6 closing commit. The
-crossing loop (Q5) remains complete and verified above; the next backlog task
-after Q6 is Q7 (docs/QWEN_BACKLOG.md).
+Q1–Q5 completed 2026-10-12. Q6 core/UI shipped at 5b31f92/56db0dc;
+verification closed at 6306452. Q7 is complete as recorded above.
 
-## Q6 record (2026-10-12, in flight)
+## Q6 implementation record (2026-10-12; verified 2026-10-31)
 
 - `src/logic.js` (pure, committed as the checkpoint): `STUDIO.pinCap: 2`;
   `normalizeSketchPins` (non-array/garbage → [], string-coerced ids, deduped,
@@ -48,14 +62,9 @@ after Q6 is Q7 (docs/QWEN_BACKLOG.md).
   `SaveSys.save` on every toggle); and the sketchbook gamepad focus list now
   includes the pin rect when a page is open. Smoke: ALL SMOKE TESTS PASSED
   after the wiring.
-- **Remaining (→ complete):** smoke stage 115 driving the real Game
-  headlessly — `g._openSketchbook()`, assert the focus list contains the pin
-  rect, `g.input.kb.add('x')` + `g._updateSketchbook()` toggles the pin and
-  the (stub) localStorage save carries `sketchPins`, the 3rd pin is refused
-  with the 'Two pages are pinned' banner, a mouse `lPressed` on the pin rect
-  toggles too — plus an optional frame scene of the pinned book (T0
-  discipline), the full 19-gate check (foreground), and the Q6 closing
-  commit. SAVE_VERSION stays 12, GAME_VERSION 1.0.0.
+- **Verified:** stage 115 covers the real Game pin UI; source/dist journeys
+  exercise DOM keyboard/mouse input, suspension and saved pin reload. All
+  19 gates passed at closure. SAVE_VERSION stays 12, GAME_VERSION 1.0.0.
 
 ## Q5 record (2026-10-12)
 
@@ -313,14 +322,9 @@ HTML5 itch.io path and records alternatives.
 
 ## Next session
 
-Implement **Q6 — preserve two pinned sketchbook pages** (Milestone 3,
-docs/QWEN_BACKLOG.md): optional pinned-ID metadata, maximum two pinned plus
-eight rolling pages. Bounded normalization, deterministic eviction, clear UI.
-Unpinning returns a page to the normal retention policy. Acceptance: repeated
-filing never duplicates a page; pins survive twenty new expeditions and save
-reload; total artwork remains below 80 KiB. Tests: retention across
-pin/unpin/re-file orders, malformed/legacy imports, mouse/controller focus
-and state suspension. Do not revive historical next actions.
+The approved Q6/Q7 mission is complete. Q8/Q9 remain unimplemented backlog;
+human playtests (Q10) and publication still require their own scope/authorization.
+Do not revive historical next actions. See docs/VALIDATION.md for this pass.
 
 No known reproducible game-breaking issue remains in exercised paths.
 Human friend feedback, physical controllers, Firefox/Safari and hosted iframe

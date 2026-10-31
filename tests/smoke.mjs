@@ -9324,11 +9324,14 @@ console.log('== stage 114: Q6 (Astra) — pinned sketchbook pages (cap, retentio
 
 console.log('== stage 115: Q6 — real Game pin UI characterization ==');
 {
-  const { bookLayout } = await import('../src/studio.js');
+  const { bookLayout, drawSketchbook } = await import('../src/studio.js');
   const g = new Game(makeCanvas());
   g.save.sketchbook = ['a', 'b', 'c'].map(id => ({ id, seed: 1, title: id, biome: 'swamp', result: 'study', studies: [], strokes: [[1, 1, 2, 2, 0, 5]] }));
   g.save.sketchPins = []; g._openSketchbook();
   const b = bookLayout(g), focus = g._gpMenuList();
+  const labels = [], ctx = makeCtx(makeCanvas()); ctx.fillText = (text, x, y) => labels.push({ text, y });
+  drawSketchbook(g, ctx);
+  assert(b.pin.y - labels.find(l => l.text === 'A painting only you could make.').y >= 12, 'book subtitle clears the added control row');
   assert(focus.list.some(r => r.x === b.pin.x && r.y === b.pin.y), 'controller focus contains pin');
   const press = k => { g.input.reset(); g.input.kb.add(k); g._updateSketchbook(); };
   press('x'); assert(g.save.sketchPins.includes('c'), 'X pins open page');
@@ -9340,5 +9343,7 @@ console.log('== stage 115: Q6 — real Game pin UI characterization ==');
   press('escape'); assert(!g._bookOpen && !g.input.kb.size, 'closing clears input');
 }
 
+console.log('== stage 116: Q7 — bounded captions and explicit exhibition ==');
+await import('./exhibition.mjs');
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

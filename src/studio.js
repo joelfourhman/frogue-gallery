@@ -1,6 +1,6 @@
 // Living field studies, a bounded brush wake, and the player's own sketchbook.
 // Rule data/validation lives in logic.js. This module has no network or assets.
-import { FIELD_STUDIES, STUDIO, PIGMENTS, PIGMENT_ORDER, studyNode, paintStudy, brushWakeStatus, normalizeStudio, fileSketch, studiesForBiome, studyRewardEarned } from './logic.js';
+import { FIELD_STUDIES, STUDIO, PIGMENTS, PIGMENT_ORDER, studyNode, paintStudy, brushWakeStatus, normalizeStudio, fileSketch, studiesForBiome, studyRewardEarned, renameSketchPage } from './logic.js';
 import { SaveSys } from './save.js';
 import { clamp, TAU } from './math.js';
 import { INK, uiButton, centerText, uiFont, paperPanel, paperEnd } from './ui.js';
@@ -265,7 +265,11 @@ export function bookLayout(g) {
     export: { x: x + 595, y: y + 610, w: 215, h: 38 }, close: { x: x + 850, y: y + 610, w: 180, h: 38 },
     // Q6: the pin toggle — above the postcard's top-right corner (it acts on
     // the open page, so it is only drawn/enabled when a page exists).
-    pin: { x: x + 876, y: y + 82, w: 154, h: 34 }
+    pin: { x: x + 876, y: y + 82, w: 154, h: 34 },
+    rename: { x: x + 270, y: y + 82, w: 180, h: 34 },
+    exhibit: { x: x + 466, y: y + 82, w: 250, h: 34 },
+    confirm: { x: g.cw / 2 - 230, y: g.ch / 2 + 38, w: 210, h: 40 },
+    cancel: { x: g.cw / 2 + 20, y: g.ch / 2 + 38, w: 210, h: 40 }
   };
 }
 
@@ -359,7 +363,7 @@ export function drawSketchbook(g, ctx) {
   ctx.fillStyle = 'rgba(20,31,28,0.88)'; ctx.fillRect(0, 0, g.cw, g.ch);
   const c = paperPanel(ctx, b.x, b.y, b.w, b.h, { seed: 91 });
   centerText(c, 'The Field Sketchbook', g.cw / 2, b.y + 48, uiFont(31, { weight: 700 }), '#304b45');
-  centerText(c, 'A painting only you could make.', g.cw / 2, b.y + 78, uiFont(16, { italic: true }), '#61705e');
+  centerText(c, 'A painting only you could make.', g.cw / 2, b.y + 70, uiFont(16, { italic: true }), '#61705e');
   c.textAlign = 'left'; c.fillStyle = '#304b45'; c.font = uiFont(18, { weight: 700 }); c.fillText('Living studies', b.x + 34, b.y + 144);
   FIELD_STUDIES.forEach((s, i) => {
     const done = (g.save.studio?.completed || []).includes(s.id);
@@ -393,11 +397,48 @@ export function drawSketchbook(g, ctx) {
   }
   const bookBtns = [['prev', '← Previous'], ['next', 'Next →'], ['export', 'Save postcard · PNG'], ['close', 'Close · J / Esc']];
   if (page) bookBtns.push(['pin', pinned ? 'Unpin page · X' : 'Pin page · X']);   // Q6
+  if (page) bookBtns.push(['rename', 'Name page'], ['exhibit', g.save.sketchExhibit === page.id ? 'Remove from title screen' : pinned ? 'Exhibit on title screen' : 'Exhibit · pin page first']);
   for (const [key, label] of bookBtns) {
-    const r = b[key], disabled = key !== 'close' && (!page || (key === 'prev' && g._bookIndex === 0) || (key === 'next' && g._bookIndex >= pages.length - 1));
+    const r = b[key], disabled = key !== 'close' && (!page || (key === 'exhibit' && !pinned) || (key === 'prev' && g._bookIndex === 0) || (key === 'next' && g._bookIndex >= pages.length - 1));
     uiButton(ctx, r.x, r.y, r.w, r.h, label, g._mouseIn(r.x, r.y, r.w, r.h), disabled, { seed: 92, size: 14 });
   }
   paperEnd(ctx);
+  if (g._bookEditor) {
+    ctx.fillStyle = 'rgba(20,31,28,0.92)'; ctx.fillRect(0, 0, g.cw, g.ch);
+    centerText(ctx, 'Name this postcard · 48 characters', g.cw / 2, g.ch / 2 - 70, uiFont(25), '#f6efdb');
+    centerText(ctx, 'Enter saves · Esc cancels · keyboard / on-screen keyboard to type', g.cw / 2, g.ch / 2 + 15, uiFont(15), '#f6efdb');
+    for (const [key, label] of [['confirm', 'Save title'], ['cancel', 'Cancel']]) {
+      const r = b[key]; uiButton(ctx, r.x, r.y, r.w, r.h, label, g._mouseIn(r.x, r.y, r.w, r.h), false, { size: 18 });
+    }
+    const r = g.canvas.getBoundingClientRect(), input = g._bookEditor.input;
+    Object.assign(input.style, { left: `${r.left + (g.cw / 2 - 260) * r.width / g.cw}px`, top: `${r.top + (g.ch / 2 - 45) * r.height / g.ch}px`, width: `${520 * r.width / g.cw}px`, height: `${42 * r.height / g.ch}px`, fontSize: `${24 * r.width / g.cw}px` });
+  }
+}
+
+export function editPostcardTitle(g) {
+  const page = g.save.sketchbook?.[g._bookIndex];
+  if (!page || g._bookEditor) return;
+  const input = document.createElement('input'); input.type = 'text'; input.value = page.title;
+  input.maxLength = 96; input.setAttribute('aria-label', 'Postcard title');
+  input.style.cssText = 'position:fixed;z-index:10;box-sizing:border-box;background:#f6efdb;color:#304b45;border:2px solid #a87825;border-radius:4px;padding:4px;';
+  g.input.reset(); g.input._textOwner = true;
+  g._bookEditor = { id: page.id, input };
+  input.addEventListener('keydown', e => {
+    if (e.isComposing) return;
+    if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); finishPostcardTitle(g, e.key === 'Enter'); }
+    e.stopPropagation();
+  });
+  const boundDraft = () => { input.value = Array.from(input.value).slice(0, 48).join(''); };
+  input.addEventListener('input', e => { if (!e.isComposing) boundDraft(); });
+  input.addEventListener('compositionend', boundDraft);
+  input.addEventListener('keyup', e => e.stopPropagation());
+  document.body.appendChild(input); input.focus(); input.select();
+}
+export function finishPostcardTitle(g, confirm = false) {
+  const editor = g._bookEditor;
+  if (!editor) return;
+  if (confirm && renameSketchPage(g.save, editor.id, editor.input.value)) SaveSys.save(g.save);
+  editor.input.remove(); g._bookEditor = null; g.input._textOwner = false; g.input.reset();
 }
 
 export function exportPostcard(g) {

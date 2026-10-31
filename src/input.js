@@ -24,6 +24,7 @@ export class Input {
 
   _bind(cv) {
     this._kd = (e) => {
+      if (this._textOwner) return; // Native postcard editor owns text, including shortcuts.
       if (e.repeat) return;
       const k = e.key.toLowerCase();
       if (!this.keys.has(k)) this.kb.add(k);

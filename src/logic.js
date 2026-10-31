@@ -204,14 +204,29 @@ const finiteBound = (n, min, max) => typeof n === 'number' && Number.isFinite(n)
 // garbled field degrades to [], ids are string-coerced + deduped, and the
 // list is capped at pinCap (the FIRST two wins — a corrupt blob can never
 // carry more than two pins forward).
+const sketchId = value => ['string', 'number', 'boolean'].includes(typeof value) ? String(value).slice(0, 48) : '';
 export function normalizeSketchPins(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
   for (const v of raw) {
-    const id = String(v ?? '').slice(0, 48);
+    const id = sketchId(v);
     if (id && !out.includes(id)) out.push(id);
   }
   return out.slice(0, STUDIO.pinCap);
+}
+export function normalizeSketchTitle(raw) {
+  if (typeof raw !== 'string') return 'An afternoon in the swamp';
+  const text = raw.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/gu, ' ').trim();
+  return Array.from(text).slice(0, 48).join('') || 'An afternoon in the swamp';
+}
+export function renameSketchPage(save, id, title) {
+  const page = save.sketchbook?.find(p => p.id === id);
+  if (!page) return false;
+  page.title = normalizeSketchTitle(title); page.named = true; return true;
+}
+export function exhibitSketchPage(save, id) {
+  if (!save.sketchPins?.includes(id) || !save.sketchbook?.some(p => p.id === id)) return false;
+  save.sketchExhibit = id; return true;
 }
 export function normalizeSketchbook(raw, pins = []) {
   if (!Array.isArray(raw)) return [];
@@ -223,18 +238,22 @@ export function normalizeSketchbook(raw, pins = []) {
   // no pins → exactly the old last-pageCap behavior.)
   const pinSet = new Set(normalizeSketchPins(pins));
   const keepIdx = new Set();
+  const seen = new Set(); // Imported duplicate IDs keep only their newest valid page.
   let rolling = 0;
   for (let i = raw.length - 1; i >= 0; i--) {
     const p = raw[i];
     if (!p || typeof p !== 'object' || !Array.isArray(p.strokes)) continue;
-    const id = String(p.id || '').slice(0, 48);
+    const id = sketchId(p.id);
+    if (seen.has(id)) continue;
+    seen.add(id);
     if (pinSet.has(id)) { keepIdx.add(i); continue; }
     if (rolling < STUDIO.pageCap) { rolling++; keepIdx.add(i); }
   }
   return raw.filter((p, i) => keepIdx.has(i)).map(p => ({
-    id: String(p.id || '').slice(0, 48),
+    id: sketchId(p.id),
     seed: Math.round(finiteBound(p.seed, 0, 2147483647)),
-    title: String(p.title || 'An afternoon in the swamp').slice(0, 64),
+    title: normalizeSketchTitle(p.title),
+    named: p.named === true,
     biome: ['swamp', 'reeds', 'blackReeds'].includes(p.biome) ? p.biome : 'swamp',
     result: ['study', 'victory', 'defeat', 'unfinished'].includes(p.result) ? p.result : 'unfinished',
     seconds: Math.round(finiteBound(p.seconds, 0, 86400)),
@@ -247,6 +266,8 @@ export function fileSketch(save, page) {
   const pins = normalizeSketchPins(save.sketchPins);
   const pages = normalizeSketchbook([page], pins);
   if (!pages.length || !pages[0].strokes.length) return false;
+  const existing = save.sketchbook?.find(p => p.id === pages[0].id);
+  if (existing?.named) { pages[0].title = existing.title; pages[0].named = true; }
   save.sketchbook = normalizeSketchbook([...(save.sketchbook || []).filter(p => p.id !== pages[0].id), pages[0]], pins);
   return true;
 }
@@ -268,6 +289,7 @@ export function unpinSketchPage(save, id) {
   const idx = pins.indexOf(String(id || ''));
   if (idx < 0) return false;
   save.sketchPins = pins.filter((_, i) => i !== idx);
+  if (save.sketchExhibit === String(id || '')) save.sketchExhibit = null;
   return true;
 }
 
@@ -3056,6 +3078,7 @@ export function freshSave() {
     studio: { completed: [] },
     sketchbook: [],
     sketchPins: [],       // Q6: at most 2 pinned sketchbook page ids (never age out)
+    sketchExhibit: null,  // Q7: explicit pinned title-screen keepsake; no automatic selection
     saveVersion: SAVE_VERSION,
     bank: { red: 0, blue: 0, green: 0 },
     owned: [],            // painting ids
@@ -3297,6 +3320,7 @@ export function migrateSave(raw) {
   const rawPins = normalizeSketchPins(raw.sketchPins);
   out.sketchbook = normalizeSketchbook(raw.sketchbook, rawPins);
   out.sketchPins = rawPins.filter(id => out.sketchbook.some(p => p.id === id));
+  out.sketchExhibit = typeof raw.sketchExhibit === 'string' && out.sketchPins.includes(raw.sketchExhibit) ? raw.sketchExhibit : null;
   // B6: apply the version migration chain, then stamp the current version.
   // Legacy saves stored the version under `v`; read either key. The chain
   // rewrites `out` in place (mutating the normalized fields) as it walks

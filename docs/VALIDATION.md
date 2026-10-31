@@ -1,5 +1,64 @@
 # Validation — Astra Vertical Slice
 
+## Personal exhibition follow-up — 2026-10-31 (Q6/Q7)
+
+`node scripts/check.mjs --browser`: all 19 gates PASS, including all nine
+unchanged pacing bands, no balance flags, source/dist Chromium journeys,
+36 frame scenes, deterministic package and bounded effects/performance checks.
+Game 1.0.0 / Save 12 and zero runtime dependencies remain unchanged.
+
+- Stage 115 characterizes shipped Q6 behavior through the real Game: X and
+  mouse pin/unpin, controller focus, two-pin refusal/banner, immediate save,
+  input cleanup. Existing stage 114 retains pin/eviction/re-file/migration checks.
+- Stage 116 (`tests/exhibition.mjs`) covers 48-code-point plain-text captions,
+  whitespace/control/bidi cleanup, empty/malformed defaults, missing page no-op,
+  preserving names across re-filing, explicit pinned-only exhibit, unpin clear,
+  missing/stale/malformed exhibit fallback and unchanged legacy art/strokes.
+- Full-cap fixture: ten pages × 180 maximum-coordinate strokes, all study IDs,
+  maximum metadata and escaped Unicode captions/IDs, including pin/exhibit
+  metadata: **57,333 UTF-8 bytes**, below **81,920 bytes (80 KiB)**.
+- New regressions reproduce and fix malformed duplicate pinned IDs exceeding
+  the ten-page cap, and object-shaped JSON IDs throwing during migration.
+- Actual DOM key/mouse tests open, type, confirm/cancel and reload captions.
+  Long ASCII and astral Unicode draft text stay within 48 code points live.
+  J/X/M typed into the editor never close the book, toggle pins or enter gameplay.
+- An injected Gamepad API device exercises the real polling/focus/click path:
+  D-pad navigation, A pin/unpin/name/save/exhibit/remove/PNG export, B cancel.
+  Editor confirm/cancel are the only focus targets while editing; B does not
+  close the surrounding book. This is not physical controller hardware testing.
+- Mouse and controller download identical PNG bytes. Decoded **1600×960**
+  browser download matches the shared postcard renderer with **zero differing
+  channel values**; a changed caption changes **16,967** caption-region values.
+- After real localStorage reload, the edited name, pin and explicit selection
+  remain. The actual title-canvas postcard region matches the shared renderer
+  pixel-for-pixel; removing the exhibit changes **175,016** channel values.
+- Evidence: `tests/.out/astra/{12-pinned-book,13-named-book,14-editor-640,
+  15-exhibition-title-640}.png`, `postcard.png`, `controller-postcard.png`,
+  `report.json`. Changed book/editor/title frames were visually reviewed.
+  A crowded book subtitle was moved clear of the new control row and covered
+  by a layout regression. 640×480 editor field and save/cancel stay on-screen;
+  title menu buttons remain unobscured. Fine print naturally shrinks at 640px.
+
+RED/GREEN evidence was observed for the absent caption API/editor, live input
+bound, malformed-save defects and header clearance. Generated logs/artifacts
+are ignored under `.cache/` and `tests/.out/`; no fake renderer screenshots.
+The smoke canvas remains a stub for logic/layout; pixel claims above come from
+real Chromium source AND built-runtime journeys.
+An exact-pixel test exposed intermittent Chromium GPU/readback rounding (one
+channel value by one, not changed content). Browser journeys now request
+`willReadFrequently` CPU rasterization in the test harness only; exact zero-diff
+assertions remain intact. Twenty consecutive built-runtime journeys then passed.
+The separate frame/performance harnesses still exercise the normal canvas path.
+
+Limits: typing uses a keyboard or OS on-screen keyboard; no controller alphabet
+picker was added. Physical controllers, real IME hardware input, Firefox/Safari,
+human enjoyment and hosted iframe/download behavior remain unverified. No
+publication or account/profile configuration changes occurred. The available
+Discord tools expose reads/thread/admin actions but no message-send action, so
+commit handles are reported in the delivery summary instead of channel pings.
+
+## Original Astra validation record
+
 Recorded 2026-09-26. Reproduce with `node scripts/check.mjs --browser`.
 This command fails on nonzero exits, missing success markers and any enforced
 pacing band violation. Full output and timings are saved in .cache/checks/.

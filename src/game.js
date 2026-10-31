@@ -7,7 +7,8 @@ import { Player } from './player.js';
 import { Paint } from './paint.js';
 import { spawnEnemy, drawEnemy } from './enemies.js';
 import { Input } from './input.js';
-import { FieldStudio, sketchbookButton, bookLayout, drawSketchbook, exportPostcard } from './studio.js';
+import { FieldStudio, sketchbookButton, bookLayout, drawSketchbook, exportPostcard, editPostcardTitle, finishPostcardTitle, drawPostcard } from './studio.js';
+import { exhibitSketchPage, studyRewardEarned } from './logic.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
@@ -459,13 +460,19 @@ export class Game {
     this.input.reset(); this.sfx('ui');
   }
 
-  _closeSketchbook() { this._bookOpen = false; this.input.reset(); this.sfx('ui-back'); }
+  _closeSketchbook() { finishPostcardTitle(this); this._bookOpen = false; this.input.reset(); this.sfx('ui-back'); }
 
   _updateSketchbook() {
     const input = this.input, b = bookLayout(this), n = (this.save.sketchbook || []).length;
+    if (this._bookEditor) {
+      if (input.mouse.lPressed) for (const key of ['confirm', 'cancel']) {
+        const r = b[key]; if (this._mouseIn(r.x, r.y, r.w, r.h)) finishPostcardTitle(this, key === 'confirm');
+      }
+      return;
+    }
     if (input.pressed('j') || input.pressed('escape')) { this._closeSketchbook(); return; }
     let action = input.pressed('arrowleft') ? 'prev' : input.pressed('arrowright') ? 'next' : null;
-    if (input.mouse.lPressed) for (const key of ['prev', 'next', 'export', 'close', 'pin']) {
+    if (input.mouse.lPressed) for (const key of ['prev', 'next', 'export', 'close', 'pin', 'rename', 'exhibit']) {
       const r = b[key]; if (this._mouseIn(r.x, r.y, r.w, r.h)) action = key;
     }
     if (input.pressed('x')) action = 'pin';   // Q6: the pin toggle (a free key while the book is open)
@@ -473,6 +480,12 @@ export class Game {
     if (action === 'next') this._bookIndex = Math.max(0, Math.min(n - 1, this._bookIndex + 1));
     if (action === 'export') exportPostcard(this);
     if (action === 'close') this._closeSketchbook();
+    if (action === 'rename') editPostcardTitle(this);
+    if (action === 'exhibit') {
+      const pg = this.save.sketchbook?.[this._bookIndex];
+      if (pg && this.save.sketchExhibit === pg.id) { this.save.sketchExhibit = null; SaveSys.save(this.save); }
+      else if (pg && exhibitSketchPage(this.save, pg.id)) SaveSys.save(this.save);
+    }
     if (action === 'pin') {
       // Q6: pin/unpin the open page. The pure rules (cap of 2, idempotence,
       // retention) live in logic.js; this is the interaction layer — the
@@ -665,7 +678,7 @@ export class Game {
   // of precedence (an open overlay owns the focus).
   _gpMenuList() {
     const g = this;
-    if (g._bookOpen) { const b = bookLayout(g); const pg = (g.save.sketchbook || [])[g._bookIndex]; return { id: 'sketchbook', list: [b.prev, b.next, b.export, b.close, ...(pg ? [b.pin] : [])] }; }
+    if (g._bookOpen) { const b = bookLayout(g); const pg = (g.save.sketchbook || [])[g._bookIndex]; return g._bookEditor ? { id: 'postcard-title', list: [b.confirm, b.cancel] } : { id: 'sketchbook', list: [b.prev, b.next, b.export, b.close, ...(pg ? [b.pin, b.rename, ...((g.save.sketchPins || []).includes(pg.id) ? [b.exhibit] : [])] : [])] }; }
     if (g.state === 'title') {
       if (g.optionsOpen) {
         const o = g._optionsLayout();
@@ -722,6 +735,7 @@ export class Game {
 
   // W2: B backs out one level, per the current state.
   _gpMenuBack() {
+    if (this._bookEditor) { finishPostcardTitle(this); return; }
     const g = this;
     if (g._bookOpen) { g._closeSketchbook(); return; }
     if (g.state === 'title' && g.optionsOpen) { g._closeOptions(); g.sfx('ui-back'); return; }
@@ -7604,6 +7618,12 @@ _drawAtelier(ctx) {
     // a slow breathing bob (draw-only; no world/player state). Sits in the
     // lower-left, clear of the centered title panel.
     this._drawIdleFrog(ctx);
+    const keepsake = this.save.sketchPins?.includes(this.save.sketchExhibit) && this.save.sketchbook?.find(p => p.id === this.save.sketchExhibit);
+    if (keepsake) {
+      ctx.fillStyle = '#a87825'; ctx.fillRect(20, 268, 324, 204);
+      drawPostcard(ctx, keepsake, 26, 274, 312, 187.2, studyRewardEarned(this.save.studio?.completed || [], 'swamp'), studyRewardEarned(this.save.studio?.completed || [], 'reeds'), !!this.save.flags?.crossingPainted);
+      centerText(ctx, 'Your pinned keepsake · J to curate', 182, 498, uiFont(16), '#f6efdb');
+    }
 
     const cx = this.cw / 2;
     const bob = Math.sin(this.now * 1.4) * 4;

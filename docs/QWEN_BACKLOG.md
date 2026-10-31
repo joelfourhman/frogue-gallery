@@ -73,7 +73,7 @@ Do not relax bands to hide a failure. No new runtime dependency.
   frame evidence and full pacing gate.
 - **Dependencies:** Q4.
 
-## Q6 [P2] — Preserve two pinned sketchbook pages
+## Q6 [P2] — Preserve two pinned sketchbook pages — COMPLETE
 - **Purpose:** Prevent a favorite artwork from aging out.
 - **Files:** src/logic.js, src/studio.js, tests/slice.mjs.
 - **Requirements:** Optional pinned-ID metadata, maximum two pinned plus eight
@@ -85,7 +85,7 @@ Do not relax bands to hide a failure. No new runtime dependency.
   mouse/controller focus and state suspension.
 - **Dependencies:** Milestone 0.
 
-## Q7 [P2] — Name and exhibit a favorite page
+## Q7 [P2] — Name and exhibit a favorite page — COMPLETE
 - **Purpose:** Complete Milestone 3's personal exhibition.
 - **Files:** src/studio.js, src/game.js, src/logic.js,
   tests/vertical-slice.mjs.
