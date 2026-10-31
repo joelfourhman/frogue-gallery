@@ -3,7 +3,7 @@
 // world paint layer and applies pigment damage + statuses to anything it touches.
 'use strict';
 import { TAU, clamp, dist, dist2 } from './math.js';
-import { PIGMENTS, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus, REEDS_FLOOD_FLOOR } from './logic.js';
+import { PIGMENTS, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus, REEDS_FLOOD_FLOOR, mothPaint } from './logic.js';
 import { UI, uiFont } from './ui.js';
 
 // S1 (v1.9): the creatures with a DEDICATED per-creature hit sting (the 6
@@ -415,6 +415,7 @@ export class Paint {
     const fired = {};
     const blip = { burn: 'burn-ignite', freeze: 'freeze-tick', root: 'root-thud' };
     for (const e of hits) {
+      if (e.kind === 'moth') mothPaint(e, pig, this.world.mothFlower);
       // K1 (v1.5 M1) front-arc SHELL deflection (the Mud Turtle). The factor is
       // computed from the player position; side/back paint deals full damage
       // and RED BURN bypasses it entirely (it never routes through a paint

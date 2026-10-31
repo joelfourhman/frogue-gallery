@@ -42,6 +42,70 @@ export function mosquitoStep(e, dt, player) {
   }
 }
 
+// Lantern moth: finite in-run rules. Only the frog's carried lantern owns the
+// lure; ambient fireflies/rest stones never acquire an attack target. A frame
+// crosses at most one boundary, so a long/resumed frame cannot skip the tell.
+export const LANTERN_MOTH = Object.freeze({ cap: 2, tell: 0.6, dash: 0.35, recover: 1.4, range: 145, speed: 62, dashSpeed: 330, flowerRange: 130, reward: 2 });
+export function mothCanSpawn(enemies) {
+  return enemies.filter(e => e.kind === 'moth' && !e.dead).length < LANTERN_MOTH.cap;
+}
+export function mothPaint(e, pigment, flower) {
+  if (pigment !== 'blue' || e.dead || e.hp <= 0 || e.mothSettled) return;
+  e.mothPhase = 'settle'; e.mothT = LANTERN_MOTH.recover;
+  e.mothFlowerTarget = flower?.green && Math.hypot(e.x - flower.x, e.y - flower.y) <= LANTERN_MOTH.flowerRange ? flower : null;
+}
+export function mothReward(e) {
+  if (!e.mothSettled || e.mothRewarded || e.dead || e.hp <= 0) return 0;
+  e.mothRewarded = true;
+  return LANTERN_MOTH.reward;
+}
+export function mothContact(e) {
+  return !e.dead && e.hp > 0 && e.mothPhase === 'dash' && !e.status;
+}
+export function mothStep(e, dt, light) {
+  dt = Math.max(0, Math.min(0.1, Number.isFinite(dt) ? dt : 0));
+  e.mothPhase ||= 'approach';
+  if (e.dead || e.hp <= 0 || !light?.alive) {
+    e.mothPhase = 'approach'; e.mothT = 0; e.mothBlue = false; e.mothFlowerTarget = null; return;
+  }
+  const stunned = e.status && ['freeze', 'root', 'dizzy'].includes(e.status.type);
+  if (stunned && (e.mothPhase === 'tell' || e.mothPhase === 'dash')) {
+    e.mothPhase = 'settle'; e.mothT = LANTERN_MOTH.recover;
+  }
+  if (e.mothPhase === 'settle') {
+    if (e.mothSettled) return;
+    if (e.mothFlowerTarget) {
+      const f = e.mothFlowerTarget;
+      if (!f.green) e.mothFlowerTarget = null;
+      else {
+        if (!stunned && Math.hypot(e.x - f.x, e.y - f.y) <= 8) e.mothSettled = true;
+        return; // adapter glides to the flower after thaw; no re-armed dash
+      }
+    }
+    if (!stunned) {
+      e.mothT = Math.max(0, e.mothT - dt);
+      if (e.mothT <= 1e-8) e.mothPhase = 'approach';
+    }
+    return;
+  }
+  if (!light.lit || light.owner !== 'player') { e.mothPhase = 'approach'; e.mothT = 0; return; }
+  if (stunned) return;
+  if (e.mothPhase === 'approach') {
+    const d = Math.hypot(light.x - e.x, light.y - e.y);
+    if (d <= LANTERN_MOTH.range) {
+      e.mothPhase = 'tell'; e.mothT = LANTERN_MOTH.tell;
+      e.mothDX = d > 0 ? (light.x - e.x) / d : 1;
+      e.mothDY = d > 0 ? (light.y - e.y) / d : 0;
+    }
+  } else {
+    e.mothT = Math.max(0, e.mothT - dt);
+    if (e.mothT <= 1e-8) {
+      if (e.mothPhase === 'tell') { e.mothPhase = 'dash'; e.mothT = LANTERN_MOTH.dash; }
+      else { e.mothPhase = 'settle'; e.mothT = LANTERN_MOTH.recover; }
+    }
+  }
+}
+
 // ---------------------------------------------------------------- enemies
 // Field studio rules: optional finite content; studio.js owns the presentation.
 export const FIELD_STUDIES = [
@@ -294,6 +358,8 @@ export function unpinSketchPage(save, id) {
 }
 
 export const ENEMIES = {
+  // Authored encounter only: deliberately absent from all wave/mode tables.
+  moth: { id: 'moth', name: 'Lantern Moth', hp: 60, speed: 62, dmg: 4, radius: 16, armor: 0, fly: true, score: 10, paintTintDecay: 0.4 },
   beetle: {
     id: 'beetle', name: 'Mud Beetle', hp: 36, speed: 40, dmg: 6, radius: 16,
     armor: 0.35,          // fraction of physical damage blocked (burn ignores it)

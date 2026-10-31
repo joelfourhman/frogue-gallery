@@ -3,7 +3,7 @@
 // them is handled by paint.js. Enemies here own movement + contact attacks.
 'use strict';
 import { TAU, clamp, dist, lerp } from './math.js';
-import { ENEMIES, stepStatus, physicalDamage, lightFactor, REEDS_BESTIARY, wispBlinded, leechDrain, PIGMENTS, MOSQUITO_FLIGHT, mosquitoStep } from './logic.js';
+import { ENEMIES, stepStatus, physicalDamage, lightFactor, REEDS_BESTIARY, wispBlinded, leechDrain, PIGMENTS, MOSQUITO_FLIGHT, mosquitoStep, LANTERN_MOTH, mothStep, mothContact } from './logic.js';
 import { UI, uiFont } from './ui.js';
 
 // ------------------------------------------------------------------
@@ -390,6 +390,30 @@ export class Enemy {
     const stunned = this.status && (this.status.type === 'dizzy' || this.status.type === 'freeze' || this.status.type === 'root');
     const spd = this.speed * this.statusSpeed();
 
+    if (this.kind === 'moth') {
+      const light = this.mothLight || { alive: player.alive, lit: false };
+      mothStep(this, dt, light);
+      this.vx = 0; this.vy = 0;
+      if (!stunned && player.alive && !this.mothSettled) {
+        const target = this.mothPhase === 'settle' ? this.mothFlowerTarget : this.mothPhase === 'approach' && light.lit && light.owner === 'player' ? light : null;
+        if (target) {
+          const d = Math.hypot(target.x - this.x, target.y - this.y);
+          const speed = Math.min(this.speed * this.statusSpeed(), d / Math.max(dt, 0.001));
+          if (d > 0) { this.vx = (target.x - this.x) / d * speed; this.vy = (target.y - this.y) / d * speed; }
+        } else if (this.mothPhase === 'dash') {
+          this.vx = this.mothDX * LANTERN_MOTH.dashSpeed;
+          this.vy = this.mothDY * LANTERN_MOTH.dashSpeed;
+        }
+      }
+      this.x += this.vx * dt; this.y += this.vy * dt;
+      [this.x, this.y] = world.collideCircle(this.x, this.y, this.r);
+      if (mothContact(this) && this.attackCd <= 0 && player.alive && player.iframes <= 0 && dist(this.x, this.y, player.x, player.y) < this.r + player.r + 2) {
+        this.attackCd = 0.9;
+        const dmg = physicalDamage(this.dmg, this, tuning, tuning.playerDmgReduce || 0) * (tuning.dmgTakenMult || 1);
+        if (player.hurt(dmg, tuning)) this._lastHit = now;
+      }
+      return;
+    }
     // R3 (v1.6 Module R): the light-rewritten bestiary (Reeds archetypes). Each
     // carries custom movement/behavior (wisp homing + blind spin, the serpent's
     // burrow/telegraph/surface cycle, the leech's cling + drain) — the generic

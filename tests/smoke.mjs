@@ -9345,5 +9345,7 @@ console.log('== stage 115: Q6 — real Game pin UI characterization ==');
 
 console.log('== stage 116: Q7 — bounded captions and explicit exhibition ==');
 await import('./exhibition.mjs');
+console.log('== stage 117: Q8 — bounded lantern moth rules and enemy/paint adapters ==');
+await import('./moth.mjs');
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

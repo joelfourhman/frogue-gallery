@@ -1,4 +1,19 @@
-# Project state — Q6/Q7 personal exhibition complete
+# Project state — Q8 rules complete; Q9 encounter in progress
+
+Q8 closed 2026-10-31: pure bounded approach/tell/dash/settle rules,
+600ms direction-locked warning, dash-only contact, player-owned lantern lure,
+blue interruption, green-flower settlement and a one-time +2 blue reward latch.
+Enemy and actual landed Paint adapters implemented; moth is NOT in any live
+spawn table. Maximum-two predicate; freeze/root/dizzy recovery, death/darkness,
+wrong pigments/range, repeat settlement and enemy contact/glide covered by
+stage 117 (`tests/moth.mjs`). Four vertical RED/GREEN slices observed for missing
+rules, counter/reward/cap, Enemy adapter and landed blue paint routing.
+`node scripts/check.mjs`: all 15 core gates PASS, all nine pacing bands IN,
+balance none flagged. Existing combat values/mixes and versions unchanged.
+Next: Q9 authored optional ordinary post-victory Reeds encounter, presentation,
+actual browser inputs and cleanup matrix, then all 19 browser gates.
+
+# Previous checkpoint — Q6/Q7 personal exhibition complete
 
 Q6 closed 2026-10-31: stage 115 characterizes the real Game pin UI (controller
 focus, X, mouse, cap banner, immediate localStorage persistence, input cleanup).
