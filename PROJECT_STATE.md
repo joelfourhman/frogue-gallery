@@ -27,7 +27,10 @@ pinned/named book, 640px editor and title keepsake; reviewed for layout/readabil
 Physical controller hardware and Firefox/Safari remain unverified; text entry
 requires a keyboard or OS on-screen keyboard (no new controller alphabet picker).
 
-Next: Q8 is backlog only; this approved Q6/Q7 mission adds no moth encounter.
+Next active mission: Q8/Q9 lantern-moth encounter, authorized by Joel's
+"Keep going" after Q6/Q7 completion. Plan: docs/PLAN-lantern-moth.md.
+Implement bounded rules first, then one optional post-victory Reeds encounter;
+full core/browser gates required. No publication or participant outreach.
 Historical implementation records below are retained, not current next actions.
 
 # Previous checkpoint — Astra Q1–Q5 complete (registry, studies, painted crossing loop)
