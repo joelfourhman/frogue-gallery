@@ -2,6 +2,7 @@
 'use strict';
 import { traceBlob, wobble, clamp, dist2, TAU, mulberry32 } from './math.js';
 import { INK, sat, mixColor, centerText, uiFont } from './ui.js';
+import { PondLife } from './wildlife.js';
 import { REEDS_WIDTH, REEDS_DARK_WIDTH, REEDS_POCKETS, REEDS_FLOOD_FLOOR, REEDS_FLOOD_FACTOR, REEDS_DARK_POCKETS, REEDS_DARK_FLOOD_FLOOR, REEDS_DARK_FLOOD_FACTOR, REEDS_DARK_BESTIARY_DENSITY, CROSSING, crossingTransition, crossingSolids, MOTH_NOOK, strokeTouches } from './logic.js';
 
 const WSCALE = 0.5; // paint layer resolution factor
@@ -231,6 +232,8 @@ export class World {
     this.reeds = [];          // grown reeds: {x,y,h,burn}
     this.slick = [];          // fresh blue slick: {x,y,r,t}
     this.build();
+    // Dedicated cosmetic RNG: no terrain or spawn rolls consumed.
+    this.pondLife = new PondLife(seed, this.w, this.h, this.reedsVariant, this.blackReeds);
 
     // paint layer
     const pw = Math.ceil(this.w * WSCALE), ph = Math.ceil(this.h * WSCALE);
@@ -516,6 +519,7 @@ export class World {
 
   splat(x, y, pigment, r, strong) {
     if (x < 0 || y < 0 || x > this.w || y > this.h) return;
+    this.pondLife.paint(x, y, pigment);
     const cell = this.cellAt(x, y);
     cell.age = 3.2;
     if (pigment !== 'dry') cell[pigment] = Math.min(3, cell[pigment] + (strong ? 1 : 0.6));
@@ -574,6 +578,7 @@ export class World {
   pigmentAt(x, y) { return this.cellAt(x, y); }
 
   update(dt) {
+    this.pondLife.update(dt);
     // age & decay pigment grid
     for (const [key, c] of this.pigmentGrid) {
       if (c.age > 0) {
@@ -1253,6 +1258,8 @@ export class World {
       gl++;
     }
     ctx.globalAlpha = 1;
+
+    this.pondLife.draw(ctx, view, colorSat, px, py);
 
     // Q5 (Astra): the painted crossing — the bramble wall at the detour
     // mouth (a fixed world prop; pure draw-time, so P10 culls it like every

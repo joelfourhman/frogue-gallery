@@ -9411,5 +9411,25 @@ console.log('== stage 118: Q9 — authored Reeds moth encounter, live stroke and
   g.options.wander=false; g.save.ngCycle=1; g.save.flags.reedsVictory=true;
   g._beginExpedition(false,{reeds:true}); assert(!g.world.mothFlower,'no Black Reeds leak');
 }
+console.log('== stage 119: living-study feedback and coat progress ==');
+await import('./studio-feedback.mjs');
+console.log('== stage 120: bounded decorative pond wildlife ==');
+await import('./wildlife.mjs');
+console.log('== stage 121: paused field atlas and mode-safe landmarks ==');
+const { runAtlasGameTests } = await import('./atlas.mjs');
+runAtlasGameTests(Game, makeCanvas);
+console.log('== stage 122: first-click aim follows the latest pointer ==');
+{
+  const g = new Game(makeCanvas()); g._beginExpedition();
+  g.input.setView({ x: 2700, y: 400, scale: 1, w: 1280, h: 800 });
+  g.input.mouse.worldX = 0; g.input.mouse.worldY = 0;
+  g.input._md({ clientX: 538, clientY: 396, button: 0 });
+  assert(g.input.mouse.worldX === 3238 && g.input.mouse.worldY === 796,
+    'mouse-down resolves fresh world coordinates before player samples aim');
+  g.input.setView({ x: 1000, y: 200, scale: 2, w: 1280, h: 800 });
+  g.input._mm({ clientX: 400, clientY: 300 });
+  assert(g.input.mouse.worldX === 1200 && g.input.mouse.worldY === 350,
+    'immediate pointer resolution respects zoom and camera origin');
+}
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

@@ -154,6 +154,40 @@ export function studiesForBiome(biome, { challenge = false, wander = false } = {
   if (challenge || wander) return [];
   return FIELD_STUDIES.filter(s => s.biome === biome);
 }
+
+// Field atlas: a bounded, read-only view of the current expedition. Landmarks
+// come from live state; the map never invents a checkpoint or grants progress.
+export function fieldAtlasSnapshot({ biome = 'swamp', width = 5400, height = 1500,
+  player, studies = [], remembered = [], rests = [], checkpoints = [], crossingState, mothFlower,
+  challenge = false, wander = false } = {}) {
+  const w = Number.isFinite(width) && width > 0 ? width : 5400;
+  const h = Number.isFinite(height) && height > 0 ? height : 1500;
+  const point = p => p && Number.isFinite(p.x) && Number.isFinite(p.y)
+    ? { x: Math.max(0, Math.min(w, p.x)), y: Math.max(0, Math.min(h, p.y)) } : null;
+  const frog = point(player) || { x: 0, y: h / 2 };
+  const live = Array.isArray(studies) ? studies : [];
+  const subjects = studiesForBiome(biome, { challenge, wander }).map(def => {
+    const state = live.find(s => s?.id === def.id);
+    const step = Number.isFinite(state?.step) ? Math.max(0, Math.min(3, Math.floor(state.step))) : 0;
+    const coats = step === 3 ? 0 : Number.isFinite(state?.coats) ? Math.max(0, Math.min(STUDIO.coats, Math.floor(state.coats))) : 0;
+    return { id: def.id, name: def.name, x: def.x, y: def.y, step, coats,
+      remembered: Array.isArray(remembered) && remembered.includes(def.id),
+      complete: step === 3, color: def.colors[step] || null, verb: def.verbs[step] || 'A living memory' };
+  }).sort((a, b) => a.x - b.x);
+  const nearest = subjects.filter(s => !s.complete).sort((a, b) =>
+    Math.hypot(a.x - frog.x, a.y - frog.y) - Math.hypot(b.x - frog.x, b.y - frog.y))[0] || null;
+  const points = (items, cap) => Array.isArray(items) ? items.slice(0, cap).map(point).filter(Boolean) : [];
+  const authored = !challenge && !wander;
+  return { width: w, height: h, frog, studies: subjects, next: nearest,
+    rests: biome === 'reeds' || biome === 'blackReeds' ? points(rests, 16) : [],
+    checkpoints: points(checkpoints, 4),
+    crossing: authored && biome === 'swamp' && CROSSING_STATES.includes(crossingState)
+      ? { x: CROSSING.x, y: CROSSING.y, state: crossingState } : null,
+    moth: authored && biome === 'reeds' && point(mothFlower)
+      ? { ...point(mothFlower), resting: !!mothFlower.resting, green: !!mothFlower.green } : null,
+    title: biome === 'blackReeds' ? 'The Black Reeds' : biome === 'reeds' ? 'Beneath the Reeds' : 'The Watercolor Swamp',
+    mode: challenge ? 'Curator Challenge' : wander ? 'Wandering expedition' : 'An afternoon of discoveries' };
+}
 // Q1: pure reward check — true only when every ID of the group is completed.
 export function studyRewardEarned(completed, group = 'swamp') {
   const g = STUDY_GROUPS[group];

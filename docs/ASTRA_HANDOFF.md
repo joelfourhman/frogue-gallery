@@ -1,5 +1,9 @@
 # Astra handoff — 2026-09-26
 
+Historical handoff. Q1–Q9 below have since shipped. For current work read
+PROJECT_STATE.md and the 2026-11-11 ROADMAP.md; the recommended Q1 task at the
+end of this historical record is no longer a next action.
+
 The major development cycle is complete as **Astra Vertical Slice**.
 Start with PROJECT_STATE.md, then CURRENT_STATE.md. Do not restart the old
 v1.1/v1.10 plans. Read source and tests whenever a document disagrees.

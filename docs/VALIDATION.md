@@ -1,5 +1,12 @@
 # Validation — Astra Vertical Slice
 
+## Living Sketchbook follow-up — 2026-11-11
+
+All 19 core/browser gates pass with the paused Field Atlas, study feedback,
+bounded pond wildlife and immediate first-click aim repair. See
+[VALIDATION-living-sketchbook.md](VALIDATION-living-sketchbook.md) for coverage,
+reviewed screenshots, unchanged pacing, artifact hash and remaining limits.
+
 ## Lantern moth follow-up — 2026-10-31 (Q8/Q9)
 
 Milestone 4 is complete. See `docs/VALIDATION-lantern-moth.md` for the rule/

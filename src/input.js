@@ -49,6 +49,10 @@ export class Input {
       const r = cv.getBoundingClientRect();
       this.mouse.x = (e.clientX - r.left) * cv.width / (r.width || cv.width);
       this.mouse.y = (e.clientY - r.top) * cv.height / (r.height || cv.height);
+      // Movement samples aim before the next simulation-side input refresh.
+      // Resolve a new move/click now so its first stroke uses this pointer,
+      // rather than the previous frame's direction through a moving camera.
+      this.update();
     };
     this._md = (e) => {
       this._mm(e);

@@ -1,6 +1,6 @@
-# Current state — Astra Vertical Slice
+# Current state — The Living Sketchbook
 
-**2026-10-31.** Astra and the Q6/Q7 personal exhibition are complete. This document describes
+**2026-11-11.** Astra, Q1–Q9 and the Living Sketchbook expansion are implemented. This document describes
 the implementation. Future work lives in ROADMAP.md and QWEN_BACKLOG.md.
 The runtime version remains 1.0.0 and save version remains 12.
 
@@ -35,14 +35,32 @@ playtest durations**. Studies are optional and add unmeasured exploration time.
 
 ## New field studio
 
-Three hand-authored studies occupy the normal swamp when Wander is off.
-They are absent from Curator Challenges and Reeds runs.
+Three hand-authored studies occupy the normal swamp and two occupy ordinary
+Reeds when Wander is off. They are absent from Curator Challenges, Wander and
+Black Reeds runs. Nearby paper cards show the active pigment/verb and coat
+count, including brief guidance for an aimed wrong-color stroke. Instructions
+draw above the Reeds darkness; the target circles remain in the world.
 
 | Study | Position | Painting sequence | Result |
 |---|---|---|---|
 | First Light | 640, 750 | Blue → green → red | Water, lilies, dancing fireflies |
 | The Rain Choir | 2300, 720 | Green → blue → red | Reeds, rain, warm flower bells |
 | A Borrowed Sky | 3940, 760 | Red → blue → green | Sun, reflection, flying birds |
+
+Reeds adds The Lantern Garden and The Echo Pool. Completing the Reeds pair
+grants a cosmetic woven border independently of the swamp's golden signature.
+The optional painted crossing near Rain Choir responds to green/blue/red;
+the optional Reeds lantern-moth nook teaches green flowers and blue interruption.
+
+V opens a paused Field Atlas with the frog, live study progress, remembered
+studies, visited checkpoints, lantern rests and available authored side paths.
+It also opens from the pause menu with mouse/controller. V/Esc, Return or
+controller B closes it, preserving prior pause and clearing held actions.
+Landmarks are mode-aware. The atlas is a field sketch, not a collision map.
+
+Each world has 24 decorative dragonflies/pond skaters from a separate seeded
+random stream. Nearby paint elicits a 3.4-second pigment response; rendering is
+culled outside the viewport. They do not affect combat, collision or saves.
 
 Aim at the active numbered circle and apply three coats per stage. Wrong
 colors and distant/backward strokes do not count. Each completed stage
@@ -93,6 +111,8 @@ the existing warning tells the player that progress may not persist.
 | src/game.js | State machine, frame orchestration, world/boss integration, HUD/menus, gamepad routing |
 | src/logic.js | Pure rules, tuning, progression, save normalization, study and wake rules |
 | src/studio.js | FieldStudy presentation/runtime, bounded stroke journal, sketchbook UI, PNG export |
+| src/atlas.js | Paused field map and live expedition landmark presentation |
+| src/wildlife.js | Fixed-cap cosmetic pond life, separate RNG and expiring pigment response |
 | src/player.js | Movement, hop, collision, damage/heal/death |
 | src/paint.js | Swipe/splash, paint surfaces, enemy/boss paint application; onStroke callback for studio |
 | src/enemies.js | Enemy instances, behavior and procedural art; boss render/state helpers |
@@ -129,7 +149,7 @@ help study identification. Canvas UI has limited screen-reader support.
   tested in this pass. No touch interface is implemented.
 - Saves are local to each origin/browser. Reload loses the active expedition;
   saved progression and filed pages survive. Eight rolling pages plus two pins.
-- The fixed studies do not adapt to Wander or appear in the two Reeds biomes.
+- Fixed studies do not adapt to Wander or appear in Black Reeds; ordinary Reeds has two.
 - game.js remains large and mixes orchestration, menus and boss presentation.
   Avoid broad refactors while adding content; extract a boundary only with tests.
 - Several legacy probes duplicate a headless harness and rely partly on

@@ -1,5 +1,15 @@
 # Environment and tool changes
 
+## Living Sketchbook — 2026-11-11
+
+No software, dependency, service or machine setting installed or changed.
+Used the existing Node.js 24.22.1, Git, playwright-core and local Chromium.
+Chromium required execution outside the sandbox's process restrictions;
+all game/browser traffic remained on loopback with isolated test profiles.
+Test servers and browser processes close in their harness cleanup paths.
+Generated evidence uses the existing ignored dist/, .cache/ and tests/.out/
+directories. No public upload, remote push or participant outreach.
+
 ## Astra pass — 2026-09-26
 
 No software, browser, package, service, system configuration or global

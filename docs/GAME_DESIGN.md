@@ -115,8 +115,9 @@ the world should stay readable during crowded fights.
 
 ## Deliberate boundaries of this slice
 
-Three authored swamp studies, one earned ability, three difficulty choices,
-the established campaign/biomes, and an exportable sketchbook constitute a
-complete milestone. Reeds studies, exhibit curation, additional environmental
-paint interactions and new enemy ecology are later expansion. No account,
+Five authored studies across swamp/Reeds, one earned ability, three difficulty
+choices, the established campaign and an exportable curated sketchbook form the
+current experience. The painted crossing and lantern moth provide optional
+detours. A paused Field Atlas helps find them; progress cards make brush feedback
+explicit and bounded decorative wildlife responds to pigment. No account,
 online leaderboard, cloud save, touch UI or public deployment was added.

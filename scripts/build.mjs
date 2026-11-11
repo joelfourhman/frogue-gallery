@@ -38,5 +38,5 @@ end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(entries.length, 8); end.writ
 end.writeUInt32LE(centralBuf.length, 12); end.writeUInt32LE(offset, 16);
 const zip = Buffer.concat([...locals, centralBuf, end]);
 await fs.writeFile(path.join(ROOT, 'dist', 'frogue-gallery.zip'), zip);
-await fs.writeFile(path.join(ROOT, 'dist', 'manifest.json'), JSON.stringify({ milestone: 'Astra Vertical Slice', files: manifest, zipSha256: crypto.createHash('sha256').update(zip).digest('hex') }, null, 2) + '\n');
+await fs.writeFile(path.join(ROOT, 'dist', 'manifest.json'), JSON.stringify({ milestone: 'The Living Sketchbook', files: manifest, zipSha256: crypto.createHash('sha256').update(zip).digest('hex') }, null, 2) + '\n');
 console.log(`BUILD READY: dist/frogue-gallery/ and dist/frogue-gallery.zip (${entries.length} files, ${Math.ceil(zip.length / 1024)} KiB)`);

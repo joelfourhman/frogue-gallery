@@ -478,6 +478,8 @@ try {
   report.push('Defeat, title return and fresh expedition restart verified');
   const {mothBrowser}=await import('./moth-browser.mjs');
   await mothBrowser({page,tick,out,report});
+  const { livingSketchbookBrowser } = await import('./living-sketchbook-browser.mjs');
+  await livingSketchbookBrowser({page,tick,out,report});
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(out, 'report.json'), JSON.stringify({ report, errors }, null, 2));
   console.log(JSON.stringify(report, null, 2));

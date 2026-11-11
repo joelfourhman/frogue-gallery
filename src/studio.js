@@ -1,6 +1,6 @@
 // Living field studies, a bounded brush wake, and the player's own sketchbook.
 // Rule data/validation lives in logic.js. This module has no network or assets.
-import { FIELD_STUDIES, STUDIO, PIGMENTS, PIGMENT_ORDER, studyNode, paintStudy, brushWakeStatus, normalizeStudio, fileSketch, studiesForBiome, studyRewardEarned, renameSketchPage } from './logic.js';
+import { FIELD_STUDIES, STUDIO, PIGMENTS, PIGMENT_ORDER, studyNode, strokeTouches, paintStudy, brushWakeStatus, normalizeStudio, fileSketch, studiesForBiome, studyRewardEarned, renameSketchPage } from './logic.js';
 import { SaveSys } from './save.js';
 import { clamp, TAU } from './math.js';
 import { INK, uiButton, centerText, uiFont, paperPanel, paperEnd } from './ui.js';
@@ -13,7 +13,7 @@ export class FieldStudio {
     this.game = game;
     game.save.studio = normalizeStudio(game.save.studio);
     this.studies = studiesForBiome(game.runBiome, { challenge: !!game.challenge, wander: !!game.options.wander })
-      .map(s => ({ ...s, step: 0, coats: 0, bloom: 0 }));
+      .map(s => ({ ...s, step: 0, coats: 0, bloom: 0, wrongT: 0, coatFlash: 0 }));
     this.strokes = []; this.seen = 0; this.wakes = []; this.hopId = 0; this.wakeT = 0;
     this.id = `${game.runSeed}-${game.save.stats.expeditions}`;
   }
@@ -47,7 +47,17 @@ export class FieldStudio {
     this.record(stroke);
     for (const study of this.studies) {
       const before = study.step;
-      if (!paintStudy(study, stroke)) continue;
+      if (!paintStudy(study, stroke)) {
+        // A quiet, replacing instruction, only for an actual hit on the active
+        // target. Reuse the same pure geometry as paintStudy; never award a coat.
+        if (study.step < 3 && (stroke.kind === 'swipe' || stroke.kind === 'splash') && study.wrongT <= 0 &&
+            [stroke.x, stroke.y, stroke.a, stroke.range].every(Number.isFinite)) {
+          const target = studyNode(study);
+          if (stroke.pigment !== target.pigment && strokeTouches(stroke, target.x, target.y)) study.wrongT = 1.8;
+        }
+        continue;
+      }
+      study.wrongT = 0; study.coatFlash = 0.35;
       const node = studyNode(study, before);
       g.particles.splatter(node.x, node.y, PIGMENTS[stroke.pigment].color, 5, 50);
       if (study.step !== before) {
@@ -80,7 +90,11 @@ export class FieldStudio {
 
   update(dt) {
     const g = this.game, p = g.player;
-    for (const study of this.studies) study.bloom = Math.max(0, study.bloom - dt * 0.5);
+    for (const study of this.studies) {
+      study.bloom = Math.max(0, study.bloom - dt * 0.5);
+      study.wrongT = Math.max(0, study.wrongT - dt);
+      study.coatFlash = Math.max(0, study.coatFlash - dt);
+    }
     for (const wake of this.wakes) wake.t -= dt;
     this.wakes = this.wakes.filter(w => w.t > 0);
     if (this.sheltered()) p.iframes = Math.max(p.iframes, 0.08);
@@ -130,7 +144,6 @@ export class FieldStudio {
       ctx.save(); ctx.translate(s.x, s.y);
       drawLivingStudy(ctx, s, now);
       centerText(ctx, s.name, 0, -112, uiFont(18, { italic: true }), '#304b45');
-      const nearby = distance(this.game.player, s) < 280;
       if (s.step < 3) {
         for (let i = 0; i < 3; i++) {
           const node = studyNode(s, i), x = node.x - s.x, y = node.y - s.y;
@@ -141,21 +154,51 @@ export class FieldStudio {
           centerText(ctx, i < s.step ? '✓' : String(pigmentKey(s.colors[i])), x, y + 5, uiFont(16, { weight: 700 }), INK);
           if (i === s.step) {
             ctx.beginPath(); ctx.arc(x, y, 24, -Math.PI / 2, -Math.PI / 2 + TAU * s.coats / STUDIO.coats); ctx.stroke();
+            if (s.coatFlash > 0) {
+              ctx.globalAlpha = s.coatFlash / 0.35;
+              ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.arc(x, y, 25 + 10 * (1 - s.coatFlash / 0.35), 0, TAU); ctx.stroke();
+            }
           }
         }
         ctx.globalAlpha = 1;
-        if (nearby) {
-          centerText(ctx, `${pigmentKey(s.colors[s.step])} · ${s.verbs[s.step]}`, 0, 100, uiFont(16, { weight: 700 }), INK);
-          centerText(ctx, 'Aim at the numbered circle and hold paint', 0, 120, uiFont(12), '#3b5651');
-        }
-      } else if (nearby) centerText(ctx, 'Living study · saved in Sketchbook [J]', 0, 108, uiFont(13, { italic: true }), '#304b45');
+      }
       ctx.restore();
     }
   }
 
   drawHint(ctx) {
     const g = this.game;
-    if (g._tutorialActive() || g.help || g.paused) return;
+    if (g._tutorialActive() || g.help || g.paused || !g.player?.alive) return;
+    // Screen-space paper stays readable in the Reeds, above its darkness mask.
+    // At most one panel, with no new input ownership or simulation state.
+    let nearby = null, nearest = 280;
+    for (const study of this.studies) {
+      const d = distance(g.player, study);
+      if (d < nearest) { nearby = study; nearest = d; }
+    }
+    if (nearby) {
+      const s = nearby, w = Math.min(580, g.cw - 40), x = (g.cw - w) / 2, y = g.ch - 132;
+      const c = paperPanel(ctx, x, y, w, 104, { seed: 87 });
+      centerText(c, s.step < 3 ? `${s.name} · Step ${s.step + 1} / 3` : `${s.name} · Study complete`, g.cw / 2, y + 26, uiFont(18, { weight: 700 }), INK);
+      if (s.step < 3) {
+        const pigment = s.colors[s.step], paint = PIGMENTS[pigment];
+        centerText(c, `${pigmentKey(pigment)} · ${paint.name} (${pigment}) — ${s.verbs[s.step]}`, g.cw / 2, y + 51, uiFont(18), INK);
+        const dotsX = g.cw / 2 - 170;
+        for (let i = 0; i < STUDIO.coats; i++) {
+          c.fillStyle = i < s.coats ? paint.color : '#e7d9c2';
+          c.strokeStyle = '#665b4c'; c.lineWidth = 1.5;
+          c.beginPath(); c.arc(dotsX + i * 16, y + 78, 5, 0, TAU); c.fill(); c.stroke();
+        }
+        centerText(c, `Coats ${s.coats} / ${STUDIO.coats}`, g.cw / 2 - 72, y + 84, uiFont(16, { weight: 700 }), INK);
+        centerText(c, s.wrongT > 0 ? `Try ${paint.name} on this circle` : 'Aim at the circle · Hold paint', g.cw / 2 + 114, y + 84, uiFont(16), s.wrongT > 0 ? '#893d29' : '#3b5651');
+      } else {
+        centerText(c, 'Your postcard is saved. The swamp remembers.', g.cw / 2, y + 53, uiFont(18), '#304b45');
+        centerText(c, 'J · Open your sketchbook     Keep exploring when ready →', g.cw / 2, y + 82, uiFont(16), INK);
+      }
+      paperEnd(ctx);
+      return;
+    }
     const first = this.studies[0];
     if (!first || first.step === 3 || g.player.x > 1000 || this.unlocked) return;
     const c = paperPanel(ctx, 370, g.ch - 62, 540, 40, { seed: 87 });

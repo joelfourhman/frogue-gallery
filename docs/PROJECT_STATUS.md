@@ -1,7 +1,8 @@
 # Project status
 
-**Astra Vertical Slice is complete.** The old v1.10-only plan is superseded
-by the user's major development request.
+**The Living Sketchbook follows the completed Astra and Q1–Q9 milestones.**
+The active roadmap was rewritten on 2026-11-11 around discovery, responsive
+painting and decorative ecology. See PROJECT_STATE.md for verified closure.
 
 - Live next action: [PROJECT_STATE.md](../PROJECT_STATE.md).
 - What exists: [CURRENT_STATE.md](CURRENT_STATE.md).

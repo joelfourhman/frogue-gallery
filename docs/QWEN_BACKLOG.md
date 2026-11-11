@@ -1,7 +1,10 @@
 # Qwen backlog
 
-This is future implementation work after the completed Astra milestone.
-Read ASTRA_HANDOFF.md and CURRENT_STATE.md first. No known P0 crash or
+Q1–Q9 are complete as of 2026-10-31. Their specifications below are retained
+as implementation history, not pending assignments. The 2026-11-11 active
+roadmap is **The Living Sketchbook**, in ROADMAP.md. Q10's local facilitator
+kit is prepared in PLAYTEST.md; real sessions/Q11 and publication/Q12 remain
+pending. Read PROJECT_STATE.md first. No known P0 crash or
 softlock remains from the tested paths. A newly reproduced game-breaking bug
 becomes P0 and takes priority over this expansion backlog.
 
@@ -11,7 +14,7 @@ and one coherent commit. Use `node scripts/check.mjs`; use `--browser`
 when changing gameplay rendering/input, saves or delivery.
 Do not relax bands to hide a failure. No new runtime dependency.
 
-## Q1 [P1] — Make study definitions aware of biomes and reward groups
+## Q1 [P1] — Make study definitions aware of biomes and reward groups — COMPLETE
 - **Purpose:** A safe extension point for Milestone 1's Reeds art.
 - **Files:** src/logic.js, src/studio.js, tests/slice.mjs.
 - **Requirements:** Keep the current three definitions/IDs unchanged. Add a
@@ -23,9 +26,9 @@ Do not relax bands to hide a failure. No new runtime dependency.
   registered. Old schema 12 saves round-trip unchanged.
 - **Tests:** Selector/reward group/migration assertions; existing browser
   source/dist journeys.
-- **Dependencies:** Milestone 0. **Recommended first task.**
+- **Dependencies:** Milestone 0. Completed; do not restart this task.
 
-## Q2 [P1] — Implement Lantern Garden end to end
+## Q2 [P1] — Implement Lantern Garden end to end — COMPLETE
 - **Purpose:** First optional painting discovery in ordinary Reeds.
 - **Files:** src/logic.js, src/studio.js, tests/slice.mjs,
   tests/vertical-slice.mjs.
@@ -38,7 +41,7 @@ Do not relax bands to hide a failure. No new runtime dependency.
   Reeds pacing and all core gates.
 - **Dependencies:** Q1.
 
-## Q3 [P2] — Add Echo Pool and its Reeds border reward
+## Q3 [P2] — Add Echo Pool and its Reeds border reward — COMPLETE
 - **Purpose:** Finish Milestone 1 with a second distinct subject.
 - **Files:** src/logic.js, src/studio.js, tests/slice.mjs.
 - **Requirements:** Blue→red→green ripples/stars/birds at another safe fixed
@@ -49,7 +52,7 @@ Do not relax bands to hide a failure. No new runtime dependency.
   screenshots, full check command.
 - **Dependencies:** Q2.
 
-## Q4 [P2] — Model the optional painted crossing
+## Q4 [P2] — Model the optional painted crossing — COMPLETE
 - **Purpose:** Collision-safe foundation for Milestone 2.
 - **Files:** src/logic.js, src/world.js, tests/smoke.mjs.
 - **Requirements:** Add pure state transitions for green crossing/blue current/
@@ -61,7 +64,7 @@ Do not relax bands to hide a failure. No new runtime dependency.
   transitions and restart cleanup.
 - **Dependencies:** Q1.
 
-## Q5 [P2] — Build and illustrate one complete side loop
+## Q5 [P2] — Build and illustrate one complete side loop — COMPLETE
 - **Purpose:** Make Q4's rules discoverable in play.
 - **Files:** src/world.js, src/studio.js, src/game.js, tests/vertical-slice.mjs.
 - **Requirements:** One small detour near Rain Choir with visible interactable

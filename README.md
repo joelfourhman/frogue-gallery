@@ -4,7 +4,7 @@ A tiny frog paints a gray swamp back to life. Burn pursuers with crimson,
 freeze a diving fly with cobalt, grow a little pond into a living painting,
 and bring home a postcard made from your own brush strokes.
 
-**Astra Vertical Slice — completed development milestone, 2026-09-26.**
+**The Living Sketchbook — exploration and painting update, 2026-11-11.**
 The compatibility identifiers remain game 1.0.0 / save schema 12.
 
 ## Play locally
@@ -33,8 +33,11 @@ and teaches **brush-hop**: hold paint while hopping to leave a defensive wake.
 Two more living studies await along the swamp.
 
 The optional guided practice on the title teaches each pigment and the
-three-color boss awakening. H opens the Field Guide; J opens your sketchbook.
-Both pause the action. Every expedition can leave a keepsake, even a defeat.
+three-color boss awakening. V opens the Field Atlas, H the Field Guide, and J
+your sketchbook. All pause the action. The atlas shows your next unfinished
+study and optional detours; nearby study cards explain each coat of paint.
+Dragonflies and pond skaters quietly respond to your brush. Every expedition
+can leave a keepsake, even a defeat.
 
 ## Controls
 
@@ -48,6 +51,7 @@ Both pause the action. Every expedition can leave a keepsake, even a defeat.
 | Dry brush | 4 | LT |
 | Lantern, in the Reeds | L | LB |
 | Pause / sketchbook | P or Esc / J | Start / Back |
+| Field Atlas (pauses expedition) | V; V or Esc to close | Pause → Field Atlas; B to close |
 | Guide / mute | H or ? / M | Guide available from pause |
 | Menu navigation | Mouse / displayed shortcuts | D-pad, A confirm, B back |
 

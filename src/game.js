@@ -9,6 +9,7 @@ import { spawnEnemy, drawEnemy } from './enemies.js';
 import { MOTH_NOOK, mothEncounterAllowed, mothCanSpawn, mothReward } from './logic.js';
 import { Input } from './input.js';
 import { FieldStudio, sketchbookButton, bookLayout, drawSketchbook, exportPostcard, editPostcardTitle, finishPostcardTitle, drawPostcard } from './studio.js';
+import { atlasButton, atlasLayout, drawFieldAtlas } from './atlas.js';
 import { exhibitSketchPage, studyRewardEarned } from './logic.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
@@ -461,6 +462,22 @@ export class Game {
     this.input.reset(); this.sfx('ui');
   }
 
+  _openAtlas() {
+    if (this.state !== 'expedition' || this.dying || this.help || this._bookOpen || this._cine || this.heron?.flying > 0 || this.heron?.sinking > 0) return;
+    this._atlasOpen = true;
+    if (this.player) this.player.splashCharge = 0;
+    this.input.reset(); this.sfx('ui');
+  }
+
+  _closeAtlas() { this._atlasOpen = false; this.input.reset(); this.sfx('ui-back'); }
+
+  _updateAtlas() {
+    const b = atlasLayout(this).close;
+    if (this.input.pressed('v') || this.input.pressed('escape') ||
+        (this.input.mouse.lPressed && this._mouseIn(b.x, b.y, b.w, b.h))) this._closeAtlas();
+    else if (this.input.pressed('m')) this._muteToggle();
+  }
+
   _closeSketchbook() { finishPostcardTitle(this); this._bookOpen = false; this.input.reset(); this.sfx('ui-back'); }
 
   _updateSketchbook() {
@@ -606,7 +623,7 @@ export class Game {
     // a menu shouldn't be dropped mid-choice). This split is what keeps W1's
     // in-run keys from leaking into the menus (space would Start the game,
     // 1/2/3 would switch atelier tabs, a would open the Atelier from the title).
-    const inRun = this.state === 'expedition' && !this.dying && !this.paused && !this.help && !this._bookOpen;
+    const inRun = this.state === 'expedition' && !this.dying && !this.paused && !this.help && !this._bookOpen && !this._atlasOpen;
     if (inRun) {
       // Recency gate: a stale in-run pad disengages + releases its keys.
       if (!gamepadActive(this.options, pad, now, gp.lastActiveMs, GAMEPAD_INACTIVITY_MS)) {
@@ -679,6 +696,7 @@ export class Game {
   // of precedence (an open overlay owns the focus).
   _gpMenuList() {
     const g = this;
+    if (g._atlasOpen) return { id: 'atlas', list: [atlasLayout(g).close] };
     if (g._bookOpen) { const b = bookLayout(g); const pg = (g.save.sketchbook || [])[g._bookIndex]; return g._bookEditor ? { id: 'postcard-title', list: [b.confirm, b.cancel] } : { id: 'sketchbook', list: [b.prev, b.next, b.export, b.close, ...(pg ? [b.pin, b.rename, ...((g.save.sketchPins || []).includes(pg.id) ? [b.exhibit] : [])] : [])] }; }
     if (g.state === 'title') {
       if (g.optionsOpen) {
@@ -714,6 +732,7 @@ export class Game {
           { x: px, y: py0 + 164, w: pw, h: 44 },   // Resume
           { x: px, y: py0 + 216, w: pw, h: 44 },   // Quit to the Pond
           sketchbookButton(g),
+          atlasButton(),
         ] };
       }
       return null;   // active in-run: no menu focus (W1 feed is active)
@@ -738,6 +757,7 @@ export class Game {
   _gpMenuBack() {
     if (this._bookEditor) { finishPostcardTitle(this); return; }
     const g = this;
+    if (g._atlasOpen) { g._closeAtlas(); return; }
     if (g._bookOpen) { g._closeSketchbook(); return; }
     if (g.state === 'title' && g.optionsOpen) { g._closeOptions(); g.sfx('ui-back'); return; }
     if (g.state === 'expedition' && g.help) { g.help = false; g.sfx('ui-back'); return; }
@@ -954,9 +974,21 @@ export class Game {
     const dt = clamp((t - this.last) / 1000, 0, 0.05);
     this.last = t;
     this.now = t / 1000;
+    const atlasWasOpen = this._atlasOpen;
     this._pollGamepad();
+    if (this._atlasOpen || atlasWasOpen) {
+      if (this._atlasOpen) this._updateAtlas();
+      this._drawAll(); this.input.endFrame(); return;
+    }
     if (this._bookOpen) {
       this._updateSketchbook(); this._drawAll(); this.input.endFrame(); return;
+    }
+    if (this.state === 'expedition' && !this.dying && !this.help && !this._cine) {
+      const a = atlasButton();
+      if (this.input.pressed('v') || (this.paused && this.input.mouse.lPressed && this._mouseIn(a.x, a.y, a.w, a.h))) {
+        this._openAtlas();
+        if (this._atlasOpen) { this._drawAll(); this.input.endFrame(); return; }
+      }
     }
     const bookButton = sketchbookButton(this);
     const bookMenu = (this.state !== 'expedition' || this.paused) && !this.optionsOpen && !this._encoreOpen && !this._modPrompt && !this._seedCard && !this._cine;
@@ -1284,6 +1316,7 @@ export class Game {
   _quitToTitle() {
     if (this.state === 'expedition') this.studio?.archive('unfinished');
     this._bookOpen = false;
+    this._atlasOpen = false;
     this.input.reset();
     this.state = 'title';
     this.paused = false;
@@ -2924,6 +2957,8 @@ _drawAtelier(ctx) {
   }
 
   _beginExpedition(guided = false, opts = {}) {
+    this._atlasOpen = false;
+    this._atlasCheckpoints = [];
     // R1 (v1.6 Module R): `opts.reeds` marks a BENEATH-THE-REEDS expedition
     // (the victory-gated, darker, deeper-swamp variant). It changes ONLY the
     // world variant (the light economy is populated) and activates THE LANTERN
@@ -4236,6 +4271,7 @@ _drawAtelier(ctx) {
     // rest checkpoint: thick green paint mends 3 HP per tick when you rest in it
     const rx = clamp(p.x + 560, 0, W - 60);
     const ry = clamp(p.y, 120, this.world.h - 120);
+    if (this._atlasCheckpoints.length < 4) this._atlasCheckpoints.push({ x: rx, y: ry });
     this.world.paintSplash(rx, ry, 110, 'green');
     this.particles.leafPuff(rx, ry - 40, '#9ed483', 3);
     for (let i = 0; i < 2; i++) {
@@ -6551,6 +6587,10 @@ _drawAtelier(ctx) {
     if (!this.optionsOpen && !this._encoreOpen && !this._modPrompt && !this._seedCard && !this._cine && (this.state !== 'expedition' || this.paused)) {
       const b = sketchbookButton(this);
       uiButton(ctx, b.x, b.y, b.w, b.h, 'Sketchbook  [J]', this._mouseIn(b.x, b.y, b.w, b.h), false, { seed: 93, size: 14 });
+      if (this.state === 'expedition' && this.paused && !this.help) {
+        const a = atlasButton();
+        uiButton(ctx, a.x, a.y, a.w, a.h, 'Field Atlas  [V]', this._mouseIn(a.x, a.y, a.w, a.h), false, { seed: 719, size: 14 });
+      }
     }
     this._drawGpFocus(ctx);
     this._drawGpChip(ctx);
@@ -6609,12 +6649,13 @@ _drawAtelier(ctx) {
     // beyond the options toggle; skipped entirely when the option is off.
     this._drawGrain(ctx);
     if (this._bookOpen) { drawSketchbook(this, ctx); this._drawGpFocus(ctx); }
+    if (this._atlasOpen) { drawFieldAtlas(this, ctx); this._drawGpFocus(ctx); }
 
     // J2 (v1.4): the boss-defeat white flash — a brief screen-wide white wash
     // that peaks on the defeat frame and fades over ~0.3s. Pure presentation
     // (gated by options.shake via whiteFlash); drawn last so it washes over
     // the heron's bloom at the moment of the big moment.
-    if (this._whiteFlash > 0 && this.state === 'expedition') {
+    if (this._whiteFlash > 0 && this.state === 'expedition' && !this._atlasOpen) {
       ctx.save();
       ctx.globalAlpha = Math.min(0.9, this._whiteFlash);
       ctx.fillStyle = '#ffffff';
@@ -7049,7 +7090,7 @@ _drawAtelier(ctx) {
     ctx.fillStyle = '#d8d3bb'; ctx.fillRect(hopX + 12, hopY + 23, 122, 6);
     ctx.fillStyle = '#62845b'; ctx.fillRect(hopX + 12, hopY + 23, 122 * clamp(1 - p.hopCd / (t.hopCooldown || 0.7), 0, 1), 6);
     centerText(ctx, p.hopCd > 0 ? 'catching a breath' : this.studio?.unlocked ? 'hold paint for a wake' : 'ready to leap', hopX + 73, hopY + 39, uiFont(9, { italic: true }), INK, 0.7);
-    centerText(ctx, 'H · field guide     J · sketchbook', this.cw - 148, this.ch - 20, uiFont(12), this.lanternReeds ? '#f3ead7' : INK, 0.8);
+    centerText(ctx, 'V · atlas   H · guide   J · sketchbook', this.cw - 148, this.ch - 20, uiFont(12), this.lanternReeds ? '#f3ead7' : INK, 0.8);
 
     const h = this.heron;
     if (h && h._intro <= 0 && h.hp > 0 && h.flying <= 0) {
@@ -7967,7 +8008,7 @@ _drawAtelier(ctx) {
     }
 
     // footer
-    centerText(c, this._gp.connected ? 'Left stick move · Right stick aim · RT paint · RB hop · B splash · Start pause · Back sketchbook' : 'WASD / arrows move · Space hop · J sketchbook · P pause · M mute', g.cx, g.py + g.ph - 22, uiFont(UI.sizes.label, { italic: true }), INK, 0.6);
+    centerText(c, this._gp.connected ? 'Left stick move · Right stick aim · RT paint · RB hop · B splash · Start pause / atlas · Back sketchbook' : 'WASD / arrows move · Space hop · V atlas · J sketchbook · P pause · M mute', g.cx, g.py + g.ph - 22, uiFont(UI.sizes.label, { italic: true }), INK, 0.6);
     // T4 (v1.2 M13): the "Watch me" retraining band — replay a single pigment
     // drill or the sketch-heron phase on demand (opt-in; never auto-enters, and
     // the replay is a frozen aside that never counts toward the timed run).
@@ -8050,7 +8091,7 @@ _drawAtelier(ctx) {
     uiButton(ctx, px, py + 164, pw, 44, 'Resume', this._mouseIn(px, cy - ph / 2 + 164, pw, 44), false, { seed: 41, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
     uiButton(ctx, px, py + 216, pw, 44, 'Quit to the Pond', this._mouseIn(px, cy - ph / 2 + 216, pw, 44), false, { seed: 42, size: 16, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
     ctx.restore();
-    centerText(c, 'M to mute', cx, py + 286, uiFont(UI.sizes.small, { italic: true }), INK, 0.6);
+    centerText(c, 'V · field atlas    M · mute', cx, py + 286, uiFont(UI.sizes.small, { italic: true }), INK, 0.6);
     paperEnd(ctx);
   }
 

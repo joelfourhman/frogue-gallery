@@ -7,13 +7,16 @@ Python server). Stop only the server process belonging to this project.
 Do not kill every Node/Python process on the machine.
 
 The Astra browser tests own free-port servers and close them at completion.
-The local preview left for this task uses127.0.0.1:8766.
+The earlier Astra pass recorded a preview at 127.0.0.1:8766. The Living
+Sketchbook pass uses only harness-owned free-port servers; it does not leave
+a new persistent server running.
 
 ## Generated directories
 
 These are ignored by Git and may be regenerated:
 - dist/: runtime folder, upload ZIP and manifest; `node scripts/build.mjs`.
 - .cache/checks/: text logs and JSON check report.
+- .cache/atlas-review.png and .cache/studio-*.png: local visual review evidence.
 - .cache/astra-logs/: this development pass's earlier diagnostic logs.
 - tests/.out/astra/: browser screenshots, postcard and report.
 - tests/frames/astra/: staged render screenshots and manifest.

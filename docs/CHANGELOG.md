@@ -1,3 +1,17 @@
+# The Living Sketchbook — 2026-11-11
+
+- V opens a paused Field Atlas with current study progress, remembered scenes,
+  nearest unfinished study and the expedition's available side paths/rests.
+  Mouse and controller access also live in the pause menu.
+- Study instruction cards show the needed pigment, action and coat count;
+  aimed wrong-color strokes get quiet guidance, including above Reeds darkness.
+- 24 decorative dragonflies and pond skaters quietly respond to nearby paint,
+  with a separate deterministic random stream and bounded, fading effects.
+- First-click aiming now resolves fresh pointer coordinates immediately,
+  preventing a fast stroke from using the prior frame's direction.
+- Reconciled the roadmap with completed Q1–Q9 work and prepared the anonymous
+  five-player facilitator kit. Save 12 / Game 1.0.0 remain compatible.
+
 # Astra Vertical Slice — 2026-09-26
 
 Built on c1ea26b; no runtime/save-version bump.

@@ -1,4 +1,49 @@
-# Project state — Milestone 4 Q8/Q9 complete
+# Project state — The Living Sketchbook complete (2026-11-11)
+
+Rewrote docs/ROADMAP.md against the implemented Q1–Q9 baseline and dispatched
+three implementation agents with separate file ownership. Shipped milestones
+A–C: a paused Field Atlas, clearer living-study paint feedback, and decorative
+pond wildlife. Prepared docs/PLAYTEST.md for the next human-feedback milestone.
+
+- **Field Atlas:** V or pause-menu button, mouse/Esc/V/controller return,
+  current study coats/stages, saved memories, nearest unfinished study, real
+  zone rest locations, Reeds lantern rests, crossing and moth nook. Content
+  obeys biome/Wander/Challenge gates. No save writes, fast travel or new schema.
+  Opening clears held input/charge; return preserves the previous pause state.
+- **Painting:** nearby paper cards name pigment/number/action and coats; aimed
+  wrong-color strokes get brief quiet feedback, successful coats pulse the
+  target, completion points to the saved postcard. Reeds cards sit above dark
+  masking. Existing study rules, rewards and art retention remain unchanged.
+- **Pond life:** 24 seeded dragonflies/skaters per world, offscreen draw culling,
+  gentle frog avoidance and pigment curiosity lasting 3.4 seconds. Separate
+  RNG; tests preserve terrain and shared RNG signatures in all three biomes.
+- **Input repair:** real browser regression exposed first-click aim using the
+  previous frame's pointer after camera movement. Mouse move/down now resolve
+  world coordinates immediately through the current input view. The live
+  wrong-color → correct-color test failed before and passes after the fix.
+
+Verification: `node scripts/check.mjs --browser` **all 19 gates PASS**; smoke
+ends `ALL SMOKE TESTS PASSED`, including new stages 119–122. Source/dist real
+DOM key/mouse and injected-controller journeys pass. All 36 frame scenes and
+bounded performance gates pass. Atlas at 1280/640px, swamp/Reeds study cards
+and pigment-responsive wildlife screenshots were visually reviewed. Evidence:
+docs/VALIDATION-living-sketchbook.md; tests/.out/astra/23–28 PNGs.
+
+Balance before/after: no flags; no combat tuning changed. Pacing unchanged:
+Normal 17.2m / human model 18.3m; heron 37.0s; Reeds 22.2m; Warden 3.54–3.90m;
+Black Reeds 25.6m; Umbral 3.73m; NG+ 19.5m; Wander 16.9–17.8m / Reeds 21.6–22.7m.
+CPU draw-submission p95: quiet 0.80ms, peak/ceiling 1.20ms, sustained 1.40ms;
+these are local probe measurements, not displayed FPS or human experience.
+
+Game 1.0.0 / Save 12; no new dependencies or machine installations. Built ZIP
+SHA-256: `2e7c716d7a81b8be4cc79a2a4c97dd08821d44194c1ffa2f7a8e427c0eeb17dc`.
+No remote publication, participant outreach or analytics. Full results and
+facilitator kit are ready; real participants, physical controllers and
+Firefox/Safari remain unverified. Next: owner-arranged human sessions, then
+evidence-driven Q11 fixes; Q12 hosting still needs host/account/visibility and
+publication authorization. Historical next-action notes below are superseded.
+
+# Previous checkpoint — Milestone 4 Q8/Q9 complete
 
 Q8 committed at **40baf4c** (2026-10-31): bounded pure rules, Enemy/Paint
 adapters, no live wave-table exposure; all 15 core gates PASS at closure,
