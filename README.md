@@ -5,6 +5,7 @@ freeze a diving fly with cobalt, grow a little pond into a living painting,
 and bring home a postcard made from your own brush strokes.
 
 **One continuous dungeon — four floors, one final boss, 2026-11-11.**
+The latest pass adds deeper gardens, clearer combat cues and varied brush gifts.
 The compatibility identifiers remain game 1.0.0 / save schema 12.
 
 ## Play locally
@@ -27,19 +28,25 @@ The Node server additionally restricts served files to the game itself.
 ## First expedition
 
 Press Enter. Repaint pale lilies, flowers, mushrooms and stones any color.
-Your colors stay on these objects for this expedition. Walk right to the
+Your colors stay on these objects for the current floor. Paint all four objects
+in a garden cluster for a small bloom celebration; recolored mushrooms chime.
+Deeper floors add hanging lanterns and swaying whisper reeds. Walk right to the
 **Lily Clearing** bell and paint it to start a short, optional three-round fight.
 Red lanes warn of an attack: dodge sideways with Space, then paint during
 recovery. Blue interrupts; following blue with red makes that red hit 50%
 stronger in the clearing. Paint the bell between rounds; walk away to cancel.
 First completion restores health; replay freely without currency rewards.
+A result card remembers battle time, rounds, dodge uses and colors tried.
 The first guardian waits at the far end of the swamp. Defeating it opens the
 next floor of the same run.
 
 Descend through **Watercolor Marsh → Sunken Reeds → Hollow Sanctuary → Black
 Reeds**, facing the Great Gray Heron, Silt Wyrm, Hollow Warden and finally the
 Umbral Wyrm. Between floors, rest to heal 35% of maximum health and select one
-gift: stronger paint, two more health points, or faster dodge/splash recharge.
+of three offered gifts. The first rest offers stronger paint, two more health
+points, or faster dodge/splash recharge. Later rests mix familiar choices with
+broader reach, quicker strokes and stronger green healing. Cards show the
+before-and-after values; offers stay fixed for that run.
 Confirm Descend when ready. Gifts stack for this run; a new attempt starts on
 floor one with a fresh build. Only defeating the Umbral Wyrm wins the dungeon.
 
@@ -52,7 +59,9 @@ Two more living studies await along the swamp.
 The optional guided practice on the title teaches each pigment and the
 three-color boss awakening. V opens the Field Atlas, H the Field Guide, and J
 your sketchbook. All pause the action. The atlas shows your next unfinished
-study and optional detours; nearby study cards explain each coat of paint.
+study, guardian arena, clearing and optional detours; nearby study cards
+explain each coat of paint. Floor introductions and quiet route hints keep the
+next destination clear. Open carved-reed landmarks announce guardian arenas.
 Dragonflies and pond skaters quietly respond to your brush. Every expedition
 can leave a keepsake, even a defeat.
 
@@ -83,13 +92,17 @@ mouse pointer; the game no longer shows a distant crosshair.
 ## What's included
 
 - Five living field studies across swamp/Reeds, an earned brush-hop and cosmetic postcard rewards.
-- 64 freely repaintable plants/stones and a replayable three-round clearing.
+- 64 freely repaintable objects per floor, musical mushrooms, colored lanterns,
+  whisper reeds and 16 one-time garden celebrations per floor.
+- A replayable three-round clearing with a useful completion card; attack,
+  recovery, blue-interrupt and boss-state captions make combat easier to read.
 - An eight-page sketchbook containing sampled real strokes; save a 1600×960
   PNG postcard from any page.
 - One four-floor dungeon, four main guardians, named encounter zones,
   checkpoints, pigment counters and lantern play. Hollow Sanctuary reuses
   the Reeds environment with its own guardian.
-- Three run-only gift choices; no New Game+, prestige, shop or separate modes.
+- Six possible run-only gifts, three offered at each of three rests, numeric
+  previews and an end-of-run build summary; no New Game+, prestige or shop.
 - Paper panels, procedural watercolor scenery, synthesized music and sound.
 - Gentle / Normal / Bold difficulty; music/SFX and presentation settings;
   browser-local saves and JSON export/import.

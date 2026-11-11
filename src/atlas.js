@@ -1,6 +1,7 @@
 // A paper field atlas. No simulation, persistence, assets or network access.
 import { fieldAtlasSnapshot, PIGMENTS, PIGMENT_ORDER, STUDIO } from './logic.js';
 import { INK, uiFont, centerText, paperPanel, paperEnd, uiButton } from './ui.js';
+import { journeyLandmarks } from './journey-ui.js';
 
 export const atlasButton = () => ({ x: 224, y: 18, w: 184, h: 34 });
 export function atlasLayout(g) {
@@ -10,10 +11,11 @@ export function atlasLayout(g) {
 }
 
 export function atlasForGame(g) {
-  return fieldAtlasSnapshot({ biome: g.runBiome, width: g.world.w, height: g.world.h,
+  const snapshot = fieldAtlasSnapshot({ biome: g.runBiome, width: g.world.w, height: g.world.h,
     player: g.player, studies: g.studio?.studies, remembered: g.save.studio?.completed, rests: g.world.restSpots,
     checkpoints: g._atlasCheckpoints, crossingState: g.world.crossingState,
     mothFlower: g.world.mothFlower, challenge: !!g.challenge, wander: !!g.options.wander });
+  return { ...snapshot, journey: journeyLandmarks(g) };
 }
 
 export function drawFieldAtlas(g, ctx) {
@@ -40,6 +42,24 @@ export function drawFieldAtlas(g, ctx) {
   c.strokeStyle = '#758c78'; c.lineWidth = 1.5; c.strokeRect(m.x, m.y, m.w, m.h);
   text('N ↑', m.x + 12, m.y + 22, 16, '#405a4d', true);
   text('E →', m.x + m.w - 48, m.y + m.h - 12, 16, '#405a4d', true);
+  if (a.journey) {
+    const guardian = a.journey.guardian, edge = pos(guardian), end = pos({ x: a.width, y: 750 });
+    c.fillStyle = 'rgba(120,96,139,.12)'; c.fillRect(edge.x, m.y + 30, end.x - edge.x, m.h - 60);
+    const x = (edge.x + end.x) / 2, y = m.y + m.h / 2;
+    c.fillStyle = guardian.defeated ? '#497e61' : '#77618b';
+    c.beginPath(); c.moveTo(x, y - 12); c.lineTo(x + 12, y); c.lineTo(x, y + 12); c.lineTo(x - 12, y); c.closePath(); c.fill();
+    centerText(c, guardian.defeated ? '✓' : guardian.final ? '4' : '!', x, y + 1, uiFont(14, { weight: 700 }), '#fff7e5');
+    centerText(c, guardian.name, x, m.y + 28, uiFont(12, { weight: 700 }), '#564565');
+    centerText(c, guardian.final ? 'Final guardian' : 'Guardian arena', x, m.y + 46, uiFont(11), '#564565');
+    const clearing = a.journey.clearing;
+    if (clearing) {
+      const q = pos(clearing); c.fillStyle = clearing.complete ? '#497e61' : '#477c96';
+      c.beginPath(); c.moveTo(q.x - 8, q.y + 5); c.quadraticCurveTo(q.x - 8, q.y - 10, q.x, q.y - 10);
+      c.quadraticCurveTo(q.x + 8, q.y - 10, q.x + 8, q.y + 5); c.closePath(); c.fill();
+      c.beginPath(); c.arc(q.x, q.y + 8, 2, 0, Math.PI * 2); c.fill();
+      centerText(c, clearing.complete ? 'Clearing restored' : 'Lily Clearing', q.x, q.y + 31, uiFont(13), '#365a4c');
+    }
+  }
   for (const p of a.rests) {
     const q = pos(p); c.fillStyle = '#f2d28b'; c.strokeStyle = '#83602e';
     c.beginPath(); c.arc(q.x, q.y, 5, 0, Math.PI * 2); c.fill(); c.stroke();
@@ -68,7 +88,7 @@ export function drawFieldAtlas(g, ctx) {
   c.fillStyle = '#365b49'; c.beginPath(); c.arc(frog.x - 4, frog.y - 30, 2, 0, Math.PI * 2); c.arc(frog.x + 4, frog.y - 30, 2, 0, Math.PI * 2); c.fill();
   centerText(c, 'YOU', frog.x, frog.y - 47, uiFont(13, { weight: 700 }), '#234b45');
 
-  text('○ Study / ✓ complete     ▪ Zone rest paint     ● Lantern rest', b.x + 48, b.y + 410, 17, '#435b4c');
+  text('○ Study / ✓ complete     ▪ Zone rest paint     ● Lantern rest     ◆ Guardian', b.x + 48, b.y + 410, 17, '#435b4c');
   const cardsY = b.y + 448;
   if (a.studies.length) {
     const cardW = (1056 - 24 * (a.studies.length - 1)) / a.studies.length;

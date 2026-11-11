@@ -1,6 +1,6 @@
 // The single dungeon's rest screen and route cues. Rendering never advances
 // a floor or grants a reward; Game owns input, pure logic owns those rules.
-import { CAMPAIGN, CAMPAIGN_REWARDS, campaignFloor } from './logic.js';
+import { CAMPAIGN, CAMPAIGN_REWARDS, campaignFloor, campaignRewardOffers, campaignRewardPreview } from './logic.js';
 import { centerText, uiFont, paperPanel, paperEnd, uiButton, INK } from './ui.js';
 import { TAU } from './math.js';
 
@@ -17,7 +17,7 @@ export function dungeonCampLayout(g) {
   const tight = h < 570, gap = w < 700 ? 10 : 20;
   const cardsY = y + (tight ? 194 : 246), cardH = h - (tight ? 329 : 408);
   const cardW = (w - 48 - gap * 2) / 3;
-  const cards = CAMPAIGN_REWARDS.map((reward, i) => ({
+  const cards = campaignRewardOffers(g.campaign).map((reward, i) => ({
     id: reward.id, x: x + 24 + i * (cardW + gap), y: cardsY, w: cardW, h: cardH,
   }));
   const buttonW = Math.min(430, w - 64);
@@ -62,7 +62,8 @@ export function drawDungeonCamp(g, ctx) {
   if (!g.campaign) return;
   const l = dungeonCampLayout(g), p = l.panel, floor = campaignFloor(g.campaign);
   const next = CAMPAIGN[Math.min(CAMPAIGN.length - 1, g.campaign.floor + 1)];
-  const selected = CAMPAIGN_REWARDS.find(reward => reward.id === g._campChoice);
+  const offers = campaignRewardOffers(g.campaign);
+  const selected = offers.find(reward => reward.id === g._campChoice);
   const pad = g._gp?.connected && g.options?.gamepad !== 'off';
   ctx.save(); ctx.fillStyle = 'rgba(25,39,33,0.76)'; ctx.fillRect(0, 0, g.cw, g.ch); ctx.restore();
   const c = paperPanel(ctx, p.x, p.y, p.w, p.h, { seed: 107 });
@@ -84,7 +85,7 @@ export function drawDungeonCamp(g, ctx) {
   paperEnd(c);
 
   for (let i = 0; i < l.cards.length; i++) {
-    const r = l.cards[i], reward = CAMPAIGN_REWARDS[i], chosen = selected?.id === reward.id;
+    const r = l.cards[i], reward = offers[i], chosen = selected?.id === reward.id;
     const c = paperPanel(ctx, r.x, r.y, r.w, r.h, { seed: 108 + i, fill: chosen ? '#fff8e7' : hover(g, r) ? '#f9efdc' : '#e9dfcc' });
     c.strokeStyle = chosen ? ACCENTS[i] : '#b1a98e'; c.lineWidth = chosen ? 4 : 1;
     c.strokeRect(r.x + 6, r.y + 6, r.w - 12, r.h - 12);
@@ -92,7 +93,11 @@ export function drawDungeonCamp(g, ctx) {
     c.fillStyle = ACCENTS[i]; c.beginPath(); c.arc(r.x + r.w / 2, numberY, compact ? 12 : 15, 0, TAU); c.fill();
     centerText(c, String(i + 1), r.x + r.w / 2, numberY, uiFont(compact ? 15 : 18, { weight: 700 }), '#fff8e7');
     wrapped(c, reward.name, r.x + r.w / 2, r.y + (compact ? 47 : 65), r.w - 24, r.w < 230 ? 15 : 21, INK);
-    wrapped(c, reward.description, r.x + r.w / 2, r.y + (compact ? 72 : r.w < 230 ? 91 : 104), r.w - 28, compact ? 12 : r.w < 230 ? 13 : 17, '#455545');
+    if (!compact) wrapped(c, reward.description, r.x + r.w / 2, r.y + (r.w < 230 ? 91 : 104), r.w - 28, r.w < 230 ? 13 : 17, '#455545');
+    const preview = campaignRewardPreview(g.tuning, reward.id);
+    preview.forEach((line, row) => centerText(c, line, r.x + r.w / 2,
+      compact ? r.y + 76 + row * 18 : r.y + r.h - 69 + row * 19,
+      uiFont(compact ? 11 : r.w < 230 ? 12 : 14, { weight: 700 }), '#355a48'));
     centerText(c, chosen ? 'Selected' : pad ? 'Choose with A' : `Press ${i + 1} or click`, r.x + r.w / 2, r.y + r.h - (compact ? 15 : 22),
       uiFont(r.w < 230 ? 13 : 16, { weight: chosen ? 700 : 400 }), chosen ? ACCENTS[i] : '#655f52');
     paperEnd(c);
@@ -110,7 +115,7 @@ export function drawDungeonCamp(g, ctx) {
 }
 
 export function drawDungeonProgress(g, ctx) {
-  if (!g.campaign || g.state !== 'expedition' || g.help || g.paused || g._bookOpen || g._atlasOpen) return;
+  if (!g.campaign || g.state !== 'expedition' || g.help || g.paused || g._bookOpen || g._atlasOpen || g.encounter?.nearby || g.encounter?.active) return;
   const floor = campaignFloor(g.campaign), final = floor.final;
   const text = `Depth ${g.campaign.floor + 1} / ${CAMPAIGN.length} · ${floor.name}${final ? ' · Final boss' : ''}`;
   const w = Math.min(450, g.cw - 420), x = (g.cw - w) / 2;

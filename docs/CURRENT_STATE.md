@@ -3,6 +3,8 @@
 **2026-11-11.** The playable game is one four-floor descent with a fresh run
 build, three inter-floor rests and a final boss. New Game+ and its progression
 systems are removed. Runtime version remains 1.0.0 and save schema remains 12.
+The current twenty-idea pass adds gardens throughout the dungeon, combat and
+route feedback, varied rest offers and numeric gift previews.
 See ROADMAP.md for current priorities and PROJECT_STATE.md for verified checks.
 
 ## The playable loop
@@ -17,8 +19,18 @@ Health, run time, score and collected pigment carry across floors. Each rest
 heals 35% of maximum health, rounded up and capped, and requires one gift
 selection followed by Descend. Brighter paint increases brush/splash/burn
 damage 20%; Lily heart adds 2 maximum health and fills the added capacity;
-Flowing brush multiplies dodge/splash cooldowns by 0.88. Repeated gifts stack.
-Only three selections can occur, and they last for that run.
+Flowing brush multiplies dodge/splash cooldowns by 0.88. Three specialties add
+Broad brush (swipe reach ×1.20, splash radius ×1.15), Quick strokes (swipe
+cooldown ×0.85), and Kind moss (green ground/on-paint healing ×1.35).
+Only three selections can occur, and they last for that run. Repeated gifts
+stack when offered again.
+
+Exactly three cards appear at every rest. The first offers the original power,
+health and flow gifts; the second keeps Lily heart plus two specialties, and
+the third keeps Flowing brush plus two specialties. Specialty pairs are fixed
+by run seed and depth, separate from combat randomness. The rule layer rejects
+unoffered choices. Cards preview rounded numeric before-and-after values from
+the current tuning, including already earned gifts.
 
 New runs use base tuning for Gentle/Normal/Bold, ignoring saved purchased
 upgrades and equipped paintings. No standalone shop, challenge, Wander or
@@ -37,16 +49,20 @@ human enjoyment and long-run balance still require playtesting.
 | Movement | Responsive stops/reversal, full-speed ordinary painting, short Space dodge, stationary aim direction, 120ms early-input buffer |
 | Brush | Unlimited swipe and release-fired charged splash; one brush marker at actual reach; local charge/dodge cues |
 | Colors | Red damage/burn, blue slow/freeze/interrupt, green root/healing, dry status clear/restoration |
-| Threats | Swamp and Reeds creatures with telegraphs and pigment counters; mosquitoes commit to a lane and recover |
+| Threats | Swamp/Reeds telegraphs and pigment counters; bounded attack, recovery and blue-interrupt captions; plain boss-state cues |
 | Campaign | Four floor guardians in fixed order; run-only gifts; final victory only after Umbral |
 | World | Zone encounters, checkpoints, optional side guardian, weather, Bold hazards, Reeds flooding/darkness/lantern |
-| Lily Clearing | Optional first-floor three-round bell encounter; blue interrupts, blue-to-red adds 50% direct damage; no repeat reward farming |
-| Free painting | 64 opening plants/stones accept any paint color and retain it for the current floor |
+| Lily Clearing | Optional first-floor bell encounter; blue-to-red adds 50% direct damage; result card shows battle time, rounds, dodge uses and colors; no repeat reward farming |
+| Free painting | 64 objects per floor; deep lanterns/whisper reeds, musical mushrooms, 16 bounded cluster celebrations; colors last for the floor |
+| Route guidance | Distinct floor introductions, one contextual objective, open guardian landmarks and atlas destinations |
 | Presentation | Procedural watercolor, paper UI, visible boss bodies, cached darkness mask, bounded particles, Web Audio |
 | Persistence | Browser-local save, in-memory fallback, validated JSON import/export; no active-run resume |
 
 Floor guardians stay dormant until the final 900 pixels. Painting cannot wake
 a remote boss. The final boss is the fourth guardian, not the first swamp heron.
+Guardian landmarks mark that same arena threshold without adding collision or
+another unlock. Intro/objective rendering never changes simulation; guidance
+yields to menus, tutorials, teaching cards, event banners and nearby combat.
 
 ## Living studies and exploration
 
@@ -76,7 +92,15 @@ within its 205-pixel teaching area until completion.
 V opens the paused Field Atlas, also reachable from pause with mouse/controller.
 It shows the frog, live/remembered studies, checkpoints, lantern rests and
 available detours. Closing restores the prior pause state and clears held
-input. The atlas is a field sketch rather than a collision map.
+input. Guardian arenas are shaded and marked; the first floor includes its
+Lily Clearing bell. The atlas is a field sketch rather than a collision map.
+
+Free gardens use four objects per cluster. Coloring all four triggers one
+short bloom; a completion latch prevents erase/repaint farming. Recolored
+mushrooms use an existing short chime; sound cooldowns and fixed effect slots
+bound repeated input. Lantern glow and whisper-reed movement are decorative,
+not new light fuel, collision, combat or save systems. Garden counts reset
+with each floor; only that floor's 64 props and 16 clusters are live.
 
 Each world has 24 decorative dragonflies/pond skaters from a separate seeded
 random stream. Nearby paint prompts a 3.4-second response. They are culled
@@ -89,6 +113,8 @@ two pins retain up to 180 quantized strokes each, sampled from actual successful
 brush actions. Pages are souvenirs, not complete replays. Study completion,
 opening the book, leaving for the title and run endings file/update pages.
 Each floor has its own world/stroke journal; saved earlier pages remain.
+The run-end screen shows earned gift names and stack counts beside the latest
+postcard, including a useful empty-build message for an early defeat.
 
 Page names use a native plain-text editor limited to 48 code points. Typing
 owns input. Edited captions survive re-filing. A selected pinned page appears
@@ -111,11 +137,12 @@ the active campaign, including its gifts; already filed pages remain saved.
 |---|---|
 | index.html | Responsive logical canvas, boot error reporting, loopback-only debug handle |
 | src/game.js | Frame/state orchestration, floor transitions, combat integration, HUD/menus and controller routing |
-| src/logic.js | Pure campaign transitions/rewards, ordinary tuning, save normalization and painting/combat rules |
-| src/dungeon.js | Rest choices, Descend control and four-floor progress/route presentation |
-| src/encounter.js | Bounded replayable Lily Clearing |
-| src/combat-ui.js | Close-range brush, charge and dodge presentation |
-| src/repaint.js | Bounded freely repaintable scenery |
+| src/logic.js | Pure campaign transitions, seeded gift offers/previews, tuning, save normalization and painting/combat rules |
+| src/dungeon.js | Rest choices/numeric previews, Descend control and four-floor progress/route presentation |
+| src/journey-ui.js | Floor voices, contextual objectives, guardian landmarks and earned build summary |
+| src/encounter.js | Bounded replayable Lily Clearing and completion statistics |
+| src/combat-ui.js | Close-range brush, charge/dodge presentation and bounded enemy/boss captions |
+| src/repaint.js | Per-floor repaintable scenery, musical mushrooms and bounded garden celebrations |
 | src/studio.js | Authored studies, brush wake, stroke journal, sketchbook and PNG export |
 | src/atlas.js / wildlife.js | Paused map and bounded cosmetic pond life |
 | src/player.js / paint.js / enemies.js | Movement, brush combat, creature/boss behavior and rendering |

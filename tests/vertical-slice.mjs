@@ -489,6 +489,12 @@ try {
   await clearingBrowser({page,tick,out,report});
   const { campaignBrowser } = await import('./campaign-browser.mjs');
   await campaignBrowser({page,tick,out,report});
+  const { paintDelightsBrowser } = await import('./paint-delights-browser.mjs');
+  await paintDelightsBrowser({page,tick,out,report});
+  const { combatDelightsBrowser } = await import('./combat-delights-browser.mjs');
+  await combatDelightsBrowser({page,tick,out,report});
+  const { brushJourneyBrowser } = await import('./brush-journey-browser.mjs');
+  await brushJourneyBrowser({page,tick,out,report});
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(out, 'report.json'), JSON.stringify({ report, errors }, null, 2));
   console.log(JSON.stringify(report, null, 2));

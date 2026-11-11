@@ -1,4 +1,42 @@
-# Project state — One painted dungeon (2026-11-11)
+# Project state — Twenty delights (2026-11-11)
+
+Owner asked for 20 improvement ideas and their implementation. All 20 are
+mapped to shipped behavior in docs/ROADMAP.md, Milestone 4. Three agents owned
+painting, combat feedback and journey UI; parent integrated gifts and checks.
+
+Painting: **64 props per floor** (256 across the full descent), now including
+deep hanging lanterns and whisper reeds. Mushrooms play a chime; each of 16
+four-prop clusters celebrates its first full coloring. All effects are bounded,
+run/floor-local decoration with no currency, healing or combat reward.
+
+Combat: at most two nearby warning/opening/blue-stop captions, plus a truthful
+boss phase/lantern cue. Existing warning geometry and attack timings remain.
+Clearing results record battle time, dodges and colors, with a replay tip.
+Duplicate old attack captions and overlapping depth text are suppressed.
+
+Journey: four floor arrival cards, a contextual objective that yields to
+lessons/events, guardian approach arches, guardian/clearing atlas markers and
+an end-screen brush-build recap. Boss arrival remains spatially gated.
+
+Gifts: six possible gifts, still three choices total. First rest keeps the
+original three; later rests retain heart/flow respectively and offer two
+seeded specialties. Broad brush: range **74→88.8**, splash radius **58→66.7**
+(×1.20/×1.15); Quick strokes: swipe cooldown **.200→.170s** (×.85); Kind moss:
+green-ground healing **3→4.05 HP/s**, paint healing **.5→.675 HP/hit** (×1.35).
+These are base Normal values; repeated gifts stack, exact rounded previews
+use live tuning, and every bonus resets on a new run. Unoffered gifts cannot
+be granted; repaint/redraw cannot reroll choices. No base tuning changed.
+
+Smoke stages 128–131 cover the new behavior. Browser checks exercise all
+specialty selections and actual DOM painting across all three deeper floors,
+blue interrupt, clearing result, atlas and guardian cues. Final required-gate
+results and balance comparison are in docs/VALIDATION-delights.md: **all 19
+gates pass**, including source/dist journeys, 36 frames and performance.
+Before/after balance telemetry is byte-identical; clearing times remain
+45.0/44.4s and the original four-boss combat build remains 292.7s.
+Human enjoyment and whole-run balance remain playtest questions, not bot claims.
+
+# Previous checkpoint — One painted dungeon (2026-11-11)
 
 Owner direction: remove New Game+ and its features; make one long roguelike
 dungeon with bosses and one final boss. The roadmap now follows that request.

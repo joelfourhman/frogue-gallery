@@ -36,15 +36,24 @@ elapsed time, score and collected pigment carry between floors. There is no
 intervening shop or separate biome selection.
 
 The first three victories heal 35% of maximum health, rounded up and capped,
-and offer one of three gifts. The player chooses, then explicitly descends.
+and offer three cards from six possible gifts. The player chooses one, then
+explicitly descends. Cards show the actual rounded before-and-after values.
 
 | Gift | Effect for this run |
 |---|---|
 | Brighter paint | +20% brush, splash and burn damage |
 | Lily heart | +2 maximum health; the added capacity is filled on descent |
 | Flowing brush | Dodge and splash cooldowns multiplied by 0.88 |
+| Broad brush | Swipe reach multiplied by 1.20; splash radius by 1.15 |
+| Quick strokes | Swipe cooldown multiplied by 0.85 |
+| Kind moss | Green ground-healing and healing on paint multiplied by 1.35 |
 
-Choices may repeat and stack. A complete run contains only three gift choices;
+The first rest teaches the original three choices. The second keeps Lily heart
+and offers two seeded specialties; the third keeps Flowing brush and offers
+two seeded specialties. Broad brush, Quick strokes and Kind moss form that
+specialty pool. The run seed fixes offers; viewing cards never rerolls them or
+consumes combat randomness. Choices may repeat and stack when offered again.
+A complete run contains only three gift choices;
 all gift power disappears at the end of the run. Legacy permanent upgrades
 and equipped paintings do not affect starting stats. New Game+, its variants,
 prestige, gold-tier progression, standalone challenges and Wander are removed
@@ -64,9 +73,13 @@ and release a fully charged splash for a broader hit.
 | Green | Root ground enemies and heal | Lilies, reeds and growth |
 | Dry | Weak damage, clear status and restore color | Erase free-painted props |
 
-The opening contains 64 freely repaintable lilies, mushrooms, flowers and
-stones. Any color works; dry erases. Changes remain on the current floor and
-react locally. These objects have no hidden recipe or currency requirement.
+Each floor contains 64 freely repaintable objects. The marsh keeps lilies,
+mushrooms, flowers and stones; deeper gardens add hanging lanterns and whisper
+reeds. Any color works; dry erases. Changes remain on the current floor and
+react locally. Mushroom recoloring plays a short chime. Painting all four
+objects in one of 16 clusters triggers a finite bloom celebration once per
+floor. Erasing does not rearm that celebration. These objects have no hidden
+recipe, gameplay reward or currency requirement, and do not change collision.
 The five authored studies are separate subjects with visible numbered stages,
 nearby instructions, immediate scene transformations and saved postcards.
 
@@ -93,6 +106,14 @@ blue slows/freezes a clearing target deals 50% more direct damage. The bell
 starts each round; walking away cancels. First completion heals once, and
 replaying does not farm loot or healing.
 
+The completion card shows active battle time, cleared rounds, dodge uses and
+colors tried, then offers encouragement and a practical replay suggestion.
+It does not grade the player or award power for performance. Nearby enemies
+receive at most two separated captions prioritizing threats: attack warnings,
+blue interruption and safe recovery openings. Boss captions describe the
+current attack or vulnerability in plain language. This feedback reads the
+existing combat state; it does not alter damage or timing.
+
 The intended newcomer encounter is roughly two minutes; actual human duration
 and enjoyment are unmeasured. Scripted timing is not a human playtest result.
 Ordinary mosquitoes also commit to a visible attack direction, then expose a
@@ -113,9 +134,17 @@ Echo Pool, plus a lantern-moth detour. The painted crossing is another optional
 swamp discovery.
 
 V opens the paused Field Atlas, H the Field Guide and J the sketchbook. The
-atlas shows the frog, checkpoints, available studies and authored detours.
+atlas shows the frog, checkpoints, available studies, authored detours, the
+guardian arena and the first-floor clearing. Each floor has a brief introduction
+and its own guardian landmark emblem. One quiet route objective yields to
+teaching cards, event banners and nearby fights. The open arena landmark is
+decoration, not another locked gate or progression requirement.
 Nearby study cards identify the required action and color without a hidden
 recipe. Decorative wildlife responds quietly without affecting combat.
+
+The run-end screen pairs the latest postcard with the brush gifts earned on
+that descent, including repeated-gift counts. An early defeat shows a fresh
+brush message rather than an empty summary.
 
 The sketchbook retains eight recent pages plus two pins, sampled from actual
 brush actions. Players can name a page, exhibit a pinned page on the title and

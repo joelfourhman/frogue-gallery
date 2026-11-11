@@ -1,5 +1,14 @@
 # Environment and tool changes
 
+## Twenty delights — 2026-11-11
+
+No environment, dependency or service changes. Existing Node/Chromium tooling
+verified new interactions on loopback; harnesses close their own servers and
+browsers. Preview remains the existing 127.0.0.1:8767 process. New generated
+evidence is in tests/.out/astra/40–47 and combat-*.png, .cache/paint-delights-review/
+and .cache/journey-review/. Baseline balance is archived in
+.cache/checks/balance-before-delights.log; packaged output remains ignored dist/.
+
 ## Single dungeon — 2026-11-11
 
 No new dependencies, services or machine settings. Existing Node, Chromium and

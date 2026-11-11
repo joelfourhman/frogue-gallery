@@ -557,9 +557,6 @@ export function drawAttackWarning(ctx, e) {
     ctx.lineTo(e.x + dx * (length - 12) + dy * 8, e.y + dy * (length - 12) - dx * 8); ctx.stroke();
     ctx.strokeStyle = '#b34026'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 6, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(1 - remaining, 0, 1)); ctx.stroke();
-    if (e._clearing) { ctx.font = uiFont(12, { weight: 700 }); ctx.textAlign = 'center'; ctx.fillStyle = '#763327'; ctx.fillText('DODGE', e.x, e.y - e.r - 16); }
-  } else if (e._clearing && !e.status && !(e.tintT > 0) && !(e.hitFlash > 0)) {
-    ctx.font = uiFont(12, { weight: 700 }); ctx.textAlign = 'center'; ctx.fillStyle = '#335940'; ctx.fillText('Paint now', e.x, e.y - e.r - 16);
   }
   ctx.restore();
 }

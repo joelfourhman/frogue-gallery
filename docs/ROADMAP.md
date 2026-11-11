@@ -56,6 +56,43 @@ Record observed test results and limits in PROJECT_STATE.md before committing.
 Scripted combat and pacing estimates establish regressions and bounds; they do
 not establish human enjoyment or a measured human duration for the new dungeon.
 
+## Milestone 4 — Twenty delights (implemented, 2026-11-11)
+
+The owner requested 20 ideas and trusted implementation. This pass concentrates
+on painting, readable combat, navigation and meaningful brush choices. The
+four-floor campaign and absence of New Game+ remain unchanged.
+
+| # | Improvement | Implemented behavior |
+|---|---|---|
+| 1 | Paint the deeper swamp | 64 repaintable props on every campaign floor |
+| 2 | Hanging lanterns | Recolorable lanterns with warm animated light |
+| 3 | Whisper reeds | Painted reeds sway, glow and react locally |
+| 4 | Musical mushrooms | Recoloring caps plays a short existing chime and animated notes |
+| 5 | Garden celebrations | Each four-prop garden blooms once when fully colored |
+| 6 | Clear attack warnings | Nearby captions explain the live warning lane |
+| 7 | Readable openings | Recovery windows explicitly invite painting |
+| 8 | Blue-stop feedback | A blue interrupt visibly confirms that the attack stopped |
+| 9 | Boss phase cues | Plain instructions for telegraphs, open maws and lantern darkness |
+| 10 | Clearing result card | Battle time, dodges, color use and an encouraging next step |
+| 11 | Floor introductions | Four short, distinct arrival cards |
+| 12 | Current objective | One contextual route/combat instruction that yields to lessons |
+| 13 | Guardian landmarks | Open reed arches mark the arena approach, without locking movement |
+| 14 | Atlas landmarks | Guardian arenas and optional Lily Clearing appear on the map |
+| 15 | Run-build recap | End screen shows the gifts that shaped this attempt |
+| 16 | Varied rest choices | Later rests offer stable seed-based specialties beside a familiar gift |
+| 17 | Broad brush | 20% longer brush reach and 15% larger splash radius |
+| 18 | Quick strokes | 15% shorter swipe cooldown |
+| 19 | Kind moss | 35% stronger green-ground and direct-paint healing |
+| 20 | Gift previews | Cards display current → resulting values before selection |
+
+The first rest still teaches the original three gifts. The second retains
+Lily heart and the third Flowing brush, each alongside two distinct specialties
+chosen from Broad brush, Quick strokes and Kind moss. Choices never reroll on
+redraw, and only offered gifts can be granted. Three gifts total still limits
+the run's growth. Decorative gardens grant no currency or combat advantages.
+
+See PROJECT_STATE.md and VALIDATION-delights.md for tests and limitations.
+
 ## Next — tune the connected experience from play
 
 1. Replay the entire descent and check whether the next floor, guardian and

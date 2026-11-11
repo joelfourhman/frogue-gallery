@@ -9,6 +9,7 @@ export class OpeningEncounter {
     this.game = game; this.allowed = clearingAllowed(game);
     this.phase = 'ready'; this.round = -1; this.queued = 0; this.members = [];
     this.elapsed = 0; this.completed = false; this.bellColor = 'blue'; this.bellCd = 0;
+    this.result = null; this.colorsUsed = new Set(); this.dodges = 0; this._wasHopping = false;
     this._paintReleased = true;
   }
   get nearby() {
@@ -18,6 +19,12 @@ export class OpeningEncounter {
   get active() { return this.phase === 'fight' || this.phase === 'between'; }
   get suppressesWaves() { return this.allowed && this.active; }
   onStroke(stroke) {
+    // Paint statistics belong only to the active battle; bell strokes and
+    // scenery painted before/after it cannot inflate the result.
+    if (this.phase === 'fight' && this.game.player.alive && !this.game.dying &&
+      ['red', 'blue', 'green'].includes(stroke?.pigment) &&
+      this.members.some(e => ((!e.dead && e.hp > 0) || e.hitFlash > 0) &&
+        strokeTouches(stroke, e.x, e.y, e.r))) this.colorsUsed.add(stroke.pigment);
     if (!this.allowed || this.game._tutorialActive() || !this.game.player.alive || this.game.dying ||
         this.phase === 'fight' || this.bellCd > 0 || !this._paintReleased ||
         !['swipe', 'splash'].includes(stroke.kind) || !strokeTouches(stroke, CLEARING.x, CLEARING.y, CLEARING.r)) return false;
@@ -27,6 +34,8 @@ export class OpeningEncounter {
     this.bellColor = stroke.pigment === 'dry' ? 'blue' : stroke.pigment;
     if (this.phase === 'ready' || this.phase === 'complete') {
       this.round = -1; this.elapsed = 0;
+      this.result = null; this.colorsUsed.clear(); this.dodges = 0;
+      this._wasHopping = this.game.player.hopT > 0;
       // Give the authored fight room. Preserve existing actors and rewards;
       // move nearby ambient creatures outside the clearing rather than kill.
       for (const e of this.game.enemies) {
@@ -59,6 +68,7 @@ export class OpeningEncounter {
     const g = this.game;
     g.enemies = g.enemies.filter(e => !this.members.includes(e));
     this.members = []; this.phase = this.completed ? 'complete' : 'ready'; this.round = -1; this.queued = 0;
+    this._wasHopping = false;
     this._paintReleased = false; this.bellCd = 0.8;
   }
   update(dt) {
@@ -70,11 +80,16 @@ export class OpeningEncounter {
       this.cancel(); return;
     }
     if (this.phase !== 'fight') return;
+    const hopping = p.hopT > 0;
+    if (hopping && !this._wasHopping) this.dodges++;
+    this._wasHopping = hopping;
     this.elapsed += dt; this._fill();
     if (this.queued < CLEARING.rounds[this.round].length || this.members.some(e => !e.dead && e.hp > 0)) return;
     this._paintReleased = false; this.bellCd = 0.8;
     if (this.round === CLEARING.rounds.length - 1) {
       this.phase = 'complete';
+      this.result = Object.freeze({ seconds: Math.round(this.elapsed), rounds: CLEARING.rounds.length,
+        dodges: this.dodges, colors: this.colorsUsed.size });
       if (!this.completed) {
         this.completed = true; p.hp = p.maxHp;
         g._triggerBloom(CLEARING.x, CLEARING.y);
@@ -108,6 +123,14 @@ export class OpeningEncounter {
     if (!this.nearby || g._tutorialActive() || g.help || g.paused || g._bookOpen || g._atlasOpen || !g.player.alive) return;
     const w = Math.min(550, g.cw - 28), x = (g.cw - w) / 2, y = g.ch - 126;
     const c = paperPanel(ctx, x, y, w, 98, { seed: 94 });
+    if (this.phase === 'complete' && this.result) {
+      const r = this.result, time = `${Math.floor(r.seconds / 60)}:${String(r.seconds % 60).padStart(2, '0')}`;
+      centerText(c, 'Lily Clearing restored · Nicely painted!', g.cw / 2, y + 24, uiFont(17, { weight: 700 }), '#345f40');
+      centerText(c, `${r.rounds} rounds · ${time} battle time · ${r.dodges} dodges · ${r.colors}/3 colors`, g.cw / 2, y + 49, uiFont(14), INK);
+      centerText(c, r.colors < 2 ? 'Try blue to stop a charge, then red. Paint the bell to replay.' :
+        'Your color changes made room to paint. Follow the path or replay.', g.cw / 2, y + 76, uiFont(13), '#46604c');
+      paperEnd(c); return;
+    }
     const left = this.phase === 'fight' ? CLEARING.rounds[this.round].length - this.members.filter(e => e.dead || e.hp <= 0).length : 0;
     centerText(c, this.phase === 'fight' ? `Lily Clearing · Round ${this.round + 1}/3 · ${left} bugs left` : this.phase === 'complete' ? 'Clearing restored · Paint the bell to play again' : this.phase === 'between' ? 'Round clear · Paint the bell to continue' : 'Paint the bell to try a short fight', g.cw / 2, y + 26, uiFont(17, { weight: 700 }), INK);
     const line = this.phase === 'fight' && g.player.hp < g.player.maxHp * 0.65 ? '3 GREEN: paint bugs or ground to heal.' : this.round === 0 ? 'Red lane? Move + SPACE to dodge. Paint after it passes.' : '2 BLUE stops attacks. Then 1 RED hits harder!';

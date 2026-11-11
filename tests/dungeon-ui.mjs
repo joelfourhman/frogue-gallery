@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { CAMPAIGN, CAMPAIGN_REWARDS, createCampaignRun, finishCampaignFloor } from '../src/logic.js';
+import { CAMPAIGN, CAMPAIGN_REWARDS, createCampaignRun, finishCampaignFloor, campaignRewardOffers } from '../src/logic.js';
 import { dungeonCampLayout, drawDungeonCamp, drawDungeonProgress, drawDungeonRoute } from '../src/dungeon.js';
 
 const lines = [], calls = [];
@@ -19,7 +19,7 @@ for (const [cw, ch] of [[1280, 800], [640, 500]]) {
   finishCampaignFloor(g.campaign, CAMPAIGN[0].boss);
   const layout = dungeonCampLayout(g);
   assert.equal(layout.cards.length, 3);
-  assert.deepEqual(layout.cards.map(r => r.id), CAMPAIGN_REWARDS.map(r => r.id));
+  assert.deepEqual(layout.cards.map(r => r.id), campaignRewardOffers(g.campaign).map(r => r.id));
   for (const r of [layout.panel, ...layout.cards, layout.descend]) {
     assert(r.w > 0 && r.h > 0 && r.x >= 0 && r.y >= 0 && r.x + r.w <= cw && r.y + r.h <= ch, 'all interactive regions stay within canvas');
   }
@@ -48,5 +48,7 @@ for (const [cw, ch] of [[1280, 800], [640, 500]]) {
     assert.equal(calls.length, 0, `${flag} hides dungeon progress`);
   }
   drawDungeonRoute(g, ctx, 24, 50, cw - 48);
+  g.encounter = { nearby: true }; calls.length = 0; drawDungeonProgress(g, ctx);
+  assert.equal(calls.length, 0, 'clearing instruction card owns the bottom area');
 }
 console.log('Dungeon UI: readable reward choices, explicit descent, four-depth progress and render purity PASS');

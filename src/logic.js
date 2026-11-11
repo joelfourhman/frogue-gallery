@@ -286,7 +286,25 @@ export const CAMPAIGN_REWARDS = Object.freeze([
   Object.freeze({ id: 'power', name: 'Brighter paint', description: '+20% brush, splash and burn damage for this run.' }),
   Object.freeze({ id: 'heart', name: 'Lily heart', description: '+2 maximum health for this run.' }),
   Object.freeze({ id: 'flow', name: 'Flowing brush', description: 'Dodge and splash recharge 12% faster for this run.' }),
+  Object.freeze({ id: 'reach', name: 'Broad brush', description: 'Reach 20% farther. Splash covers a 15% wider radius.' }),
+  Object.freeze({ id: 'tempo', name: 'Quick strokes', description: 'Paint again 15% sooner with each brush stroke.' }),
+  Object.freeze({ id: 'mend', name: 'Kind moss', description: 'Green paint restores 35% more health.' }),
 ]);
+// First rest teaches the original three gifts. Later rests keep one familiar
+// choice in its original slot and offer two distinct specialties. Pure seeded
+// sampling never consumes combat RNG or rerolls while a card is drawn.
+export function campaignRewardOffers(run) {
+  if (!campaignFloor(run) || run.complete || run.floor >= 3) return [];
+  if (run.floor === 0) return CAMPAIGN_REWARDS.slice(0, 3);
+  const random = mulberry32(((run.seed || 0) ^ Math.imul(run.floor + 1, 0x45d9f3b)) >>> 0);
+  const pool = CAMPAIGN_REWARDS.slice(3);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const cards = pool.slice(0, 2);
+  cards.splice(run.floor, 0, CAMPAIGN_REWARDS[run.floor]);
+  return cards;
+}
 export function createCampaignRun(seed = 0) {
   return { seed: Number.isFinite(Number(seed)) ? Math.floor(Number(seed)) >>> 0 : 0,
     floor: 0, cleared: [], rewards: [], pendingReward: false, complete: false };
@@ -312,7 +330,7 @@ export function chooseCampaignReward(run, id) {
       !Array.isArray(run.cleared) || !Array.isArray(run.rewards) ||
       run.cleared.length !== run.floor + 1 || run.cleared[run.floor] !== floor.boss ||
       !run.cleared.every((boss, index) => boss === CAMPAIGN[index].boss) ||
-      run.rewards.length !== run.floor || !CAMPAIGN_REWARDS.some(reward => reward.id === id) ||
+      run.rewards.length !== run.floor || !campaignRewardOffers(run).some(reward => reward.id === id) ||
       !run.rewards.every(value => CAMPAIGN_REWARDS.some(reward => reward.id === value))) return false;
   run.rewards.push(id);
   run.floor++;
@@ -327,8 +345,23 @@ export function applyCampaignRewards(tuning, run) {
     if (id === 'power') { tuning.power *= 1.2; tuning.burnDps *= 1.2; }
     if (id === 'heart') tuning.maxHp += 2;
     if (id === 'flow') { tuning.hopCooldown *= 0.88; tuning.splashCooldown *= 0.88; }
+    if (id === 'reach') { tuning.swipeRange *= 1.2; tuning.splashRadius *= 1.15; }
+    if (id === 'tempo') tuning.swipeCooldown *= 0.85;
+    if (id === 'mend') { tuning.greenHeal *= 1.35; tuning.greenHealOnPaint *= 1.35; }
   }
   return tuning;
+}
+export function campaignRewardPreview(tuning, id) {
+  const before = tuning || makeTuning();
+  const after = applyCampaignRewards({ ...before }, { rewards: [id] });
+  const pair = (label, field, digits, unit = '') => `${label}: ${before[field].toFixed(digits)} → ${after[field].toFixed(digits)}${unit}`;
+  if (id === 'power') return [pair('Power', 'power', 2, '×'), pair('Burn', 'burnDps', 1, '/s')];
+  if (id === 'heart') return [pair('Max health', 'maxHp', 0), '+2 health filled immediately'];
+  if (id === 'flow') return [pair('Dodge', 'hopCooldown', 3, 's'), pair('Splash', 'splashCooldown', 3, 's')];
+  if (id === 'reach') return [pair('Reach', 'swipeRange', 1), pair('Splash radius', 'splashRadius', 1)];
+  if (id === 'tempo') return [pair('Stroke delay', 'swipeCooldown', 3, 's'), 'Shorter delay = quicker painting'];
+  if (id === 'mend') return [pair('Ground heal', 'greenHeal', 2, '/s'), pair('Hit heal', 'greenHealOnPaint', 3)];
+  return [];
 }
 export function movementVelocity(vx, vy, targetX, targetY, dt, launch = false) {
   if (launch) return [targetX, targetY];

@@ -14,6 +14,7 @@ import { exhibitSketchPage, studyRewardEarned, cycleCombatPigment, splashChargeS
 import { drawCombatReadout } from './combat-ui.js';
 import { CAMPAIGN, createCampaignRun, campaignFloor, finishCampaignFloor, chooseCampaignReward, applyCampaignRewards } from './logic.js';
 import { drawDungeonCamp, dungeonCampLayout, drawDungeonProgress, drawDungeonRoute } from './dungeon.js';
+import { drawJourneyWorld, drawJourneyHud, drawRunBuild } from './journey-ui.js';
 import { OpeningEncounter } from './encounter.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
@@ -4262,6 +4263,7 @@ export class Game {
     // ripples" that makes the paint LANDING visible, not just the arc).
     if (this.state === 'expedition' || this.state === 'end') this.studio?.draw(ctx, v, this.now);
     if (this.state === 'expedition') this.encounter?.drawWorld(ctx, v);
+    if (this.state === 'expedition') drawJourneyWorld(this, ctx, v);
     this.paint && this.paint.drawInk(ctx);
     // J1 (v1.4): short-lived wet residue marks sit on the surface, under the
     // active stroke and all entities (draw-only; never affects logic).
@@ -4310,7 +4312,7 @@ export class Game {
       this._drawOffscreenEnemyArrows(ctx, v);
       if (this.state === 'expedition') drawCombatReadout(this, ctx, v);
       this._drawHud(ctx);
-      if(this.state==='expedition')drawDungeonProgress(this,ctx);
+      if(this.state==='expedition'){drawDungeonProgress(this,ctx);drawJourneyHud(this,ctx);}
     }
     // T1 (v1.2 M13): the on-screen goal chip + SKIP button for the guided first
     // expedition (rendered above the HUD so it reads as the active instruction).
@@ -5589,8 +5591,9 @@ export class Game {
     drawDungeonRoute(this,c,cx-320,278,640);
     centerText(c,(this.campaign?.cleared.length||0)+' / 4 guardians · '+this._fmtClock(this.runT||0)+' · '+(this.runEnemies||0)+' bugs painted',cx,333,uiFont(20),INK);
     const page=this.save.sketchbook?.[this.save.sketchbook.length-1];
-    if(page)drawPostcard(c,page,cx-150,358,300,180,studyRewardEarned(this.save.studio?.completed||[],'swamp'),studyRewardEarned(this.save.studio?.completed||[],'reeds'),!!this.save.flags.crossingPainted);
-    centerText(c,'Brush gifts belong to this run. A new descent begins at equal strength.',cx,565,uiFont(15),INK);
+    if(page)drawPostcard(c,page,cx-310,370,240,144,studyRewardEarned(this.save.studio?.completed||[],'swamp'),studyRewardEarned(this.save.studio?.completed||[],'reeds'),!!this.save.flags.crossingPainted);
+    drawRunBuild(this,c,page?cx-40:cx-280,380,page?340:560);
+    centerText(c,'Brush gifts reset when you start a fresh descent.',cx,565,uiFont(15),INK);
     paperEnd(ctx);
     uiButton(ctx,b.primary.x,b.primary.y,b.primary.w,b.primary.h,'Start a fresh descent',this._mouseIn(b.primary.x,b.primary.y,b.primary.w,b.primary.h),false,{size:20});
     uiButton(ctx,b.ret.x,b.ret.y,b.ret.w,b.ret.h,'Return to the pond',this._mouseIn(b.ret.x,b.ret.y,b.ret.w,b.ret.h),false,{size:17});

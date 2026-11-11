@@ -1,3 +1,17 @@
+# Twenty delights — 2026-11-11
+
+- Added deeper-floor painting, hanging lanterns, whisper reeds, mushroom music
+  and bounded garden completion celebrations: 64 props per floor.
+- Added live attack/opening/blue-stop captions, boss phase instructions and
+  a clearing result card with battle time, dodges and color use.
+- Added floor introductions, contextual objectives, guardian landmarks,
+  atlas arena/clearing markers and an end-screen brush-build recap.
+- Added seeded later-rest offers, Broad brush, Quick strokes and Kind moss,
+  with actual before/after tuning previews. Still only three run-only gifts.
+- Removed duplicate attack captions and a clearing/depth UI overlap.
+- All 19 required gates pass; base balance telemetry is unchanged. See
+  ROADMAP.md Milestone 4 and VALIDATION-delights.md for the 20-item mapping.
+
 # One continuous dungeon — 2026-11-11
 
 - Connected Watercolor Marsh, Sunken Reeds, Hollow Sanctuary and Black Reeds
