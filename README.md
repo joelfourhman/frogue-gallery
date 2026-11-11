@@ -4,7 +4,7 @@ A tiny frog paints a gray swamp back to life. Burn pursuers with crimson,
 freeze a diving fly with cobalt, grow a little pond into a living painting,
 and bring home a postcard made from your own brush strokes.
 
-**The Living Sketchbook — exploration and painting update, 2026-11-11.**
+**Lily Clearing — clearer combat and free painting, 2026-11-11.**
 The compatibility identifiers remain game 1.0.0 / save schema 12.
 
 ## Play locally
@@ -26,7 +26,16 @@ The Node server additionally restricts served files to the game itself.
 
 ## First expedition
 
-Press Enter. Walk east to **First Light**, the small gray pond near the start.
+Press Enter. Repaint pale lilies, flowers, mushrooms and stones any color.
+Your colors stay on these objects for this expedition. Walk right to the
+**Lily Clearing** bell and paint it to start a short, optional three-round fight.
+Red lanes warn of an attack: dodge sideways with Space, then paint during
+recovery. Blue interrupts; following blue with red makes that red hit 50%
+stronger in the clearing. Paint the bell between rounds; walk away to cancel.
+First completion restores health; replay freely without currency rewards.
+The final boss waits until you reach the far end of the swamp.
+
+You can also visit **First Light**, the small gray pond near the start.
 Select the numbered colors and hold paint on each circle. Water, lilies and
 fireflies appear as you work. Completing it heals you, saves a sketchbook page,
 and teaches **brush-hop**: hold paint while hopping to leave a defensive wake.
@@ -59,13 +68,15 @@ can leave a keepsake, even a defeat.
 Paint is unlimited. Colored orbs are banked currency for Atelier paintings
 and upgrades; they are not brush ammunition. Red burns, blue slows/freezes,
 green roots and heals, and dry clears status and restores color.
-The colored arc beside the frog shows the brush's actual close-range reach.
-A ring highlights the nearest creature inside it. Holding splash shows its
-radius and charge beside the frog; the small arc at your feet tracks hop recovery.
+The small brush tip beside the frog shows actual close-range reach; move closer
+to distant objects. Holding splash shows its radius and charge beside the frog.
+The dodge meter appears briefly while the hop recovers. Menus retain a normal
+mouse pointer; the game no longer shows a distant crosshair.
 
 ## What's included
 
 - Three living field studies, an earned brush-hop and a cosmetic signature.
+- 64 freely repaintable plants/stones and a replayable three-round clearing.
 - An eight-page sketchbook containing sampled real strokes; save a 1600×960
   PNG postcard from any page.
 - Three biomes, six boss archetypes, named encounter zones, checkpoints,

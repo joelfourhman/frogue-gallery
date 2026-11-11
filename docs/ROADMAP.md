@@ -1,4 +1,30 @@
-# Frogue Gallery — The Living Sketchbook
+# Frogue Gallery — Paint, dodge, explore
+
+## Current milestone — Lily Clearing and free painting — IMPLEMENTED
+
+The owner's next request supersedes the wait-for-feedback priority below:
+build the short encounter, simplify confusing aiming/UI, add repaintable
+swamp objects, and delay the boss. Three agents handled encounter/enemy rules,
+free scenery and brush presentation; the coordinating agent integrated the
+HUD, boss gates, browser checks and validation.
+
+- A bell starts three rounds (3/4/5 bugs), with at most two active attackers.
+  Warning lanes lock before dashes; recovery is safe. Blue interrupts and
+  blue-to-red increases that red hit by 50% on clearing targets. No color locks.
+- Free repainting: 64 lilies, mushrooms, flowers and stones; any color works,
+  persists for the run and animates locally. No currencies or puzzle recipes.
+- One brush marker at real reach; plain color/action names and contextual
+  instructions. Remove competing crosshair/range/target/foot rings.
+- Final bosses wait for their end arena (last 900px). No opening announcement,
+  fight music or remote summon. The optional mid-run heron remains mid-run.
+
+The two-minute experience is a design target, not a stopwatch requirement.
+The precise scripted movement/dodge probe takes ~45 seconds; human duration
+and enjoyment remain unmeasured. Next: replay from a fresh expedition and
+judge whether instructions, dodge timing and repainting are now self-evident.
+See VALIDATION-lily-clearing.md. Do not expand content before that feedback.
+
+## Previous roadmap — The Living Sketchbook
 
 Rewritten 2026-11-11 against source and Git history. The game already has three
 biomes, six bosses, five living studies, a painted crossing, pinned/named

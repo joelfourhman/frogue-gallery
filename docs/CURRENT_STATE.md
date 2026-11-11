@@ -1,4 +1,12 @@
-# Current state — The Living Sketchbook
+# Current state — Lily Clearing and free painting
+
+Latest follow-up: `encounter.js` owns a bounded, replayable three-round clearing
+using pure rules in logic.js and authored attack states in enemies.js. `repaint.js`
+adds 64 freely recolorable run-local props through FieldStudio. `combat-ui.js`
+draws one brush at actual reach. Main HUD and study instructions use plain
+action/color names. Final boss activation is gated to the last 900px, including
+Warden/Umbral; sleeping bosses cannot be splashed into combat early. Save/game
+versions are unchanged. Details and limits: VALIDATION-lily-clearing.md.
 
 **2026-11-11.** Astra, Q1–Q9 and the Living Sketchbook expansion are implemented. This document describes
 the implementation. Future work lives in ROADMAP.md and QWEN_BACKLOG.md.

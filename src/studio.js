@@ -4,6 +4,7 @@ import { FIELD_STUDIES, STUDIO, PIGMENTS, PIGMENT_ORDER, studyNode, strokeTouche
 import { SaveSys } from './save.js';
 import { clamp, TAU } from './math.js';
 import { INK, uiButton, centerText, uiFont, paperPanel, paperEnd } from './ui.js';
+import { RepaintGarden } from './repaint.js';
 
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const pigmentKey = p => PIGMENT_ORDER.indexOf(p) + 1;
@@ -16,11 +17,13 @@ export class FieldStudio {
       .map(s => ({ ...s, step: 0, coats: 0, bloom: 0, wrongT: 0, coatFlash: 0 }));
     this.strokes = []; this.seen = 0; this.wakes = []; this.hopId = 0; this.wakeT = 0;
     this.id = `${game.runSeed}-${game.save.stats.expeditions}`;
+    this.garden = new RepaintGarden(game, this.studies);
   }
 
   get unlocked() { return !this.game.challenge && this.game.save.studio.completed.length > 0; }
   sheltered() {
     const g = this.game, first = this.studies[0];
+    if (g.encounter?.active) return false;
     return !!(first && first.step < 3 && !this.unlocked && g.player && distance(g.player, first) < 205);
   }
 
@@ -45,6 +48,7 @@ export class FieldStudio {
     const g = this.game;
     if (g._tutorialActive()) return;
     this.record(stroke);
+    this.garden.onStroke(stroke);
     for (const study of this.studies) {
       const before = study.step;
       if (!paintStudy(study, stroke)) {
@@ -90,6 +94,7 @@ export class FieldStudio {
 
   update(dt) {
     const g = this.game, p = g.player;
+    this.garden.update(dt);
     for (const study of this.studies) {
       study.bloom = Math.max(0, study.bloom - dt * 0.5);
       study.wrongT = Math.max(0, study.wrongT - dt);
@@ -134,6 +139,7 @@ export class FieldStudio {
   }
 
   draw(ctx, view, now) {
+    this.garden.draw(ctx, view, now);
     for (const wake of this.wakes) {
       ctx.save(); ctx.globalAlpha = 0.3 * wake.t / STUDIO.wakeLife;
       ctx.fillStyle = PIGMENTS[wake.pigment].color;
@@ -169,7 +175,8 @@ export class FieldStudio {
 
   drawHint(ctx) {
     const g = this.game;
-    if (g._tutorialActive() || g.help || g.paused || !g.player?.alive) return;
+    if (g._tutorialActive() || g.help || g.paused || g._bookOpen || g._atlasOpen || !g.player?.alive) return;
+    if (g.enemies?.some(e => !e.dead && Math.hypot(e.x - g.player.x, e.y - g.player.y) < 240)) return;
     // Screen-space paper stays readable in the Reeds, above its darkness mask.
     // At most one panel, with no new input ownership or simulation state.
     let nearby = null, nearest = 280;
@@ -180,18 +187,19 @@ export class FieldStudio {
     if (nearby) {
       const s = nearby, w = Math.min(580, g.cw - 40), x = (g.cw - w) / 2, y = g.ch - 132;
       const c = paperPanel(ctx, x, y, w, 104, { seed: 87 });
-      centerText(c, s.step < 3 ? `${s.name} · Step ${s.step + 1} / 3` : `${s.name} · Study complete`, g.cw / 2, y + 26, uiFont(18, { weight: 700 }), INK);
+      centerText(c, s.step < 3 ? `${s.name} · Color ${s.step + 1} of 3` : `${s.name} · Painting complete`, g.cw / 2, y + 26, uiFont(18, { weight: 700 }), INK);
       if (s.step < 3) {
         const pigment = s.colors[s.step], paint = PIGMENTS[pigment];
-        centerText(c, `${pigmentKey(pigment)} · ${paint.name} (${pigment}) — ${s.verbs[s.step]}`, g.cw / 2, y + 51, uiFont(18), INK);
+        const colorName = pigment[0].toUpperCase() + pigment.slice(1);
+        centerText(c, `Press ${pigmentKey(pigment)} for ${colorName} · ${s.verbs[s.step]}`, g.cw / 2, y + 51, uiFont(18), INK);
         const dotsX = g.cw / 2 - 170;
         for (let i = 0; i < STUDIO.coats; i++) {
           c.fillStyle = i < s.coats ? paint.color : '#e7d9c2';
           c.strokeStyle = '#665b4c'; c.lineWidth = 1.5;
           c.beginPath(); c.arc(dotsX + i * 16, y + 78, 5, 0, TAU); c.fill(); c.stroke();
         }
-        centerText(c, `Coats ${s.coats} / ${STUDIO.coats}`, g.cw / 2 - 72, y + 84, uiFont(16, { weight: 700 }), INK);
-        centerText(c, s.wrongT > 0 ? `Try ${paint.name} on this circle` : 'Aim at the circle · Hold paint', g.cw / 2 + 114, y + 84, uiFont(16), s.wrongT > 0 ? '#893d29' : '#3b5651');
+        centerText(c, `${s.coats} / ${STUDIO.coats}`, g.cw / 2 - 94, y + 84, uiFont(16, { weight: 700 }), INK);
+        centerText(c, s.wrongT > 0 ? `Use ${pigment} on the circle` : 'Move close · Hold left click on the circle', g.cw / 2 + 93, y + 84, uiFont(14), s.wrongT > 0 ? '#893d29' : '#3b5651');
       } else {
         centerText(c, 'Your postcard is saved. The swamp remembers.', g.cw / 2, y + 53, uiFont(18), '#304b45');
         centerText(c, 'J · Open your sketchbook     Keep exploring when ready →', g.cw / 2, y + 82, uiFont(16), INK);
@@ -199,10 +207,11 @@ export class FieldStudio {
       paperEnd(ctx);
       return;
     }
+    if (this.garden.drawHint(ctx)) return;
     const first = this.studies[0];
     if (!first || first.step === 3 || g.player.x > 1000 || this.unlocked) return;
-    const c = paperPanel(ctx, 370, g.ch - 62, 540, 40, { seed: 87 });
-    centerText(c, this.sheltered() ? 'A quiet studio. Paint the numbered circles — take your time.' : 'A little pond is waiting to be painted. Follow the path east →', 640, g.ch - 36, uiFont(14), INK);
+    const w = Math.min(540, g.cw - 32), c = paperPanel(ctx, (g.cw - w) / 2, g.ch - 62, w, 40, { seed: 87 });
+    centerText(c, this.sheltered() ? 'Paint the pond circles with their matching colors.' : 'Explore right → Paint flowers and mushrooms any color.', g.cw / 2, g.ch - 36, uiFont(14), INK);
     paperEnd(ctx);
   }
 }

@@ -1,4 +1,48 @@
-# Project state — Responsive controls and readable combat (2026-11-11)
+# Project state — Lily Clearing and free painting (2026-11-11)
+
+Owner request: build the short encounter, fix confusing brush/UI concepts,
+make more swamp objects paintable, and delay the boss. Three agents implemented
+encounter/enemy rules, free scenery and aiming; integration stayed in Game.
+
+Shipped: optional bell at (1050,730), three rounds of 3/4/5 enemies, max two
+alive. Ground attackers lock a red warning lane for 0.8s, dash for 0.28s and
+recover safely for 1.15s. Blue interrupts; red after blue deals 1.5x direct
+damage only on clearing targets. Green keeps its existing root/heal role.
+Initial authored HP 80/60 was tuned to **120 beetle / 90 mosquito** to give
+more room for the dodge/color loop; ordinary enemies/boss HP are unchanged.
+No loot farming, one first-completion heal, replay, and walk-away cancellation.
+Ambient enemies yield during the fight; the starter pond cannot grant battle
+invulnerability. Attacking an enemy takes priority over accidentally ringing
+the bell with the same stroke.
+
+**64 freely repaintable props** (lilies, mushrooms, flowers, stones) keep any
+chosen color for the run, with bounded bounce/ripple/firefly/leaf effects.
+No new currency, recipes, save fields, RNG draws or runtime dependencies.
+One brush marker replaces the competing native crosshair, arc and target rings.
+Plain Red/Blue/Green labels, Dodge/Space, contextual paint instructions, readable
+study cards and a visible menu/Skip pointer simplify the main interactions.
+
+Final bosses now wait for the **last 900px**, instead of a 3.2–38s opening
+countdown; the swamp's 3.2s announcement starts on arena entry. Warden/Umbral
+also no longer expire their intro remotely. The optional mid-run heron remains.
+This is spatial progression, not a mandatory waiting timer.
+
+Validation: required 19-gate source/dist browser suite, smoke stages 124–126,
+all nine unchanged pacing bands, before/after balance telemetry with no flags,
+and 36 frame scenes. Actual browser input covers repainting, bell activation,
+warning dodge, blue/red combo, pointer restoration and tutorial Skip. See
+docs/VALIDATION-lily-clearing.md and tests/.out/astra/32–35 PNGs.
+Full-Game balance samples changed (blue toad 0.9s → 0.7s; clean-win bank
+3/5/6 → 5/6/3 red/blue/green); ordinary damage constants are unchanged and
+affordability still passes. Detailed deltas/limitations are in the validation.
+
+Diagnostic full-Game clearing bot (no god mode): red-only **45.0s / 21 hops**;
+blue/red **44.4s / 7 hops**; both finish all rounds without damage. All 64 sampled
+worlds have a reachable bell approach. Two minutes is a newcomer design target,
+not measured human duration; the game calls it a short battle. Next: owner
+replay from a fresh expedition to judge clarity and enjoyment before expansion.
+
+# Previous checkpoint — Responsive controls and readable combat (2026-11-11)
 
 Owner feedback: “it's not that fun right now”; specifically “Movement and
 combat feel awkward.” This pass prioritizes that report over further content.

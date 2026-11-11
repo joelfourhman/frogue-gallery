@@ -26,6 +26,7 @@ These are ignored by Git and may be regenerated:
 - .cache/atlas-review.png and .cache/studio-*.png: local visual review evidence.
 - .cache/astra-logs/: this development pass's earlier diagnostic logs.
 - tests/.out/astra/: browser screenshots, postcard and report.
+- tests/.out/astra/32–35 PNGs: free repainting, warning lane, combo and 640px UI.
 - tests/frames/astra/: staged render screenshots and manifest.
 - node_modules/: optional browser test tooling; no game runtime dependency.
 

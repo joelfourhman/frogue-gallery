@@ -10,8 +10,9 @@ import { MOTH_NOOK, mothEncounterAllowed, mothCanSpawn, mothReward } from './log
 import { Input } from './input.js';
 import { FieldStudio, sketchbookButton, bookLayout, drawSketchbook, exportPostcard, editPostcardTitle, finishPostcardTitle, drawPostcard } from './studio.js';
 import { atlasButton, atlasLayout, drawFieldAtlas } from './atlas.js';
-import { exhibitSketchPage, studyRewardEarned, cycleCombatPigment, splashChargeStep } from './logic.js';
+import { exhibitSketchPage, studyRewardEarned, cycleCombatPigment, splashChargeStep, bossArenaReached } from './logic.js';
 import { drawCombatReadout } from './combat-ui.js';
+import { OpeningEncounter } from './encounter.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
@@ -3350,30 +3351,25 @@ _drawAtelier(ctx) {
       if (!this.save.flags.welcomeGranted) {
         applyWelcomeGrant(this.save);
         const total = WELCOME_GRANT.red + WELCOME_GRANT.blue + WELCOME_GRANT.green;
-        this.addBanner(`Sir Croaksworth sets out a starter's kit — +${total} pigment to begin your collection.`, 5.5, this.ch * 0.62);
+        this.addBanner(`Starter gift: ${total} paint drops for upgrades after your walk.`, 4, this.ch * 0.72);
       }
       SaveSys.save(this.save);
       // Staged first-run tutorial: one step at a time on a runT schedule, so
       // a newcomer reads a single instruction per beat instead of a wall of
       // text (the M1 version fired three banners simultaneously).
       this._tut = [
-        { at: 0.3, dur: 5.5, text: 'WASD to move — aim the brush with your mouse' },
-        { at: 7, dur: 5.5, text: 'Hold left-click to paint — it hurts bugs and colors the swamp' },
-        { at: 14, dur: 6.5, text: 'Pigments: 1 red burns · 2 blue chills · 3 green heals (stand in fresh moss)' },
-        { at: 22, dur: 6.5, text: 'Hold right-click to charge, release to splash. Space hops out of danger.' },
-        { at: 30, dur: 6.0, text: 'Paint the swamp back to color… the gray arrow marks the Great Gray Heron' },
+        { at: 0.3, dur: 5.5, text: 'Move with WASD. Hold left mouse to paint nearby.' },
+        { at: 8, dur: 5.5, text: 'Paint the pale flowers and mushrooms any color you like.' },
+        { at: 17, dur: 5.5, text: 'Space dodges. Blue stops a charging bug; red burns it.' },
+        { at: 27, dur: 5.5, text: 'Follow the path right. Paint the bell for a short bug battle.' },
       ];
       this._tutI = 0;
     } else {
       this._tut = null;
-      this.addBanner('Paint the swamp back to color… then face the Great Gray Heron.', 4.2);
+      this.addBanner('Make the swamp yours. Paint plants, explore, or try the clearing bell.', 4.2);
     }
-    // give first-timers a longer head start before the heron's reveal + banners.
-    // PT2 (M7.5): the 5-step first-run tutorial runs to ~36s, so the boss reveal
-    // (6.5s) used to interrupt it and confused newcomers. Defer the first-run
-    // reveal to 38s — just after the last tutorial step — so the boss lands as
-    // a clean "now you know the tools" moment. Returning players: 3.2s (unchanged).
-    this.heron._intro = firstRun ? 38 : 3.2;
+    // The countdown begins only in the final arena, not when the run starts.
+    this.heron._intro = 3.2;
     // K7 (v1.5 M2): a CURATOR CHALLENGE run gets a distinct banner (it is a
     // scored daily mode — same world, seeded loadout + modifier — that files a
     // score to the atelier's challenge panel). A normal run shows nothing here.
@@ -3390,8 +3386,10 @@ _drawAtelier(ctx) {
     // keeps the guided path out of play even if it is ever called otherwise.
     if (guided && tutorialEligible(this.save)) this._startTutorial();
     this.studio = new FieldStudio(this);
+    this.encounter = new OpeningEncounter(this);
     this.paint.onStroke = stroke => {
       this.studio.onStroke(stroke); this._paintCrossingStroke(stroke);
+      this.encounter.onStroke(stroke);
       if (this.world.paintMothFlower(stroke)) {
         this.sfx('moth-settle');
         this._mothBanner('Flower ready · brush moth BLUE');
@@ -4026,7 +4024,7 @@ _drawAtelier(ctx) {
       // splash the heron if it's in the burst
       // R4 (v1.6): the wyrm is splashed only while surfaced (untargetable
       // underground — same rule as the swipe path).
-      if (this.heron && this.heron.hp > 0 && !this.heron.flying
+      if (this.heron && this.heron.hp > 0 && !this.heron.flying && this.heron._intro <= 0
         && !(this.heron.wyrm && this.heron.phase !== 'surfaced')
         && !(this.heron.umbra && this.heron.phase !== 'surfaced')   // G2: the Umbral Wyrm is splashed only while surfaced
         && !(this.heron.warden && this.heron.phase !== 'mawOpen')) {
@@ -4041,6 +4039,7 @@ _drawAtelier(ctx) {
     // an old stored charge. Lost input ownership (blur/menu) also clears it.
     if (this.input.mouse.rReleased) p.splashCharge = 0;
 
+    this.encounter?.update(dt);
     // ----- enemies -----
     // P10: skip full AI for enemies far off-screen (they can't attack or be
     // painted at that range). Burn damage ALWAYS still ticks (the status check
@@ -4055,6 +4054,7 @@ _drawAtelier(ctx) {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       if (this._tutorialActive() && e !== this.tutorial.target) continue;
+      if (this.encounter?.active && !e._clearing) continue;
       if (!e.dead && p.alive) {
         const dx = e.x - p.x, dy = e.y - p.y;
         const far = dx * dx + dy * dy > CULL2;
@@ -4116,7 +4116,6 @@ _drawAtelier(ctx) {
       // is an end-of-run arena apex, not a far-away attacker). Wander is
       // Reeds-compatible (D3), so the arena gate is identical to the wyrm's.
       const wardenArena = p.x > this.world.w - 900;
-      if (this.heron._intro > 0) this.heron._intro -= dt;
       if (wardenArena && this.heron._intro > 0) this.heron._intro = 0;   // lapse on arena entry
       if (this.heron._intro <= 0 && !this._wardenEngaged) {
         this._wardenEngaged = true;
@@ -4133,7 +4132,6 @@ _drawAtelier(ctx) {
       // it is the Black Reeds' end-of-run apex). It reuses the wyrm's arena
       // gate (Reeds-compatible) + its own dual-maw / deep-dark tell.
       const umbraArena = p.x > this.world.w - 900;
-      if (this.heron._intro > 0) this.heron._intro -= dt;
       if (umbraArena && this.heron._intro > 0) this.heron._intro = 0;   // lapse on arena entry
       if (this.heron._intro <= 0 && !this._umbraEngaged) {
         this._umbraEngaged = true;
@@ -4156,7 +4154,7 @@ _drawAtelier(ctx) {
         this.addBanner('It moves through the mud — strike it at its SURFACE POINTS. Paint red / blue / green to wake it!', 4.6, 195);
         this.zoomTarget = 0.92;
       }
-    } else if (this.heron._intro > 0) {
+    } else if (this.heron._intro > 0 && bossArenaReached(p.x, this.world.w)) {
       this.heron._intro -= dt;
       if (this.heron._intro <= 0) {
         this.sfx('boss-growl');
@@ -4601,7 +4599,7 @@ _drawAtelier(ctx) {
   }
 
   _spawnWave(dt) {
-    if (this._tutorialActive() || this.studio?.sheltered()) return;
+    if (this._tutorialActive() || this.studio?.sheltered() || this.encounter?.suppressesWaves) return;
     this.spawnT -= dt;
     if (this.spawnT > 0) return;
     const t = this.runT;
@@ -4893,6 +4891,12 @@ _drawAtelier(ctx) {
   }
 
   _onEnemyDead(e) {
+    if (e._noLoot) {
+      this.sfx('enemy-die');
+      this.particles.splatter(e.x, e.y, e.tint || '#8fb0f0', 8, 70);
+      this.hitStop(0.08, 0.4);
+      return;
+    }
     this.score += e.score;
     this.runEnemies += 1;  // Q1 (v1.6): this expedition's enemies painted (pause summary; in-memory only)
     // S1 (v1.9): the per-creature DEATH sting — the 6 archetypes have a
@@ -6412,6 +6416,11 @@ _drawAtelier(ctx) {
 
   _drawAll() {
     const ctx = this.ctx;
+    const painting = this.state === 'expedition' && this.player?.alive && !this.dying &&
+      !this.paused && !this.help && !this._bookOpen && !this._atlasOpen && !this._cine;
+    const skip = this._tutorialActive() ? this._tutorialLayout().skip : null;
+    const overSkip = skip && this._mouseIn(skip.x, skip.y, skip.w, skip.h);
+    this.canvas.style.cursor = painting && !overSkip ? 'none' : 'default';
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.cw, this.ch);
     const v = this._view();
@@ -6490,6 +6499,7 @@ _drawAtelier(ctx) {
     // on top of its landing (draw-only; the "painted soil darkens / water
     // ripples" that makes the paint LANDING visible, not just the arc).
     if (this.state === 'expedition' || this.state === 'end') this.studio?.draw(ctx, v, this.now);
+    if (this.state === 'expedition') this.encounter?.drawWorld(ctx, v);
     this.paint && this.paint.drawInk(ctx);
     // J1 (v1.4): short-lived wet residue marks sit on the surface, under the
     // active stroke and all entities (draw-only; never affects logic).
@@ -6562,7 +6572,10 @@ _drawAtelier(ctx) {
     }
     // T1 (v1.2 M13): the on-screen goal chip + SKIP button for the guided first
     // expedition (rendered above the HUD so it reads as the active instruction).
-    if (this.state === 'expedition') this.studio?.drawHint(ctx);
+    if (this.state === 'expedition') {
+      if (!this.encounter?.nearby && !this.encounter?.active) this.studio?.drawHint(ctx);
+      this.encounter?.drawHint(ctx);
+    }
     if (this.state === 'expedition' && this.tutorial && !this.tutorial.done) this._drawTutorialChip(ctx);
     if (this.state === 'title') this._drawTitle(ctx);
     if (this.state === 'title' && this.optionsOpen) this._drawOptions(ctx);
@@ -7001,7 +7014,7 @@ _drawAtelier(ctx) {
     for (let i = 0; i < 4; i++) {
       const c = order[i];
       const pig = PIGMENTS[c];
-      const x = 14 + i * 66, y = 52;
+      const x = 14 + i * 86, y = 52;
       const selected = p.pigment === c;
       ctx.save();
       if (selected) {
@@ -7009,10 +7022,10 @@ _drawAtelier(ctx) {
         ctx.fillStyle = '#fdf6e9';
         ctx.lineWidth = 3;
         ctx.strokeStyle = pig.color;
-        this._blobRect(ctx, x, y, 60, 44, 11 + i * 3);
+        this._blobRect(ctx, x, y, 80, 44, 11 + i * 3);
         ctx.fill(); ctx.stroke();
       } else {
-        this._paperChip(ctx, x, y, 60, 44, 10 + i * 2);
+        this._paperChip(ctx, x, y, 80, 44, 10 + i * 2);
       }
       ctx.globalAlpha = 1;
       // key hint
@@ -7029,20 +7042,20 @@ _drawAtelier(ctx) {
       ctx.arc(x + 27, y + 13, 2.6, 0, TAU);
       ctx.fill();
       // stock pips
-      centerText(ctx, ['BURN', 'FREEZE', 'MEND', 'CLEAR'][i], x + 30, y + 38, uiFont(11, { weight: 700 }), INK, 0.9);
+      centerText(ctx, ['Red · burn', 'Blue · stop', 'Green · heal', 'Dry · erase'][i], x + 40, y + 38, uiFont(12, { weight: 700 }), INK, 0.9);
       ctx.restore();
     }
 
-    centerText(ctx, 'Q / E or wheel · switch color', 145, 114, uiFont(13), this.lanternReeds ? '#f3ead7' : INK, 0.9);
+    centerText(ctx, 'Left mouse: paint nearby   ·   Q / E or wheel: color', 250, 115, uiFont(14), this.lanternReeds ? '#f3ead7' : INK, 0.95);
     // ---- splash charge bar (right of pigments) ----
-    const bx = 14 + 4 * 66 + 10, by = 52, bw = 120, bh = 44;
+    const bx = 14 + 4 * 86 + 10, by = 52, bw = 136, bh = 44;
     ctx.save();
     this._paperChip(ctx, bx, by, bw, bh, 8);
     ctx.restore();
     const chg = p.splashCharge;
     ctx.save();
     ctx.globalAlpha = 0.92;
-    centerText(ctx, 'SPLASH', bx + bw / 2, by + 10, uiFont(UI.sizes.tiny, { weight: 700 }), INK, 0.6);
+    centerText(ctx, 'Splash · right mouse', bx + bw / 2, by + 11, uiFont(12, { weight: 700 }), INK, 0.9);
     ctx.fillStyle = 'rgba(43,35,32,0.15)';
     this._blobRect(ctx, bx + 10, by + 22, bw - 20, 12, 1);
     ctx.fill();
@@ -7066,7 +7079,7 @@ _drawAtelier(ctx) {
     ctx.save();
     ctx.globalAlpha = 0.92;
     const sx = this.cw - 14;
-    centerText(ctx, `Score  ${this.score}`, sx - 70, 28, uiFont(UI.sizes.sub, { weight: 700 }), INK);
+    centerText(ctx, this.challenge ? `Score  ${this.score}` : 'Drops for upgrades', sx - 94, 31, uiFont(15, { weight: 700 }), INK);
     for (let i = 0; i < 3; i++) {
       const c = ORB_COLORS[i];
       const pig = PIGMENTS[c];
@@ -7082,13 +7095,13 @@ _drawAtelier(ctx) {
     ctx.restore();
 
     // ---- boss bar (top-center, once the heron is live) ----
-    const hopX = 422, hopY = 52;
+    const hopX = 514, hopY = 52;
     this._paperChip(ctx, hopX, hopY, 146, 44, 13);
-    centerText(ctx, this.studio?.unlocked ? 'BRUSH-HOP · Space' : 'HOP · Space', hopX + 73, hopY + 14, uiFont(11, { weight: 700 }), INK);
+    centerText(ctx, 'Dodge · Space', hopX + 73, hopY + 14, uiFont(14, { weight: 700 }), INK);
     ctx.fillStyle = '#d8d3bb'; ctx.fillRect(hopX + 12, hopY + 23, 122, 6);
     ctx.fillStyle = '#62845b'; ctx.fillRect(hopX + 12, hopY + 23, 122 * clamp(1 - p.hopCd / (t.hopCooldown || 0.7), 0, 1), 6);
-    centerText(ctx, p.hopCd > 0 ? 'catching a breath' : this.studio?.unlocked ? 'hold paint for a wake' : 'ready to leap', hopX + 73, hopY + 39, uiFont(9, { italic: true }), INK, 0.7);
-    centerText(ctx, 'V · atlas   H · guide   J · sketchbook', this.cw - 148, this.ch - 20, uiFont(12), this.lanternReeds ? '#f3ead7' : INK, 0.8);
+    centerText(ctx, p.hopCd > 0 ? 'Recharging' : 'Ready', hopX + 73, hopY + 39, uiFont(12), INK, 0.85);
+    centerText(ctx, 'V Map   ·   H Help   ·   J Sketchbook', this.cw - 162, this.ch - 20, uiFont(14), this.lanternReeds ? '#f3ead7' : INK, 0.9);
 
     const h = this.heron;
     if (h && h._intro <= 0 && h.hp > 0 && h.flying <= 0) {
@@ -7769,7 +7782,7 @@ _drawAtelier(ctx) {
     // controls card
     const c = paperPanel(ctx, px, py, pw, ph, { seed: 11 });
     centerText(c, 'The swamp is fading to gray.', cx, py + 34, uiFont(UI.sizes.subPlus, { weight: 600 }));
-    centerText(c, 'Paint it back to color — then face the Great Gray Heron.', cx, py + 58, uiFont(UI.sizes.subPlus, { weight: 600 }));
+    centerText(c, 'Repaint the plants, dodge the bugs, and explore to the right.', cx, py + 58, uiFont(UI.sizes.subPlus, { weight: 600 }));
     const rows = this._gp.connected ? [
       ['Move / Aim', 'left stick / right stick'],
       ['Paint', 'hold RT · LT selects dry brush'],
@@ -7779,10 +7792,10 @@ _drawAtelier(ctx) {
       ['Pause / Book', 'Start / Back'],
     ] : [
       ['Move', 'WASD / arrow keys'],
-      ['Paint', 'hold left mouse, aim with the cursor'],
-      ['Splash burst', 'hold right mouse, release'],
-      ['Dodge hop', 'space — brief invulnerability'],
-      ['Pigments', 'Q / E or wheel · 1 red · 2 blue · 3 green'],
+      ['Paint nearby', 'aim with mouse · hold left button'],
+      ['Splash', 'hold right mouse until full, release'],
+      ['Dodge', 'Space — leap safely through attacks'],
+      ['Change color', 'Q / E or wheel · 1 red · 2 blue · 3 green'],
       ['Pause', 'P or Esc'],
     ];
     rows.forEach((r, i) => {
@@ -7937,9 +7950,9 @@ _drawAtelier(ctx) {
     // ---- left column: painting (the pigments) ----
     c.save(); c.font = uiFont(UI.sizes.sub, { weight: 700 }); c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Painting — your brush', colL, y0); c.restore();
     const pig = [
-      ['1', PIGMENTS.red.color, 'Crimson', 'BIG damage + burn (damage over time, ignores armor); your main weapon'],
-      ['2', PIGMENTS.blue.color, 'Cobalt', 'medium damage + FREEZE: flies freeze solid on the spot, ground enemies slow then freeze'],
-      ['3', PIGMENTS.green.color, 'Moss', 'light damage but HEALS the frog + restores color; roots ground enemies (flies are immune)'],
+      ['1', PIGMENTS.red.color, 'Red — burn', 'Burn bugs. In the clearing, blue then red makes the red hit stronger.'],
+      ['2', PIGMENTS.blue.color, 'Blue — stop', 'Stop flying bugs and slow ground bugs. Use it to interrupt a charge.'],
+      ['3', PIGMENTS.green.color, 'Green — heal', 'Hold ground bugs in place. Stand in fresh green paint to heal.'],
     ];
     pig.forEach((r, i) => {
       const y = y0 + 34 + i * 58;
@@ -7951,7 +7964,7 @@ _drawAtelier(ctx) {
       this._wrapHelp(c, r[3], colL + 32, y + 16, colW - 32, 14);
     });
     c.font = uiFont(UI.sizes.label); c.fillStyle = 'rgba(43,35,32,0.7)'; c.textAlign = 'left'; c.textBaseline = 'middle';
-    this._wrapHelp(c, 'Hold left mouse to paint, aim with the cursor. Hold right mouse to charge a Splash burst, release to fire. A dry brush (no pigment) deals light damage, but it CLEANS enemy status and restores the swamp\u2019s color the fastest — it never runs out.', colL, y0 + 34 + 3 * 58 + 6, colW, 14);
+    this._wrapHelp(c, 'Hold left mouse: paint near the brush tip. Move closer to reach things. Q/E or wheel: change color. Space: dodge. Hold right mouse until the ring fills, then release for a splash. Pale plants accept any color; 4 erases their paint.', colL, y0 + 34 + 3 * 58 + 6, colW, 14);
 
     // ---- right column: counterplay + the heron ----
     c.save(); c.font = uiFont(UI.sizes.sub, { weight: 700 }); c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Know your quarry', colR, y0); c.restore();

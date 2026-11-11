@@ -1,5 +1,11 @@
 # Validation — Astra Vertical Slice
 
+## Lily Clearing follow-up — 2026-11-11
+
+The new authored fight, repaintable scenery, simplified brush/UI and late boss
+gates are covered in [VALIDATION-lily-clearing.md](VALIDATION-lily-clearing.md).
+Human timing and enjoyment remain unmeasured; scripted results are labeled.
+
 ## Control-feel follow-up — 2026-11-11
 
 Owner feedback prioritized awkward movement/combat. All 19 gates pass after

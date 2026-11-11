@@ -5,6 +5,7 @@
 import { TAU, clamp, dist, lerp } from './math.js';
 import { ENEMIES, stepStatus, physicalDamage, lightFactor, REEDS_BESTIARY, wispBlinded, leechDrain, PIGMENTS, MOSQUITO_FLIGHT, mosquitoStep, LANTERN_MOTH, mothStep, mothContact } from './logic.js';
 import { UI, uiFont } from './ui.js';
+import { CLEARING, clearingStep } from './logic.js';
 
 // ------------------------------------------------------------------
 // L3 (v1.9 T3): enemy liveness — distinct telegraphs + panic/lick/flee.
@@ -425,6 +426,29 @@ export class Enemy {
       return;
     }
 
+    if (this._clearing && !this.fly) {
+      clearingStep(this, dt, player);
+      this.vx = 0; this.vy = 0;
+      if (!stunned && player.alive) {
+        if (this.clearingPhase === 'approach') {
+          const d = Math.hypot(player.x - this.x, player.y - this.y);
+          if (d > 1) { this.vx = (player.x - this.x) / d * spd; this.vy = (player.y - this.y) / d * spd; }
+        } else if (this.clearingPhase === 'dash') {
+          this.vx = this.clearingDX * CLEARING.dashSpeed;
+          this.vy = this.clearingDY * CLEARING.dashSpeed;
+        }
+      }
+      this.x += this.vx * dt; this.y += this.vy * dt;
+      [this.x, this.y] = world.collideCircle(this.x, this.y, this.r);
+      if (this.clearingPhase === 'dash' && this.attackCd <= 0 && player.alive && player.iframes <= 0 &&
+          dist(this.x, this.y, player.x, player.y) < this.r + player.r + 2) {
+        this.attackCd = CLEARING.dash + CLEARING.recover;
+        const damage = physicalDamage(this.dmg, this, tuning, tuning.playerDmgReduce || 0) * (tuning.dmgTakenMult || 1);
+        if (player.hurt(damage, tuning)) this._lastHit = now;
+      }
+      return;
+    }
+
     // --- AI: seek the player, with a little wandering
     let ax = 0, ay = 0;
     if (!stunned && !asleep && player.alive) {
@@ -521,16 +545,38 @@ function drawMoth(ctx, e, now) {
   ctx.restore();
 }
 
+// A filled lane plus a filling ring means "about to strike". It stays fixed
+// after the tell starts, so stepping sideways really does escape the attack.
+export function drawAttackWarning(ctx, e) {
+  if (e.dead || ['freeze', 'root', 'dizzy', 'slow'].includes(e.status?.type)) return;
+  const fly = e.kind === 'mosquito';
+  const phase = fly ? e.flight : e._clearing ? e.clearingPhase : null;
+  if (phase !== 'tell' && phase !== 'recover') return;
+  ctx.save();
+  if (phase === 'tell') {
+    const dx = fly ? e.dartX : e.clearingDX, dy = fly ? e.dartY : e.clearingDY;
+    const length = fly ? e.speed * MOSQUITO_FLIGHT.speed * MOSQUITO_FLIGHT.dart : CLEARING.dashSpeed * CLEARING.dash;
+    const remaining = fly ? e.flightT / MOSQUITO_FLIGHT.tell : e.clearingT / CLEARING.windup;
+    ctx.lineCap = 'round'; ctx.globalAlpha = 0.38; ctx.strokeStyle = '#b34026'; ctx.lineWidth = e.r * 2 + 4;
+    ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + dx * length, e.y + dy * length); ctx.stroke();
+    ctx.globalAlpha = 0.95; ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff3cc';
+    ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + dx * length, e.y + dy * length); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(e.x + dx * (length - 12) - dy * 8, e.y + dy * (length - 12) + dx * 8);
+    ctx.lineTo(e.x + dx * length, e.y + dy * length);
+    ctx.lineTo(e.x + dx * (length - 12) + dy * 8, e.y + dy * (length - 12) - dx * 8); ctx.stroke();
+    ctx.strokeStyle = '#b34026'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 6, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(1 - remaining, 0, 1)); ctx.stroke();
+    if (e._clearing) { ctx.font = uiFont(12, { weight: 700 }); ctx.textAlign = 'center'; ctx.fillStyle = '#763327'; ctx.fillText('DODGE', e.x, e.y - e.r - 16); }
+  } else if (e._clearing && !e.status && !(e.tintT > 0) && !(e.hitFlash > 0)) {
+    ctx.font = uiFont(12, { weight: 700 }); ctx.textAlign = 'center'; ctx.fillStyle = '#335940'; ctx.fillText('Paint now', e.x, e.y - e.r - 16);
+  }
+  ctx.restore();
+}
+
 // ------------------------------------------------------------------- draw
 export function drawEnemy(ctx, e, now) {
   if (e.kind === 'moth') { drawMoth(ctx, e, now); return; }
-  if (e.kind === 'mosquito' && e.flight === 'tell' && !e.dead) {
-    ctx.save(); ctx.strokeStyle = '#aa492c'; ctx.lineWidth = 2.5;
-    ctx.setLineDash([5, 6]); ctx.beginPath();
-    ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + e.dartX * 95, e.y + e.dartY * 95); ctx.stroke();
-    ctx.setLineDash([]); ctx.beginPath(); ctx.arc(e.x, e.y, 21 + e.flightT * 14, 0, TAU); ctx.stroke();
-    ctx.restore();
-  }
+  drawAttackWarning(ctx, e);
   const bobY = e.fly ? Math.sin(now * 3 + e._seed) * 5 : 0;
   const y = e.y - (e.fly ? 18 : 0) + bobY;
   const flash = e.hitFlash > 0 ? 1 : 0;
@@ -541,6 +587,8 @@ export function drawEnemy(ctx, e, now) {
   // enemy at render time. Pure + allocation-free (writes scalar fields); never
   // touches e.x / e.y (the collision body), hp, dmg, status, or the RNG.
   l3Draw(e, now);
+  // Authored tells follow the actual attack clock, not unrelated idle pulses.
+  if (e._clearing) { e._l3dx = 0; e._l3dy = 0; e._l3crouch = e.clearingPhase === 'tell' ? 1 : 0; e._l3scale = 1; }
   const l3dx = e._l3dx || 0, l3dy = e._l3dy || 0;
   const l3scale = e._l3scale || 1;
 

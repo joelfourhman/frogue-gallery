@@ -1,5 +1,13 @@
 # Environment and tool changes
 
+## Lily Clearing — 2026-11-11
+
+No packages or machine settings changed. Reused existing Node, Git and Chromium.
+Browser checks use isolated profiles and loopback servers, closed by harnesses.
+The existing source preview at 127.0.0.1:8767 serves these changes after reload;
+no additional persistent process was created. Local evidence uses .cache/checks/
+and tests/.out/astra/32–35; the build refreshes ignored dist/ output.
+
 ## Responsive controls — 2026-11-11
 
 No dependencies or machine settings changed. Used the existing Node/Git and

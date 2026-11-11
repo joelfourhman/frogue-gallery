@@ -436,11 +436,11 @@ frames(2);
 assert(game.state === 'expedition', 'first expedition started');
 assert(game.save.flags.intro, 'intro flag set on the first expedition');
 frames(20); // ~0.33s: step 1 (at 0.3) fires; step 3 (pigments, at 14s) must not
-assert(game.banners.some(b => b.text.startsWith('WASD to move')), 'tutorial step 1 (movement) shows within the first second');
+assert(game.banners.some(b => b.text.startsWith('Move with WASD')), 'tutorial step 1 (movement) shows within the first second');
 assert(!game.banners.some(b => b.text.includes('red burns')), 'pigment step held back until its scheduled time');
 assert(game.heron._intro > 3, `first-run heron reveal delayed (got ${game.heron._intro.toFixed(1)}s remaining)`);
-frames(400); // ~6.7s more (runT ≈ 7s): step 2 fires
-assert(game.banners.some(b => b.text.includes('left-click')), 'tutorial step 2 (painting) fired on schedule');
+frames(480); // ~8s more: free-painting instruction fires
+assert(game.banners.some(b => b.text.includes('any color')), 'tutorial step 2 (free painting) fired on schedule');
 // first-hit teaching: take a hit directly (player survives: 2 dmg)
 game.player.iframes = 0;
 game.player.hurt(2, game.tuning);
@@ -5967,7 +5967,7 @@ console.log('== stage 79: v1.5 K8 — Challenge Reward (Masterpiece + rank gold)
   assert(g82.heron && g82.heron.gilded === true, 'K9: the cycle-3 expedition\'s heron is gilded');
   g82.heron._intro = 0.016; g82.banners = [];
   // the engage block lives in _updateExpedition (boss trigger section)
-  g82.player.alive = true; g82.player.hp = 100; g82.player.x = 100; g82.player.y = 500;
+  g82.player.alive = true; g82.player.hp = 100; g82.player.x = g82.world.w - 600; g82.player.y = 500;
   g82._prevHp = 100;
   g82._updateExpedition(0.016);
   assert(g82._firstSight.gilded === true, 'K9: the gilded-heron first-sight flag latched on boss engage');
@@ -5978,7 +5978,7 @@ console.log('== stage 79: v1.5 K8 — Challenge Reward (Masterpiece + rank gold)
   g83._beginExpedition();
   assert(g83.heron && g83.heron.gilded === undefined, 'K9: the cycle-0 heron is not gilded');
   g83.heron._intro = 0.016; g83.banners = [];
-  g83.player.alive = true; g83.player.hp = 100; g83.player.x = 100; g83.player.y = 500; g83._prevHp = 100;
+  g83.player.alive = true; g83.player.hp = 100; g83.player.x = g83.world.w - 600; g83.player.y = 500; g83._prevHp = 100;
   g83._updateExpedition(0.016);
   assert(g83._firstSight.gilded === false, 'K9: a cycle-0 (gray heron) engage never fires the gilded callout');
   assert(g83.banners.filter(b => String(b.text).includes('GILDED HERON')).length === 0, 'K9: no gilded callout on a first-time run');
@@ -9425,5 +9425,33 @@ console.log('== stage 122: first-click aim follows the latest pointer ==');
 console.log('== stage 123: responsive movement and readable close combat ==');
 const { testControlFeelGame } = await import('./control-feel.mjs');
 testControlFeelGame(Game, makeCanvas);
+console.log('== stage 124: simple brush aiming and freely repaintable scenery ==');
+await import('./aim-ui.mjs');
+const { testRepaintGame } = await import('./repaint.mjs');
+testRepaintGame(Game, makeCanvas);
+console.log('== stage 125: bosses wait for their final arena ==');
+{
+  const { bossArenaReached, freshSave } = await import('../src/logic.js');
+  assert(!bossArenaReached(4500, 5400) && bossArenaReached(4501, 5400), 'boss gate is the final 900px');
+  for (const biome of ['swamp', 'reeds']) {
+    const g = new Game(makeCanvas()); g.save = freshSave(); g.options.wander = false;
+    g.save.flags.reedsUnlocked = true; g._beginExpedition(false, { reeds: biome === 'reeds' });
+    g.player.iframes = 999; g.heron._intro = 0.01;
+    g._updateExpedition(0.05);
+    assert(g.heron._intro > 0, `${biome}: no remote summon during opening`);
+    g.player.x = g.world.w - 600; g._updateExpedition(0.05);
+    assert(g.heron._intro <= 0, `${biome}: reaching the final arena engages the boss`);
+  }
+}
+console.log('== stage 126: authored clearing attacks, color combo and replay ==');
+await import('./encounter.mjs');
+{
+  const g = new Game(makeCanvas()); g.save = (await import('../src/logic.js')).freshSave();
+  g.options.wander = false; g._beginExpedition();
+  const pond = g.studio.studies[0]; g.player.x = pond.x; g.player.y = pond.y;
+  assert(g.studio.sheltered(), 'opening painting pond normally shelters a newcomer');
+  g.encounter.phase = 'fight';
+  assert(!g.studio.sheltered(), 'clearing battle cannot borrow pond invulnerability');
+}
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

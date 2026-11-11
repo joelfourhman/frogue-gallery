@@ -3,7 +3,7 @@
 // world paint layer and applies pigment damage + statuses to anything it touches.
 'use strict';
 import { TAU, clamp, dist, dist2 } from './math.js';
-import { PIGMENTS, brushHitsCircle, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus, REEDS_FLOOD_FLOOR, mothPaint } from './logic.js';
+import { PIGMENTS, brushHitsCircle, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus, REEDS_FLOOD_FLOOR, mothPaint, clearingCombo } from './logic.js';
 import { UI, uiFont } from './ui.js';
 
 // S1 (v1.9): the creatures with a DEDICATED per-creature hit sting (the 6
@@ -418,8 +418,9 @@ export class Paint {
       const deflect = frontDeflectFactor(e, p);
       // K2 (v1.5 M2): an ASLEEP cragfrog is vulnerable — ×1.5 paint damage.
       const sleepBonus = cragSleepBonus(e);
+      const combo = clearingCombo(pig, e);
       const dmg = paintDamage(base, pig, this.tuning, {
-        enemy: e, deflectFactor: deflect, sleepBonus,
+        enemy: e, deflectFactor: deflect, sleepBonus, statusBonus: combo,
       });
       e.hp -= dmg;
       // J1 (v1.9): the paint-CONNECT impact flash. Set `e.hitFlash` so the
@@ -445,7 +446,7 @@ export class Paint {
       if (deflect < 1) {
         this.note(e.x, e.y - e.r - 28, 'shell', pig, e, 'damage');
       } else {
-        this.note(e.x, e.y - e.r - 28, '-' + Math.round(dmg), pig, e, 'damage');
+        this.note(e.x, e.y - e.r - 28, combo > 1 ? `Blue + red! -${Math.round(dmg)}` : '-' + Math.round(dmg), pig, e, 'damage');
       }
       // v1.4 color rework (Joel): the dry brush CLEANS — scrubbing off the
       // enemy's active status (burn/slow/freeze/root). Dizzy is a toad quirk,

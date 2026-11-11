@@ -1,3 +1,13 @@
+# Lily Clearing and free painting — 2026-11-11
+
+- Optional three-round bell encounter, readable committed attacks and safe recovery.
+- Blue interrupts; blue-to-red gains 50% direct damage against clearing bugs.
+- 64 freely recolorable lilies, mushrooms, flowers and stones, kept for the run.
+- One brush marker; plain color/action labels and contextual painting instructions.
+- Bosses wait until their final arena; no early remote summons or boss music.
+- Replay without loot/heal farming; leave to cancel. Painting a bug wins over bell input.
+- Browser regressions cover real painting, bell, dodge, combo and pointer input.
+
 # Responsive controls — 2026-11-11
 
 - Tighter stopping/reversal and an immediate, short dodge hop.

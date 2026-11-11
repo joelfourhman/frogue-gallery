@@ -269,6 +269,10 @@ export function strokeTouchesCrossing(stroke, margin = 26) {
 // Control response, separate from travel speed and combat damage. Exponential
 // response keeps acceleration/braking consistent across browser frame rates.
 export const MOVEMENT = Object.freeze({ accelerate: 26, brake: 38, reverse: 36, hopSpeed: 2.2 });
+// Final bosses belong to the last clearing, never to the opening paint lesson.
+export function bossArenaReached(playerX, worldWidth) {
+  return Number.isFinite(playerX) && Number.isFinite(worldWidth) && playerX > worldWidth - 900;
+}
 export function movementVelocity(vx, vy, targetX, targetY, dt, launch = false) {
   if (launch) return [targetX, targetY];
   const idle = targetX === 0 && targetY === 0;
@@ -3913,4 +3917,44 @@ export function wanderInBudget(layout) {
   if (empty > 0) reasons.push(`${empty} empty zone(s)`);
   if (!layout.bossEligible) reasons.push('not boss-eligible');
   return { ok: reasons.length === 0, reasons };
+}
+
+// An optional early clearing: three bite-sized rounds, never a timed lock.
+// Only authored actors opt into the lunge and blue-to-red bonus.
+export const CLEARING = Object.freeze({
+  x: 1050, y: 730, r: 25, range: 300, leaveRange: 580,
+  windup: 0.8, dash: 0.28, recover: 1.15, dashSpeed: 290, triggerRange: 145,
+  cap: 2, beetleHp: 120, mosquitoHp: 90,
+  rounds: Object.freeze([
+    Object.freeze(['beetle', 'beetle', 'mosquito']),
+    Object.freeze(['mosquito', 'beetle', 'mosquito', 'beetle']),
+    Object.freeze(['beetle', 'mosquito', 'beetle', 'mosquito', 'beetle']),
+  ]),
+});
+export function clearingAllowed(g) {
+  return g?.runBiome === 'swamp' && !g.options?.wander && !g.challenge && !(g.ngCycle > 0);
+}
+export function clearingCombo(pigment, enemy) {
+  return pigment === 'red' && enemy?._clearing && ['slow', 'freeze'].includes(enemy.status?.type) ? 1.5 : 1;
+}
+export function clearingStep(e, dt, player) {
+  dt = Math.max(0, Math.min(0.1, Number.isFinite(dt) ? dt : 0));
+  e.clearingPhase ||= 'approach';
+  if (!player?.alive || e.dead || e.hp <= 0) {
+    e.clearingPhase = 'approach'; e.clearingT = 0; return;
+  }
+  if (['slow', 'freeze', 'root', 'dizzy'].includes(e.status?.type)) {
+    e.clearingPhase = 'recover'; e.clearingT = CLEARING.recover; return;
+  }
+  e.clearingT = Math.max(0, (e.clearingT || 0) - dt);
+  const distance = Math.hypot(e.x - player.x, e.y - player.y);
+  if (e.clearingPhase === 'approach' && distance <= CLEARING.triggerRange) {
+    e.clearingPhase = 'tell'; e.clearingT = CLEARING.windup;
+    e.clearingDX = distance > 0 ? (player.x - e.x) / distance : 1;
+    e.clearingDY = distance > 0 ? (player.y - e.y) / distance : 0;
+  } else if (e.clearingT <= 0) {
+    if (e.clearingPhase === 'tell') { e.clearingPhase = 'dash'; e.clearingT = CLEARING.dash; }
+    else if (e.clearingPhase === 'dash') { e.clearingPhase = 'recover'; e.clearingT = CLEARING.recover; }
+    else if (e.clearingPhase === 'recover') e.clearingPhase = 'approach';
+  }
 }

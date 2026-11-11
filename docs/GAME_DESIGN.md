@@ -30,6 +30,11 @@ for players who want greater difficulty.
 
 ## Paint
 
+The opening offers 64 freely recolorable lilies, mushrooms, wildflowers and
+stones. These are artistic subjects, not recipes: red/blue/green always work,
+dry erases, and colors remain for the run. Numbered pond studies retain their
+three-color transformations and are explained separately when approached.
+
 | Paint | Tactical purpose | Environmental / artistic role |
 |---|---|---|
 | Crimson | Highest direct damage and burn; punishes armored pursuers | Warm light, fireflies, suns |
@@ -59,6 +64,19 @@ and green briefly holds a grounded enemy. A hop cannot indefinitely refresh
 the same enemy, and all marks expire.
 
 ## Threats and fair reaction
+
+Lily Clearing at (1050,730) is an optional bell-triggered activity. Three
+rounds release 3/4/5 bugs, at most two alive. Authored beetles warn for 0.8s,
+dash along that locked direction for 0.28s, and recover safely for 1.15s.
+Blue interrupts; red on a blue-slowed/frozen clearing target gains 50% direct
+damage. Green supplies the existing root/healing option. Targets have
+120 beetle / 90 mosquito HP, scaled by difficulty. No loot is awarded;
+first completion heals once, replay is cosmetic. Walking away cancels safely.
+The intended newcomer experience is roughly two minutes, with no forced wait
+or exact-time promise; the precise scripted dodge bot clears in ~45 seconds.
+
+Final bosses remain dormant until the last 900px of their biome. A swamp
+heron then gets its 3.2s announcement; Reeds apexes engage on arena entry.
 
 The existing bestiary offers armor, pursuit, ranged pressure, ambush, sound
 hunting and lantern interactions. Mosquitoes now commit to a marked direction

@@ -40,9 +40,10 @@ const ctx = new Proxy({ fillText: (text, x, y) => lines.push({ text, x, y }) }, 
   set: (o, key, value) => { o[key] = value; return true; },
 });
 studio.drawHint(ctx);
-assert(lines.some(l => l.text === 'First Light · Step 1 / 3'));
-assert(lines.some(l => l.text.includes('2 · Cobalt (blue)') && l.text.includes('Wake the water')));
-assert(lines.some(l => l.text === 'Coats 1 / 3'));
+assert(lines.some(l => l.text === 'First Light · Color 1 of 3'));
+assert(lines.some(l => l.text.includes('Press 2 for Blue') && l.text.includes('Wake the water')));
+assert(lines.some(l => l.text === '1 / 3'));
+assert(lines.some(l => l.text.includes('Hold left click on the circle')));
 assert(lines.every(l => l.y > game.ch - 132 && l.y < game.ch - 28), 'study instructions fit their bottom paper panel');
 studio.update(1);
 assert.equal(study.coatFlash, 0, 'cosmetic pulse expires');
@@ -55,12 +56,12 @@ assert.equal(archived, 1);
 assert.equal(game.player.hp, 10, 'existing completion reward is unchanged');
 assert.deepEqual(game.save.studio.completed, ['first-light']);
 lines.length = 0; studio.drawHint(ctx);
-assert(lines.some(l => l.text.includes('Study complete')));
+assert(lines.some(l => l.text.includes('Painting complete')));
 assert(lines.some(l => l.text.includes('J · Open your sketchbook')));
 studio.onStroke(stroke);
 assert.equal(archived, 1, 'completed scene cannot reward again');
 
-for (const mode of ['paused', 'help']) {
+for (const mode of ['paused', 'help', '_bookOpen', '_atlasOpen']) {
   game[mode] = true; lines.length = 0; studio.drawHint(ctx);
   assert.equal(lines.length, 0, `${mode} owns its screen`); game[mode] = false;
 }
@@ -73,7 +74,7 @@ game.runBiome = 'reeds'; const reeds = new FieldStudio(game), garden = reeds.stu
 game.player.x = garden.x; game.player.y = garden.y;
 lines.length = 0; reeds.drawHint(ctx);
 assert(lines.some(l => l.text.includes('The Lantern Garden')));
-assert(lines.some(l => l.text.includes('3 · Moss (green)')), 'Reeds uses the same fully lit instruction panel');
+assert(lines.some(l => l.text.includes('Press 3 for Green')), 'Reeds uses the same fully lit instruction panel');
 for (const options of [{ challenge: true, wander: false }, { challenge: false, wander: true }]) {
   game.challenge = options.challenge; game.options.wander = options.wander;
   const excluded = new FieldStudio(game); lines.length = 0; excluded.drawHint(ctx);
