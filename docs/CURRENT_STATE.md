@@ -4,6 +4,12 @@
 the implementation. Future work lives in ROADMAP.md and QWEN_BACKLOG.md.
 The runtime version remains 1.0.0 and save version remains 12.
 
+The owner's 2026-11-11 movement/combat feedback prompted a control-feel pass:
+quicker stops/reversal, immediate hop launch, full-speed ordinary painting,
+Q/E/wheel color cycling, quick-click capture, release-only splash cancellation,
+local reach/charge/readiness cues and bounded per-target hit text. Warden HP is
+48,000 after a 4% pacing adjustment. Details: VALIDATION-control-feel.md.
+
 ## The playable loop
 
 Title → optional guided practice or Atelier → expedition → living studies,

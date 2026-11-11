@@ -1,3 +1,13 @@
+# Responsive controls — 2026-11-11
+
+- Tighter stopping/reversal and an immediate, short dodge hop.
+- Ordinary brush hits keep movement at full speed; strong impacts retain weight.
+- Q/E and wheel color selection; quick clicks reliably paint once.
+- Visible brush reach, hittable-target ring, local splash and hop readiness.
+- Larger HUD action text; repeated hits replace overlapping damage/status labels.
+- Splash releases consistently; canceled charges cannot fire on a later click.
+- Warden health reduced 4% to preserve its existing pacing band.
+
 # The Living Sketchbook — 2026-11-11
 
 - V opens a paused Field Atlas with current study progress, remembered scenes,

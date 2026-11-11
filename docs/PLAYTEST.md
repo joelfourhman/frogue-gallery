@@ -4,6 +4,13 @@ Prepared 2026-11-11. This is a facilitator kit, not a record of completed human
 sessions. No participants have been contacted. Artifact identity and automated
 rehearsal evidence are recorded in VALIDATION-living-sketchbook.md.
 
+Owner feedback later that day: “Movement and combat feel awkward.” This is a
+qualitative report, not a completed facilitated session. The responsive-control
+pass and automated evidence are recorded in VALIDATION-control-feel.md. Start
+the next owner replay with stopping/turning, dodging, switching pigment and
+charging/releasing a splash. Ask which action still feels delayed or unclear;
+record their words before deciding whether more tuning or content is needed.
+
 ## Setup
 
 Use `node scripts/dev.mjs --dist` and open http://127.0.0.1:8765 on the testing

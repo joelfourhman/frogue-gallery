@@ -3,7 +3,7 @@
 // world paint layer and applies pigment damage + statuses to anything it touches.
 'use strict';
 import { TAU, clamp, dist, dist2 } from './math.js';
-import { PIGMENTS, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus, REEDS_FLOOD_FLOOR, mothPaint } from './logic.js';
+import { PIGMENTS, brushHitsCircle, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus, REEDS_FLOOD_FLOOR, mothPaint } from './logic.js';
 import { UI, uiFont } from './ui.js';
 
 // S1 (v1.9): the creatures with a DEDICATED per-creature hit sting (the 6
@@ -333,12 +333,7 @@ export class Paint {
       // telegraphing or surfaced (the counterplay is a painted-ring interrupt
       // before it surfaces; see the game's _bestiarySwipe).
       if (e.burrower && (e.phase === 'burrowed' || e.phase === 'recover')) continue;
-      const d = dist(p.x, p.y, e.x, e.y);
-      if (d > R + e.r) continue;
-      const ang = Math.atan2(e.y - p.y, e.x - p.x);
-      let diff = Math.abs(ang - a);
-      if (diff > Math.PI) diff = TAU - diff;
-      if (diff < arc / 2 + Math.asin(Math.min(1, e.r / Math.max(d, 1))) ) hits.push(e);
+      if (brushHitsCircle(p.x, p.y, a, R, arc, e)) hits.push(e);
     }
     this._applyHits(hits, pig, 'swipe');
     return hits.length ? hits : null;
@@ -448,9 +443,9 @@ export class Paint {
       }
       // floating damage number (pigment-colored); a deflected hit says "shell!"
       if (deflect < 1) {
-        this.note(e.x, e.y - e.r - 18, 'shell', pig);
+        this.note(e.x, e.y - e.r - 28, 'shell', pig, e, 'damage');
       } else {
-        this.note(e.x, e.y - e.r - 18, '-' + Math.round(dmg), pig);
+        this.note(e.x, e.y - e.r - 28, '-' + Math.round(dmg), pig, e, 'damage');
       }
       // v1.4 color rework (Joel): the dry brush CLEANS — scrubbing off the
       // enemy's active status (burn/slow/freeze/root). Dizzy is a toad quirk,
@@ -459,7 +454,7 @@ export class Paint {
         if (e.status && e.status.type !== 'dizzy') {
           const clearedType = e.status.type;
           e.status = null; e.burnAccum = 0;
-          this.note(e.x, e.y - e.r - 6, 'cleanse', 'dry');
+          this.note(e.x, e.y - e.r - 6, 'cleanse', 'dry', e);
           // S3: the scrub-whoosh, once per action.
           if (!fired.cleanse) {
             fired.cleanse = true; this.sfx('cleanse');
@@ -472,12 +467,12 @@ export class Paint {
       // toad special: any non-dry paint can dizzy instead of the normal status
       } else if (e.dizzyPaintChance && Math.random() < e.dizzyPaintChance) {
         e.status = { type: 'dizzy', t: e.dizzyDuration || 1.2, appliedAt: e._now || 0 };
-        this.note(e.x, e.y - e.r - 6, 'dizzy!', 'green');
+        this.note(e.x, e.y - e.r - 6, 'dizzy!', 'green', e);
       } else {
         const res = paintStatusFor(pig, e, e._now || 0);
         if (res.status) {
           e.status = res.status;
-          if (res.note && res.note !== 'immune-root') this.note(e.x, e.y - e.r - 6, res.note, pig);
+          if (res.note && res.note !== 'immune-root') this.note(e.x, e.y - e.r - 6, res.note, pig, e);
           // S3: a tiny "it just happened" blip for the status that landed,
           // once per action (slow is folded into the freeze blip; only
           // burn/freeze/root get their own sting).
@@ -500,7 +495,7 @@ export class Paint {
     // standing-in-green) drop to 0 during the plume. No-op otherwise.
     if (pig === 'green' && hits.length && p.hp < p.maxHp && !p._plumeSuppress) {
       p._healAcc = (p._healAcc || 0) + (this.tuning.greenHealOnPaint || 0.5);
-      this.note(p.x, p.y - p.r - 14, 'heal', 'green');
+      this.note(p.x, p.y - p.r - 14, 'heal', 'green', p);
       // S1 (v1.9): the heal chime — fires the instant a green stroke actually
       // lands a heal (suppressed by the gilded plume, like the heal itself).
       // Presentation-only (sfx-bus; no-op in headless smoke).
@@ -524,7 +519,7 @@ export class Paint {
       heron._lastPig = pig;
       let d = paintDamage(this.tuning.swipeDamage, pig, this.tuning, { enemy: heron });
       if (heron.awakened) d *= 2;
-      this.note(heron.x, heron.y - 150, '-' + Math.round(d), pig);
+      this.note(heron.x, heron.y - 150, '-' + Math.round(d), pig, heron, 'damage');
     }
     return res;
   }
@@ -545,9 +540,13 @@ export class Paint {
   }
 
   // (logic.js paintBoss imported at module level to keep this stateless)
-  note(x, y, text, pig) {
-    if (this.hitNotes.length > 24) return;
-    this.hitNotes.push({ x, y, text, t: 0.9, max: 0.9, pig });
+  note(x, y, text, pig, owner = null, channel = 'status') {
+    // One latest-hit number and one status per creature. Rapid strokes should
+    // not bury the target under overlapping copies of "frozen" and damage.
+    const existing = owner && this.hitNotes.find(n => n.owner === owner && n.channel === channel);
+    if (existing) { Object.assign(existing, { x, y, text, pig, t: 0.9 }); return; }
+    if (this.hitNotes.length >= 24) return;
+    this.hitNotes.push({ x, y, text, t: 0.9, max: 0.9, pig, owner, channel });
   }
 
   // ------------------------------ rendering (world space)

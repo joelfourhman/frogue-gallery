@@ -61,6 +61,13 @@ The ordinary rendering/performance gates and every pacing band must still pass.
 
 ## Milestone D — Learn from five players — KIT PREPARED; SESSIONS PENDING
 
+**2026-11-11 owner-feedback priority:** movement/combat were reported awkward.
+The responsive-control pass now ships faster stops/reversal, immediate hops,
+uninterrupted ordinary attacks, Q/E/wheel selection, accurate local range/charge
+cues and cleaner hit text. See VALIDATION-control-feel.md for the measured
+before/after and tests. Next is an owner replay of this core loop before more
+content. The five-session milestone below remains pending.
+
 Prepare the local build and facilitator sheet in docs/PLAYTEST.md now. The
 next evidence must come from actual people: can they find a study, understand
 paint response, use the atlas and want to keep their postcard?

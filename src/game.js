@@ -10,7 +10,8 @@ import { MOTH_NOOK, mothEncounterAllowed, mothCanSpawn, mothReward } from './log
 import { Input } from './input.js';
 import { FieldStudio, sketchbookButton, bookLayout, drawSketchbook, exportPostcard, editPostcardTitle, finishPostcardTitle, drawPostcard } from './studio.js';
 import { atlasButton, atlasLayout, drawFieldAtlas } from './atlas.js';
-import { exhibitSketchPage, studyRewardEarned } from './logic.js';
+import { exhibitSketchPage, studyRewardEarned, cycleCombatPigment, splashChargeStep } from './logic.js';
+import { drawCombatReadout } from './combat-ui.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
@@ -3772,10 +3773,9 @@ _drawAtelier(ctx) {
         if (this.runWaypoints.length > ROUTE_WAYPOINT_CAP) this.runWaypoints.shift();
       }
     }
-    if (this.input.mouse.rDown && p.splashCharge < 1) {
-      p.splashCharge = Math.min(1, p.splashCharge + dt / this.tuning.splashCharge);
-      if (p.splashCharge >= 1) { this.sfx('charge-ready'); this._noiseEvent(p.x, p.y); } // K2: a full charge is a noise
-    }
+    const previousCharge = p.splashCharge;
+    p.splashCharge = splashChargeStep(previousCharge, dt, this.input.mouse.rDown, this.input.mouse.rReleased, this.tuning.splashCharge);
+    if (previousCharge < 1 && p.splashCharge >= 1) { this.sfx('charge-ready'); this._noiseEvent(p.x, p.y); }
 
     // ----- named expedition zones (P5): banner + staged spawn + rest checkpoint -----
     if (p.alive) {
@@ -3811,6 +3811,8 @@ _drawAtelier(ctx) {
     }
 
     // ----- pigment switching (1-4) -----
+    const cycle = this.input.pressed('e') ? 1 : this.input.pressed('q') ? -1 : Math.sign(this.input.mouse.wheel);
+    if (cycle) { p.pigment = cycleCombatPigment(p.pigment, cycle); this.sfx('ui'); }
     const PIGMENT_KEYS = ['1', '2', '3', '4'];
     for (let i = 0; i < PIGMENT_KEYS.length; i++) {
       if (this.input.pressed(PIGMENT_KEYS[i])) {
@@ -3930,22 +3932,12 @@ _drawAtelier(ctx) {
 
     // ----- attacks -----
     const targetList = this.enemies;
-    if (this.input.mouse.lDown) {
+    if (this.input.mouse.lDown || this.input.mouse.lPressed) {
       const swHits = this.paint.trySwipe(targetList);
-      // J1 (v1.9): the paint-CONNECT hit-stop. When the brush LANDS a hit (a
-      // real connect, not a whiff or a cooldown no-op), a brief 40–70 ms dip on
-      // the PRESENTATION clock freezes the world for an instant so the impact
-      // reads. Reuses the v1.4 hitStop (real-time timeScale dip, gated by
-      // options.shake, never touches tuning/runT/the seeded RNG). If the swipe
-      // also kills, the kill path's longer ~110 ms hit-stop (Math.max) extends
-      // it. A tiny camera punch reuses the shake. GATED OFF during the guided
-      // teaching run (`_tutorialActive`): that run is a separate FROZEN-CLOCK
-      // practice layer (runT holds, banners suppressed) where the player learns
-      // the verbs calmly — combat time-dilation belongs to the timed expedition,
-      // not the tutorial. Without the gate, the connect hit-stop would dilate
-      // simDt on every practice swipe and slow the drill's status-DoT/phase
-      // progression past the frame budget the tests (and the guided pace) rely on.
-      if (swHits && swHits.length && !this._tutorialActive()) { this.hitStop(0.05, 0.3); this.addShake(2); }
+      // Regular brush rhythm keeps movement at full speed. Existing enemy
+      // flashes/ink/audio acknowledge hits; kills and charged bursts retain
+      // their stronger stop. Repeated 50ms dips made close combat feel sticky.
+      if (swHits && swHits.length && !this._tutorialActive()) this.addShake(1);
       this._noiseEvent(p.x, p.y); // K2: a paint swipe is a noise
       this._bestiarySwipe(p); // R3 (v1.6): leech paint-off + serpent ring-interrupt
       // paint the heron too (only while boss is "live" and player not dying)
@@ -4016,7 +4008,7 @@ _drawAtelier(ctx) {
         }
       }
     }
-    if ((this.input.mouse.rReleased || this.input.mouse.rPressed) && p.splashCharge >= 1 && this.paint.splashCd <= 0) {
+    if (this.input.mouse.rReleased && p.splashCharge >= 1 && this.paint.splashCd <= 0) {
       const spHits = this.paint.trySplash(targetList);
       this.addShake(8);
       // J1 (v1.9): the CHARGED-splat hit-stop — a longer ~110 ms dip when the
@@ -4044,6 +4036,10 @@ _drawAtelier(ctx) {
         }
       }
     }
+
+    // Releasing early or during recovery cancels; a later click cannot fire
+    // an old stored charge. Lost input ownership (blur/menu) also clears it.
+    if (this.input.mouse.rReleased) p.splashCharge = 0;
 
     // ----- enemies -----
     // P10: skip full AI for enemies far off-screen (they can't attack or be
@@ -6561,6 +6557,7 @@ _drawAtelier(ctx) {
     if (this.state === 'expedition' || this.state === 'end') {
       this._drawOffscreenHeronArrow(ctx, v);
       this._drawOffscreenEnemyArrows(ctx, v);
+      if (this.state === 'expedition') drawCombatReadout(this, ctx, v);
       this._drawHud(ctx);
     }
     // T1 (v1.2 M13): the on-screen goal chip + SKIP button for the guided first
@@ -7032,10 +7029,11 @@ _drawAtelier(ctx) {
       ctx.arc(x + 27, y + 13, 2.6, 0, TAU);
       ctx.fill();
       // stock pips
-      centerText(ctx, ['BURN', 'FREEZE', 'MEND', 'CLEAR'][i], x + 30, y + 38, uiFont(9, { weight: 700 }), INK, 0.8);
+      centerText(ctx, ['BURN', 'FREEZE', 'MEND', 'CLEAR'][i], x + 30, y + 38, uiFont(11, { weight: 700 }), INK, 0.9);
       ctx.restore();
     }
 
+    centerText(ctx, 'Q / E or wheel · switch color', 145, 114, uiFont(13), this.lanternReeds ? '#f3ead7' : INK, 0.9);
     // ---- splash charge bar (right of pigments) ----
     const bx = 14 + 4 * 66 + 10, by = 52, bw = 120, bh = 44;
     ctx.save();
@@ -7061,7 +7059,7 @@ _drawAtelier(ctx) {
       }
     }
     ctx.globalAlpha = 1;
-    centerText(ctx, chg >= 1 ? 'release to splash!' : 'hold right-click', bx + bw / 2, by + 39, uiFont(UI.sizes.micro, { italic: true }), INK, 0.5);
+    centerText(ctx, this.paint.splashCd > 0 ? `ready in ${this.paint.splashCd.toFixed(1)}s` : chg >= 1 ? 'release to splash!' : 'hold right-click', bx + bw / 2, by + 39, uiFont(11, { italic: true }), INK, 0.85);
     ctx.restore();
 
     // ---- score + collected (top-right) ----
@@ -7784,7 +7782,7 @@ _drawAtelier(ctx) {
       ['Paint', 'hold left mouse, aim with the cursor'],
       ['Splash burst', 'hold right mouse, release'],
       ['Dodge hop', 'space — brief invulnerability'],
-      ['Pigments', '1 red burns · 2 blue chills · 3 green heals'],
+      ['Pigments', 'Q / E or wheel · 1 red · 2 blue · 3 green'],
       ['Pause', 'P or Esc'],
     ];
     rows.forEach((r, i) => {

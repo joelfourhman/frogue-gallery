@@ -266,6 +266,35 @@ export function strokeTouchesCrossing(stroke, margin = 26) {
   const reach = CROSSING.r + margin;
   return ex * ex + ey * ey <= reach * reach;
 }
+// Control response, separate from travel speed and combat damage. Exponential
+// response keeps acceleration/braking consistent across browser frame rates.
+export const MOVEMENT = Object.freeze({ accelerate: 26, brake: 38, reverse: 36, hopSpeed: 2.2 });
+export function movementVelocity(vx, vy, targetX, targetY, dt, launch = false) {
+  if (launch) return [targetX, targetY];
+  const idle = targetX === 0 && targetY === 0;
+  const rate = idle ? MOVEMENT.brake : vx * targetX + vy * targetY < 0 ? MOVEMENT.reverse : MOVEMENT.accelerate;
+  const a = 1 - Math.exp(-rate * Math.max(0, dt));
+  const x = vx + (targetX - vx) * a, y = vy + (targetY - vy) * a;
+  return [idle && Math.abs(x) < 0.5 ? 0 : x, idle && Math.abs(y) < 0.5 ? 0 : y];
+}
+// Cycling is for the three combat colors. Dry stays an explicit 4-key choice.
+export function cycleCombatPigment(pigment, direction) {
+  const colors = ['red', 'blue', 'green'];
+  const i = colors.indexOf(pigment), step = direction < 0 ? -1 : 1;
+  return colors[i < 0 ? step > 0 ? 0 : 2 : (i + step + 3) % 3];
+}
+export function splashChargeStep(charge, dt, held, released, duration) {
+  return held ? Math.min(1, charge + dt / duration) : released ? charge : 0;
+}
+// Shared by actual swipe collision and its visual range preview.
+export function brushHitsCircle(x, y, aim, range, arc, target) {
+  const d = Math.hypot(target.x - x, target.y - y);
+  if (d > range + target.r) return false;
+  const angle = Math.atan2(target.y - y, target.x - x) - aim;
+  const diff = Math.abs(Math.atan2(Math.sin(angle), Math.cos(angle)));
+  return diff < arc / 2 + Math.asin(Math.min(1, target.r / Math.max(d, 1)));
+}
+
 export const STUDIO = Object.freeze({ coats: 3, nodeRadius: 25, wakeLife: 1.25, wakeRadius: 27, wakeCap: 24, strokeCap: 180, pageCap: 8, pinCap: 2 });
 export function studyNode(study, step = study.step || 0) {
   const offsets = [[-62, 16], [0, -28], [62, 16]];
@@ -1915,7 +1944,7 @@ export function wyrmSurfacePoint(h, surfIdx, worldW) {
 // Wander apex). Wander-mode only (Wander OFF never selects it).
 export const WARDEN = {
   kind: 'warden',               // the 5th boss archetype (vs gray/green/gilded/wyrm)
-  hp: 50000,                    // 50k — above the wyrm's 48k (the Wander apex)
+  hp: 48000,                    // Keeps 2–4m pacing with uninterrupted brush movement.
   awakenNeed: { red: 45, blue: 45, green: 45 }, // the SAME 3-hue rhythm as the herons / wyrm
   strikeDmg: 12,                // the maw-strike's damage (a big hit, dodgeable — same as the wyrm)
   strikeReach: 220,             // a frog within this of the surface point is hit

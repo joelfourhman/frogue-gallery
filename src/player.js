@@ -2,7 +2,7 @@
 'use strict';
 import { TAU, clamp, lerp, dist, traceBlob, wobble } from './math.js';
 import { INK, sat } from './ui.js';
-import { PIGMENTS, hopLift, inGravityPocket, floodedWaterFactor, REEDS_POCKETS, REEDS_FLOOD_FLOOR, crossingSpeedFactor, inCrossingZone } from './logic.js';
+import { PIGMENTS, MOVEMENT, movementVelocity, hopLift, inGravityPocket, floodedWaterFactor, REEDS_POCKETS, REEDS_FLOOD_FLOOR, crossingSpeedFactor, inCrossingZone } from './logic.js';
 
 export class Player {
   constructor(x, y, tuning) {
@@ -72,8 +72,10 @@ export class Player {
     // hop / dodge (Space). PT3 (M7.5 fly-fairness): gated on a stamina cooldown
     // (hopCd) so mashing Space no longer chains into near-continuous i-frames.
     this.hopBuffer = input.pressed(' ') ? 0.12 : Math.max(0, this.hopBuffer - dt);
+    let launched = false;
     if (this.hopBuffer > 0 && this.hopT <= 0 && this.hopCd <= 0 && this.alive) {
       this.hopBuffer = 0;
+      launched = true;
       let [hx, hy] = mv;
       if (!hx && !hy) { hx = Math.cos(this.aimA); hy = Math.sin(this.aimA); }
       this.hopDir = [hx, hy];
@@ -100,7 +102,7 @@ export class Player {
 
     // movement: base speed, boosted mid-hop; E3 slow/root modifiers
     let spd = this.speed;
-    if (this.hopT > 0.04) spd *= 2.6;
+    if (this.hopT > 0.04) spd *= MOVEMENT.hopSpeed;
     spd *= this.speedFactor();
     // R3 (v1.6): a clinging leech STRANGLES the frog — movement reduced 25%
     // (the pure leechFactor, 0.75 while clung). Reeds-only; byte-identical
@@ -132,8 +134,7 @@ export class Player {
       spd *= crossingSpeedFactor(world.crossingState);
     }
     const direction = this.hopT > 0.04 ? this.hopDir : mv;
-    this.vx = lerp(this.vx, direction[0] * spd, 1 - Math.exp(-14 * dt));
-    this.vy = lerp(this.vy, direction[1] * spd, 1 - Math.exp(-14 * dt));
+    [this.vx, this.vy] = movementVelocity(this.vx, this.vy, direction[0] * spd, direction[1] * spd, dt, launched);
     this.x += this.vx * dt;
     this.y += this.vy * dt;
     const [cx, cy] = world.collideCircle(this.x, this.y, this.r);

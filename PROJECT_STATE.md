@@ -1,4 +1,47 @@
-# Project state — The Living Sketchbook complete (2026-11-11)
+# Project state — Responsive controls and readable combat (2026-11-11)
+
+Owner feedback: “it's not that fun right now”; specifically “Movement and
+combat feel awkward.” This pass prioritizes that report over further content.
+
+Implemented: faster acceleration/braking/reversal; immediate, bounded hop
+launch; ordinary brush hits keep movement at full speed (kill/charged-impact
+hit-stop remains); Q/E and wheel cycle red/blue/green, with 4 explicitly dry;
+quick clicks between frames paint once; a brush-reach arc and nearest hittable
+target ring share actual swipe geometry; local splash-radius/charge/readiness
+and hop-recovery cues; larger HUD action text; one damage and one status label
+per target; release-only splash with partial/lost-input charge cancellation.
+
+Measured 60Hz before → after: release drift **14.57 → 4.32px**, reversal
+**3 → 2 frames**, first-hop velocity **124.45 → 506px/s**, displacement after
+13 frames **82.66 → 92.45px**. Ordinary sustained paint over 3 real seconds
+advances **2.673 → 3.000s** of simulation in the isolated target fixture.
+Walking top speed stays 230px/s, hop cooldown 0.7s and invulnerability unchanged.
+Response rates in pure logic: 14/s for everything → acceleration 26/s,
+braking 38/s, reversal 36/s; hop multiplier 2.6 → 2.2 with immediate launch.
+
+Warden HP **50,000 → 48,000 (-4%)**: removing repeated slowdowns put the
+existing cycling-bot fight at 3.81–4.11m; the retune returns all six samples to
+**3.60–3.99m** without changing attack windows or relaxing any band. Two Reeds
+probes now hold movement input while injecting ideal travel velocity; previously
+they inadvertently measured braking every frame. The repaired probe also ran
+against an archived pre-pass runtime to distinguish harness effects from tuning.
+
+`node scripts/check.mjs --browser`: **all 19 gates PASS**, including smoke
+stage 123, nine pacing gates, balance, source/dist actual-input journeys,
+36 rendered scenes, package and performance. Balance before/after: no flags;
+TTK/pressure/splash ratios unchanged. Seeded victory pigment sample changed
+from 3/7/4 to 3/5/6 red/blue/green as movement changed its collection path;
+the affordable-loadout target still passes. Current pacing: Normal 17.3m,
+human model 18.4m, heron 37.0s, Reeds 22.2m, Black Reeds 25.7m, Umbral 3.79m,
+NG+ 19.5m; Wander 16.9–17.8m / Reeds 21.6–22.7m.
+
+Visuals reviewed: tests/.out/astra/29-close-combat.png, 30-splash-readiness.png,
+31-combat-640.png. Evidence/limits: docs/VALIDATION-control-feel.md. Game 1.0.0 /
+Save 12 unchanged; no dependencies or external services. Next: owner replay
+of move → dodge → switch color → paint → splash, then refine from that feedback.
+This establishes responsive input and regression coverage, not proven enjoyment.
+
+# Previous checkpoint — The Living Sketchbook complete (2026-11-11)
 
 Rewrote docs/ROADMAP.md against the implemented Q1–Q9 baseline and dispatched
 three implementation agents with separate file ownership. Shipped milestones

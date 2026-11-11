@@ -209,7 +209,8 @@ assert(game.player.splashCharge >= 1, `splash fully charged (${game.player.splas
 mosquito.x = game.player.x - 45;
 mosquito.y = game.player.y;
 mosquito.status = null;
-game.input.mouse.rPressed = true;
+game.input.mouse.rDown = false;
+game.input.mouse.rReleased = true;
 frames(2);
 game.input.mouse.rDown = false;
 assert(mosquito.hp < mosquitoHp0 || mosquito.dead, `charged splash hit the mosquito (hp ${mosquitoHp0} -> ${mosquito.hp}, dead: ${mosquito.dead})`);
@@ -3765,19 +3766,11 @@ console.log('== stage 59: v1.4 J2 — hit-stop + shake escalation + boss-defeat 
 }
 
 // ======================================================================
-// stage 59b — v1.9 J1: the hitstop is PURE PRESENTATION (A/B game-time invariance)
-// The v1.4 hitStop dilates the WORLD sim + runT by `timeScale`, and the dip is
-// drained on REAL time (the _frame gate), so a connect's hit-stop stretches the
-// presentation wall-clock, never the rule outcomes. PROVE it: drive two
-// identical expeditions A (hitstop ON) and B (hitStop -> no-op), each from a
-// fixed RNG seed, one real frame with the brush held at a pinned beetle. At the
-// connect instant the brush deals the SAME damage in both (the hitstop fired in
-// A but never changed the enemy's hp — pure presentation). Then, over the next
-// equal number of REAL frames, A's game clock (runT) advances SLOWER than B's
-// (A is still in its ~50 ms dip at 0.3x) — the dilation stretches real time,
-// it does not touch the rules, the seeded RNG stream, or the tuning.
+// stage 59b — ordinary swipes keep controls at full speed. Effects on/off must
+// produce equal damage and elapsed simulation time. Heavy impact and kill
+// hit-stop remain covered in stage 59 and the real-browser splash journey.
 // ======================================================================
-console.log('== stage 59b: v1.9 J1 — the hitstop is pure presentation (A/B game-time invariance) ==');
+console.log('== stage 59b: ordinary brush rhythm preserves full-speed controls ==');
 {
   const { spawnEnemy } = await import('../src/enemies.js');
   // reset the harness RNG to a fixed seed so A and B consume identical streams.
@@ -3813,14 +3806,14 @@ console.log('== stage 59b: v1.9 J1 — the hitstop is pure presentation (A/B gam
     p.swipeT = 0; g.paint.swipeCd = 0;   // arm a fresh swipe so the connect lands
   };
 
-  // ---- RUN A: the connect FIRES the hitstop ----
+  // Regular swipes retain hit feedback without repeatedly slowing controls.
   resetRng();
   const A = mk(true);
   aimAt(A.g, A.b); A.g.input.mouse.lDown = true; A.fr(1);   // the brush lands
   assert(A.b.hp < 200, `J1: the connect dealt paint damage (beetle hp ${A.b.hp})`);
   assert(A.b.hitFlash > 0, `J1: the connect fired the impact flash (hitFlash=${A.b.hitFlash.toFixed(2)})`);
-  assert(A.g._hitstopT > 0, `J1: the connect FIRED the hitstop (dilation budget _hitstopT=${A.g._hitstopT.toFixed(3)}s)`);
-  assert(A.g.timeScale < 1, `J1: the hitstop dilated the PRESENTATION clock (timeScale=${A.g.timeScale.toFixed(2)})`);
+  assert(A.g._hitstopT === 0, 'normal brush connect no longer adds repeated hit-stop');
+  assert(A.g.timeScale === 1, 'normal brush connect keeps movement at full speed');
 
   // ---- RUN B: identical setup, but hitStop is a no-op (the non-hitstop baseline) ----
   resetRng();
@@ -3830,13 +3823,11 @@ console.log('== stage 59b: v1.9 J1 — the hitstop is pure presentation (A/B gam
 
   // ---- THE INVARIANT: the hitstop never changes the rule outcome ----
   assert(A.b.hp === B.b.hp, `J1: the connect's RULE OUTCOME is identical with/without the hitstop (hp ${A.b.hp} vs ${B.b.hp}) — pure presentation, provably`);
-  // and the hitstop dilated the PRESENTATION clock: over the next EQUAL number
-  // of REAL frames, A (still in its ~50 ms dip at 0.3x) advances its game clock
-  // SLOWER than B — the dilation stretches real wall-clock, not the rules.
+  // Repeated ordinary connects must not slow the movement clock.
   const runTA0 = A.g.runT, runTB0 = B.g.runT;
   A.fr(4); B.fr(4);
   const dA = A.g.runT - runTA0, dB = B.g.runT - runTB0;
-  assert(dA < dB, `J1: the hitstop stretched the PRESENTATION clock — over 4 real frames A's game-time advanced ${dA.toFixed(4)}s vs B's ${dB.toFixed(4)}s (dilation, not a rule/tuning/RNG change)`);
+  assert(Math.abs(dA - dB) < 1e-9, 'ordinary brush rhythm advances equally with effects enabled or disabled');
   Math.random = savedRandom;
 }
 
@@ -7790,7 +7781,7 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
   try { (globalThis.localStorage || {}).setItem('frogue_gallery_options', JSON.stringify(L1.freshOptions())); } catch {}
   const W = F1.WARDEN, T1 = F1.makeTuning();
   // ---- (0) the boss constant: the 5th archetype, 50k HP (the Wander apex) ----
-  assert(W.kind === 'warden' && W.hp === 50000, 'F1: the Hollow Warden is declared (kind warden, 50k HP — the Wander apex, above the Silt Wyrm 48k)');
+  assert(W.kind === 'warden' && W.hp === 48000, 'F1: the Hollow Warden has 48k HP to preserve its 2–4 minute band with uninterrupted brush rhythm');
   assert(W.surfacePoints === 3 && W.telegraph > 0 && W.mawOpen > 0 && W.mawClosed > 0, 'F1: 3 telegraphed maw points on the arena line (a ~1.5s ripple-ring tell; a maw-open paintable window + a maw-closed invulnerable window)');
   assert(W.awakenNeed.red === 45 && W.awakenNeed.blue === 45 && W.awakenNeed.green === 45, 'F1: the SAME 3-hue awaken rhythm as the herons / wyrm (45/45/45)');
   assert(W.siphonRate > 0 && Math.abs(W.siphonRate - 1 / 60) < 1e-4, 'F1: the siphon rate drains a full wick in ~60s (base; taste-scaled to 45s feast / 75s quiet)');
@@ -9431,5 +9422,8 @@ console.log('== stage 122: first-click aim follows the latest pointer ==');
   assert(g.input.mouse.worldX === 1200 && g.input.mouse.worldY === 350,
     'immediate pointer resolution respects zoom and camera origin');
 }
+console.log('== stage 123: responsive movement and readable close combat ==');
+const { testControlFeelGame } = await import('./control-feel.mjs');
+testControlFeelGame(Game, makeCanvas);
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

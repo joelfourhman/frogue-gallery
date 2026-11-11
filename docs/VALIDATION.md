@@ -1,5 +1,12 @@
 # Validation — Astra Vertical Slice
 
+## Control-feel follow-up — 2026-11-11
+
+Owner feedback prioritized awkward movement/combat. All 19 gates pass after
+the responsive movement/brush UI pass. See
+[VALIDATION-control-feel.md](VALIDATION-control-feel.md) for measured response,
+the 4% Warden-health retune, probe correction, screenshots and remaining limits.
+
 ## Living Sketchbook follow-up — 2026-11-11
 
 All 19 core/browser gates pass with the paused Field Atlas, study feedback,

@@ -1,11 +1,11 @@
 'use strict';
 import './seed.mjs';
-// wardpace.mjs — F1 (v1.7) HOLLOW WARDEN PACING probe (informational, NOT a gate).
+// wardpace.mjs — HOLLOW WARDEN PACING probe, enforced by scripts/check.mjs.
 //
 // Modeled on reedspace.mjs (the Silt Wyrm probe) + wandpace.mjs (the Wander probe).
 // The Warden is the 5th boss archetype: it spawns ONLY at the end of a WANDER
 // expedition (Wander ON) — NEVER in a hand-tuned (Wander-OFF) run (byte-identical
-// to v1.6). It is the Wander-apex (50k HP, above the Silt Wyrm's 48k).
+// to v1.6). It is the Wander apex (48k HP after the control-feel retune).
 //
 // This probe measures the Warden fight via the REAL paint path (like reedspace's
 // wyrm measurement): god-mode (iframes, point-blank, lDown always) — the LOWER
@@ -13,10 +13,9 @@ import './seed.mjs';
 //
 // The Warden's maw-window cadence (mawOpen 10.5s / mawClosed 2.4s / telegraph
 // 1.5s) + 3-hue awaken (0.62× speedup) + taste bias (0.85–1.15×) mean a fight
-// runs ~97–115 s god-mode → ~3.9–4.5 min human — comparable to the Silt Wyrm's
-// 97.7s god / 3.9 min human (the other Reeds apex boss). The Warden sits at the
-// TOP of the 2–4 min human band (the 50k-HP Wander apex is the longest of the
-// Reeds bosses, but in-band).
+// stays within the enforced 2–4 minute modeled-human band. The control-feel
+// pass lowered health 50k → 48k as ordinary brush hits stopped dilating the
+// simulation clock. Read the printed results for current samples.
 //
 // Deterministic: the harness Math.random is a seeded stream (same as smoke.mjs),
 // so a full run is reproducible. Seeds are FIXED (WANDER_SEEDS=... to override).
@@ -77,7 +76,7 @@ const seeds = (process.env.WARDEN_SEEDS || DEFAULT_SEEDS.join(',')).split(',').m
 // The human-DPS ratio from reedspace.mjs (the Silt Wyrm fight): the human bot
 // deals ~42% of god-mode DPS (dodging + pigment cycling + the surfaced windows).
 // We reuse the SAME ratio for the Warden (same paint path, same 3-hue rhythm,
-// same maw-window gating) — the only difference is the HP (50k vs 48k) + the
+// same maw-window gating) — the distinguishing factor is the
 // maw cadence (the Warden's mawOpen 10.5s vs the wyrm's surfaced 7.0s).
 const HUMAN_DPS_FRAC = 0.42;
 
@@ -124,7 +123,7 @@ function wardenFight(seed) {
 }
 
 console.log('HOLLOW WARDEN PACE — F1 (v1.7)');
-console.log('  (the 5th boss archetype; the Wander-apex; spawns ONLY at the end of a WANDER expedition; 50k HP; the Silt Wyrm is the Wander-OFF Reeds boss)');
+console.log('  (the 5th boss archetype; the Wander-apex; spawns ONLY at the end of a WANDER expedition; 48k HP; the Silt Wyrm is the Wander-OFF Reeds boss)');
 console.log(`  WARDEN.hp=${WARDEN.hp}  mawOpen=${WARDEN.mawOpen}s  mawClosed=${WARDEN.mawClosed}s  telegraph=${WARDEN.telegraph}s  siphonRate=${WARDEN.siphonRate}/s`);
 console.log('');
 console.log('GOD-MODE WARDEN FIGHTS (the real paint path; lDown always, 3-hue cycling bot; the LOWER BOUND):');
@@ -143,6 +142,6 @@ console.log('');
 console.log(`  RANGE god ${minF.toFixed(0)}-${maxF.toFixed(0)}s (mean ${meanF.toFixed(0)}s) → HUMAN ${minH.toFixed(1)}-${maxH.toFixed(1)} min`);
 console.log('');
 console.log('REFERENCE: the Silt Wyrm (48k, the Wander-OFF Reeds apex) measures 97.7s god / ~3.9 min human (reedspace.mjs).');
-console.log(`  The Warden (50k, the Wander apex) sits at ${minH.toFixed(1)}-${maxH.toFixed(1)} min human — comparable to the Wyrm, in the 2–4 min band (the Warden is the 50k-HP apex, the longest of the Reeds bosses).`);
+console.log(`  The Warden (48k, the Wander apex) sits at ${minH.toFixed(1)}-${maxH.toFixed(1)} min human — comparable to the Wyrm, in the 2–4 min band (the 2–4 minute band is enforced by scripts/check.mjs).`);
 console.log('');
 console.log('NOTE: the Warden is the WANDER end-of-run boss. It never appears in a hand-tuned (Wander-OFF) run (byte-identical to v1.6). The WARDEN_SEEDS env var can pin specific seeds for regression.');

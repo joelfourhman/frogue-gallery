@@ -480,6 +480,8 @@ try {
   await mothBrowser({page,tick,out,report});
   const { livingSketchbookBrowser } = await import('./living-sketchbook-browser.mjs');
   await livingSketchbookBrowser({page,tick,out,report});
+  const { controlFeelBrowser } = await import('./control-feel-browser.mjs');
+  await controlFeelBrowser({page,tick,out,report});
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(out, 'report.json'), JSON.stringify({ report, errors }, null, 2));
   console.log(JSON.stringify(report, null, 2));

@@ -1,5 +1,13 @@
 # Environment and tool changes
 
+## Responsive controls — 2026-11-11
+
+No dependencies or machine settings changed. Used the existing Node/Git and
+Chromium tools; all 19 gates passed. Harness servers and browsers close at exit.
+A hidden source preview is running on http://127.0.0.1:8767, process 44136;
+its PID and output logs are in .cache/feel-preview.*. This is loopback only.
+The before/after archive and audit outputs are project-local ignored files.
+
 ## Living Sketchbook — 2026-11-11
 
 No software, dependency, service or machine setting installed or changed.

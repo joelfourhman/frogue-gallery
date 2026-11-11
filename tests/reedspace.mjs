@@ -126,14 +126,15 @@ const wyrmArena = game.world.w - 460;   // the wyrm engages in the arena (end)
 const p = game.player;
 p.iframes = 9999;
 let guard = 0;
-// The headless input stub's keydown/keyup pair does not hold a key across
-// frames, so drive the REAL sim directly: give the player a rightward velocity
-// each frame and let player.update apply it (the real descent through the
-// flooded low band, at true base move speed — no fight, no lantern).
+// Hold movement intent as well as the idealized starting velocity. Without
+// input the previous probe measured braking on every frame, so changing stop
+// response incorrectly changed its traversal and subsequent boss setup.
+game.input.keys.add('d');
 while (p.x < wyrmArena && guard < 60 * 300) {
   p.vx = 230; p.vy = 0;               // base move speed (tuning.speed) rightward
   frames(1); guard++;
 }
+game.input.keys.delete('d');
 const travelGod = game.runT;
 console.log(`\nA) god-mode Reeds descent (260 -> ${Math.min(p.x, wyrmArena).toFixed(0)}px, the arena): ${travelGod.toFixed(1)}s (LOWER BOUND — no bestiary fighting, lantern, or flood slowdown applied to movement; a real descent is slower)`);
 

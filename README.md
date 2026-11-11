@@ -48,6 +48,7 @@ can leave a keepsake, even a defeat.
 | Charged splash | Hold right button; release when full | Hold B; release |
 | Hop / earned brush-hop | Space / hold paint + Space | RB / RT + RB |
 | Red / blue / green | 1 / 2 / 3 | A / X / Y |
+| Cycle combat colors | Q / E or mouse wheel | A / X / Y directly select |
 | Dry brush | 4 | LT |
 | Lantern, in the Reeds | L | LB |
 | Pause / sketchbook | P or Esc / J | Start / Back |
@@ -58,6 +59,9 @@ can leave a keepsake, even a defeat.
 Paint is unlimited. Colored orbs are banked currency for Atelier paintings
 and upgrades; they are not brush ammunition. Red burns, blue slows/freezes,
 green roots and heals, and dry clears status and restores color.
+The colored arc beside the frog shows the brush's actual close-range reach.
+A ring highlights the nearest creature inside it. Holding splash shows its
+radius and charge beside the frog; the small arc at your feet tracks hop recovery.
 
 ## What's included
 

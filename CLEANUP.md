@@ -11,11 +11,18 @@ The earlier Astra pass recorded a preview at 127.0.0.1:8766. The Living
 Sketchbook pass uses only harness-owned free-port servers; it does not leave
 a new persistent server running.
 
+The later responsive-controls pass leaves a hidden source preview on
+127.0.0.1:8767, PID 44136 (also recorded in .cache/feel-preview.pid).
+Verify that PID still belongs to this project's Node preview before stopping
+it with `Stop-Process -Id 44136`; process IDs can be reused after exit.
+
 ## Generated directories
 
 These are ignored by Git and may be regenerated:
 - dist/: runtime folder, upload ZIP and manifest; `node scripts/build.mjs`.
 - .cache/checks/: text logs and JSON check report.
+- .cache/feel-*: control audit script, baseline archive/extraction, measurements,
+  screenshots and preview PID/logs. Stop the preview before clearing its logs.
 - .cache/atlas-review.png and .cache/studio-*.png: local visual review evidence.
 - .cache/astra-logs/: this development pass's earlier diagnostic logs.
 - tests/.out/astra/: browser screenshots, postcard and report.
