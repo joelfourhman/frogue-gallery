@@ -1,5 +1,7 @@
+// Campaign regression: this probe isolates one biome/boss at base power.
+// It is not the total duration of the connected four-floor dungeon.
 // umbrapace.mjs — measure the REAL Umbral Wyrm fight (the 6th boss archetype,
-// the Black Reeds NG+ apex) with a pigment-cycling bot (builds red+blue+green
+// the Black Reeds final boss) with a pigment-cycling bot (builds red+blue+green
 // hue to trigger the 2× awaken window, as a human would). Prints the fight
 // time + the god-mode lower bound + the human estimate so UMBRA_WYRM.hp can be
 // verified against the target 2.5–4 min human band (one tier above the Silt
@@ -63,7 +65,7 @@ const { UMBRA_WYRM, SILT_WYRM } = await import('../src/logic.js');
 // The Game's REAL fresh save (so bank/upgrades/loadout/owned exist —
 // _beginExpedition's applyWelcomeGrant reads save.bank) with the Black Reeds
 // GATE set: ngCycle >= 1 AND a Reeds victory (reedsVictory latch). This is the
-// exact state a player has after beating the Reeds and picking NG+ — so the
+// exact state a player has when reaching the final dungeon floor — so the
 // _beginExpedition gate fires blackReeds=true and the end boss is the Umbral
 // Wyrm (not the Silt Wyrm).
 const game = new Game(makeCanvas());
@@ -75,12 +77,11 @@ game.save.flags.intro = true;
 game.save.flags.heronDefeated = true;
 game.save.flags.reedsUnlocked = true;
 game.save.flags.reedsVictory = true;   // G1: the "a Reeds victory" gate half
-game.save.ngCycle = 1;                  // G1: the "ngCycle >= 1" gate half
-// START THE BLACK REEDS EXPEDITION (the NG+ Reeds apex).
-game._beginExpedition(false, { reeds: true });
+// START THE BLACK REEDS EXPEDITION (the final-floor apex).
+game._beginExpedition(false, { campaignFloor: 3 });
 frames(2);
 const umbra = game.heron;
-console.log(`Black Reeds layout: ${game.world.w}px (vs ${5400}px swamp, ${SILT_WYRM ? '6000' : ''}px cycle-0 Reeds), blackReeds=${game.world.blackReeds}`);
+console.log(`Black Reeds layout: ${game.world.w}px (vs ${5400}px swamp, ${SILT_WYRM ? '6000' : ''}px second-floor Reeds), blackReeds=${game.world.blackReeds}`);
 console.log(`End boss: ${umbra.umbra ? 'THE UMBRAL WYRM (6th archetype, ' + (umbra.maxHp / 1000) + 'k HP)' : 'NOT-UMBRA (got kind ' + umbra.kind + ')'}`);
 if (!umbra.umbra) { console.log('FATAL: the Black Reeds run did not spawn the Umbral Wyrm'); process.exit(1); }
 

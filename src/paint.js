@@ -491,14 +491,11 @@ export class Paint {
     // v1.4 color rework (Joel): painting enemies with GREEN heals the frog a
     // little — the heal is per ACTION (not per enemy) so a big green splash
     // is not a free medkit. The float is drained by player.update.
-    // K4 (v1.5 M2): the GILDED Heron's plume (p._plumeSuppress) ABSORBS this
-    // heal while it is live — both green heal sources (paint-on-green AND
-    // standing-in-green) drop to 0 during the plume. No-op otherwise.
-    if (pig === 'green' && hits.length && p.hp < p.maxHp && !p._plumeSuppress) {
+    if (pig === 'green' && hits.length && p.hp < p.maxHp) {
       p._healAcc = (p._healAcc || 0) + (this.tuning.greenHealOnPaint || 0.5);
       this.note(p.x, p.y - p.r - 14, 'heal', 'green', p);
       // S1 (v1.9): the heal chime — fires the instant a green stroke actually
-      // lands a heal (suppressed by the gilded plume, like the heal itself).
+      // lands a heal.
       // Presentation-only (sfx-bus; no-op in headless smoke).
       this.sfx('heal');
     }
@@ -529,11 +526,6 @@ export class Paint {
     // direct paint damage while painting the boss
     let dmg = paintDamage(this.tuning.swipeDamage, pig, this.tuning, { enemy: h });
     if (h.awakened) dmg *= 2; // the shimmer window: double paint damage (see bossStep)
-    // N3 (v1.3 M14): the Great Green Heron's reed-pin vulnerable window — while
-    // pinned (held in place by the player's Moss paint) it takes 2x paint damage,
-    // mirroring the awaken window. The gray heron never carries `pinned`, so this
-    // is a no-op for the first-time run.
-    if (h.pinned > 0) dmg *= 2;
     h.hp -= dmg;
     const res = paintBoss(h, pig, amount, this.tuning);
     if (res === 'awaken') return 'awaken';

@@ -1,3 +1,5 @@
+// Campaign regression: this probe isolates one biome/boss at base power.
+// It is not the total duration of the connected four-floor dungeon.
 // reedspace.mjs — R6 (v1.6 Module R) REEDS RUN PACING probe (informational, NOT
 // part of the assertion smoke suite). Modeled on ngpace.mjs (the NG+ pacing
 // probe), which is itself modeled on humance.mjs / pace.mjs.
@@ -192,6 +194,6 @@ console.log(`REEDS RUN — HUMAN ESTIMATE (competent player): ~${(humanTotal / 6
 console.log(`  descent (55% avg speed + flooded/lit penalty ×1.15): ${travelHuman.toFixed(0)}s`);
 console.log(`  wave-fighting (ANALYTIC, pace.mjs swamp waves × ${REEDS_WIDTH / 5400} length): ${background.toFixed(0)}s = ${(background / 60).toFixed(1)} min`);
 console.log(`  the Silt Wyrm (48k hp, human DPS): ~${wyrmHuman.toFixed(0)}s = ${(wyrmHuman / 60).toFixed(1)} min`);
-console.log(`Target is ~20–25 min — a DESIGNED DESCENT (opt-in post-victory content, allowed to run past the 15–20 first-time band).`);
-console.log(`Note: the first-time swamp pace (15–20 min) is victory-gated and structurally untouched by the Reeds; this probe measures ONLY the Reeds run.`);
+console.log(`Target is ~20–25 min — a DESIGNED DESCENT (the second dungeon floor, isolated at base power).`);
+console.log(`Note: this measures ONLY the second floor; run-only choices may improve real campaign time.`);
 

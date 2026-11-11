@@ -1,4 +1,51 @@
-# Project state — Lily Clearing and free painting (2026-11-11)
+# Project state — One painted dungeon (2026-11-11)
+
+Owner direction: remove New Game+ and its features; make one long roguelike
+dungeon with bosses and one final boss. The roadmap now follows that request.
+Three agents implemented rules/migration, rest UI and campaign regressions;
+integration remained in Game. Previous movement, clearing and repainting work
+is preserved.
+
+Implemented one continuous four-floor run: Watercolor Marsh / Gray Heron →
+Sunken Reeds / Silt Wyrm → Hollow Sanctuary / Hollow Warden → Black Reeds /
+Umbral Wyrm. Intermediate clears open a rest, not a victory screen. Health,
+time, score and collected drops carry onward. Each rest restores **35% max HP
+(rounded up, capped)**, then offers one explicit run-only gift and Descend.
+Brighter paint gives **×1.20 damage/burn**, Lily heart **+2 max/current HP**,
+Flowing brush **×0.88 dodge/splash cooldowns**. Three choices total; duplicates
+stack. Only Umbral ends the campaign in victory. Death/new run resets gifts.
+
+Removed NG+ cycles/scaling/modifiers, Green/Gilded Heron variants, gold rewards,
+gilded frames, retirement/prestige, Encore and the shop/challenge/Wander menu
+routes. New runs ignore saved purchased stats and equipped paintings. Save
+migration removes obsolete NG fields and gold art while retaining ordinary
+artwork, sketchbook, pins, names and exhibition. Learned painting/study
+abilities remain. SAVE_VERSION 12 and GAME_VERSION 1.0.0 are unchanged.
+Internal Wander generator fixtures remain diagnostic compatibility only.
+
+Title, floor progress, rest and final/death screens now describe the single
+route. Rests display health and carried gifts; keyboard/mouse/controller all
+work. Practice is replayable. Controller B cancels a gift choice without
+abandoning the run. Bosses still wait for the final 900px of each floor.
+
+Balance: unchanged base enemy TTK, base zone pressure 1.22/1.64/1.76/2.20,
+swipe **32.4 DPS**, charged splash **27.1 single / 81.2 group DPS**. New reward
+telemetry verifies free access, carry and reset: power 1→1.2, HP 10→12, dodge
+cooldown .700→.616 seconds for one of each gift. Seven retained pacing bands
+pass; obsolete NG/Wander gates are replaced by campaign rules and the actual
+four-boss combat journey. The invincible perfect-position combat bot takes
+**292.7s** (37.3 / 85.0 / 80.3 / 90.0), excluding traversal and human decisions.
+
+All **19 required gates pass**, including source/dist browser journeys,
+36 frame scenes, performance and deterministic packaging; smoke reaches
+stage 127 and ends `ALL SMOKE TESTS PASSED`. Final validation is recorded in
+docs/VALIDATION-dungeon.md. Full human-run
+length and enjoyment remain unmeasured. Hollow Sanctuary reuses Reeds terrain;
+this is four connected floors, not four new biomes. Active runs are not saved
+across reload. Next: replay the connected route, tune gift choices and repeated
+Reeds encounters from observed play, then add authored variety.
+
+# Previous checkpoint — Lily Clearing and free painting (2026-11-11)
 
 Owner request: build the short encounter, fix confusing brush/UI concepts,
 make more swamp objects paintable, and delay the boss. Three agents implemented

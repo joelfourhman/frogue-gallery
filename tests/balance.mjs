@@ -15,9 +15,8 @@
 //      progression curve: is zone 1 teachable, zone 4 pressure?).
 //   3. CHARGED-SPLASH VALUE: charged vs uncharged paint DPS ratio (is charging
 //      worth its cooldown?).
-//   4. PIGMENT ECONOMY: income per zone (orbs/banked) vs the pigment costs of
-//      the 10 paintings + the 3 upgrade tracks — can a first-time player
-//      plausibly afford a 2-slot loadout by zone 3–4?
+//   4. CAMPAIGN REWARDS: three free boss choices, bounded gains, carried run
+//      stats and complete power reset after defeat.
 //   5. A short list of FLAGGED IMBALANCES (judgment + the number that's off).
 //
 // Deterministic: no wall-clock (frames() advances a virtual clock), no
@@ -102,9 +101,7 @@ const HUMAN_DPS_FRAC = 0.42;
 // the conservative 0.45 for the zone-traversal time budget).
 const HUMAN_MOVE_FRAC = 0.45;
 const PLAYER_SPEED = 230; // player.js `get speed()` — the frog's max move speed
-// Measured economy verdict (populated by SECTION 4, read by the SECTION 5
-// flags): cumulative banked bank at each zone boundary + whether a first-timer
-// can afford the cheapest 2-painting loadout by zone 3 / zone 4.
+// Campaign reward access/carry/gains/reset results, read by SECTION 5.
 let ECON = null;
 
 // Enemy kinds to measure: the 3 base archetypes + the Reeds bestiary trio.
@@ -315,88 +312,29 @@ for (const level of [0, 1, 3]) {
 }
 
 // ============================================================================
-// SECTION 4 — PIGMENT ECONOMY (income vs cost of paintings + upgrades)
+// SECTION 4 — RUN REWARDS (free choices, carry, bounded gains and fresh reset)
 // ============================================================================
-// Income: MEASURE the actual orb income of a full first-time run by driving a
-// god-mode traversal (same rig as humance.mjs) and reading game.collected at
-// each zone boundary + on finishing. That is the raw per-run orb income; the
-// banked value a first-timer actually keeps is bankGain(collected) on a clean
-// victory (deathKeepFraction only applies on a defeat). Cost: the 10 pigment
-// paintings + the 3 upgrade tracks. Question: can a first-timer plausibly
-// afford a 2-slot loadout by zone 3–4?
 {
-  const welcome = L.WELCOME_GRANT;
-  console.log('[4] PIGMENT ECONOMY  (first-time player, measured orb income by zone)');
-  console.log('    running a god-mode full traversal and reading collected orbs at each zone...\n');
-  // ---- drive a full first-time run, sampling collected[] at zone boundaries ----
-  const game = new Game(makeCanvas());
-  game.start(); frames(2);
-  game.save.flags.intro = true;
-  game._beginExpedition(); frames(2);
-  const pl = game.player; pl.iframes = 999;
-  const W = game.world.w;
-  const HX = game.heron.x;
-  const zoneOrbs = [];                       // cumulative collected at each zone boundary
-  for (const z of ZONES) zoneOrbs.push({ x: z.x * W, taken: false });
-  const snapshot = () => ({ red: game.collected.red, blue: game.collected.blue, green: game.collected.green });
-  let zi = 0; let crossed = 0;
-  while (pl.x < HX - 20 && crossed < 60 * 2000) {
-    game.input.keys.clear(); game.input.keys.add('d');
-    game.input.mouse.x = 640; game.input.mouse.y = 400; game.input.update();
-    pl.iframes = 999;
-    frame(); crossed++;
-    if (zi < ZONES.length && pl.x >= zoneOrbs[zi].x && !zoneOrbs[zi].taken) {
-      zoneOrbs[zi].taken = true; zoneOrbs[zi].collected = snapshot(); zi++;
-    }
+  console.log('[4] CAMPAIGN REWARDS  (one free choice after each of three bosses)');
+  const g = new Game(makeCanvas()); g.save = L.freshSave(); g.options.wander = false;
+  g._beginExpedition();
+  const base = L.makeTuning();
+  const access = [], carry = [];
+  for (let i = 0; i < 3; i++) {
+    g.score = 600 + i; g.runT = 120 + i; g.collected = { red: 2, blue: 3, green: 4 };
+    g.player.hp = Math.max(1, g.player.maxHp - 2);
+    g._endRun('victory');
+    access.push(g.state === 'camp' && g.campaign.pendingReward && g.save.stats.victories === 0);
+    g._campChoice = ['power', 'heart', 'flow'][i]; g._descendCampaign();
+    carry.push(g.score === 600+i && g.runT === 120+i && g.collected.red === 2 && g.campaign.floor === i+1);
+    console.log('    depth ' + (i+2) + ': ' + g.campaign.rewards.join(' + ') + '; power ' + g.tuning.power.toFixed(2) + '; max HP ' + g.tuning.maxHp + '; hop cooldown ' + g.tuning.hopCooldown.toFixed(3) + 's');
   }
-  const runIncome = snapshot();   // raw orbs collected over the WHOLE run (victory path)
-  // Banked: what a clean victory keeps (bankGain on a victory — deathKeep = 1.0).
-  const banked = L.bankGain(runIncome, { died: false, victory: true, tuning: game.tuning });
-  // Per-pigment cumulative banked bank at each zone boundary: bankGain on the
-  // collected[] sampled AT that boundary (collected only grows, so the snapshot
-  // is already the cumulative-to-here income), plus the first-run welcome grant.
-  const zoneBank = zoneOrbs.map((z) => {
-    const c = z.collected || { red: 0, blue: 0, green: 0 };
-    // cumulative collected up to this boundary: the sampled value at the boundary
-    // already IS cumulative (collected only grows), so use it directly.
-    const g = L.bankGain(c, { died: false, victory: true, tuning: game.tuning });
-    return { red: welcome.red + g.red, blue: welcome.blue + g.blue, green: welcome.green + g.green };
-  });
-  console.log(`    run orb income (raw collected, full run): red ${runIncome.red} · blue ${runIncome.blue} · green ${runIncome.green}`);
-  console.log(`    banked on a clean victory:               red ${banked.red} · blue ${banked.blue} · green ${banked.green}`);
-  console.log(`    (welcome grant: red ${welcome.red} · blue ${welcome.blue} · green ${welcome.green})\n`);
-  const upgradeCosts = {};
-  for (const [id, u] of Object.entries(L.UPGRADES)) upgradeCosts[id] = u.levels.map(lv => lv.cost);
-  // Cumulative banked pigment available at each zone boundary (measured).
-  console.log('    cumulative banked pigment by zone boundary (welcome + collected-to-here):');
-  for (let i = 0; i < ZONES.length; i++) {
-    const b = zoneBank[i];
-    console.log(`      zone ${i+1} (${ZONES[i].name}): red ${b.red} · blue ${b.blue} · green ${b.green}`);
-  }
-  // Can they afford a 2-slot loadout (2 paintings) by zone 3 / zone 4?
-  const affordable = (bank, need) => need.every(c => bank[c.color] >= c.amount);
-  const paintList = L.PAINTINGS.filter(p => p.cost && !p.goldTier).map(p => [p.id, p.cost]);
-  const combos = [];
-  for (let i = 0; i < paintList.length; i++)
-    for (let j = i + 1; j < paintList.length; j++) {
-      const [a, ca] = paintList[i], [b, cb] = paintList[j];
-      const merged = { red: (ca.red||0)+(cb.red||0), blue: (ca.blue||0)+(cb.blue||0), green: (ca.green||0)+(cb.green||0) };
-      combos.push({ a, b, merged });
-    }
-  combos.sort((x, y) => (x.merged.red+x.merged.blue+x.merged.green) - (y.merged.red+y.merged.blue+y.merged.green));
-  const cheapest2 = combos[0];
-  const need = (m) => [{color:'red',amount:m.red||0},{color:'blue',amount:m.blue||0},{color:'green',amount:m.green||0}];
-  console.log(`\n    cheapest 2-painting loadout: ${cheapest2.a} + ${cheapest2.b} = red ${cheapest2.merged.red||0}/blue ${cheapest2.merged.blue||0}/green ${cheapest2.merged.green||0}`);
-  console.log('\n    upgrade track costs (per level):');
-  for (const [id, levels] of Object.entries(upgradeCosts)) {
-    const l = levels.map(c => `r${c.red||0}/b${c.blue||0}/g${c.green||0}`).join(' ');
-    console.log(`      ${id.padEnd(10)}: ${l}`);
-  }
-  const byZ3 = affordable(zoneBank[2], need(cheapest2.merged));
-  const byZ4 = affordable(zoneBank[3], need(cheapest2.merged));
-  // Publish for the SECTION 5 flags (module scope).
-  ECON = { byZ3, byZ4, bank4: zoneBank[3], cheapest: cheapest2.merged, cheapestNames: `${cheapest2.a}+${cheapest2.b}`, note: 'a straight-line god-mode sweep under-collects orbs vs a human who dawdles/detours — treat as a LOWER bound on income' };
-  console.log(`\n    VERDICT: cheapest 2-slot loadout affordable by zone 3? ${byZ3 ? 'YES' : 'NO'} · by zone 4? ${byZ4 ? 'YES' : 'NO'}`);
+  const gained = g.tuning.power > base.power && g.tuning.maxHp > base.maxHp && g.tuning.hopCooldown < base.hopCooldown;
+  g._endRun('defeat'); g._beginExpedition();
+  const reset = g.campaign.floor === 0 && g.campaign.rewards.length === 0 && g.tuning.power === base.power && g.tuning.maxHp === base.maxHp;
+  ECON = { access: access.every(Boolean), carry: carry.every(Boolean), gained, reset };
+  console.log('    free boss rewards: ' + ECON.access + '; run stats carried: ' + ECON.carry + '; meaningful gains: ' + gained + '; fresh-run reset: ' + reset);
+  console.log('    pigment drops are run score/cosmetic records; no permanent power purchase is required.');
   console.log('');
 }
 
@@ -444,17 +382,9 @@ const flags = [];
   const ratio = splashSingleDps / swipeDps;
   if (ratio < 0.6) flags.push(`charged splash single-target DPS ${splashSingleDps.toFixed(1)} is only ${ratio.toFixed(2)}× the swipe's ${swipeDps.toFixed(1)} — charging rarely pays off vs a single target`);
 }
-// (d) Economy: can't afford a loadout by zone 3 / 4 (measured income in SECTION 4)?
-{
-  const bank = ECON.bank4, c = ECON.cheapest;
-  const z3Short = !ECON.byZ3, z4Short = !ECON.byZ4;
-  const fmt = (o) => `r${o.red}/b${o.blue}/g${o.green}`;
-  const parts = [];
-  if (z3Short) parts.push(`by zone 3`);
-  if (z4Short) parts.push(`by zone 4`);
-  if (parts.length) {
-    flags.push(`economy: a first-timer can't afford the cheapest 2-painting loadout (${ECON.cheapestNames}, ${fmt(c)}) ${parts.join(' or ')} — the bank by zone 4 is only ${fmt(bank)} (measured orb income is a lower bound; a real player collects more, but the margin is thin)`);
-  }
+// (d) Campaign progression must be available without a currency grind.
+for (const [check, passed] of Object.entries(ECON)) {
+  if (!passed) flags.push('campaign reward progression failed: ' + check);
 }
 if (flags.length === 0) console.log('    (none flagged — the baseline looks balanced)');
 else for (const f of flags) console.log(`    • ${f}`);

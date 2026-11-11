@@ -12,7 +12,7 @@ export function testOpeningEncounter() {
   const g = { runBiome: 'swamp', options: {}, challenge: null, ngCycle: 0, tuning, world, player, enemies: [], dying: false,
     input: { mouse: { lDown: false, rDown: false } }, _tutorialActive: () => false, sfx() {}, _triggerBloom() { blooms++; } };
   assert(clearingAllowed(g));
-  for (const extra of [{ runBiome: 'reeds' }, { options: { wander: true } }, { challenge: {} }, { ngCycle: 1 }]) assert(!clearingAllowed({ ...g, ...extra }));
+  for (const extra of [{ runBiome: 'reeds' }, { options: { wander: true } }, { challenge: {} }, { campaign: { floor: 1 } }]) assert(!clearingAllowed({ ...g, ...extra }));
   const e = new Enemy('beetle', 0, 0, tuning); e._clearing = true;
   const target = { ...player, x: 90, y: 0 };
   clearingStep(e, 1 / 60, target); assert.equal(e.clearingPhase, 'tell');

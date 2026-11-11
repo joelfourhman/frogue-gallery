@@ -2,140 +2,135 @@
 
 ## Fantasy and pillars
 
-You are a small frog with a brush large enough to change your world. The swamp
-is dangerous, but it is also a subject worth painting. Every expedition should
-leave both useful progress and something beautiful.
+A small frog carries a magical brush into a long, dangerous watercolor dungeon.
+Painting changes both the fight and the place. Each descent can leave a personal
+sketchbook keepsake, including a failed run.
 
-1. **Color is a decision.** Fire, interruption, healing and restoration have
-   different uses; swapping paint should change a situation.
-2. **Small frog, readable danger.** Threats announce themselves. A hop, a blue
-   interruption, or green breathing room should let a player recover.
-3. **The swamp remembers.** Painting restores scenery, animates authored
-   places, and leaves a personal sketchbook instead of only a score.
-4. **Warm paper, restrained motion.** Watercolor silhouettes, expressive
-   enemies, synthesized sound and short blooms reinforce a coherent world.
-5. **A finite expedition.** Encounters, rests, optional studies and a boss
-   give each trip a beginning and an ending. Returning to the Atelier matters.
+1. **Color is a decision.** Red punishes, blue interrupts and green creates
+   breathing room. Switching paint should change the situation.
+2. **Readable danger, responsive escape.** Visible tells, committed attacks and
+   safe recovery make a well-timed dodge useful and understandable.
+3. **A world worth painting.** Recolorable scenery, living studies and quiet
+   wildlife make the brush useful between fights.
+4. **One finite descent.** Four floors, three rests and a final boss create a
+   complete run. The player's build develops during that run.
+5. **Warm paper, restrained motion.** Watercolor silhouettes, ink outlines,
+   synthesized sound and bounded effects keep the world coherent and readable.
 
-## Core loop
+## The dungeon loop
 
-Choose a difficulty/build → travel east and paint → collect pigment currency
-and discover studies → reach checkpoints → awaken/defeat the boss → bank
-earnings, inspect the page, improve the build, set out again.
+Start at base stats for the selected difficulty → paint and explore a floor →
+reach its far-end guardian → defeat it → rest and select a gift → descend.
+The fourth guardian ends the dungeon. Death ends the current run; starting
+again begins at the first floor with a fresh build.
 
-A first run can be an exploration or a short defeat. Currency, lessons and
-study unlocks create useful progress even before the first victory.
-The Great Gray Heron closes the base swamp; later biomes/NG+ already exist
-for players who want greater difficulty.
-
-## Paint
-
-The opening offers 64 freely recolorable lilies, mushrooms, wildflowers and
-stones. These are artistic subjects, not recipes: red/blue/green always work,
-dry erases, and colors remain for the run. Numbered pond studies retain their
-three-color transformations and are explained separately when approached.
-
-| Paint | Tactical purpose | Environmental / artistic role |
+| Depth | Floor | Guardian |
 |---|---|---|
-| Crimson | Highest direct damage and burn; punishes armored pursuers | Warm light, fireflies, suns |
-| Cobalt | Slow, then freeze; cancels committed fly strikes | Water, rainfall, reflection |
-| Moss | Root ground enemies and heal the frog | Lilies, reeds, living growth |
-| Dry | Weak fallback, clears status, restores color quickly | A quiet restorative brush |
+| 1 | Watercolor Marsh | The Great Gray Heron |
+| 2 | Sunken Reeds | Silt Wyrm |
+| 3 | Hollow Sanctuary | Hollow Warden |
+| 4 | Black Reeds | Umbral Wyrm — final boss |
 
-Painting is unlimited. The three collected currencies buy permanent options;
-the bank is not an ammo meter. Holding paint gives a regular swipe.
-A full charged splash rewards grouping targets; it fires when released.
-Enemy weaknesses and the boss's three-hue awakening give color switching value.
+Hollow Sanctuary uses the Reeds environment with the Warden encounter. Health,
+elapsed time, score and collected pigment carry between floors. There is no
+intervening shop or separate biome selection.
 
-The world's pigment cells and growth already influence combat space.
-The new studies add intentional environmental subjects, with three visible
-transformations rather than requiring a hidden interaction recipe.
+The first three victories heal 35% of maximum health, rounded up and capped,
+and offer one of three gifts. The player chooses, then explicitly descends.
 
-## Movement and defense
+| Gift | Effect for this run |
+|---|---|
+| Brighter paint | +20% brush, splash and burn damage |
+| Lily heart | +2 maximum health; the added capacity is filled on descent |
+| Flowing brush | Dodge and splash cooldowns multiplied by 0.88 |
 
-Movement remains direct and forgiving. Space hops toward movement, or toward
-aim when stationary. An input pressed up to 120ms before the cooldown ends is
-buffered. The HUD makes the hop's recovery visible.
+Choices may repeat and stack. A complete run contains only three gift choices;
+all gift power disappears at the end of the run. Legacy permanent upgrades
+and equipped paintings do not affect starting stats. New Game+, its variants,
+prestige, gold-tier progression, standalone challenges and Wander are removed
+from the playable loop. Warden and Umbral mechanics now belong to the normal
+campaign.
 
-Brush-hop is learned by creating the first living study. Holding paint while
-hopping leaves a brief colored wake. Its purpose is to escape and manage
-pursuers, not raise boss DPS. Red punishes pursuit, blue breaks a fly's strike,
-and green briefly holds a grounded enemy. A hop cannot indefinitely refresh
-the same enemy, and all marks expire.
+## Paint and the world
 
-## Threats and fair reaction
+Painting is unlimited. Collected pigment is not ammunition, and there is no
+shop purchase required to keep painting. Hold paint for regular swipes; hold
+and release a fully charged splash for a broader hit.
 
-Lily Clearing at (1050,730) is an optional bell-triggered activity. Three
-rounds release 3/4/5 bugs, at most two alive. Authored beetles warn for 0.8s,
-dash along that locked direction for 0.28s, and recover safely for 1.15s.
-Blue interrupts; red on a blue-slowed/frozen clearing target gains 50% direct
-damage. Green supplies the existing root/healing option. Targets have
-120 beetle / 90 mosquito HP, scaled by difficulty. No loot is awarded;
-first completion heals once, replay is cosmetic. Walking away cancels safely.
-The intended newcomer experience is roughly two minutes, with no forced wait
-or exact-time promise; the precise scripted dodge bot clears in ~45 seconds.
+| Paint | Combat purpose | Artistic role |
+|---|---|---|
+| Red | Direct damage and burn | Warm light, flowers and fireflies |
+| Blue | Slow/freeze and interrupt committed attacks | Water, rain and reflection |
+| Green | Root ground enemies and heal | Lilies, reeds and growth |
+| Dry | Weak damage, clear status and restore color | Erase free-painted props |
 
-Final bosses remain dormant until the last 900px of their biome. A swamp
-heron then gets its 3.2s announcement; Reeds apexes engage on arena entry.
+The opening contains 64 freely repaintable lilies, mushrooms, flowers and
+stones. Any color works; dry erases. Changes remain on the current floor and
+react locally. These objects have no hidden recipe or currency requirement.
+The five authored studies are separate subjects with visible numbered stages,
+nearby instructions, immediate scene transformations and saved postcards.
 
-The existing bestiary offers armor, pursuit, ranged pressure, ambush, sound
-hunting and lantern interactions. Mosquitoes now commit to a marked direction
-after 0.60 seconds, dart for 0.30 seconds, then recover for 0.85 seconds.
-Sideways movement, a hop or blue paint are clear counters; approach contact
-does not deal damage.
+The small brush beside the frog marks actual close-range reach. A distant
+mouse position is an aim direction, not a promise that paint reaches it.
+Splash charge/radius and dodge recovery appear locally when relevant.
 
-Bosses have attack tells and vulnerability windows. The heron teaches the
-three-hue awakening, while Reeds bosses add surfaced maws and lantern rules.
-The optional practice heron cannot die before teaching that rhythm.
-Practice is quiet: ordinary encounters and boss attacks are held while a
-lesson is active, including retraining from the Field Guide.
+## Movement and fair combat
 
-## Opening experience
+Movement stops and reverses promptly; ordinary painting retains full movement
+speed. Space launches a short dodge hop toward movement, or toward aim when
+stationary. An input up to 120ms before cooldown completion is buffered.
 
-The intended sequence is:
-- Read movement/paint controls on the title; start immediately or choose the
-  optional seven-step guided practice.
-- Follow the short eastward hint to First Light. Its unfinished pond is a
-  protected teaching area for a player who has not earned brush-hop.
-- Paint water, lilies and fireflies. See each stage change the scene.
-- Earn a useful movement interaction and receive the first saved postcard.
-- Meet readable enemies, use the new wake, and find the next checkpoint.
-- Discover the Rain Choir and Borrowed Sky as optional variations before
-  reaching the final threat.
+Completing a living study teaches brush-hop: hold paint while hopping to leave
+a brief defensive wake. Red burns pursuers, blue interrupts flies and green
+holds grounded enemies. Marks expire, have a fixed cap and cannot repeatedly
+refresh one enemy during the same hop. This learned painting interaction
+remains available in later runs.
 
-This sequence is implemented and exercised with browser input. Exact human
-timing and enjoyment remain playtest questions, not assertions from bot speed.
+Lily Clearing is an optional first-floor bell encounter with three rounds of
+3/4/5 bugs and at most two active enemies. Beetles show a locked warning lane
+for 0.8s, dash for 0.28s and recover for 1.15s. Blue interrupts; a red hit after
+blue slows/freezes a clearing target deals 50% more direct damage. The bell
+starts each round; walking away cancels. First completion heals once, and
+replaying does not farm loot or healing.
 
-## Progression and gallery
+The intended newcomer encounter is roughly two minutes; actual human duration
+and enjoyment are unmeasured. Scripted timing is not a human playtest result.
+Ordinary mosquitoes also commit to a visible attack direction, then expose a
+recovery window. The bestiary adds armor, ambushes and lantern interactions.
 
-The Atelier retains the existing painting catalog, two-slot builds, upgrades,
-synergy pairs, collections, NG+ and challenge progression. The new reward
-track is deliberately short: one study teaches brush-hop; three grant a
-cosmetic signature. No extra talent tree or currency was added.
+Floor guardians wait for the final 900 pixels of the floor. They cannot be
+summoned remotely by early painting. The heron teaches the three-color
+awakening; deeper guardians add surfaced maws, lantern pressure and darkness.
+The optional guided practice holds ordinary combat while teaching these rules.
 
-The sketchbook gives "Gallery" a personal meaning. Each expedition leaves
-a bounded sample of its actual marks, illustrated with completed study
-memories. Players can browse eight recent pages and save a postcard as PNG.
-A failed expedition still has a place in the book. Pages describe their
-outcome and retention limit; they are not claimed to be complete replays.
+## Opening, exploration and keepsakes
 
-## Art direction and sound
+The title offers a fresh dungeon run or optional guided practice. First Light
+near the start gives new players a sheltered painting lesson. The optional
+clearing provides room to practice dodging and color switching. Rain Choir and
+Borrowed Sky add further swamp subjects; the Reeds contains Lantern Garden and
+Echo Pool, plus a lantern-moth detour. The painted crossing is another optional
+swamp discovery.
 
-The existing procedural art avoids runtime assets and network dependencies.
-Warm cream paper, ink outlines, muted swamp greens and localized pigment
-saturation support the painter fantasy. Each completed study becomes a small
-animated diorama: drifting fireflies, rainfall, or birds over reflected light.
+V opens the paused Field Atlas, H the Field Guide and J the sketchbook. The
+atlas shows the frog, checkpoints, available studies and authored detours.
+Nearby study cards identify the required action and color without a hidden
+recipe. Decorative wildlife responds quietly without affecting combat.
 
-Short sound cues mark coats, transformations, completion and learning.
-Existing biome ambience, combat stingers, directional effects, particles and
-hit feedback remain. Effects pools and wake marks have explicit limits;
-the world should stay readable during crowded fights.
+The sketchbook retains eight recent pages plus two pins, sampled from actual
+brush actions. Players can name a page, exhibit a pinned page on the title and
+save a local 1600×960 PNG postcard. Study completion records and postcard
+signatures/borders remain. Existing saves retain their pages, pins, names,
+exhibition and ordinary artwork collection; obsolete New Game+ fields are
+discarded. No mid-run resume is provided.
 
-## Deliberate boundaries of this slice
+## Boundaries
 
-Five authored studies across swamp/Reeds, one earned ability, three difficulty
-choices, the established campaign and an exportable curated sketchbook form the
-current experience. The painted crossing and lantern moth provide optional
-detours. A paused Field Atlas helps find them; progress cards make brush feedback
-explicit and bounded decorative wildlife responds to pigment. No account,
-online leaderboard, cloud save, touch UI or public deployment was added.
+The game uses Canvas 2D, procedural art and Web Audio with no runtime network
+or package dependencies. Difficulty is Gentle, Normal or Bold. Saves stay in
+the current browser/origin. There is no account, cloud save, online leaderboard,
+touch interface or new public deployment. Canvas screen-reader support remains
+limited. Runtime effects, strokes and decorative populations are bounded.
+
+The current roadmap prioritizes clarity, the connected dungeon's balance and
+human feedback. Older repeat-cycle and shop designs are historical.

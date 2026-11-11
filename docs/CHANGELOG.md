@@ -1,3 +1,24 @@
+# One continuous dungeon — 2026-11-11
+
+- Connected Watercolor Marsh, Sunken Reeds, Hollow Sanctuary and Black Reeds
+  into a single run. Great Gray Heron, Silt Wyrm and Hollow Warden guard the
+  route; only the Umbral Wyrm ends it in victory.
+- Three inter-floor rests heal 35% of maximum health and offer a run-only
+  damage, health or recharge gift. Select a gift, then explicitly descend.
+- Fresh runs begin at base difficulty stats; health and run totals carry
+  between floors. Death/restart resets the route and gifts.
+- Removed New Game+ cycles/scaling/modifiers, Green/Gilded Heron variants,
+  gold-tier progression, gilded frames and prestige bonuses. Removed the
+  standalone shop, Wander and challenge flows.
+- Retained sketchbooks, pins, page names, title exhibitions, ordinary artwork
+  collections and learned study interactions. Legacy purchased stats no longer
+  affect starting builds. Save 12 / game 1.0.0 remain compatible.
+- Added campaign transition/reward/save regressions and a complete simulated
+  combat journey. Human enjoyment and full-dungeon duration remain unmeasured;
+  see PROJECT_STATE.md for the verified results and limits.
+
+Older entries below record previous behavior and can describe removed systems.
+
 # Lily Clearing and free painting — 2026-11-11
 
 - Optional three-round bell encounter, readable committed attacks and safe recovery.

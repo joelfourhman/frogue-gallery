@@ -12,128 +12,14 @@ import { FieldStudio, sketchbookButton, bookLayout, drawSketchbook, exportPostca
 import { atlasButton, atlasLayout, drawFieldAtlas } from './atlas.js';
 import { exhibitSketchPage, studyRewardEarned, cycleCombatPigment, splashChargeStep, bossArenaReached } from './logic.js';
 import { drawCombatReadout } from './combat-ui.js';
+import { CAMPAIGN, createCampaignRun, campaignFloor, finishCampaignFloor, chooseCampaignReward, applyCampaignRewards } from './logic.js';
+import { drawDungeonCamp, dungeonCampLayout, drawDungeonProgress, drawDungeonRoute } from './dungeon.js';
 import { OpeningEncounter } from './encounter.js';
 import { AudioSys } from './audio.js';
 import { ParticleSystem } from './particles.js';
 import { SaveSys } from './save.js';
-import { PIGMENTS, PIGMENT_ORDER, ENEMIES, makeTuning, applyDifficulty, DIFFICULTIES, bossStep, bankGain, freshSave, UPGRADES, PAINTINGS, canAfford, payCost, costArray, applyWelcomeGrant, WELCOME_GRANT, activeSynergy, canRetireCollection, retireCollection, galleryBonusLevel, MID_HERON, midHeronAllowed, WEATHER_PHASES, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialEligible, tutorialDrillDone, tutorialDrillSatisfied, SKETCH_HERON, tutorialDone, retrainAllowed, ngUnlocked, applyNGPlus, ngPlusScaling, GREEN_HERON, greenHeronPinTick, GILDED_HERON, gildedPlumeTick, gildedPlumeActive, MODIFIERS, MODIFIER_ORDER, applyModifier, saveModifier, goldEarn, goldEventBoss, goldEventSynergy, goldEventOrbs, goldTotal, canAffordGold, GILDED_FRAME, canBuyGildedFrame, buyGildedFrame, isGilded, STORM_SURGE, stormSurgeFor, stormSurgeCleared, stormSurgeRainPhase, CHALLENGE_TOP_N, challengeUnlocked, challengeDaySeed, challengeDate, challengeDrawLoadout, challengeDrawModifier, challengeScore, challengeFileScore, MASTERPIECE, isMasterpieceMinted, challengeRank, challengeRankBonus, challengeRankEvent, challengeComplete, LANTERN, lanternState, lanternTick, lanternRadius, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, inGravityPocket, hopLift, floodedWaterFactor, blackReedsUnlocked, REEDS_DARK_LANTERN, REEDS_DARK_BESTIARY_DENSITY, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, routeTrail, ROUTE_WAYPOINT_CAP, validateSaveBlob, WANDER_BUDGET, pickWanderSeed, wanderContent, wanderTaste, BOSS_IDS, galleryCompletion, galleryCompletionProgress, capstoneLevel, galleryBonusTotal, GAME_VERSION, CROSSING, strokeTouchesCrossing, inCrossingZone, pinSketchPage, unpinSketchPage } from './logic.js';
+import { PIGMENTS, ENEMIES, makeTuning, DIFFICULTIES, bossStep, freshSave, costArray, MID_HERON, midHeronAllowed, weatherFor, weatherFactor, BOLD_HAZARDS, boldHazardsAllowed, placeZoneHazards, orbStreakMult, orbStreakState, ORB_STREAK, revealProgress as revealProgressOf, tutorialDrillSatisfied, SKETCH_HERON, retrainAllowed, STORM_SURGE, stormSurgeFor, stormSurgeRainPhase, LANTERN, lightFactor, reedsUnlocked, REEDS_CREATURES, REEDS_BESTIARY, SILT_WYRM, wyrmStep, wyrmSurfacePoint, WARDEN, wardenStep, wardenSurfacePoint, wardenTasteFactor, wardenFuelSiphon, REEDS_DARK_LANTERN, lanternTickFor, lanternRadiusFor, lanternLightFactor, UMBRA_WYRM, umbrStep, umbrSurfacePoint, umbraFuelSiphon, umbrDeepDark, umbraPaintable, GAMEPAD_MAP, gamepadActive, GAMEPAD_INACTIVITY_MS, ROUTE_WAYPOINT_CAP, validateSaveBlob, pickWanderSeed, wanderContent, wanderTaste, GAME_VERSION, CROSSING, strokeTouchesCrossing, inCrossingZone, pinSketchPage, unpinSketchPage } from './logic.js';
 import { UI, uiFont, INK, PAPER, centerText, outlineText, paperPanel, paperEnd, uiButton, drawPips, sat, mixColor, roundRectPath } from './ui.js';
-
-// A1 (v1.2 M9): the atelier's resident characters speak in short one-liners.
-// Five context pools per character (victory / defeat / purchase / general /
-// ng — the NG+ pool is the C1 v1.3 batch-2 addition, drawn only when
-// ngCycle >= 1), a typewriter reveal, and rotation so the same line never
-// repeats twice in a row. Pure display data — nothing here is persisted.
-const ATELIER_CHARS = [
-  { name: 'Mabel', pools: {
-      victory: [
-        'The swamp was green again by morning. You hear that?',
-        'I told Giuseppe you were steady. I never lie about strokes.',
-        'Hang that one on the wall. You have earned a wall.',
-      ],
-      defeat: [
-        'The water takes and the water gives. Bank what you can.',
-        'Wipe your snout and sit. The kettle is always on.',
-        'Every great canvas starts with a wet patch. Try again soon.',
-      ],
-      purchase: [
-        'Ah, new colors! My eyes, Giuseppe — look at them!',
-        'You spoil me. Sit, you will want the good light next.',
-        'Paid in pigment, and paid in good company. Worth it.',
-      ],
-      general: [
-        'I still cannot tell the moon from a pale lily. You can.',
-        'Paint slow, dry fast — that is the whole secret, really.',
-        'The reeds were quieter today. Good signs, for a painter.',
-      ],
-      // C1 (v1.3 M16): the NG+ CONTEXT pool — a SECOND line pool drawn only
-      // when ngCycle >= 1 (a returning expedition). Reuses the EXACT A1
-      // machinery (context priority above the cycle-0 pools, rotating, no
-      // repeat, typewriter); nothing persisted.
-      ng: [
-        'The gold is piling up in the safe — spend it well, you have earned it.',
-        'A second expedition! The swamp noticed you. So did the heron.',
-        'Hang the Gilded Frame and the whole wall will glow for you.'
-      ],
-  } },
-  { name: 'Giuseppe', pools: {
-      victory: [
-        'A clear run! Buy me a pigment while you are at it.',
-        'I was watching from the window. Magnificent technique.',
-        'Victory, victory — and did you count the drops, or not?',
-      ],
-      defeat: [
-        'The swamp keeps its own ledger. Ours is smaller, and kinder.',
-        'You came back! That is already half the sale.',
-        'A bruised frog paints the bluest. Rest first, obviously.',
-      ],
-      purchase: [
-        'Sold! No refunds, but excellent taste. As always.',
-        'A fine investment. The frame alone pays for itself.',
-        'My stock is thinning and my smile is not. Keep buying.',
-      ],
-      general: [
-        'Everything for sale, nothing truly gone. House rules.',
-        'Best painters in my experience: the ones who keep showing up.',
-        'Red for passion, blue for patience, green for a long lunch.',
-      ],
-      // C1: the NG+ context pool (Giuseppe reacting to a high ngCycle).
-      ng: [
-        'Third expedition? I am starting to keep a tally, and my prices are climbing.',
-        'Every NG+ you take, the gold shelf gets fuller. My favorite shelf.',
-        'You come back for more. That is either devotion or a very good business plan.'
-      ],
-  } },
-  { name: 'Monet', pools: {
-      victory: [
-        'Not bad. The light was on my side, though. Probably.',
-        'You cleared it. I am allowed to be a little pleased.',
-        'Impressive. I will stop practicing in the same swamp now.',
-      ],
-      defeat: [
-        'Lost, and yet you painted something. That is the whole point.',
-        'The heron is a critic. So am I. We do not mix, you know.',
-        'Failure dries faster than you think. Sit, then go.',
-      ],
-      purchase: [
-        'You buy the pigments and I buy the silence. Fair trade.',
-        'More color for you to get wrong beautifully. Lovely.',
-        'A rival who invests in their tools. Respect, at least.',
-      ],
-      general: [
-        'I paint the swamp at dawn. You paint it at its worst. We tie.',
-        'Color is just light that got in trouble. So are we, all.',
-        'Your frog has manners. It paints over its mistakes. Good.',
-      ],
-      // C1: the NG+ context pool (Monet on the gilded frame / second-campaign
-      // collection).
-      ng: [
-        'A gilded frame would suit your second collection. The light would like it.',
-        'You are collecting twice now. The gallery is becoming a habit — a good one.',
-        'Return, and the swamp returns. I approve of the symmetry.'
-      ],
-  } },
-];
-
-// A3 (v1.2 M9): the Curator's Ledger — a short lore/collectible blurb per
-// painting, shown in its own atelier tab (a display-only collection book).
-// Data-only (strings), keyed by painting id; the collected/not-yet state is
-// read live from the save, so nothing extra is persisted.
-const LEDGER_LORE = {
-  'moonlit-pond': 'The only pond that ever held the whole sky at once. Mabel paints it by memory; the moon forgives.',
-  'dancing-salamander': 'It never sat still long enough to paint — so Giuseppe painted it mid-leap and dared it to finish the sentence.',
-  'spring-garden': 'A garden that bloomed through a single, impossibly green afternoon. You can almost smell the rain in it.',
-  'self-portrait': 'Frogue, unposed and unflattering, exactly as the swamp sees you. It is the bravest thing you have owned.',
-  'king-frog': 'Painted for a frog who never sat on a throne but somehow ruled the lily pads anyway. Royalty is a matter of drops.',
-  'storm-cloud': 'A single cloud caught at the exact second it decided to rain. Monet insists it was raining on him, not the canvas.',
-  "beetle-armor": 'Chitin borrowed, not stolen — the beetle grew a second shell and kept its dignity. So did you.',
-  'croaksworth': 'The one portrait he finally let himself be. Even the old heron looks a little proud, and a little green.',
-  'gilded-meridian': 'The Curator gilded a single horizon and it glows still — every drop that crosses it leaves a little more of itself behind. A gold-tier work; earned only in the second expedition.',
-  'verdant-crown': 'A crown woven from the moss that mends, worn by no frog and gifted to all of them. It heals the hand that reaches for it. A gold-tier work; earned only in the second expedition.',
-};
-export function ledgerEntry(pt) {
-  return { id: pt.id, name: pt.name, lore: LEDGER_LORE[pt.id] || 'A blank page, still waiting for its story.' };
-}
 
 // P5: 4 named expedition zones + a rest checkpoint between each — structure
 // the run so a full expedition reads as a journey, not one long hallway.
@@ -264,7 +150,7 @@ export class Game {
     // ---------- persistence + tuning ----------
     this.save = SaveSys.load() || freshSave();
     this.options = SaveSys.loadOptions();
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
+    this.tuning = makeTuning({}, [], this.options.difficulty);
     // B5: persistent storage unavailable (privacy mode, quota, disabled)? We
     // still run on the in-memory save, but surface a one-time warning so the
     // player knows progress may not survive a reload. storageOK forces the
@@ -301,14 +187,6 @@ export class Game {
 
     // ---------- world (persists as the title backdrop, re-seeded per run) ----------
     this.world = new World(mulberry32((Date.now() % 100000) | 0), (Date.now() % 99991) | 0);
-    // R1 (v1.6 Module R): THE LANTERN — the Reeds biome's signature light
-    // mechanic. The in-run state object lives here; all the RULES (drain /
-    // refill / radius / light factor / the victory gate) are pure in logic.js.
-    // `this.lantern` is the current {fuel, lit} state; `this.lanternReeds` is
-    // whether THIS expedition is a Reeds variant (the lantern is only active /
-    // only drawn / only drained there — a first-time swamp run never touches
-    // it, so the 15–20 min cycle-0 run stays byte-identical). The cached light
-    // gradient + its radius are lazily built per-radius (never per-frame).
     this.lantern = { fuel: 1, lit: true };
     this.lanternReeds = false;
     this._lanternGrad = null;      // cached radial gradient for the lit radius
@@ -347,8 +225,6 @@ export class Game {
     this.endKind = null;
     this.endT = 0;
     this.endGains = null;
-    this._modPrompt = null;   // N4 (v1.3 M14): { sel } — the open expedition-modifier picker
-    this._seedCard = null;    // O1 (v1.7): { seed } — the pre-expedition WANDER seed card
     this._bloom = null;      // V2 (v1.2 M11): { x, y, t, dur } — heron awaken bloom
     this._bloomSurge = 0;    // V2: timed saturation surge (0..~0.14), decays to 0
     // M1 (v1.4): the first-victory cinematic beat — { t, dur, arpeggiated }.
@@ -376,8 +252,8 @@ export class Game {
     // cursor resting on a button never re-ticks. (Pause open/close is handled
     // by direct swaps at the pause-transition sites, not here.)
     this._hoverIdx = -1;
-    // J3 (v1.4): the camera's awaken-moment hold. A heron rising (the Great
-    // Green Heron reveal) triggers a ~1.2 s zoom-out + hold on the heron, then
+    // J3 (v1.4): the camera's awaken-moment hold. The gray heron rising
+    // triggers a ~1.2 s zoom-out + hold on the heron, then
     // the camera eases back to normal follow. Real-time presentation — it never
     // affects the measured runT.
     this._awakenHoldT = 0;
@@ -406,8 +282,7 @@ export class Game {
     this.hazards = [];
     this.orbStreak = 0;
     this.heron = null;
-    this.runT = 0;
-    this.ngCycle = 0;    // N1 (v1.3 M14): this run's New Game+ cycle (0 = base game)
+    this.runT = 0; this._floorStartT = 0;
     this.spawnT = 3;
     this.score = 0;
     // E2 (v1.2 M10): weather/tide phases — a pending phase for the current zone
@@ -429,22 +304,7 @@ export class Game {
     // fires a single small banner the first time the creature is seen this
     // session and never repeats (session-lifetime, like the M3 EGG A flag —
     // NOT cleared per expedition).
-    this._firstSight = { turtle: false, cragfrog: false, surge: false, gilded: false };
-
-    // A1: atelier one-liners — reveal state for the typewriter line shown in
-    // the atelier. Seeded from the last finished run's outcome on entry.
-    this._atelierSay = null;    // { name, text, revealed } or null
-    this._atelierSayIdx = {};   // per-character rotation index (not persisted)
-    this.lastResult = null;     // 'victory' | 'defeat' | null — last finished run
-
-    // M2 (v1.4): the "Encore" gallery-viewing screen. An overlay OPENED FROM the
-    // atelier (it stacks on top of state 'atelier' so the between-run sanctuary
-    // keeps breathing underneath). `encoreT` = time in the screen (drives a
-    // gentle crossfade-in); `_encoreIdx` = the painting currently on display
-    // (a pure in-memory pointer — NO new persistence).
-    this._encoreOpen = false;
-    this.encoreT = 0;
-    this._encoreIdx = 0;
+    this._firstSight = { turtle: false, cragfrog: false, surge: false };
 
     // one-time audio unlock on first gesture (browser autoplay rules).
     // P9: also start the ambient bed so the music/SFX sliders have a live
@@ -624,7 +484,7 @@ export class Game {
     // long as the pad is CONNECTED (no recency timeout — a player navigating
     // a menu shouldn't be dropped mid-choice). This split is what keeps W1's
     // in-run keys from leaking into the menus (space would Start the game,
-    // 1/2/3 would switch atelier tabs, a would open the Atelier from the title).
+    // 1/2/3 would select paint while another menu owns input).
     const inRun = this.state === 'expedition' && !this.dying && !this.paused && !this.help && !this._bookOpen && !this._atlasOpen;
     if (inRun) {
       // Recency gate: a stale in-run pad disengages + releases its keys.
@@ -644,7 +504,7 @@ export class Game {
   // synthesizes a mouse click AT the focused rect (the SAME _mouseIn + lPressed
   // machinery a mouse uses — so gamepad and mouse can't diverge); B backs out
   // one level. The focused list is computed fresh each frame from the current
-  // state (so it tracks options/pause/help/end/atelier/title automatically).
+  // state (so it tracks options/pause/help/end/title automatically).
   _gpMenuWrite(pad, now) {
     const gp = this._gp, inp = this.input;
     const focus = this._gpMenuList();
@@ -694,7 +554,7 @@ export class Game {
   // W2: the current menu focus list. Returns { id, [rects] } where each rect is
   // { x, y, w, h } and matches the EXACT rect the mouse-click handler tests
   // (_mouseIn), so a synthesized A-click hits the same button. Computed from
-  // the current state — options > pause > help > end > atelier > title order
+  // the current state — options > pause > help > end > title order
   // of precedence (an open overlay owns the focus).
   _gpMenuList() {
     const g = this;
@@ -706,19 +566,16 @@ export class Game {
         // the options focus list: the gamepad-mode toggle + the visual toggles
         // + back (the sliders are drag-only, not focus-steppable — a gamepad
         // can't scrub a slider without a horizontal cursor).
-        return { id: 'options', list: [o.gpad, o.shake, o.vignette, o.grain, o.wander, o.back] };
+        return { id: 'options', list: [o.gpad, o.shake, o.vignette, o.grain, o.back] };
       }
       const t = g._titleLayout();
       const items = [ { rect: { x: t.bx, y: t.by, w: t.bw, h: t.bh } } ];        // Start
       // T1: the guided first expedition (fresh-save only) — it has its own
       // mouse-click handler, so it's a focusable item when visible.
-      if (tutorialEligible(g.save)) items.push({ rect: { x: t.tx, y: t.ty, w: t.tw, h: t.th } });
-      if (t.ng) items.push({ rect: t.ng });                                     // NG+ / guided slot
+      items.push({ rect: { x: t.tx, y: t.ty, w: t.tw, h: t.th } });
       t.diff.forEach((d) => items.push({ rect: d }));                           // difficulty pills
-      if (t.chall) items.push({ rect: t.chall });                                // Curator Challenge
-      items.push({ rect: { x: t.abx, y: t.aby, w: t.abw, h: t.abh } });          // Atelier
+      items.push({ rect: { x: t.abx, y: t.aby, w: t.abw, h: t.abh } });          // Sketchbook
       items.push({ rect: { x: t.ox, y: t.oy, w: t.ow, h: t.oh } });              // Options
-      if (t.reeds) items.push({ rect: t.reeds });                                // Beneath the Reeds
       return { id: 'title', list: [...items.map((i) => i.rect), sketchbookButton(g)] };
     }
     if (g.state === 'expedition') {
@@ -739,18 +596,12 @@ export class Game {
       }
       return null;   // active in-run: no menu focus (W1 feed is active)
     }
+    if(g.state==='camp'){const c=dungeonCampLayout(g);return{id:'camp',list:[...c.cards,...(g._campChoice?[c.descend]:[])]};}
     if (g.state === 'end') {
       const b = g._endButtons();
       const items = [ b.primary ];
-      if (b.ng) items.push(b.ng);
       items.push(b.ret);
       return { id: 'end', list: [...items, sketchbookButton(g)] };
-    }
-    if (g.state === 'atelier') {
-      if (g._encoreOpen) return { id: 'atelier', list: [] };   // Encore owns input
-      const rows = g._atelierRows();
-      const focus = rows.filter((r) => r.enabled !== false && r.focus !== false);
-      return { id: 'atelier', list: [...focus, sketchbookButton(g)] };
     }
     return null;
   }
@@ -761,11 +612,11 @@ export class Game {
     const g = this;
     if (g._atlasOpen) { g._closeAtlas(); return; }
     if (g._bookOpen) { g._closeSketchbook(); return; }
+    if (g.state === 'camp') { g._campChoice=null; g._gp.idx=0; g.sfx('ui-back'); return; }
     if (g.state === 'title' && g.optionsOpen) { g._closeOptions(); g.sfx('ui-back'); return; }
     if (g.state === 'expedition' && g.help) { g.help = false; g.sfx('ui-back'); return; }
     if (g.state === 'expedition' && g.paused) { g.paused = false; g.sfx('ui'); return; }   // B resumes
     if (g.state === 'end') { g.sfx('ui-back'); g._quitToTitle(); return; }
-    if (g.state === 'atelier') { g.sfx('ui-back'); g._quitToTitle(); return; }
     if (g.state === 'title') { g.sfx('ui-back'); }   // top level: nothing to back out of
   }
 
@@ -993,8 +844,8 @@ export class Game {
       }
     }
     const bookButton = sketchbookButton(this);
-    const bookMenu = (this.state !== 'expedition' || this.paused) && !this.optionsOpen && !this._encoreOpen && !this._modPrompt && !this._seedCard && !this._cine;
-    if (!this.input._fieldFocus && !this.optionsOpen && !this._cine && !this._modPrompt && !this._seedCard && !this._encoreOpen &&
+    const bookMenu = (this.state !== 'expedition' || this.paused) && !this.optionsOpen && !this._cine;
+    if (!this.input._fieldFocus && !this.optionsOpen && !this._cine &&
         (this.input.pressed('j') || (bookMenu && this.input.mouse.lPressed && this._mouseIn(bookButton.x, bookButton.y, bookButton.w, bookButton.h)))) {
       this._openSketchbook(); this._drawAll(); this.input.endFrame(); return;
     }
@@ -1135,60 +986,16 @@ export class Game {
           }
         }
       }
+    } else if (this.state === 'camp') {
+      if(this.input.pressed('m'))this._muteToggle();
+      this._updateCampaignCamp();
     } else if (this.state === 'end') {
-      this.endT += dt;
-      this._stepHeronFlight(dt);
-      // N4 (v1.3 M14): the expedition-modifier picker, when open, owns this
-      // frame's input (it is an overlay on the end screen). Otherwise the
-      // normal end-screen buttons route.
-      // M1 (v1.4): the first-victory cinematic beat (a FRESH player's first
-      // win) takes precedence — it plays for ~4s and ANY key/click skips it
-      // immediately. While it runs the end-screen buttons do NOT route (a skip
-      // tap must not immediately open the atelier) and endT keeps advancing so
-      // the victory card reveals right after the beat closes. A returning
-      // player (beat-seen flag) never has _cine, so they hit the buttons as
-      // before.
-      if (this._cine) {
-        this._cine.t += dt;
-        // "any key or click": kb.size > 0 is any just-pressed key; mouse.lPressed
-        // is a just-clicked frame.
-        const skip = this.input.mouse.lPressed
-          || (this.input.kb && this.input.kb.size > 0);
-        if (this._cine.t >= this._cine.dur || skip) {
-          // M1 (v1.4): the beat just closed — the normal victory card reveals
-          // NOW, so this is when the triumphant stinger (deferred from _endRun)
-          // plays, marking the "card reveal" moment.
-          if (this._cine.firstBeat) {
-            if (this.audio.stingerVictory) this.audio.stingerVictory(); else this.sfx('victory');
-          }
-          this._cine = null;
-        }
-      } else if (this._modPrompt) {
-        this._updateModPrompt();
-      } else {
-        // buttons: "Rest at the Atelier" (primary) + "Next Expedition" (NG+)
-        // + "Return to the Pond" link. The card is taller on a victory (it
-        // carries the V4 exhibition), so both the draw and the click rects
-        // use _endCardH().
-        if (this.endT > 0.6 && this.input.mouse.lPressed) {
-          const b = this._endButtons();
-          if (this._mouseIn(b.primary.x, b.primary.y, b.primary.w, b.primary.h)) { this.sfx('ui'); this._beginAtelier(); }
-          else if (b.ng && this._mouseIn(b.ng.x, b.ng.y, b.ng.w, b.ng.h)) { this._beginNextExpedition(); }
-          else if (this._mouseIn(b.ret.x, b.ret.y, b.ret.w, b.ret.h)) { this.sfx('ui-back'); this._quitToTitle(); }
-        }
-        if (this.endT > 0.6) {
-          if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); this._beginAtelier(); }
-          if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._quitToTitle(); }
-          if (this.input.pressed('m')) this._muteToggle();
-        }
+      this.endT+=dt;
+      if(this.input.pressed('m'))this._muteToggle();
+      if(this.endT>0.6){const b=this._endButtons();
+        if(this.input.pressed('enter')||this.input.pressed(' ')||(this.input.mouse.lPressed&&this._mouseIn(b.primary.x,b.primary.y,b.primary.w,b.primary.h)))this._startExpeditionOrCard();
+        else if(this.input.pressed('escape')||(this.input.mouse.lPressed&&this._mouseIn(b.ret.x,b.ret.y,b.ret.w,b.ret.h)))this._quitToTitle();
       }
-    } else if (this.state === 'atelier') {
-      this.atelierT += dt;
-      // M2: while the Encore viewing screen is open it owns the atelier's input
-      // + the melodic layer; the atelier's own update (tabs/rows/one-liner) is
-      // skipped so nothing underneath reacts to the arrows/Esc.
-      if (this._encoreOpen) this._updateEncore(dt);
-      else this._updateAtelier(dt);
     }
 
     this._sfxMenuHover();   // S1 (v1.9): a UI hover tick when the cursor enters a button
@@ -1256,7 +1063,7 @@ export class Game {
     // responsive rather than stalling with it (it naturally eases onto the
     // slowed frog because the follow target moves less).
 
-    // (d) awaken moment — the strongest beat. A heron rising (the Great Green
+    // (d) awaken moment — the strongest beat. The gray heron rising Green
     // Heron reveal) holds the camera on the heron with a brief zoom-out for
     // _awakenHoldT seconds, then eases back to normal follow. Set in the
     // 'awaken' handler on the final heron only.
@@ -1339,587 +1146,13 @@ export class Game {
     this.sfx('ui-back');
   }
 
-  // N1 (v1.3 M14) / N4 (v1.3 M14): the "Next Expedition" action. Only reachable
-  // once a victory has been earned (ngUnlocked). It opens the expedition-MODIFIER
-  // picker (N4) — the player chooses one MODIFIERS entry for the coming cycle —
-  // and the picker's confirm advances the persisted New Game+ cycle and starts
-  // the run. NG+ scaling (N2), the second boss (N3), and the modifier (N4) then
-  // key off the run's ngCycle. A first-time save (ngCycle 0, no victory) never
-  // sees this path because the button is hidden.
-  _beginNextExpedition() {
-    if (!ngUnlocked(this.save)) return; // defensive: nothing to escalate yet
-    this._openModPrompt();
-  }
+  _challengeAdd() {}
 
-  // K7 (v1.5 M2): the CURATOR CHALLENGE — a SEEDED daily expedition. Gated
-  // behind a completed victory (challengeUnlocked — the same gate NG+ uses via
-  // ngUnlocked), so a first-time player never sees the button. The whole world
-  // shares ONE challenge per UTC day: the seed is the current UTC day (see
-  // challengeDaySeed), and everything else is derived deterministically FROM
-  // that seed (never from Math.random):
-  //   · seed     = challengeDaySeed()            (Math.floor(Date.now()/86400000))
-  //   · loadout  = a SEEDED 2-painting draw from the player's OWNED paintings
-  //   · modifier = a SEEDED pick from the MODIFIERS table
-  // The expedition runs the SAME world / makeTuning / scoring fields as a normal
-  // run (see _beginExpedition's challenge override), but is EXCLUDED from the
-  // first-time pacing band (it is its own scored mode). On a victory, _endRun
-  // computes the challenge SCORE and files it to the saved top-5 best-score list
-  // (challengeFileScore), shown in the atelier's Challenge panel.
-  // Sets this.challenge BEFORE calling _beginExpedition, which reads it.
-  _beginChallengeExpedition() {
-    if (!challengeUnlocked(this.save)) return; // defensive: nothing unlocked yet
-    const seed = challengeDaySeed();
-    const owned = Array.isArray(this.save.owned) ? this.save.owned : [];
-    this.challenge = {
-      mode: 'challenge',
-      seed,                                  // the shared UTC-day seed
-      loadout: challengeDrawLoadout(seed, owned),   // the seeded 2-painting draw
-      modifier: challengeDrawModifier(seed),        // the seeded modifier
-    };
-    this.sfx('ui');
-    this._beginExpedition();
-  }
+  // Start a fresh dungeon directly from the title.
+  _startExpeditionOrCard() { this.options.wander = false; this._beginExpedition(); }
 
-  // K7 (v1.5 M2): the single entry point for the challenge's per-run scoring
-  // hooks. Guarded to a no-op for a normal run (this.challenge null), so the
-  // call sites below are cheap one-liners that never touch a normal run. The
-  // `kind` dispatches the counter:
-  //   'enemy'  — one regular/mid/surge enemy defeated in time
-  //   'orb'    — one pigment orb collected
-  //   'bossEngage' — the final heron left its intro (boss clock starts)
-  //   'bossDefeat' — the final heron was defeated (boss clock stops; records
-  //                  the fight duration as bossTime, clamped to >= 0)
-  // 'restored' is derived in _endRun from the revealProgress delta (no per-frame
-  // hook needed — it's a single end-of-run read).
-  _challengeAdd(kind) {
-    const c = this.challenge;
-    if (!c || c.mode !== 'challenge') return;
-    if (kind === 'enemy') c.enemies += 1;
-    else if (kind === 'orb') c.orbs += 1;
-    else if (kind === 'bossEngage') { if (c._bossEngage == null) c._bossEngage = this.runT; }
-    else if (kind === 'bossDefeat') {
-      if (c._bossEngage != null) c.bossTime = Math.max(0, this.runT - c._bossEngage);
-    }
-  }
-
-  // N4 (v1.3 M14): open the expedition-modifier picker (an overlay on the end
-  // screen). The current saved modifier (if any) is pre-selected so a returning
-  // player can re-confirm it with a single Enter. The cycle is NOT advanced
-  // here — that happens on the picker's confirm (_confirmNextExpedition), so
-  // quitting from the prompt leaves the save untouched.
-  _openModPrompt() {
-    const saved = saveModifier(this.save);
-    const i = saved ? (MODIFIER_ORDER.indexOf(saved) + 1) : 0;
-    this._modPrompt = { sel: Math.min(Math.max(i, 0), MODIFIER_ORDER.length) };
-    this.sfx('ui');
-  }
-
-  // N4 (v1.3 M14): advance the NG+ cycle and start the expedition (the picker's
-  // confirm, and the direct path once a modifier is chosen). The modifier (if
-  // any) was already persisted by _chooseModPrompt on selection.
-  _confirmNextExpedition() {
-    this._modPrompt = null;
-    this.save.ngCycle = (Math.floor(this.save.ngCycle) || 0) + 1;
-    SaveSys.save(this.save);
-    this.sfx('ui');
-    this._beginExpedition();
-  }
-
-  // N4 (v1.3 M14): the picker's selection index (0 = no modifier; 1..N = the
-  // MODIFIER_ORDER entries).
-  _modSelId() {
-    const i = this._modPrompt ? this._modPrompt.sel : 0;
-    return i <= 0 ? null : MODIFIER_ORDER[i - 1];
-  }
-
-  // N4 (v1.3 M14): persist the currently-selected modifier to the save
-  // (null when the "no modifier" card is selected). Idempotent.
-  _chooseModPrompt() {
-    const id = this._modSelId();
-    if ((this.save.ngModifier || null) === (id || null)) return;
-    this.save.ngModifier = id || null;
-    SaveSys.save(this.save);
-  }
-
-  // N4 (v1.3 M14): the picker's geometry — 4 cards (No modifier + the 3
-  // modifiers) in a centered row, plus a Continue button.
-  _modPromptGeom() {
-    const cx = this.cw / 2, cy = this.ch / 2;
-    const n = MODIFIER_ORDER.length + 1; // +1 for the "no modifier" card
-    const cw = 232, gap = 18, ch = 150;
-    const totalW = n * cw + (n - 1) * gap;
-    const x0 = cx - totalW / 2, y0 = cy - ch / 2 - 14;
-    const cards = [];
-    for (let i = 0; i < n; i++) cards.push({ x: x0 + i * (cw + gap), y: y0, w: cw, h: ch, id: i <= 0 ? null : MODIFIER_ORDER[i - 1] });
-    return { cx, y0, cards, cont: { x: cx - 130, y: y0 + ch + 26, w: 260, h: 50 } };
-  }
-
-  // N4 (v1.3 M14): the picker's input — arrow keys / number keys + clicks move
-  // the selection (persisting it), Enter/Space/click-Continue advances the cycle
-  // and begins the run, Esc reverts to the end screen (cycle untouched).
-  _updateModPrompt() {
-    if (!this._modPrompt) return;
-    const n = MODIFIER_ORDER.length + 1;
-    const sel = this._modPrompt.sel;
-    if (this.input.pressed('arrowleft') || this.input.pressed('a')) this._modPrompt.sel = (sel + n - 1) % n;
-    if (this.input.pressed('arrowright') || this.input.pressed('d')) this._modPrompt.sel = (sel + 1) % n;
-    for (let i = 1; i <= n; i++) {
-      const k = String(i);
-      if (this.input.pressed(k)) this._modPrompt.sel = i - 1;
-    }
-    // clicks: a card selects it; the Continue button (or clicking the selected
-    // card) confirms and begins.
-    if (this.input.mouse.lPressed) {
-      const g = this._modPromptGeom();
-      for (const c of g.cards) {
-        if (this._mouseIn(c.x, c.y, c.w, c.h)) {
-          this._modPrompt.sel = g.cards.indexOf(c);
-          this._chooseModPrompt();
-          this.sfx('ui');
-        }
-      }
-      if (this._mouseIn(g.cont.x, g.cont.y, g.cont.w, g.cont.h)) { this._chooseModPrompt(); this._confirmNextExpedition(); return; }
-    }
-    if (this.input.pressed('enter') || this.input.pressed(' ')) { this._chooseModPrompt(); this._confirmNextExpedition(); return; }
-    if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._modPrompt = null; }
-    // always persist the current selection so a quit saves the last choice
-    this._chooseModPrompt();
-  }
-
-  // N4 (v1.3 M14): draw the picker overlay (dim + 4 cards + Continue).
-  _drawModPrompt(ctx) {
-    if (!this._modPrompt) return;
-    ctx.save();
-    ctx.fillStyle = 'rgba(20,18,16,0.62)';
-    ctx.fillRect(0, 0, this.cw, this.ch);
-    const g = this._modPromptGeom();
-    const pw = 1000, px = g.cx - pw / 2, py = g.y0 - 64, ph = g.cards[0].y + g.cards[0].h + 26 + 50 + 30;
-    const c = paperPanel(ctx, px, py, pw, ph, { seed: 55 });
-    outlineText(c, 'Choose your Expedition', g.cx, py + 40, uiFont(UI.sizes.h1, { weight: 700 }), '#5a9e3d', INK, 4);
-    centerText(c, 'each New Game+ cycle wears one condition — pick the season you will swim through (Esc to back out)', g.cx, py + 64, uiFont(UI.sizes.label, { italic: true }), INK, 0.72);
-    const sel = this._modPrompt.sel;
-    g.cards.forEach((card, i) => {
-      const active = i === sel;
-      const cc = paperPanel(ctx, card.x, card.y, card.w, card.h, { seed: 60 + i, fill: active ? '#f3ead2' : '#efe8d6' });
-      cc.save();
-      cc.lineWidth = active ? 4 : 2;
-      cc.strokeStyle = active ? '#5a9e3d' : '#b7ab8c';
-      cc.beginPath(); cc.roundRect(card.x + 8, card.y + 8, card.w - 16, card.h - 16, 6); cc.stroke();
-      cc.restore();
-      // number key hint
-      centerText(cc, String(i + 1), card.x + 24, card.y + 28, uiFont(UI.sizes.bodyLg, { weight: 700 }), active ? '#5a9e3d' : INK, 0.8);
-      const titleY = card.y + 54;
-      centerText(cc, card.id ? MODIFIERS[card.id].name : 'No Modifier', card.x + card.w / 2, titleY, uiFont(UI.sizes.sub, { weight: 700 }), active ? '#5a9e3d' : INK, 1);
-      // description — centered word-wrap within the card (measureText-driven so
-      // it never overflows the card regardless of how long the line is).
-      const desc = card.id ? MODIFIERS[card.id].desc : 'the plain swamp — no condition this cycle';
-      cc.save();
-      cc.fillStyle = INK; cc.globalAlpha = 0.68; cc.font = uiFont(UI.sizes.xsmall, { italic: true });
-      cc.textAlign = 'center'; cc.textBaseline = 'middle';
-      const maxW = card.w - 30, words = desc.split(' ');
-      let line = '', yy = card.y + 80;
-      for (const w of words) {
-        const test = line ? line + ' ' + w : w;
-        if (cc.measureText(test).width > maxW && line) { cc.fillText(line, card.x + card.w / 2, yy); line = w; yy += 14; }
-        else line = test;
-      }
-      if (line) cc.fillText(line, card.x + card.w / 2, yy);
-      cc.restore();
-      paperEnd(ctx);
-    });
-    // Continue button
-    uiButton(ctx, g.cont.x, g.cont.y, g.cont.w, g.cont.h, 'Swim On', this._mouseIn(g.cont.x, g.cont.y, g.cont.w, g.cont.h), false, { seed: 5, size: 18 });
-    // G4 (v1.3 M15): the gold BALANCE READOUT on the Next Expedition prompt —
-    // shows the available gold + what it buys, so a returning player knows what
-    // they can spend before they dive. PURE read of save.gold (no new mechanics).
-    {
-      const ro = this._goldReadout();
-      centerText(c, `◆ ${ro.text}`, g.cx, g.cont.y + g.cont.h + 20, uiFont(UI.sizes.smallPlus, { weight: 700 }), '#c9922a', 0.95);
-    }
-    ctx.restore();
-  }
-
-  // O1 (v1.7): the pre-expedition WANDER seed card. Before a Wander expedition
-  // begins (from the title's "Begin Expedition"), a small paper card shows the
-  // generated SEED + the taste NAME + its one-line FLAVOR — so the player knows
-  // what they are walking into (and can note / share the seed). It is a NEW
-  // pre-expedition sub-state on top of the title (modeled on the _modPrompt
-  // modal: input intercept + draw-on-top). It is IN-MEMORY ONLY — nothing is
-  // persisted (the seed is latched into save.wanderSeed only when the run
-  // actually begins, in _beginExpedition). It is ONLY offered when Wander is ON
-  // (options.wander) and the player is starting a normal expedition — hand-tuned
-  // (Wander-OFF), Reeds, challenge, guided and NG+ runs never show it.
-  _openSeedCard() {
-    if (this.options.wander !== true) return;
-    const prev = Math.max(0, Math.floor(this.save.wanderSeed) || 0);
-    this._seedCard = { seed: pickWanderSeed(prev, Date.now() | 0) };
-  }
-  _closeSeedCard() { this._seedCard = null; }
-  // O1 (v1.7): the title's main "Begin Expedition" entry (Enter/Space + the big
-  // button). If THE WANDER is on, show the pre-expedition seed card first (the
-  // player chooses the expedition they are walking into); otherwise begin
-  // directly — exactly the pre-O1 behavior. Hand-tuned (Wander-OFF, the
-  // default) runs NEVER see the card, so their start path is byte-identical.
-  _startExpeditionOrCard() {
-    if (this.options.wander === true) { this._openSeedCard(); return; }
-    this._beginExpedition();
-  }
-  _seedCardGeom() {
-    const cx = this.cw / 2, cy = this.ch / 2;
-    const pw = Math.min(520, this.cw - 40), ph = 208;
-    const px = cx - pw / 2, py = cy - ph / 2;
-    return { cx, cy, pw, ph, px, py, set: { x: cx - 110, y: py + ph - 56, w: 220, h: 42 } };
-  }
-  _updateSeedCard() {
-    if (!this._seedCard) return;
-    // Esc / Backspace: back out to the title (no run started).
-    if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._closeSeedCard(); return; }
-    // Enter / Space: set out with the EXACT seed shown on the card.
-    if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); const seed = this._seedCard.seed; this._closeSeedCard(); this._beginExpedition(false, { seed }); return; }
-    // mouse: the "Set Out" button sets out; anything else closes back to the title.
-    const g = this._seedCardGeom();
-    if (this.input.mouse.lPressed) {
-      if (this._mouseIn(g.set.x, g.set.y, g.set.w, g.set.h)) { this.sfx('ui'); const seed = this._seedCard.seed; this._closeSeedCard(); this._beginExpedition(false, { seed }); return; }
-      this.sfx('ui-back'); this._closeSeedCard();
-    }
-  }
-  _drawSeedCard(ctx) {
-    if (!this._seedCard) return;
-    const seed = this._seedCard.seed;
-    const taste = wanderTaste(seed);
-    ctx.save();
-    ctx.fillStyle = 'rgba(20,18,16,0.55)';
-    ctx.fillRect(0, 0, this.cw, this.ch);
-    const g = this._seedCardGeom();
-    const c = paperPanel(ctx, g.px, g.py, g.pw, g.ph, { seed: 77 });
-    outlineText(c, 'The Wander — tonight\u2019s seed', g.cx, g.py + 38, uiFont(UI.sizes.h2, { weight: 700 }), '#5a9e3d', INK, 4);
-    centerText(c, 'a single expedition, drawn from the swamp\u2019s own current', g.cx, g.py + 62, uiFont(UI.sizes.smallPlus, { italic: true }), INK, 0.66);
-    // the seed — large, monospaced-feel, noteable / shareable
-    centerText(c, 'seed ' + seed, g.cx, g.py + 104, uiFont(UI.sizes.heroSm, { weight: 700 }), '#c9922a', 1);
-    // the taste name + its one-line flavor (reproducible from the seed)
-    if (taste) {
-      centerText(c, taste.name, g.cx, g.py + 134, uiFont(UI.sizes.bodyLg, { weight: 700 }), '#8a6a3a', 0.95);
-      centerText(c, taste.note, g.cx, g.py + 152, uiFont(UI.sizes.small, { italic: true }), INK, 0.62);
-    }
-    // the "Set Out" button
-    uiButton(ctx, g.set.x, g.set.y, g.set.w, g.set.h, 'Set Out', this._mouseIn(g.set.x, g.set.y, g.set.w, g.set.h), false, { seed: 78, size: 16 });
-    centerText(ctx, 'Esc — back to the pond', g.cx, g.py + g.ph + 14, uiFont(UI.sizes.xsmall, { italic: true }), '#fdf6e9', 0.5);
-    paperEnd(ctx);
-    ctx.restore();
-  }
-
-// ================= part 3: the atelier ===============================
-  // Between-run sanctuary: spend bank pigments on upgrades + paintings,
-  // choose the 2-painting loadout, and watch the swamp breathe below.
-  _beginAtelier() {
-    this.state = 'atelier';
-    this.atelierT = 0;
-    this.atelierTab = 0;            // 0 upgrades, 1 paintings
-    this.paused = false;
-    this._lastPurchase = null;      // A1: a fresh visit has no "just bought" hook
-    this._pickAtelierSay();
-    if (!this.save.flags.firstAtelier) {
-      this.save.flags.firstAtelier = true;
-      SaveSys.save(this.save);
-      this._atelierIntro = true;   // one-time how-it-works panel (drawn on the first visit only)
-    }
-  }
-
-  // A1: pick the atelier one-liner for this visit. Context priority:
-  // (1) a purchase just made this visit, (2) NG+ context (C1 — a returning
-  // expedition, ngCycle >= 1), (3) the last finished run's result, (4) the
-  // player's best run, (5) general banter. Each character rotates through
-  // their pool without repeating the last line. Pure data read — nothing
-  // persisted. (The NG+ pool is a SECOND pool; it falls back to general if a
-  // character lacked one, though all three residents have one.)
-  _pickAtelierSay() {
-    const chars = ATELIER_CHARS;
-    const who = chars[Math.floor(Math.random() * chars.length)];
-    const best = this.save.bestRun;
-    const ng = (Math.floor(this.save.ngCycle) || 0) >= 1;
-    const ctx =
-      this._lastPurchase ? 'purchase'
-      : ng ? 'ng'
-      : this.lastResult === 'victory' ? 'victory'
-      : this.lastResult === 'defeat' ? 'defeat'
-      : best && best.cleared ? 'victory'
-      : best ? 'general'
-      : 'general';
-    const pool = who.pools[ctx] || who.pools.general;
-    const i = (this._atelierSayIdx[who.name] || 0) % pool.length;
-    this._atelierSayIdx[who.name] = (i + 1) % pool.length;
-    this._atelierSay = { name: who.name, text: pool[i], revealed: 0 };
-  }
-
-  // A1: a purchase just made — re-roll the one-liner from the purchase pool
-  // so the resident reacts to the fresh acquisition (a banner-free echo).
-  _noteAtelierPurchase() {
-    this._lastPurchase = true;
-    const who = ATELIER_CHARS[Math.floor(Math.random() * ATELIER_CHARS.length)];
-    const pool = who.pools.purchase;
-    const i = (this._atelierSayIdx[who.name] || 0) % pool.length;
-    this._atelierSayIdx[who.name] = (i + 1) % pool.length;
-    this._atelierSay = { name: who.name, text: pool[i], revealed: 0 };
-  }
-
-  // ---- layout: single source of truth for BOTH draw and click handling ----
-  _atelierGeom() {
-    const cx = this.cw / 2, ch = this.ch;
-    const listX = cx - 560, listW = 1120;
-    return {
-      cx, ch, listX, listW,
-      // M8 P8 + A3 + K7: five tabs (Upgrades / Paintings / Gallery / Ledger /
-      // Challenge); narrow + tight so all five sit on one symmetric row about cx.
-      tabY: 148, tabW: 150, tabH: 44, tabGap: 8,
-      rowY0: 204, rowH: 104, rowGap: 12,
-      cardW: (listW - 24) / 2, cardH: 90, cardGap: 8, cols: 2,  // G2: 10 paintings (2x5) fit above the Depart button
-      depart: { x: cx - 150, y: ch - 92, w: 300, h: 54 },
-      leave: { x: cx - 370, y: ch - 82, w: 200, h: 34 },
-      // M2: the "Encore" viewing-screen entry (right of the Depart button,
-      // mirrored off the leave button). Opens the gallery-wall walk-through.
-      encore: { x: cx + 170, y: ch - 82, w: 200, h: 34 },
-    };
-  }
-
-  _atelierRows() {
-    // [{x, y, w, h, enabled?, act()}] — the full click map for this frame.
-    const g = this._atelierGeom();
-    const rows = [];
-    {
-      // M8 P8 + A3 + K7: five tabs (Upgrades / Paintings / Gallery / Ledger /
-      // Challenge), centered on cx. Total span = 5*tabW + 4*tabGap; each tab's
-      // left edge steps by (tabW + tabGap). Symmetric about cx by construction.
-      const N = 5, span = N * g.tabW + (N - 1) * g.tabGap, x0 = g.cx - span / 2;
-      for (let i = 0; i < N; i++) {
-        rows.push({ tag: `tab${i}`, x: x0 + i * (g.tabW + g.tabGap), y: g.tabY, w: g.tabW, h: g.tabH, act: () => { if (this.atelierTab !== i) this.sfx('ui'); this.atelierTab = i; } });
-      }
-    }
-    if (this.atelierTab === 0) {
-      Object.keys(UPGRADES).forEach((id, i) => {
-        const u = UPGRADES[id];
-        const lv = this.save.upgrades[id] || 0;
-        const maxed = lv >= u.levels.length;
-        const y = g.rowY0 + i * (g.rowH + g.rowGap);
-        rows.push({ tag: 'buy:' + id, x: g.listX + g.listW - 250, y: y + 21, w: 220, h: 62, enabled: !maxed && canAfford(this.save.bank, Array.isArray(u.levels[lv].cost) ? u.levels[lv].cost : costArray(u.levels[lv].cost)), act: () => this._buyUpgrade(id) });
-      });
-    } else if (this.atelierTab === 1) {
-      // the Gallery tab (2) is display-only — no buy/hang rows
-      PAINTINGS.forEach((pt, i) => {
-        if (this._ptLocked(pt)) return; // sealed: nothing to click
-        const col = i % g.cols, row = (i / g.cols) | 0;
-        const x = g.listX + col * (g.cardW + 24);
-        const y = g.rowY0 + row * (g.cardH + g.cardGap);
-        const owned = this.save.owned.includes(pt.id);
-        const inLoadout = this.save.loadout.includes(pt.id);
-        const bw = 160, bh = 38, bx = x + g.cardW - bw - 14, by = y + 26;
-        const isGold = !!pt.goldTier;
-        if (isGold) {
-          // G2: gold-tier paintings are NG+-gated, bought with the meta gold
-          // currency, and NEVER added to the 2-slot loadout (permanent meta).
-          const ngOk = (Math.floor(this.save.ngCycle) || 0) >= 1;
-          const enabled = !owned && ngOk && canAffordGold(this.save, pt);
-          rows.push({ tag: 'paint:' + pt.id, x: bx, y: by, w: bw, h: bh, enabled, act: () => this._buyGoldPainting(pt.id) });
-          return;
-        }
-        if (owned) rows.push({ tag: 'paint:' + pt.id, x: bx, y: by, w: bw, h: bh, enabled: inLoadout || this.save.loadout.length < 2, act: () => this._toggleLoadout(pt.id) });
-                else rows.push({ tag: 'paint:' + pt.id, x: bx, y: by, w: bw, h: bh, enabled: canAfford(this.save.bank, Array.isArray(pt.cost) ? pt.cost : costArray(pt.cost)), act: () => this._buyPainting(pt.id) });
-      });
-    }
-    // A4 (v1.2 M9): the Curator's Ledger (tab 3) offers a 'Rehung Frame'
-    // retirement: once the collection is complete (all 8 + one hung), retiring
-    // mints a permanent, saved gallery bonus. Repeatable — a counter, not a flag.
-    // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' tier sits in its OWN bar just
-    // above the Rehung Frame bar (50g permanent prestige bump, NG+ + gold-gated).
-    // Both bars are 560 wide; each button is 150 wide on the RIGHT edge so the
-    // click rects line up with the drawn buttons.
-    if (this.atelierTab === 3) {
-      const eligible = canRetireCollection(this.save);
-      const barW = 560, barH = 84, btnW = 150, btnH = 56;
-      // Gilded Frame bar: y = ch-248 (sits above the Rehung bar at ch-150).
-      const gbx = g.cx - barW / 2, gby = g.ch - 248;
-      const canGild = canBuyGildedFrame(this.save);
-      rows.push({
-        tag: 'gild', x: gbx + barW - btnW - 14, y: gby + (barH - btnH) / 2, w: btnW, h: btnH,
-        enabled: canGild, act: () => this._buyGildedFrame(),
-      });
-      // Rehung Frame bar: y = ch-150 (unchanged from A4).
-      const rbx = g.cx - barW / 2, rby = g.ch - 150;
-      rows.push({
-        tag: 'retire', x: rbx + barW - btnW - 14, y: rby + (barH - btnH) / 2, w: btnW, h: btnH,
-        enabled: eligible, act: () => this._retireCollection(),
-      });
-    }
-    rows.push({ tag: 'depart', x: g.depart.x, y: g.depart.y, w: g.depart.w, h: g.depart.h, act: () => { this.sfx('ui'); this._beginExpedition(); } });
-        rows.push({ tag: 'leave', x: g.leave.x, y: g.leave.y, w: g.leave.w, h: g.leave.h, act: () => { this.sfx('ui-back'); this._quitToTitle(); } });
-        rows.push({ tag: 'encore', x: g.encore.x, y: g.encore.y, w: g.encore.w, h: g.encore.h, act: () => this._openEncore() });
-    return rows;
-  }
-
-  _updateAtelier(dt) {
-    const dismissIntro = () => { this._atelierIntro = false; };
-    // A1: advance the typewriter reveal of the current one-liner
-    if (this._atelierSay && this._atelierSay.revealed < this._atelierSay.text.length) {
-      this._atelierSay.revealed = Math.min(this._atelierSay.text.length, this._atelierSay.revealed + dt * 28);
-    }
-    if (this.input.pressed('escape') || this.input.pressed('backspace')) { this.sfx('ui-back'); this._quitToTitle(); return; }
-    if (this.input.pressed('enter') || this.input.pressed(' ')) { this.sfx('ui'); this._beginExpedition(); return; }
-    if (this.input.pressed('1')) { if (this.atelierTab !== 0) this.sfx('ui'); this.atelierTab = 0; dismissIntro(); }
-    if (this.input.pressed('2')) { if (this.atelierTab !== 1) this.sfx('ui'); this.atelierTab = 1; dismissIntro(); }
-    if (this.input.pressed('3')) { if (this.atelierTab !== 2) this.sfx('ui'); this.atelierTab = 2; dismissIntro(); }
-    if (this.input.pressed('4')) { if (this.atelierTab !== 3) this.sfx('ui'); this.atelierTab = 3; dismissIntro(); }
-    if (this.input.pressed('5')) { if (this.atelierTab !== 4) this.sfx('ui'); this.atelierTab = 4; dismissIntro(); }  // K7 (v1.5 M2): the Challenge panel
-    if (this.atelierTab === 0) {
-      if (this.input.pressed('a')) { this._buyUpgrade('capacity'); dismissIntro(); }
-      if (this.input.pressed('s')) { this._buyUpgrade('power'); dismissIntro(); }
-      if (this.input.pressed('d')) { this._buyUpgrade('vitality'); dismissIntro(); }
-    }
-    if (this.input.mouse.lPressed) {
-      const m = this.input.mouse;
-      for (const r of this._atelierRows()) {
-        if (m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y && m.y <= r.y + r.h) {
-          if (r.enabled === false) { this.sfx('hurt'); continue; }
-          dismissIntro();
-          r.act();
-          break;
-        }
-      }
-    }
-  }
-
-  _buyUpgrade(id) {
-    const u = UPGRADES[id];
-    const lv = this.save.upgrades[id] || 0;
-    if (lv >= u.levels.length) return;
-    const cost = u.levels[lv].cost;
-    const cc = Array.isArray(cost) ? cost : costArray(cost);
-    if (!canAfford(this.save.bank, cc)) { this.sfx('hurt'); return; }
-    this.save.bank = payCost(this.save.bank, cc);
-    this.save.upgrades[id] = lv + 1;
-    this.sfx('paint-create');
-    SaveSys.save(this.save);
-    this._noteAtelierPurchase();
-  }
-
-  _ptLocked(pt) {
-    // Sir Croaksworth's portrait stays sealed until the first heron is painted
-    return !!(pt.locked && !this.save.flags.heronDefeated && !this.save.owned.includes(pt.id));
-  }
-
-  _buyPainting(id) {
-    const pt = PAINTINGS.find(p => p.id === id);
-    if (!pt || this._ptLocked(pt) || this.save.owned.includes(id)) return;
-    const cc = Array.isArray(pt.cost) ? pt.cost : costArray(pt.cost);
-    if (!canAfford(this.save.bank, cc)) { this.sfx('hurt'); return; }
-    this.save.bank = payCost(this.save.bank, cc);
-    this.save.owned.push(id);
-    if (this.save.loadout.length < 2) this.save.loadout.push(id); // new art hangs right away
-    this.sfx('paint-create');
-    if (id === 'croaksworth' && !this.save.flags.croaksworthGiven) {
-      this.save.flags.croaksworthGiven = true;
-      this.sfx('awaken');
-      this.addBanner('Sir Croaksworth smiles. "Well done, little one. The world thanks you."', 5.2, this.ch * 0.34);
-      this.addBanner('He tucks a silver coin into your pocket. (+5 of every pigment)', 5.2, this.ch * 0.34 + 34);
-      for (const k of ['red', 'blue', 'green']) this.save.bank[k] += 5;
-    }
-    SaveSys.save(this.save);
-    this._noteAtelierPurchase();
-  }
-
-  // G2 (v1.3 M15): purchase a gold-tier painting with the meta gold currency.
-  // NG+-gated (ngCycle >= 1) and gold-denominated. The painting is OWNED but
-  // NOT hung into the loadout — it is a permanent meta bonus (applied in
-  // makeTuning via save.owned), so a first-time (cycle-0) player never sees it.
-  _buyGoldPainting(id) {
-    const pt = PAINTINGS.find(p => p.id === id);
-    if (!pt || !pt.goldTier || this.save.owned.includes(id)) return;
-    if ((Math.floor(this.save.ngCycle) || 0) < 1) { this.sfx('hurt'); return; } // NG+ gate
-    if (!canAffordGold(this.save, pt)) { this.sfx('hurt'); return; }
-    this.save.gold -= pt.goldCost;
-    this.save.owned.push(id);
-    // rebuild live tuning so the bonus is active right away + next run
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
-    this.sfx('awaken');
-    this.addBanner(`${pt.name} is hung in gilded glass — its effect is yours forever.`, 4.2, this.ch * 0.34);
-    SaveSys.save(this.save);
-    this._noteAtelierPurchase();
-  }
-
-  // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier — a permanent,
-  // saved, 50g purchase (NG+ + gold-gated) that applies a tuning bump ON TOP
-  // of the Rehung Frame gallery bonus. All the rules (eligibility, one-time,
-  // gold deduction) live in logic.js buyGildedFrame(); this method is a thin
-  // game-side wrapper: on success rebuild the live tuning, persist, banner.
-  _buyGildedFrame() {
-    if (!buyGildedFrame(this.save)) { this.sfx('hurt'); return; }
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
-    this.sfx('awaken');
-    this.addBanner('The Gilded Frame is hung — the gallery blazes with light.', 4.4, this.ch * 0.34);
-    this.addBanner(`+${GILDED_FRAME.ink} pigment of each color at every run start · +${Math.round(GILDED_FRAME.orbMult * 100 - 100)}% orb value. Permanent.`, 4.4, this.ch * 0.34 + 34);
-    SaveSys.save(this.save);
-    this._noteAtelierPurchase();
-  }
-
-  // G2 (v1.3 M15): a small gold chip + amount, left-anchored (mirrors _costChips
-  // but for the meta gold currency).
-  _goldChips(ctx, amount, x, y) {
-    const cx0 = x;
-    ctx.beginPath();
-    ctx.arc(cx0, y, 9, 0, TAU);
-    ctx.fillStyle = '#d9a520';
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = INK;
-    ctx.stroke();
-    centerText(ctx, String(amount) + 'g', cx0 + 20, y, uiFont(UI.sizes.body, { weight: 700 }), '#8a6d1f', 1);
-    return cx0 + 56;
-  }
-
-  // G4 (v1.3 M15): the gold BALANCE READOUT — a short, reusable line that shows
-  // the available gold + a hint of what it buys. Shown in the atelier header
-  // (always) and on the Next Expedition prompt (NG+). PURE presentation (reads
-  // save.gold + the GILDED_FRAME constant) — no new mechanics, no new state.
-  _goldReadout() {
-    const gold = Math.floor(this.save.gold) || 0;
-    const ngOk = (Math.floor(this.save.ngCycle) || 0) >= 1;
-    const gilded = isGilded(this.save);
-    const canGild = ngOk && !gilded && gold >= GILDED_FRAME.cost;
-    const hint = gilded
-      ? 'the Gilded Frame is hung — it is forever yours'
-      : canGild
-        ? `spend ${GILDED_FRAME.cost}g in the Curator's Ledger to hang the Gilded Frame (+${GILDED_FRAME.ink} ink · +${Math.round(GILDED_FRAME.orbMult * 100 - 100)}% orb)`
-        : ngOk
-          ? `earned from boss defeats, first synergies & the 100-orb run — spend it in the Curator's Ledger (${GILDED_FRAME.cost}g = Gilded Frame)`
-          : 'a meta pigment — earned from boss defeats, first synergies & the 100-orb run (spent in NG+ only)';
-    return { gold, text: `gold ${gold} · ${hint}` };
-  }
-
-  _toggleLoadout(id) {
-    const i = this.save.loadout.indexOf(id);
-    if (i >= 0) { this.save.loadout.splice(i, 1); this.sfx('ui-back'); }
-    else {
-      if (this.save.loadout.length >= 2) return;
-      this.save.loadout.push(id);
-      this.sfx('ui');
-    }
-    SaveSys.save(this.save);
-  }
-
-  // A4 (v1.2 M9): retire a completed collection for a permanent, saved gallery
-  // bonus. Prestige-lite — NOT a save-wipe: the collection and bank remain, and
-  // the run tuning is rebuilt so the bonus is live immediately. Repeatable.
-  _retireCollection() {
-    if (!canRetireCollection(this.save)) { this.sfx('hurt'); return; }
-    const before = galleryBonusLevel(this.save);
-    const after = retireCollection(this.save);
-    if (after === before) return;
-    SaveSys.save(this.save);
-    // rebuild the live tuning so the bonus is active right away (also for the
-    // next run) without needing a fresh expedition start.
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
-    this.sfx('awaken');
-    this.addBanner(`The frame is rehung — Gallery Bonus ${after} minted.`, 4.2, this.ch * 0.34);
-    this.addBanner(`+${after * 2} pigment of each color at every run start · +${Math.round(after * 10)}% orb value.`, 4.2, this.ch * 0.34 + 34);
-  }
+  // Legacy callers enter the kept sketchbook instead of the removed shop.
+  _beginAtelier() { this._quitToTitle(); this._openSketchbook(); }
 
   _leftText(ctx, text, x, y, font, color = INK, alpha = 1) {
     ctx.save();
@@ -1948,788 +1181,6 @@ export class Game {
           cx0 += 44;
         }
         return cx0;
-  }
-
-_drawAtelier(ctx) {
-    const g = this._atelierGeom();
-    // backdrop: dim drift over the living swamp (world keeps ticking below)
-    ctx.save();
-    ctx.fillStyle = 'rgba(30,25,22,0.52)';
-    ctx.fillRect(0, 0, this.cw, this.ch);
-    ctx.restore();
-
-    const cx = g.cx;
-    outlineText(ctx, 'The Atelier', cx, 40, uiFont(UI.sizes.displayLg, { weight: 700 }), '#f4ead8', INK, 6);
-    centerText(ctx, 'a quiet studio above the water — spend your pigments well', cx, 78, uiFont(UI.sizes.bodyLg, { italic: true }), '#fdf6e9', 0.85);
-    // G4 (v1.3 M15): the gold BALANCE READOUT — a header line showing the
-    // available gold + a hint of what it buys (a pure read of save.gold).
-    // Sits between the subtitle and the bank strip; the bank strip moves down
-    // a touch (96→104) to make room. No new mechanics.
-    const goldHint = this.save.ngCycle >= 1 ? "Curator's Ledger · Gilded Frame 50g" : 'meta pigment · spend in NG+';
-    centerText(ctx, `gold ${this.save.gold || 0} · ${goldHint}`, cx + 240, 94, uiFont(UI.sizes.small), '#f4d397', 0.95);
-
-    // bank strip with loadout preview
-    const stripW = 760, stripH = 40, sx = cx - stripW / 2, sy = 104;
-    ctx.save();
-    ctx.fillStyle = 'rgba(244,234,216,0.92)';
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(sx, sy, stripW, stripH, 20);
-    ctx.fill(); ctx.stroke();
-    ctx.restore();
-    const b = this.save.bank;
-    centerText(ctx, 'Bank', sx + 44, sy + stripH / 2, uiFont(UI.sizes.bodyLg, { weight: 700 }), INK, 0.9);
-    PIGMENT_ORDER.filter(c => c !== 'dry').forEach((color, i) => {
-      const pig = PIGMENTS[color];
-      const px = sx + 110 + i * 90;
-      ctx.beginPath();
-      ctx.arc(px, sy + stripH / 2, 9, 0, TAU);
-      ctx.fillStyle = pig.color;
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = INK;
-      ctx.stroke();
-      centerText(ctx, String(b[color]), px + 20, sy + stripH / 2, uiFont(UI.sizes.sub, { weight: 700 }), INK, 1);
-    });
-    // G1 (v1.3 M15): the meta gold — displayed in the bank strip but visually
-    // distinct (a gold dot) so players learn it is NOT a pigment. It is
-    // META-ONLY: it never feeds combat and is not a 4th paint color.
-    const gx = sx + 110 + 3 * 90;
-    ctx.beginPath();
-    ctx.arc(gx, sy + stripH / 2, 9, 0, TAU);
-    ctx.fillStyle = '#d9a520';
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = INK;
-    ctx.stroke();
-    centerText(ctx, String(this.save.gold || 0), gx + 20, sy + stripH / 2, uiFont(UI.sizes.sub, { weight: 700 }), INK, 1);
-    centerText(ctx, 'GOLD', gx - 4, sy + stripH / 2, uiFont(UI.sizes.micro, { weight: 600 }), INK, 0.6);
-    centerText(ctx, `loadout ${this.save.loadout.length}/2`, sx + stripW - 210, sy + stripH / 2, uiFont(UI.sizes.label, { weight: 700 }), INK, 0.7);
-    for (let s = 0; s < 2; s++) {
-      const id = this.save.loadout[s];
-      const fx = sx + stripW - 96 + s * 32, fy = sy + 7, fs = 26;
-      ctx.save();
-      ctx.fillStyle = '#e9dcc3';
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(fx, fy, fs, fs, 4);
-      ctx.fill(); ctx.stroke();
-      ctx.restore();
-      const pt = id ? PAINTINGS.find(p => p.id === id) : null;
-      if (pt) this._drawPaintingMotif(ctx, pt, fx + 3, fy + 3, fs - 6);
-      else centerText(ctx, '·', fx + fs / 2, fy + fs / 2 + 1, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.35);
-    }
-
-    // tabs (M8 P8 + A3 + K7: five) — same centered layout as the click map in
-    // _atelierRows (span = 5*tabW + 4*tabGap, left edge stepping by tabW+tabGap).
-    const tN = 5, tSpan = tN * g.tabW + (tN - 1) * g.tabGap, tX0 = cx - tSpan / 2;
-    [['Studio Upgrades', 0], ['Paintings', 1], ['The Gallery', 2], ["Curator's Ledger", 3], ['Challenge', 4]].forEach(([label, idx]) => {
-      const active = this.atelierTab === idx;
-      const bx = tX0 + idx * (g.tabW + g.tabGap);
-      uiButton(ctx, bx, g.tabY, g.tabW, g.tabH, label, this._mouseIn(bx, g.tabY, g.tabW, g.tabH) && !active, active, { seed: 30 + idx, size: 12.5 });
-    });
-    // persistent one-line legends, so returning players never have to guess
-    if (this.atelierTab === 0) {
-      centerText(ctx, 'training is paid in banked pigments — it is permanent, even after a defeat', cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.75);
-    } else if (this.atelierTab === 1) {
-      // A2: when the current 2-slot loadout forms a named "duo", the legend
-      // surfaces it (the creative slot choice is visible, not just applied).
-      const duo = activeSynergy(this.save.loadout);
-      if (duo) centerText(ctx, `✦ duo active: ${duo.name} — ${duo.desc}`, cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.body, { weight: 700 }), '#c9922a', 1);
-      else centerText(ctx, 'buy once, then hang up to 2 — hung paintings are real passive bonuses on your runs', cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.75);
-    } else if (this.atelierTab === 3) {
-      // G4 (v1.3 M15): the gold LEGEND line — a short "what gold is + where it
-      // comes from" note, so the meta currency is explained right where it is
-      // spent (the Curator's Ledger holds the gold-tier works + the Gilded Frame).
-      centerText(ctx, `◆ gold is a meta pigment — earned from boss defeats, first synergies & the 100-orb run, spent here on gold-tier works & the Gilded Frame (NG+ only)`, cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.smallPlus, { weight: 700 }), '#c9922a', 0.95);
-    } else if (this.atelierTab === 4) {
-      // K7 (v1.5 M2): the Curator Challenge legend — one shared daily challenge,
-      // a seeded loadout + modifier, scored and filed to the best-score list.
-      centerText(ctx, 'the Curator’s daily challenge — one swamp, one brush, seeded for the whole world. paint it, clear the heron; your score is filed below', cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.78);
-    } else {
-      centerText(ctx, 'your collection — every painting you own, hung on the wall (owned frames are lit)', cx, g.tabY + g.tabH + 18, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.75);
-    }
-
-    // list
-    if (this.atelierTab === 0) {
-      Object.keys(UPGRADES).forEach((id, i) => {
-        const u = UPGRADES[id];
-        const lv = this.save.upgrades[id] || 0;
-        const maxed = lv >= u.levels.length;
-        const buyable = !maxed && canAfford(this.save.bank, Array.isArray(u.levels[lv].cost) ? u.levels[lv].cost : costArray(u.levels[lv].cost));
-        const y = g.rowY0 + i * (g.rowH + g.rowGap);
-        const c = paperPanel(ctx, g.listX, y, g.listW, g.rowH, { seed: 40 + i });
-        this._leftText(c, u.name, g.listX + 36, y + 30, uiFont(UI.sizes.titlePlus, { weight: 700 }), INK, 1);
-        this._leftText(c, u.desc, g.listX + 36, y + 58, uiFont(UI.sizes.body), INK, 0.75);
-        drawPips(c, g.listX + 44, y + 84, 6, u.levels.length, lv, PIGMENTS.green.color);
-        this._leftText(c, `level ${lv}/${u.levels.length}`, g.listX + 130, y + 84, uiFont(UI.sizes.label), INK, 0.6);
-        if (maxed) {
-          this._leftText(c, 'fully learned — the frog hums with it', g.listX + 400, y + 30, uiFont(UI.sizes.label, { italic: true }), INK, 0.5);
-        } else {
-          const tNow = makeTuning(this.save.upgrades, this.save.loadout);
-          const tNext = makeTuning({ ...this.save.upgrades, [id]: lv + 1 }, this.save.loadout);
-          const diffs = [];
-          if (tNext.maxHp !== tNow.maxHp) diffs.push(`health ${tNow.maxHp} → ${tNext.maxHp}`);
-          if (Math.abs(tNext.power - tNow.power) > 1e-9) diffs.push(`power ${tNow.power.toFixed(2)} → ${tNext.power.toFixed(2)}`);
-          if (tNext.capacity !== tNow.capacity) diffs.push(`capacity ${tNow.capacity} → ${tNext.capacity}`);
-          if (diffs.length) this._leftText(c, diffs.join('   ·   '), g.listX + 400, y + 30, uiFont(UI.sizes.body, { weight: 700 }), '#4c8a34', 0.95);
-          this._costChips(c, u.levels[lv].cost, g.listX + 400, y + 84);
-        }
-        const bw = 220, bh = 62, bx = g.listX + g.listW - 250, by = y + 21;
-        uiButton(c, bx, by, bw, bh, maxed ? 'MAX' : buyable ? 'Learn' : 'Cannot afford', this._mouseIn(bx, by, bw, bh), false, { seed: 60 + i, size: 16 });
-        paperEnd(ctx);
-      });
-    } else if (this.atelierTab === 1) {
-      PAINTINGS.forEach((pt, i) => {
-        const col = i % g.cols, row = (i / g.cols) | 0;
-        const x = g.listX + col * (g.cardW + 24);
-        const y = g.rowY0 + row * (g.cardH + g.cardGap);
-        const owned = this.save.owned.includes(pt.id);
-        const inLoadout = this.save.loadout.includes(pt.id);
-        const isGold = !!pt.goldTier;
-        // NG+ gate: gold-tier paintings are purchasable only on NG+ cycles
-        // (ngCycle >= 1). A first-time player (cycle 0) sees them but cannot
-        // buy them — and the button reads "NG+ only".
-        const ngOk = (Math.floor(this.save.ngCycle) || 0) >= 1;
-        const costC = (isGold || Array.isArray(pt.cost)) ? null : costArray(pt.cost);
-        const buyable = !owned && !isGold && canAfford(this.save.bank, costC);
-        const c = paperPanel(ctx, x, y, g.cardW, g.cardH, { seed: 70 + i, fill: inLoadout ? '#f7f1e2' : (isGold ? '#f7efdc' : PAPER) });
-        // art tile (G2: slightly smaller so a 2x5 grid fits the 90px cards)
-        const artS = 60, artX = x + 14, artY = y + 15;
-        c.fillStyle = pt.art.bg;
-        c.beginPath(); c.roundRect(artX, artY, artS, artS, 8); c.fill();
-        c.lineWidth = isGold ? 3 : 2.5;
-        c.strokeStyle = isGold ? '#b8912e' : INK;
-        c.stroke();
-        this._drawPaintingMotif(c, pt, artX, artY, artS);
-        // text
-        const tx = artX + artS + 14;
-        const sealed = this._ptLocked(pt);
-        this._leftText(c, sealed ? '???' : pt.name, tx, y + 28, uiFont(UI.sizes.bodyLg, { weight: 700 }), INK, 1);
-        c.save();
-        c.globalAlpha = sealed ? 0.5 : 0.78;
-        c.fillStyle = isGold ? '#8a6d1f' : INK;
-        c.font = uiFont(UI.sizes.small);
-        c.textBaseline = 'middle';
-        c.fillText(sealed ? 'a portrait someone must earn' : pt.desc, tx, y + 50, 300);
-        c.restore();
-        // cost: pigment chips, or a gold chip for a gold-tier painting
-        if (!sealed) {
-          if (isGold) this._goldChips(c, pt.goldCost, tx, y + 72);
-          else this._costChips(c, pt.cost, tx, y + 72);
-        }
-        // action button (G2: gold paintings buy with gold + NG+ gate; no loadout slot)
-        const bw = 160, bh = 38, bx = x + g.cardW - bw - 14, by = y + 26;
-        let label = buyable ? 'Learn' : 'Cannot afford', enabled = buyable;
-        if (isGold) {
-          if (owned) { label = 'collected'; enabled = false; }
-          else if (!ngOk) { label = 'NG+ only'; enabled = false; }
-          else { label = `Buy · ${pt.goldCost}g`; enabled = canAffordGold(this.save, pt); }
-        } else if (owned) { label = inLoadout ? 'Unhang' : 'Hang'; enabled = inLoadout || this.save.loadout.length < 2; }
-        if (sealed) { label = 'Sealed'; enabled = false; }
-        uiButton(c, bx, by, bw, bh, label, this._mouseIn(bx, by, bw, bh), false, { seed: 90 + i, size: 13 });
-        if (inLoadout) centerText(c, '★', x + g.cardW - 24, y + 20, uiFont(UI.sizes.sub, { weight: 700 }), '#c9922a', 1);
-        paperEnd(ctx);
-      });
-    } else if (this.atelierTab === 2) {
-      // M8 P8 — the Gallery wall: every painting hung in a frame. Owned works
-      // are lit (full color + title + passive-bonus caption); works the frog
-      // hasn't earned sit in a dimmed, unlabeled frame so the collection reads
-      // as a wall of art, not a shop.
-      const fw = 190, fh = 150, fgap = 28, cols = 5, rows = 2;  // G2: 10 paintings (5x2) fit the width
-      const gridW = cols * fw + (cols - 1) * fgap, gridH = rows * fh + (rows - 1) * fgap;
-      const gx0 = cx - gridW / 2, gy0 = g.rowY0 + 8;
-      // H2 (v1.8): the Gallery Wall progress readout + the full-collection glow.
-      // Pure presentation over galleryCompletion(save) — no run time. (a) A thin
-      // gilded progress strip above the wall shows "Paintings X / 10 · Bosses Y /
-      // 6" so the player can SEE what they are missing; (b) when the Full
-      // Collection has latched (save.galleryComplete), a soft gold glow blooms
-      // behind the 10-frame wall (procedural art only — no new asset). Both are
-      // gated on galleryCompletionProgress(save), so a non-complete save reads
-      // the readout but no glow (byte-identical look to pre-H2 apart from the
-      // readout line).
-      const prog = galleryCompletionProgress(this.save);
-      const progY = gy0 - 26;
-      centerText(ctx,
-        `Paintings ${prog.paintingsOwned} / ${prog.paintingsTotal}   ·   Bosses ${prog.bossesDefeated} / ${prog.bossesTotal}`,
-        cx, progY, uiFont(UI.sizes.label, { weight: 700 }),
-        prog.complete ? '#f3d98a' : '#fdf6e9', 0.9);
-      if (prog.complete) {
-        // the full-collection glow — a soft gold radial bloom behind the wall
-        // (drawn UNDER the frames, over the paper). Procedural only.
-        const glow = ctx.createRadialGradient(cx, gy0 + gridH / 2, gridH * 0.2,
-          cx, gy0 + gridH / 2, gridW * 0.55);
-        const pulse = 0.5 + 0.5 * Math.sin(this.atelierT * 2);
-        glow.addColorStop(0, `rgba(201,146,42,${0.18 + 0.10 * pulse})`);
-        glow.addColorStop(1, 'rgba(201,146,42,0)');
-        ctx.save();
-        ctx.fillStyle = glow;
-        ctx.fillRect(gx0 - 40, gy0 - 20, gridW + 80, gridH + 40);
-        ctx.restore();
-      }
-      PAINTINGS.forEach((pt, i) => {
-        const col = i % cols, row = (i / cols) | 0;
-        const x = gx0 + col * (fw + fgap), y = gy0 + row * (fh + fgap);
-        const owned = this.save.owned.includes(pt.id);
-        const sealed = this._ptLocked(pt);
-        const c = paperPanel(ctx, x, y, fw, fh, { seed: 130 + i, fill: owned ? '#f9f3e2' : '#efe8d6' });
-        // the frame: a double border, gilded when owned
-        const fx = x + 14, fy = y + 14, fs = fw - 28;
-        c.save();
-        c.lineWidth = 5;
-        c.strokeStyle = owned ? '#b8912e' : '#b7ab8c';
-        c.beginPath(); c.roundRect(fx - 3, fy - 3, fs + 6, fs + 6, 4); c.stroke();
-        c.lineWidth = 2;
-        c.strokeStyle = owned ? '#8a6d1f' : '#9a9078';
-        c.beginPath(); c.roundRect(fx, fy, fs, fs, 2); c.stroke();
-        if (owned) {
-          c.fillStyle = pt.art.bg;
-          c.fillRect(fx, fy, fs, fs);
-          this._drawPaintingMotif(c, pt, fx, fy, fs);
-        } else {
-          // dimmed, unlabeled — a silhouette of a future painting
-          c.fillStyle = sealed ? '#d8cfb8' : '#e3dac4';
-          c.fillRect(fx, fy, fs, fs);
-          c.globalAlpha = 0.4;
-          c.fillStyle = INK;
-          c.font = uiFont(UI.sizes.h1, { weight: 700 });
-          c.textAlign = 'center'; c.textBaseline = 'middle';
-          c.fillText(sealed ? '?' : '✕', fx + fs / 2, fy + fs / 2);
-        }
-        c.restore();
-        // placard
-        c.save();
-        c.fillStyle = INK;
-        c.textAlign = 'center'; c.textBaseline = 'middle';
-        if (owned) {
-          c.font = uiFont(UI.sizes.body, { weight: 700 });
-          c.globalAlpha = 1;
-          c.fillText(pt.name, x + fw / 2, y + fh - 34);
-          c.font = uiFont(UI.sizes.xsmall, { italic: true });
-          c.globalAlpha = 0.7;
-          c.fillText(pt.desc, x + fw / 2, y + fh - 18, fw - 24);
-          if (this.save.loadout.includes(pt.id)) { c.globalAlpha = 1; c.font = uiFont(UI.sizes.small, { weight: 700 }); c.fillStyle = '#c9922a'; c.fillText('★ hung', x + fw - 20, y + 22); }
-        } else {
-          c.font = uiFont(UI.sizes.xsmall, { italic: true });
-          c.globalAlpha = 0.6;
-          c.fillText(sealed ? 'a sealed portrait' : 'not yet collected', x + fw / 2, y + fh - 24);
-        }
-        c.restore();
-        paperEnd(ctx);
-      });
-      const ownedCount = PAINTINGS.filter(pt => this.save.owned.includes(pt.id)).length;
-      // K8 (v1.5 M2): the MASTERPIECE — "The Heron, Waking" — a unique,
-      // unbuyable collection piece minted by the first challenge clearing.
-      // Shown as a compact GILDED PLAQUE in the band below the 10-painting grid
-      // (fits between the collection counter and the Depart button), with the
-      // heron motif on the left + a plaque on the right. Pure display (gated
-      // by the goldEarned latch); it is NOT a PAINTINGS id, so it never enters
-      // the shop/loadout/tuning.
-      const mpMinted = isMasterpieceMinted(this.save);
-      if (mpMinted) {
-        const pw = 460, ph = 92, px = cx - pw / 2, py = gy0 + gridH + 20; // 550..642, fits above the depart button (708)
-        const pc = paperPanel(ctx, px, py, pw, ph, { seed: 900, fill: '#fbf3dd' });
-        // the gilded plaque frame (double border)
-        const fpx = px + 10, fpy = py + 10, fpw = pw - 20, fph = ph - 20;
-        pc.save();
-        pc.lineWidth = 4; pc.strokeStyle = '#b8912e';
-        pc.beginPath(); pc.roundRect(fpx - 3, fpy - 3, fpw + 6, fph + 6, 6); pc.stroke();
-        pc.lineWidth = 1.5; pc.strokeStyle = '#8a6d1f';
-        pc.beginPath(); pc.roundRect(fpx, fpy, fpw, fph, 4); pc.stroke();
-        // the motif (a square on the left, sized to the plaque inner height) + text (right)
-        const ms = fph; // square = plaque inner height
-        const mtx = fpx + 6, mty = fpy + 6;
-        pc.save();
-        pc.beginPath(); pc.rect(mtx, mty, ms, ms); pc.clip();
-        this._drawMasterpieceMotif(pc, mtx, mty, ms);
-        pc.restore();
-        pc.lineWidth = 2; pc.strokeStyle = '#8a6d1f';
-        pc.strokeRect(mtx, mty, ms, ms);
-        // the text
-        const tx0 = mtx + ms + 16, txMid = tx0 + (fpw - 12 - ms - 16) / 2;
-        pc.fillStyle = '#a3762a'; pc.textAlign = 'center'; pc.textBaseline = 'middle';
-        pc.font = uiFont(UI.sizes.bodyLg, { weight: 700 });
-        pc.fillText(MASTERPIECE.name, txMid, py + ph * 0.32);
-        pc.font = uiFont(UI.sizes.tinyPlus, { italic: true }); pc.globalAlpha = 0.9; pc.fillStyle = INK;
-        pc.fillText('MASTERPIECE — framed by the Curator', txMid, py + ph * 0.58);
-        pc.globalAlpha = 0.6; pc.font = uiFont(UI.sizes.tiny);
-        pc.fillText('first challenge clearing · unbuyable collection piece', txMid, py + ph * 0.82);
-        pc.restore();
-        paperEnd(ctx);
-        centerText(ctx, `${ownedCount} of ${PAINTINGS.length} paintings + 1 masterpiece in your collection`, cx, py + ph + 14, uiFont(UI.sizes.label, { weight: 700 }), '#fdf6e9', 0.85);
-      } else {
-        centerText(ctx, `${ownedCount} of ${PAINTINGS.length} paintings in your collection`, cx, gy0 + gridH + 16, uiFont(UI.sizes.body, { weight: 700 }), '#fdf6e9', 0.85);
-      }
-    } else if (this.atelierTab === 3) {
-      // A3 — the Curator's Ledger: a display-only collection book. Every
-      // painting is listed with a short lore blurb and its collected /
-      // not-yet state. Reuses the P8 Gallery wall's framed look (paperPanel +
-      // the gilded frame + the generative motif) and the same painting data;
-      // no buying here — the ledger only reads the collection.
-      // G3: 2 cols x 5 rows with a slightly shorter row height so the whole
-      // collection fits above the two prestige bars (Gilded Frame + Rehung
-      // Frame) at the bottom. Gold-tier paintings get a gilded border + a
-      // "GOLD" tag (the ledger lists all 10).
-      const fw = 548, fh = 63, fgap = 3, cols = 2, rows = Math.ceil(PAINTINGS.length / cols);
-      const gridW = cols * fw + (cols - 1) * fgap, gridH = rows * fh + (rows - 1) * fgap;
-      const gx0 = cx - gridW / 2, gy0 = g.rowY0 + 2;
-      PAINTINGS.forEach((pt, i) => {
-        const col = i % cols, row = (i / cols) | 0;
-        const x = gx0 + col * (fw + fgap), y = gy0 + row * (fh + fgap);
-        const owned = this.save.owned.includes(pt.id);
-        const entry = ledgerEntry(pt);
-        const isGold = !!pt.goldTier;
-        const c = paperPanel(ctx, x, y, fw, fh, { seed: 300 + i, fill: owned ? '#f9f3e2' : (isGold ? '#f6eed6' : '#efe8d6') });
-        // left: a framed thumbnail, gilded when collected OR gold-tier
-        // (G2: gold-tier paintings carry a gilded frame EVEN when not owned).
-        const fs = fh - 18, fx = x + 12, fy = y + (fh - fs) / 2;
-        c.save();
-        c.lineWidth = 3.5;
-        c.strokeStyle = (owned || isGold) ? '#b8912e' : '#b7ab8c';
-        c.beginPath(); c.roundRect(fx - 2, fy - 2, fs + 4, fs + 4, 3); c.stroke();
-        c.lineWidth = 1.5;
-        c.strokeStyle = (owned || isGold) ? '#8a6d1f' : '#9a9078';
-        c.beginPath(); c.roundRect(fx, fy, fs, fs, 2); c.stroke();
-        if (owned) {
-          c.fillStyle = pt.art.bg;
-          c.fillRect(fx, fy, fs, fs);
-          this._drawPaintingMotif(c, pt, fx, fy, fs);
-        } else {
-          c.fillStyle = isGold ? '#efe4c6' : '#e3dac4';
-          c.fillRect(fx, fy, fs, fs);
-          c.globalAlpha = 0.4;
-          c.fillStyle = isGold ? '#8a6d1f' : INK;
-          c.font = uiFont(UI.sizes.h3, { weight: 700 });
-          c.textAlign = 'center'; c.textBaseline = 'middle';
-          c.fillText('✕', fx + fs / 2, fy + fs / 2);
-        }
-        c.restore();
-        // right: title + GOLD tag (line 1), state tag + lore blurb (line 2)
-        const tx = fx + fs + 12, tw = fw - (fs + 24) - 12;
-        c.save();
-        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-        // line 1: name + GOLD tag
-        c.fillStyle = isGold ? '#8a6d1f' : INK;
-        c.font = uiFont(UI.sizes.bodyPlus, { weight: 700 });
-        c.globalAlpha = owned ? 1 : 0.78;
-        c.fillText(pt.name, tx, y + 24);
-        if (isGold) {
-          const nameW = c.measureText(pt.name).width;
-          c.globalAlpha = owned ? 1 : 0.7;
-          c.font = uiFont(UI.sizes.tinyPlus, { weight: 700 });
-          c.fillStyle = '#b8912e';
-          c.fillText('◆ GOLD', tx + nameW + 8, y + 24);
-        }
-        // line 2: state tag + a short lore blurb
-        const hung = this.save.loadout.includes(pt.id);
-        // G4: gold-tier rows carry a distinct STATE — the gold price when not
-        // yet owned (the "what it costs" + "you can't buy it yet"), or the
-        // owned state when collected/hung.
-        let state;
-        if (owned) state = hung ? '★ hung in the loadout' : 'collected';
-        else state = isGold ? `${pt.goldCost}g · NG+ only` : 'not yet collected';
-        c.font = uiFont(UI.sizes.xsmall, { weight: 700 });
-        c.fillStyle = owned ? (hung ? '#c9922a' : '#4e8a5a') : (isGold ? '#8a6d1f' : '#9a9078');
-        c.globalAlpha = 1;
-        c.fillText(state, tx, y + 44);
-        const stateW = c.measureText(state).width;
-        c.fillStyle = INK;
-        c.globalAlpha = owned ? 0.78 : 0.5;
-        c.font = uiFont(UI.sizes.small, { italic: true });
-        let loreOut = entry.lore;
-        const loreMax = tw - stateW - 12;
-        while (c.measureText(loreOut).width > loreMax && loreOut.length > 1) loreOut = loreOut.slice(0, loreOut.length - 1);
-        if (loreOut !== entry.lore) loreOut = loreOut.replace(/\s+\S*$/, '') + '…';
-        c.fillText(loreOut, tx + stateW + 12, y + 44);
-        c.restore();
-        paperEnd(ctx);
-      });
-      const ownCt = PAINTINGS.filter(pt => this.save.owned.includes(pt.id)).length;
-      const goldCt = PAINTINGS.filter(pt => pt.goldTier).length;
-      centerText(ctx, `the curator's ledger — ${ownCt} of ${PAINTINGS.length} collected · ${goldCt} gold-tier · a display only`, cx, gy0 + gridH + 15, uiFont(UI.sizes.smallPlus, { italic: true }), '#fdf6e9', 0.7);
-      // A4 (v1.2 M9): the 'Rehung Frame' retirement — a permanent, saved
-      // gallery bonus minted once the collection is complete. Sits above the
-      // Depart button (same geometry as the retire row in _atelierRows).
-      // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' tier — a 50g permanent
-      // prestige bar sits just ABOVE the Rehung Frame bar (NG+ + gold-gated),
-      // with a state-aware button (price / NG+ gate / owned).
-      {
-        const gilded = isGilded(this.save);
-        const canGild = canBuyGildedFrame(this.save);
-        const ngOk = (Math.floor(this.save.ngCycle) || 0) >= 1;
-        const bw = 560, bh = 84, bx = cx - bw / 2, by = g.ch - 248;
-        const c = paperPanel(ctx, bx, by, bw, bh, { seed: 520, fill: gilded ? '#f4ecd0' : (canGild ? '#f3ead2' : '#efe8d6') });
-        c.save();
-        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-        c.fillStyle = '#8a6d1f';
-        c.font = uiFont(UI.sizes.bodyLg, { weight: 700 });
-        c.globalAlpha = 1;
-        c.fillText('◆ Gilded Frame', bx + 20, by + 26);
-        c.fillStyle = INK;
-        c.font = uiFont(UI.sizes.smallPlus);
-        c.globalAlpha = 0.8;
-        c.fillText('A one-time gilded tier on top of the Rehung Frame — a permanent, saved tuning bump.', bx + 20, by + 45);
-        c.fillText(gilded
-          ? `Hung and permanent: +${GILDED_FRAME.ink} start ink · +${Math.round(GILDED_FRAME.orbMult * 100 - 100)}% orb value, every run, forever.`
-          : `One-time: +${GILDED_FRAME.ink} start ink of each color · +${Math.round(GILDED_FRAME.orbMult * 100 - 100)}% orb value, forever.`, bx + 20, by + 63);
-        c.restore();
-        // the gild button on the right (state-aware: owned / affordable / gated)
-        const bbw = 150, bbh = 56, bbx = bx + bw - bbw - 14, bby = by + (bh - bbh) / 2;
-        uiButton(c, bbx, bby, bbw, bbh, gilded ? 'Gilded' : (ngOk ? `Gild · ${GILDED_FRAME.cost}g` : 'NG+ needed'), canGild, false, { seed: 521 });
-        paperEnd(ctx);
-      }
-      {
-        const lvl = galleryBonusLevel(this.save);
-        const eligible = canRetireCollection(this.save);
-        const bw = 560, bh = 84, bx = cx - bw / 2, by = g.ch - 150;
-        const c = paperPanel(ctx, bx, by, bw, bh, { seed: 500, fill: eligible ? '#f3ead2' : '#efe8d6' });
-        c.save();
-        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-        c.fillStyle = INK;
-        c.font = uiFont(UI.sizes.bodyLg, { weight: 700 });
-        c.globalAlpha = 1;
-        c.fillText('Rehung Frame', bx + 20, by + 26);
-        c.font = uiFont(UI.sizes.smallPlus);
-        c.globalAlpha = 0.8;
-        c.fillText('Retire the complete collection for a permanent Gallery Bonus (the bank and collection remain).', bx + 20, by + 45);
-        c.fillText(`Currently: +${lvl * 2} start ink · +${Math.round(lvl * 10)}% orb value per run. Repeatable.`, bx + 20, by + 63);
-        c.restore();
-        // the retire button on the right
-        const bbw = 150, bbh = 56, bbx = bx + bw - bbw - 14, bby = by + (bh - bbh) / 2;
-        uiButton(c, bbx, bby, bbw, bbh, eligible ? 'Retire' : 'Incomplete', false, false, { seed: 501 });
-        paperEnd(ctx);
-      }
-      // K8 (v1.5 M2): the MASTERPIECE — a ledger entry for "The Heron, Waking",
-      // the unique unbuyable collection piece minted by the first challenge
-      // clearing. Shown in the bottom free band (below the Gilded/Rehung Frame
-      // bars + the atelier buttons) as a thin gilded strip with a small framed
-      // motif. Display-only; it is NOT a PAINTINGS id (so the 10-painting grid
-      // + retirement threshold are untouched). Gated by the goldEarned latch.
-      if (isMasterpieceMinted(this.save)) {
-        const mpw = 560, mph = 30, mpX = cx - mpw / 2, mpY = g.ch - 34; // 766..796, below the Rehung bar (ends 750) + the buttons (618..652)
-        const mc = paperPanel(ctx, mpX, mpY, mpw, mph, { seed: 940, fill: '#fbf3dd' });
-        mc.save();
-        // a small gilded motif square on the left
-        const ms = mph - 10, mtx = mpX + 8, mty = mpY + 5;
-        mc.lineWidth = 2; mc.strokeStyle = '#8a6d1f';
-        mc.beginPath(); mc.rect(mtx, mty, ms, ms); mc.clip();
-        this._drawMasterpieceMotif(mc, mtx, mty, ms);
-        mc.restore();
-        mc.lineWidth = 1.5; mc.strokeStyle = '#b8912e';
-        mc.strokeRect(mtx, mty, ms, ms);
-        mc.save();
-        mc.textAlign = 'left'; mc.textBaseline = 'middle';
-        mc.fillStyle = '#a3762a'; mc.font = uiFont(UI.sizes.label, { weight: 700 }); mc.globalAlpha = 1;
-        mc.fillText(MASTERPIECE.name, mtx + ms + 14, mpY + 11);
-        mc.fillStyle = INK; mc.font = uiFont(UI.sizes.tinyPlus); mc.globalAlpha = 0.72;
-        mc.fillText('◆ MASTERPIECE — framed by the Curator (first challenge clearing; unbuyable collection piece)', mtx + ms + 14, mpY + 23);
-        mc.restore();
-        paperEnd(ctx);
-      }
-    } else if (this.atelierTab === 4) {
-      // K7 (v1.5 M2): the Curator Challenge panel — the NEW atelier tab. It has
-      // two parts: (1) a "today's challenge" card showing the SEEDED loadout +
-      // modifier + date (what a run this day would draw), and (2) the SAVED
-      // best-score file — the top-5 challenges filed by score (each entry is
-      // {seed, date, score}), shown in descending order. It is a display-only
-      // panel: the challenge itself is started from the title-screen button
-      // (K7); this panel just shows today's draw and the filed best scores.
-      const seed = challengeDaySeed();
-      const owned = Array.isArray(this.save.owned) ? this.save.owned : [];
-      const loadout = challengeDrawLoadout(seed, owned);
-      const modId = challengeDrawModifier(seed);
-      const mod = modId ? MODIFIERS[modId] : null;
-      const bw = 760, bh = 150, bx = cx - bw / 2, by = g.rowY0 + 4;
-      const c = paperPanel(ctx, bx, by, bw, bh, { seed: 640, fill: '#f7f0df' });
-      c.save();
-      c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-      c.fillStyle = '#8a6d1f';
-      c.font = uiFont(UI.sizes.subLg, { weight: 700 });
-      c.globalAlpha = 1;
-      c.fillText(`The Curator's Challenge — ${challengeDate(seed)}`, bx + 22, by + 30);
-      c.fillStyle = INK;
-      c.font = uiFont(UI.sizes.label);
-      c.globalAlpha = 0.85;
-      c.fillText('One shared challenge per day — the same loadout and modifier for the whole world.', bx + 22, by + 52);
-      // the seeded loadout + modifier, drawn deterministically from the day seed
-      const loTxt = loadout.length
-        ? loadout.map(id => { const pt = PAINTINGS.find(p => p.id === id); return pt ? pt.name : id; }).join('  +  ')
-        : 'no paintings owned yet — a bare-brush day';
-      c.font = uiFont(UI.sizes.body, { weight: 700 });
-      c.globalAlpha = 1;
-      c.fillStyle = '#4c8a34';
-      c.fillText('Brush (loadout):', bx + 22, by + 80);
-      c.fillStyle = INK;
-      c.fillText(loTxt, bx + 170, by + 80);
-      c.font = uiFont(UI.sizes.body, { weight: 700 });
-      c.fillStyle = '#4c8a34';
-      c.fillText('Condition (modifier):', bx + 22, by + 104);
-      c.fillStyle = INK;
-      c.globalAlpha = 1;
-      c.fillText(mod ? `${mod.name} — ${mod.desc}` : 'clear conditions', bx + 190, by + 104);
-      c.font = uiFont(UI.sizes.small, { italic: true });
-      c.fillStyle = INK;
-      c.globalAlpha = 0.6;
-      c.fillText('score = color restored + enemies cleared in time + orbs gathered + a boss-time bonus. file it to the best list below.', bx + 22, by + 130);
-      c.restore();
-      paperEnd(ctx);
-      // the SAVED best-score file (top 5, descending by score) — already
-      // normalized by challengeFileScore at file time + the v9 migration.
-      const scores = Array.isArray(this.save.challengeScores) ? this.save.challengeScores : [];
-      const fw = 640, fh = 46, fgap = 8;
-      const fy0 = by + bh + 18;
-      c.save();
-      centerText(ctx, `filed challenges — the ${CHALLENGE_TOP_N} best scores (best first)`, cx, fy0 - 12, uiFont(UI.sizes.label, { weight: 700 }), '#c9922a', 1);
-      c.restore();
-      if (scores.length === 0) {
-        centerText(ctx, 'no challenges filed yet — clear one from the title screen.', cx, fy0 + 20, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.6);
-      } else {
-        scores.forEach((s, i) => {
-          const y = fy0 + i * (fh + fgap);
-          const rank = i + 1;
-          const cc = paperPanel(ctx, cx - fw / 2, y, fw, fh, { seed: 660 + i, fill: rank === 1 ? '#f4ecd0' : '#f6f1e2' });
-          cc.save();
-          cc.textAlign = 'left'; cc.textBaseline = 'middle';
-          const my = y + fh / 2;
-          cc.fillStyle = '#8a6d1f';
-          cc.font = uiFont(UI.sizes.subPlus, { weight: 700 });
-          cc.globalAlpha = 1;
-          cc.fillText(rank === 1 ? '①' : rank === 2 ? '②' : rank === 3 ? '③' : String(rank), cx - fw / 2 + 20, my);
-          cc.fillStyle = INK;
-          cc.font = uiFont(UI.sizes.label, { weight: 700 });
-          cc.fillText(s.date, cx - fw / 2 + 60, my);
-          cc.font = uiFont(UI.sizes.small);
-          cc.globalAlpha = 0.6;
-          cc.fillText(`seed ${s.seed}`, cx - fw / 2 + 200, my);
-          cc.textAlign = 'right';
-          cc.fillStyle = rank === 1 ? '#c9922a' : INK;
-          cc.globalAlpha = 1;
-          cc.font = uiFont(UI.sizes.title, { weight: 700 });
-          cc.fillText(String(s.score), cx + fw / 2 - 22, my);
-          cc.textAlign = 'left';
-          cc.fillStyle = '#4c8a34';
-          cc.font = uiFont(UI.sizes.xsmall, { weight: 700 });
-          cc.fillText('pts', cx + fw / 2 - 96, my);
-          cc.restore();
-          paperEnd(ctx);
-        });
-      }
-    }
-
-    // first-visit how-it-works panel (one-time; any tab/buy/action dismisses it)
-    if (this._atelierIntro) {
-      const pw = 660, ph = 300, px = cx - pw / 2, py = 250;
-      const c = paperPanel(ctx, px, py, pw, ph, { seed: 120 });
-      centerText(c, 'Welcome to the Atelier', cx, py + 40, uiFont(UI.sizes.h1Sm, { weight: 700 }), INK, 1);
-      const lines = [
-        'Gathered pigments become your bank between expeditions.',
-        'Buy upgrades here. They stay with you, even after a defeat.',
-        'Buy a painting once, then hang up to two for useful bonuses.',
-        'Begin Expedition starts a fresh journey with your chosen build.',
-      ];
-      lines.forEach((ln, i) => centerText(c, ln, cx, py + 84 + i * 32, uiFont(UI.sizes.bodyLg), INK, 0.85));
-      centerText(c, '1 / 2 / 3 browse the tabs · any action closes this note', cx, py + ph - 24, uiFont(UI.sizes.small, { italic: true }), INK, 0.75);
-      paperEnd(ctx);
-    }
-
-    // A1: the resident's one-liner — a small paper chip with a speaker tag
-    // and a typewriter reveal. Sits in the clear band under the title (the
-    // bank strip is centered, the tabs start at y148) so it never covers a
-    // card grid and reads like a note pinned to the studio wall.
-    if (this._atelierSay) {
-      const chipW = 452, chipH = 32, cxp = 16, cyp = 82;
-      this._paperChip(ctx, cxp, cyp, chipW, chipH, 140);
-      const say = this._atelierSay;
-      const shown = say.text.slice(0, Math.floor(say.revealed));
-      ctx.save();
-      ctx.fillStyle = '#8a5a2b';
-      ctx.font = uiFont(UI.sizes.label, { weight: 700 });
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillText(say.name, cxp + 16, cyp + chipH / 2);
-      const nameW = ctx.measureText(say.name).width;
-      ctx.fillStyle = INK;
-      ctx.font = uiFont(UI.sizes.body, { italic: true });
-      ctx.fillText('“' + shown, cxp + 24 + nameW, cyp + chipH / 2, chipW - 34 - nameW);
-      ctx.restore();
-    }
-
-    // footer
-    const d = g.depart;
-    uiButton(ctx, d.x, d.y, d.w, d.h, 'Begin Expedition', this._mouseIn(d.x, d.y, d.w, d.h), false, { seed: 80, size: 18 });
-    const l = g.leave;
-    ctx.save();
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = '#fdf6e9';
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(l.x, l.y, l.w, l.h, 17);
-    ctx.fill(); ctx.stroke();
-    ctx.restore();
-    centerText(ctx, '← back to the pond', l.x + l.w / 2, l.y + l.h / 2 + 1, uiFont(UI.sizes.body), INK, 0.9);
-    // M2: the "Encore" viewing-screen entry (a paper chip, right of Depart).
-    const en = g.encore;
-    ctx.save();
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = '#fdf6e9';
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(en.x, en.y, en.w, en.h, 17);
-    ctx.fill(); ctx.stroke();
-    ctx.restore();
-    centerText(ctx, 'Encore — the gallery wall', en.x + en.w / 2, en.y + en.h / 2 + 1, uiFont(UI.sizes.body), INK, 0.9);
-    centerText(ctx, 'Enter — depart the studio   ·   Esc — return to the pond', cx, d.y + d.h + 16, uiFont(UI.sizes.xsmall, { italic: true }), '#fdf6e9', 0.55);
-  }
-
-  // ==================== M2 (v1.4): the "Encore" viewing screen ====================
-  // A leisurely, presentation-only screen opened from the Atelier that walks the
-  // frog through the GALLERY WALL one large painting at a time — owned works in
-  // full color with their title + the Curator's Ledger lore (gold-tier ones in a
-  // gold frame), unowned works as shadowed frames with a "not yet" placard. A
-  // soft S1-style arpeggio plays at a low level (setEncoreArpeggio). Arrow keys /
-  // click move between paintings; Esc returns to the atelier. NO new persistence
-  // — `_encoreIdx` is an in-memory pointer. Pure draw-time + input checks.
-  // (The screen overlays state 'atelier', so the swamp keeps breathing beneath.)
-
-  _openEncore() {
-    // start on the first owned painting (so a returning frog sees art, not a
-    // shadow) — or painting 0 if the collection is still empty.
-    let startIdx = 0;
-    for (let i = 0; i < PAINTINGS.length; i++) {
-      if (this.save.owned.includes(PAINTINGS[i].id)) { startIdx = i; break; }
-    }
-    this._encoreIdx = startIdx;
-    this.encoreT = 0;
-    this._encoreOpen = true;
-    this.sfx('ui');
-    if (this.audio && this.audio.setEncoreArpeggio) this.audio.setEncoreArpeggio();
-  }
-
-  _closeEncore() {
-    if (!this._encoreOpen) return;
-    this._encoreOpen = false;
-    this.sfx('ui-back');
-    // fade the encore arpeggio out (it lives on the melody layer; clearZoneTheme
-    // is the "stop the melody layer" entry point and covers it). Idempotent.
-    if (this.audio && this.audio.clearZoneTheme) this.audio.clearZoneTheme();
-  }
-
-  _encoreStep(d) {
-    const n = PAINTINGS.length;
-    this._encoreIdx = ((this._encoreIdx + d) % n + n) % n; // wrap
-    this.encoreT = 0; // re-trigger the gentle crossfade on each change
-    this.sfx('ui');
-  }
-
-  _updateEncore(dt) {
-    this.encoreT += dt;
-    if (this.input.pressed('escape') || this.input.pressed('backspace')) { this._closeEncore(); return; }
-    if (this.input.pressed('arrowright') || this.input.pressed('arrowdown')) { this._encoreStep(1); return; }
-    if (this.input.pressed('arrowleft') || this.input.pressed('arrowup')) { this._encoreStep(-1); return; }
-    // click: right half of the screen = next, left half = previous (Esc is the
-    // only click-less exit; there's no close button so a stray click never
-    // accidentally leaves — it just browses).
-    if (this.input.mouse.lPressed && this.input.mouse.x > 0) {
-      if (this.input.mouse.x >= this.cw / 2) this._encoreStep(1);
-      else this._encoreStep(-1);
-    }
-  }
-
-  _drawEncore(ctx) {
-    // a near-opaque gallery dim over the breathing atelier (a hair of the world
-    // shows through so the screen feels hung IN the studio, not a separate page).
-    ctx.save();
-    ctx.fillStyle = 'rgba(24,19,16,0.86)';
-    ctx.fillRect(0, 0, this.cw, this.ch);
-    ctx.restore();
-
-    const cx = this.cw / 2;
-    const pt = PAINTINGS[this._encoreIdx];
-    const owned = this.save.owned.includes(pt.id);
-    const gold = owned && !!pt.goldTier;
-    const sealed = this._ptLocked(pt);
-    const entry = ledgerEntry(pt);
-
-    // gentle crossfade-in on open + on each navigation (encoreT resets to 0).
-    const fade = Math.min(1, this.encoreT / 0.28);
-    ctx.save();
-    ctx.globalAlpha = fade;
-
-    // header
-    outlineText(ctx, 'The Encore', cx, 46, uiFont(UI.sizes.display, { weight: 700 }), '#f4ead8', INK, 6);
-    centerText(ctx, 'a quiet walk through the gallery wall', cx, 80, uiFont(UI.sizes.bodyLg, { italic: true }), '#fdf6e9', 0.8);
-    // counter (which painting is on display)
-    centerText(ctx, `${this._encoreIdx + 1} / ${PAINTINGS.length}`, cx, 108, uiFont(UI.sizes.bodyLg, { weight: 700 }), gold ? '#d9a520' : '#fdf6e9', 0.9);
-
-    // the large frame (one at a time). Reuses the P8 gallery-wall frame look:
-    // paperPanel + a double border (GILDED for owned gold-tier) + the generative
-    // motif — or a dim silhouette for the unowned.
-    const S = 380, fx = cx - S / 2, fy = 150;
-    const c = paperPanel(ctx, fx - 18, fy - 18, S + 36, S + 36, { seed: 900 + this._encoreIdx, fill: owned ? '#f9f3e2' : '#e9e0cd' });
-    c.save();
-    c.lineWidth = 6;
-    c.strokeStyle = gold ? '#c9922a' : (owned ? '#b8912e' : '#a99e83');
-    c.beginPath(); c.roundRect(fx - 4, fy - 4, S + 8, S + 8, 4); c.stroke();
-    c.lineWidth = 2;
-    c.strokeStyle = gold ? '#8a6d1f' : (owned ? '#8a6d1f' : '#8f856d');
-    c.beginPath(); c.roundRect(fx + 2, fy + 2, S - 4, S - 4, 2); c.stroke();
-    if (owned) {
-      c.fillStyle = pt.art.bg;
-      c.fillRect(fx + 4, fy + 4, S - 8, S - 8);
-      this._drawPaintingMotif(c, pt, fx + 4, fy + 4, S - 8);
-    } else {
-      // shadowed frame: a darkened silhouette of a future painting.
-      c.fillStyle = sealed ? '#241f18' : '#2e271f';
-      c.fillRect(fx + 4, fy + 4, S - 8, S - 8);
-      c.globalAlpha = 0.5;
-      c.fillStyle = '#c9bfa8';
-      c.font = uiFont(UI.sizes.megaLg, { weight: 700 });
-      c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText(sealed ? '?' : '✕', cx, fy + S / 2);
-    }
-    c.restore();
-
-    // placard: title (owned) / "not yet" (unowned) + the Curator's Ledger lore.
-    const py = fy + S + 34;
-    c.save();
-    c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillStyle = INK;
-    if (owned) {
-      c.font = uiFont(UI.sizes.titlePlus, { weight: 700 });
-      c.globalAlpha = 1;
-      c.fillText(pt.name, cx, py);
-      if (gold) { c.fillStyle = '#c9922a'; c.font = uiFont(UI.sizes.small, { weight: 700 }); c.fillText('★ gold tier', cx + 150, py); }
-    } else {
-      c.font = uiFont(UI.sizes.subLg, { italic: true });
-      c.globalAlpha = 0.7;
-      c.fillText(sealed ? 'a sealed portrait — not yet' : 'not yet', cx, py);
-    }
-    // the lore blurb (Curator's Ledger data) — always shown; it's the story the
-    // curator keeps for every painting, earned or not.
-    c.fillStyle = INK;
-    c.font = uiFont(UI.sizes.body, { italic: true });
-    c.globalAlpha = owned ? 0.9 : 0.6;
-    c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(entry.lore, cx, py + 30, S - 48);
-    c.restore();
-
-    // navigation arrows (left / right of the frame) — purely visual; the real
-    // hit-test is "click left/right half" in _updateEncore.
-    ctx.save();
-    ctx.globalAlpha = fade * 0.9;
-    ctx.fillStyle = '#fdf6e9';
-    ctx.font = uiFont(UI.sizes.displayLg, { weight: 700 });
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('‹', cx - S / 2 - 52, fy + S / 2);
-    ctx.fillText('›', cx + S / 2 + 52, fy + S / 2);
-    ctx.restore();
-
-    // footer hint
-    centerText(ctx, '← → / click to browse   ·   Esc — return to the atelier', cx, this.ch - 34, uiFont(UI.sizes.small, { italic: true }), '#fdf6e9', 0.6);
-    ctx.restore();
   }
 
   // tiny generative art per painting (keeps it light, no assets)
@@ -2788,122 +1239,25 @@ _drawAtelier(ctx) {
     c.restore();
   }
 
-  // K8 (v1.5 M2): the MASTERPIECE motif — "The Heron, Waking": a stylized heron
-  // lifting off the gray shore into a pale gold dawn. Distinct from the 10
-  // shop paintings (which have an `art.shape`) — this is a collection-only
-  // piece the Curator frames after the first challenge clearing. Drawn into a
-  // rect (x, y, s×s), clipped, and read at the gallery's 162px frame + the
-  // ledger's entry. Procedural only (no assets).
-  _drawMasterpieceMotif(c, x, y, s) {
-    c.save();
-    c.beginPath(); c.rect(x, y, s, s); c.clip();
-    // the dawn sky (pale gold) over the gray shore
-    const sky = c.createLinearGradient(x, y, x, y + s);
-    sky.addColorStop(0, '#f7e7b8'); sky.addColorStop(0.62, '#ecd79c'); sky.addColorStop(1, '#8f9a90');
-    c.fillStyle = sky; c.fillRect(x, y, s, s);
-    // the low sun
-    c.beginPath(); c.arc(x + s * 0.5, y + s * 0.42, s * 0.2, 0, TAU);
-    c.fillStyle = 'rgba(255, 224, 150, 0.9)'; c.fill();
-    // the gray shore / water
-    c.fillStyle = '#6f7d74'; c.fillRect(x, y + s * 0.66, s, s * 0.34);
-    // ripples
-    c.strokeStyle = 'rgba(255,255,255,0.25)'; c.lineWidth = Math.max(1, s * 0.012);
-    for (let i = 0; i < 3; i++) {
-      const ry = y + s * (0.72 + i * 0.08);
-      c.beginPath(); c.moveTo(x + s * 0.12, ry); c.lineTo(x + s * 0.88, ry); c.stroke();
-    }
-    // the heron (a dark silhouette) rising on long legs — the "waking" figure
-    c.strokeStyle = '#2c3a33'; c.fillStyle = '#2c3a33';
-    c.lineWidth = Math.max(2, s * 0.035); c.lineCap = 'round';
-    const hx = x + s * 0.5, hy = y + s * 0.4;
-    // neck + body
-    c.beginPath();
-    c.moveTo(hx - s * 0.12, hy + s * 0.02);
-    c.bezierCurveTo(hx + s * 0.02, hy - s * 0.08, hx + s * 0.14, hy - s * 0.06, hx + s * 0.16, hy - s * 0.16);
-    c.stroke();
-    c.beginPath(); c.ellipse(hx - s * 0.04, hy + s * 0.06, s * 0.14, s * 0.07, -0.3, 0, TAU); c.fill();
-    // head + beak
-    c.beginPath(); c.arc(hx + s * 0.17, hy - s * 0.17, s * 0.045, 0, TAU); c.fill();
-    c.beginPath(); c.moveTo(hx + s * 0.21, hy - s * 0.17); c.lineTo(hx + s * 0.34, hy - s * 0.15); c.stroke();
-    // the lifted wings (two arcs above the body)
-    c.lineWidth = Math.max(2, s * 0.03);
-    c.beginPath(); c.moveTo(hx - s * 0.16, hy + s * 0.04); c.quadraticCurveTo(hx - s * 0.06, hy - s * 0.16, hx + s * 0.10, hy - s * 0.02); c.stroke();
-    c.beginPath(); c.moveTo(hx + s * 0.02, hy + s * 0.04); c.quadraticCurveTo(hx + s * 0.14, hy - s * 0.14, hx + s * 0.22, hy - s * 0.04); c.stroke();
-    // the long legs trailing down to the water
-    c.lineWidth = Math.max(1.5, s * 0.02);
-    c.beginPath(); c.moveTo(hx - s * 0.02, hy + s * 0.12); c.lineTo(hx - s * 0.06, hy + s * 0.5); c.stroke();
-    c.beginPath(); c.moveTo(hx + s * 0.02, hy + s * 0.12); c.lineTo(hx + s * 0.04, hy + s * 0.48); c.stroke();
-    c.restore();
-  }
-
   // ================= part 2: expedition update ===========================
   _updateTitle(dt) {
-    // N4 (v1.3 M14): the expedition-modifier picker (opened from the title's
-    // "Next Expedition" button) owns input while it is open — intercept BEFORE
-    // the title's own Enter/Space/A/O/M/difficulty hotkeys so they don't leak.
-    if (this._modPrompt) { this._updateModPrompt(); return; }
-    // O1 (v1.7): the pre-expedition WANDER seed card owns input while open —
-    // intercept BEFORE the title's own hotkeys so Enter/Esc don't leak.
-    if (this._seedCard) { this._updateSeedCard(); return; }
-    if (this.input.pressed('enter') || this.input.pressed(' ')) {
-      this.sfx('ui');
-      this._startExpeditionOrCard();
-      return;
-    }
-    if (this.input.pressed('a')) { this.sfx('ui'); this._beginAtelier(); return; }
-    if (this.input.pressed('o')) { this._openOptions(); return; }  // M8 P9
-    if (this.input.pressed('m')) { this._muteToggle(); return; }
-    // K7 (v1.5 M2): the 'c' hotkey opens the Curator Challenge — but only when
-    // the challenge is actually unlocked (a completed victory). A first-time
-    // save (no victory) gets no challenge hotkey, matching the hidden button.
-    if (this.input.pressed('c') && challengeUnlocked(this.save)) { this.sfx('ui'); this._beginChallengeExpedition(); return; }
-    // R1 (v1.6): the 'r' hotkey opens BENEATH THE REEDS — but only when the Reeds
-    // biome is actually unlocked (a completed victory, reedsUnlocked). A
-    // first-time save (no victory) gets no Reeds hotkey, matching the hidden
-    // button — a cycle-0 player never sees or can enter the biome.
-    if (this.input.pressed('r') && reedsUnlocked(this.save)) { this.sfx('ui'); this._beginExpedition(false, { reeds: true }); return; }
-    // M8 P7: difficulty select (G/N/B = Gentle/Normal/Bold; 1/2/3 are pigment
-    // hotkeys in-game, so avoid them). Persists in options; applied at run start.
-    if (this.input.pressed('g')) { this._setDifficulty('gentle'); return; }
-    if (this.input.pressed('n')) { this._setDifficulty('normal'); return; }
-    if (this.input.pressed('b')) { this._setDifficulty('bold'); return; }
-    // mouse buttons (see _drawTitle layout, shared via _titleLayout)
-    if (this.input.mouse.lPressed) {
-      const g = this._titleLayout();
-      // erase-save link: two clicks within 3 s (see _drawTitle for same rect)
-      if (this._mouseIn(16, this.ch - 40, 240, 28)) {
-        if ((this.now - (this._eraseArm || -99)) < 3) {
-          this._eraseArm = 0;
-          SaveSys.erase();
-          this.save = freshSave(); // fresh save back into memory (load() returns null after erase)
-          this.save.flags.intro = false;
-          this.sfx('ui-back');
-          this.addBanner('Save data erased — a fresh start.', 3, this.ch - 110);
-          return;
-        }
-        this._eraseArm = this.now;
-        this.sfx('ui');
-        return;
-      }
-      for (const p of g.diff) if (this._mouseIn(p.x, p.y, p.w, p.h)) { this._setDifficulty(p.id); return; }
-      // T1 (v1.2 M13): the guided first expedition (fresh save only). A
-      // dedicated button so the timed "Begin Expedition" path is untouched.
-      if (tutorialEligible(this.save) && this._mouseIn(g.tx, g.ty, g.tw, g.th)) { this.sfx('ui'); this._beginExpedition(true); return; }
-      // N1 (v1.3 M14): the "Next Expedition" (New Game+) button — shown only
-      // after a victory (g.ng set only when ngUnlocked). It shares the guided
-      // slot but that button is fresh-save-only, so the two never coexist.
-      if (g.ng && this._mouseIn(g.ng.x, g.ng.y, g.ng.w, g.ng.h)) { this._beginNextExpedition(); return; }
-      // K7 (v1.5 M2): the Curator Challenge button (shown only after a victory;
-      // g.chall is null otherwise). Starts the seeded, scored daily challenge.
-      if (g.chall && this._mouseIn(g.chall.x, g.chall.y, g.chall.w, g.chall.h)) { this.sfx('ui'); this._beginChallengeExpedition(); return; }
-      // R1 (v1.6): the "Beneath the Reeds" entry (shown only after a victory;
-      // g.reeds is null otherwise). Starts the victory-gated Reeds expedition
-      // VARIANT (darker, deeper swamp + THE LANTERN). A first-time save never
-      // sees or reaches this button.
-      if (g.reeds && this._mouseIn(g.reeds.x, g.reeds.y, g.reeds.w, g.reeds.h)) { this.sfx('ui'); this._beginExpedition(false, { reeds: true }); return; }
-      if (this._mouseIn(g.bx, g.by, g.bw, g.bh)) { this.sfx('ui'); this._startExpeditionOrCard(); }
-      else if (this._mouseIn(g.abx, g.aby, g.abw, g.abh)) { this.sfx('ui'); this._beginAtelier(); }
-      else if (this._mouseIn(g.ox, g.oy, g.ow, g.oh)) { this.sfx('ui'); this.optionsOpen = true; }
+    this._eraseTimer = Math.max(0,(this._eraseTimer||0)-dt);
+    if(this.input.pressed('enter') || this.input.pressed(' ')){this._startExpeditionOrCard();return;}
+    if(this.input.pressed('o')){this._openOptions();return;}
+    if(this.input.pressed('g')){this._setDifficulty('gentle');return;}
+    if(this.input.pressed('n')){this._setDifficulty('normal');return;}
+    if(this.input.pressed('b')){this._setDifficulty('bold');return;}
+    if(this.input.pressed('m')) this._muteToggle();
+    if(!this.input.mouse.lPressed)return;
+    const g=this._titleLayout();
+    if(this._mouseIn(g.bx,g.by,g.bw,g.bh)){this._startExpeditionOrCard();return;}
+    if(this._mouseIn(g.tx,g.ty,g.tw,g.th)){this.options.wander=false;this._beginExpedition(true);return;}
+    for(const d of g.diff)if(this._mouseIn(d.x,d.y,d.w,d.h))this._setDifficulty(d.id);
+    if(this._mouseIn(g.abx,g.aby,g.abw,g.abh))this._openSketchbook();
+    if(this._mouseIn(g.ox,g.oy,g.ow,g.oh))this._openOptions();
+    if(this._mouseIn(35,this.ch-42,225,30)){
+      if(this._eraseTimer>0){SaveSys.erase();this.save=freshSave();this._eraseTimer=0;}
+      else{this._eraseTimer=3;this.addBanner('Click erase again to remove saved artwork and records.',3);}
     }
   }
 
@@ -2961,64 +1315,18 @@ _drawAtelier(ctx) {
   _beginExpedition(guided = false, opts = {}) {
     this._atlasOpen = false;
     this._atlasCheckpoints = [];
-    // R1 (v1.6 Module R): `opts.reeds` marks a BENEATH-THE-REEDS expedition
-    // (the victory-gated, darker, deeper-swamp variant). It changes ONLY the
-    // world variant (the light economy is populated) and activates THE LANTERN
-    // (see this.lanternReeds below) — it never touches the cycle-0 swamp world,
-    // so a first-time 15–20 min run stays byte-identical. The title/atelier
-    // entry that sets this is itself victory-gated (reedsUnlocked), so a
-    // first-time player never reaches this path.
-    const _isReeds = !!opts.reeds;
-    // K7 (v1.5 M2): the CURATOR CHALLENGE override. A challenge run is started
-    // by _beginChallengeExpedition(), which sets this.challenge with a
-    // DETERMINISTIC (UTC-day) seed, a seeded random 2-painting loadout (drawn
-    // from the player's OWNED paintings), and a seeded random modifier. Those
-    // three override the normal fresh-world seed / saved-loadout / NG-modifier
-    // below so the whole world shares the SAME daily challenge. A normal run
-    // (this.challenge null) keeps its exact existing behavior byte-for-byte.
-    const _chal = this.challenge && this.challenge.mode === 'challenge' ? this.challenge : null;
-    // fresh world each run (title keeps drifting over whatever is left)
-    const seed = _chal ? _chal.seed : ((Math.random() * 2 ** 31) | 0);
-    this.runSeed = seed; // E2: weather phases derive deterministically from this
-    // N1 (v1.3 M14): the run's New Game+ cycle (0 = the base, first-time game;
-    // >= 1 = an NG+ cycle). Read from the save so a "Next Expedition" (which
-    // advances save.ngCycle) drives NG+ scaling (N2) and boss selection (N3).
-    this.ngCycle = Math.max(0, Math.floor(this.save.ngCycle) || 0);
-    // K5 (v1.5 M2): Master's Palette — when this NG+ modifier is active the
-    // player STARTS with a synergy duo pre-locked in the 2-slot loadout. This
-    // must run BEFORE makeTuning (it changes which paintings the loadout
-    // contains, which makeTuning consumes). Cycle-0 never carries a modifier
-    // (save.ngModifier is null), so the first-time loadout is byte-identical.
-    // K7: a challenge run carries its OWN seeded modifier (not save.ngModifier),
-    // applied AFTER the NG+ scaling (see below) — never the masters-palette
-    // pre-lock (that is a player-chosen NG+ modifier, not a challenge draw).
-    let _modId = (this.ngCycle >= 1 && !_chal) ? saveModifier(this.save) : null;
-    let _loadout = this.save.loadout;
-    if (_modId === 'masters-palette') {
-      const _pl = MODIFIERS[_modId].preLock;
-      _loadout = Array.isArray(_pl) && _pl.length ? _pl.slice() : _loadout;
+    // Normal entry starts at depth one; explicit floor options serve probes.
+    if(!opts.campaignContinue){
+      this.campaign=createCampaignRun((Math.random()*2**31)|0);
+      if(Number.isInteger(opts.campaignFloor))this.campaign.floor=clamp(opts.campaignFloor,0,3);
+      else if(opts.reeds)this.campaign.floor=this.options.wander?2:1;
+      this.campaign.cleared=CAMPAIGN.slice(0,this.campaign.floor).map(f=>f.boss);
+      this.campaign.rewards=Array(this.campaign.floor).fill('heart');
     }
-    // K7: the challenge's seeded loadout + modifier OVERRIDE the run setup.
-    // _chal.modifier is applied via applyModifier below (challenges always run
-    // one, even on a cycle-0 save — the challenge is a scored mode, not NG+).
-    if (_chal) { _loadout = _chal.loadout; _chal._modApplied = null; }
-    const _chalModId = _chal ? _chal.modifier : null;
-    // G1 (v1.8): the BLACK REEDS variant gate. It activates ONLY when ALL of:
-    //   (a) this is a Reeds expedition (`_isReeds`),
-    //   (b) it is an NG+ cycle (this.ngCycle >= 1) — the v1.6 cycle-0 Reeds
-    //       layout stays untouched (byte-identical),
-    //   (c) the player has WON the Reeds before (save.flags.reedsVictory — a
-    //       latch set on a Reeds-biome victory; false for a legacy save), and
-    //   (d) this is a HAND-TUNED run (Wander OFF). A WANDER × Reeds run keeps
-    //       its existing v1.7 WARDEN boss + cycle-0 Reeds world (the Warden is
-    //       the Wander apex; Black Reeds is the hand-tuned NG+ apex).
-    // The gate is read BEFORE the World is built so the whole world shares the
-    // variant. Every existing run (cycle-0 Reeds, Wander × Reeds, hand-tuned
-    // cycle-0 Reeds) evaluates this to false → byte-identical to v1.7.
-    this.blackReeds = _isReeds
-      && this.ngCycle >= 1
-      && !!(this.save.flags && this.save.flags.reedsVictory)
-      && this.options.wander !== true;
+    const floor=campaignFloor(this.campaign),_isReeds=floor.biome==='reeds';
+    const _chal=null;this.challenge=null;
+    const seed=(this.campaign.seed+this.campaign.floor*104729)>>>0;
+    this.runSeed=seed;this.blackReeds=floor.boss==='umbra';
     this.world = new World(mulberry32(seed), seed % 99991, { reeds: _isReeds, blackReeds: this.blackReeds });
     if (mothEncounterAllowed({ reeds: _isReeds, victory: this.save.flags?.heronDefeated, blackReeds: this.blackReeds, wander: this.options.wander, challenge: !!_chal })) this.world.enableMothEncounter();
     // S2 (v1.9): the run's MUSIC biome — which per-biome zone-theme set the
@@ -3026,32 +1334,9 @@ _drawAtelier(ctx) {
     // byte-identical). Presentation/audio only (never feeds runT).
     this.runBiome = this.blackReeds ? 'blackReeds' : (_isReeds ? 'reeds' : 'swamp');
     this.lanternReeds = _isReeds;               // R1: activate THE LANTERN (only in the Reeds variant)
-    // G1 (v1.8): the run's lantern-economy TUNING table. A Black Reeds run uses
-    // REEDS_DARK_LANTERN (a faster drain + shorter reach — the "deep dark"); every
-    // other run (cycle-0 Reeds, base swamp) uses the stock LANTERN (byte-identical).
-    // Cached here so _updateLantern / the Warden siphon / the enemy light key all
-    // read the SAME table (no per-frame allocation — a single const reference).
     this._lanternTuning = (this.blackReeds) ? REEDS_DARK_LANTERN : LANTERN;
-    // G1 (v1.8): the run's Reeds bestiary PICK THRESHOLDS. Black Reeds is denser
-    // (world.reedsBestiary = REEDS_DARK_BESTIARY_DENSITY); cycle-0 Reeds is null
-    // (the default REEDS_BESTIARY ladder). _spawnWave reads this._reedsBestiary.
     this._reedsBestiary = (this.world && this.world.reedsBestiary) || null;
-    this.tuning = makeTuning(this.save.upgrades, _loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
-    // N2 (v1.3 M14): NG+ per-cycle scaling — applied ONLY when ngCycle >= 1 so
-    // a first-time (cycle 0) run's tuning stays byte-identical to pre-NG+.
-    if (this.ngCycle >= 1 && !_chal) applyNGPlus(this.tuning, this.ngCycle);
-    // N4 (v1.3 M14): the player-chosen expedition modifier (chosen at the
-    // "Next Expedition" prompt) — applied ONLY on NG+ cycles, AFTER the NG+
-    // scaling, through the standard tuning path. A cycle-0 run never reaches
-    // this (ngCycle < 1), so a first-time run's tuning is byte-identical.
-    if (this.ngCycle >= 1 && !_chal) applyModifier(this.tuning, _modId);
-    // K7: apply the challenge's seeded modifier (always, regardless of cycle).
-    // This is the challenge's fixed daily modifier — distinct from the NG+
-    // player-chosen modifier above (a challenge run never carries both).
-    if (_chal && _chalModId) applyModifier(this.tuning, _chalModId);
-    // N4: High Tide widens the water — hand the render-side multiplier to the
-    // fresh per-run world (defaults to 1; a cycle-0 run never carries it).
-    this.world.waterWidthMult = this.tuning.waterWidthMult || 1;
+    this.tuning=applyCampaignRewards(makeTuning({},[],this.options.difficulty),this.campaign);
     this.player = new Player(PLAYER_START_X, PLAYER_START_Y, this.tuning);
     // R1 (v1.6): reset THE LANTERN for this run. In the Reeds variant it starts
     // full + lit (the frog carries a fresh paper lantern); otherwise it is
@@ -3079,28 +1364,6 @@ _drawAtelier(ctx) {
     // recap draws as a wobbly ink line on a 6-zone strip. IN-MEMORY ONLY; the
     // end screen is pure presentation over this + runT + the boss outcome.
     this.runWaypoints = []; this._lastWpT = 0;
-    this.runGold = Math.max(0, Math.floor(this.save.gold) || 0); // C2 (v1.3 M16): the gold total at run start (delta at the end = "gold earned this expedition"; in-run only, not persisted)
-    // D1 (v1.7): THE WANDER — the bounded procedural expedition variant. OPT-IN
-    // (options.wander, default OFF) and NEVER active for a guided (tutorial) run.
-    // When ON, the run's encounter CONTENT (per-zone enemy archetype mix + orb/
-    // checkpoint drop) is generated from the seeded RNG stream (mulberry32(seed +
-    // WANDER_SALT), a SEPARATE stream from the terrain pass) sampled within a
-    // hand-tuned difficulty envelope, so the run is reproducible from
-    // save.wanderSeed while each run differs. The TERRAIN/WORLD pass is UNCHANGED
-    // (same seeded world -> same painting, 60fps, P10 culling safe). When OFF (the
-    // default) this block never runs, this.zones stays the hand-tuned ZONES, and
-    // the run is byte-identical to v1.6. A fresh seed is picked from the impure
-    // layer (Date.now) so successive Wander runs differ; the layout itself is PURE
-    // (wanderContent).
-    // D3 (v1.7): the Wander LAYERS ON TOP of the other variants. It is NOT
-    // excluded by NG+ (applyNGPlus N2 scaling runs BEFORE this gate and only
-    // touches `this.tuning` — it never touches the generated content, so the NG+
-    // HP/dmg/spawn multipliers apply exactly ONCE, no compounding with any Wander
-    // scale) and it is NOT excluded by Reeds (the Reeds light economy R1 + the R3
-    // bestiary + the Silt Wyrm boss run through _spawnWave / the world variant,
-    // INDEPENDENT of the z.mix zone content — so a Wander × Reeds run has generated
-    // zone content + the Reeds bestiary/light-economy on top, a valid victory-
-    // gated variant measured by the Reeds leg of tests/wandpace.mjs).
     this.zones = ZONES;
     this.wanderActive = false;
     this.wanderSeedRun = null;
@@ -3126,37 +1389,7 @@ _drawAtelier(ctx) {
       this.zones = lay.zones.map(z => ({ ...z, mix: { ...z.mix }, sig: { kind: z.sig.kind, count: z.sig.count } }));
       this.wanderActive = true;
     }
-    // N3 (v1.3 M14): on NG+ cycles (ngCycle >= 1) the final boss is the Great
-    // GREEN Heron instead of the Great Gray Heron (the gray heron stays the
-    // first-time boss). The green heron reuses the same bossStep AI / 3-hue
-    // awaken / phase machine end-to-end; it differs only by (a) a distinct green
-    // palette and (b) ONE swapped mechanic — painting it with Moss pins it in
-    // place briefly (the E1/MidHeron reed-pin idea, at boss scale). It carries
-    // slightly MORE fixed HP than the gray heron (30k -> 36k), keeping the fight
-    // in the same ~2-3 min time band (the pin is a small extra damage window).
-    // K4 (v1.5 M2): NG+ cycle 3+ fights the GILDED HERON INSTEAD of the green
-    // heron (cycle 0 = gray, cycles 1-2 = green, cycle 3+ = gilded). Same
-    // bossStep/3-hue machinery; distinct gold palette + a heal-absorbing plume.
-    const isGildedHeron = this.ngCycle >= GILDED_HERON.minCycle;
-    const isGreen = this.ngCycle >= 1 && !isGildedHeron;
-    // F1 (v1.7): in a WANDER expedition the end-of-run boss is THE HOLLOW
-    // WARDEN (the 5th boss archetype, the Wander-apex). It reuses the EXISTING
-    // paintBoss/bossStep 3-hue awaken latch + the heron defeat/victory (sink)
-    // path, but with a NEW maw-window state machine (wardenStep): the Warden is
-    // INVULNERABLE except while its maw is OPEN (a telegraphed ~1.5 s window
-    // reusing the Silt-Wyrm ripple-ring telegraph). While the player's lantern
-    // is LIT it SIPHONS candle fuel (wardenFuelSiphon); when unlit/empty the
-    // siphon stops and the Warden turns evasive (longer maw-closed time). Its
-    // aggression is SEED-BIASED by the Wander taste (wardenTasteFactor): a
-    // "Feast Season" Warden is faster / a "Quiet Reeds" Warden evasive — the
-    // same boss feels different per run. It occupies the same `this.heron`
-    // slot so the paint routing, awaken handler, camera, and _endRun('victory')
-    // all reuse the heron machinery. A hand-tuned (Wander-OFF) run never enters
-    // this branch — its heron (gray/green/gilded) or the Reeds Silt Wyrm stays
-    // byte-identical. Wander takes precedence over Reeds: a Wander × Reeds run
-    // (the D3 variant) also fights the Warden (its lantern economy + siphon
-    // interplay is the Reeds synergy the ROADMAP calls out).
-    if (this.wanderActive) {
+    if (floor.boss === 'warden' || this.wanderActive) {
       const s0 = wardenSurfacePoint({ surfIdx: 0 }, 0, this.world.w);
       this.heron = {
         kind: WARDEN.kind, warden: true,
@@ -3176,19 +1409,6 @@ _drawAtelier(ctx) {
         awakenNeed: { ...WARDEN.awakenNeed },
       };
     } else if (_isReeds) {
-    // R4 (v1.6 Module R): in a BENEATH-THE-REEDS expedition the end-of-run boss
-    // is THE SILT WYRM (the 4th boss archetype) — a subterranean creature that
-    // reuses the EXISTING paintBoss/bossStep awaken latch + the heron defeat/victory
-    // path, but with a NEW underground-transit movement pattern (wyrmStep). It
-    // occupies the same `this.heron` slot (so the paint routing, the awaken
-    // handler, the camera, and _endRun('victory') all reuse the heron machinery).
-    // A cycle-0 (swamp) run never enters this branch — its heron is byte-identical.
-    // G2 (v1.8): the BLACK REEDS NG+ variant (this.blackReeds) fights THE
-    // UMBRAL WYRM (the 6th boss archetype) INSTEAD of the Silt Wyrm. It is a
-    // "darker twin": the SAME underground-transit + 3-hue-awaken machinery, but
-    // ~60k HP + a telegraphed DUAL maw + a "deep dark" final phase (lantern
-    // mandatory) + the Warden's fuel-siphon. A CYCLE-0 Reeds run (this.blackReeds
-    // false) still fights the Silt Wyrm — its end boss is byte-identical to v1.7.
     if (this.blackReeds) {
       const u0 = umbrSurfacePoint({ surfIdx: 0 }, 0, this.world.w);
       this.heron = {
@@ -3225,22 +1445,13 @@ _drawAtelier(ctx) {
     } else {
       this.heron = {
         x: this.world.w - 350, y: HERON_Y,
-        hp: isGildedHeron ? GILDED_HERON.hp : (isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp),
-        maxHp: isGildedHeron ? GILDED_HERON.hp : (isGreen ? GREEN_HERON.hp : this.tuning.bossMaxHp),
-        kind: isGildedHeron ? GILDED_HERON.kind : (isGreen ? GREEN_HERON.kind : 'gray'), // boss selection (smoke asserts this)
+        hp: this.tuning.bossMaxHp,
+        maxHp: this.tuning.bossMaxHp,
+        kind: 'gray',
         phase: 1, state: 'idle', stateT: 2.2, hue: { red: 0, blue: 0, green: 0 },
         awakened: false, awakenedT: 0, summonT: 9, lungeDir: -1,
         targetX: this.world.w - 650, diveH: 0, facing: -1,
         flying: 0, _intro: 3.2,
-        // N3 green-heron-only fields (the gray heron carries undefined for these,
-        // so a first-time run's heron behaves byte-identical to pre-N3):
-        green: isGreen ? true : undefined,              // distinct green palette in _drawHeron
-        awakenNeed: (isGreen || isGildedHeron) ? { ...GILDED_HERON.awakenNeed } : undefined, // same 3-hue rhythm
-        pinned: isGreen ? 0 : undefined,                // the Moss reed-pin timer (green only)
-        // K4 gilded-heron-only fields (the gray + green herons carry undefined):
-        gilded: isGildedHeron ? true : undefined,       // distinct gold palette in _drawHeron
-        plumeT: isGildedHeron ? 0 : undefined,          // the heal-absorbing plume timer (active while >0)
-        plumeCd: isGildedHeron ? 0 : undefined,        // the plume cooldown (the heal gap)
       };
     }
     // E1 (v1.2 M10): the Painted Heron — a mid-run "half-heron" set-piece on a
@@ -3248,7 +1459,7 @@ _drawAtelier(ctx) {
     // heron's bossStep machinery at reduced scale (much lower HP, ~1 hue to
     // awaken, phase escalation capped at 2). NON-blocking: the frog can walk
     // past it (optional), so the 15–20 min pacing target is preserved.
-    this.midHeron = midHeronAllowed(this.options.difficulty) ? {
+    this.midHeron = floor.id === 'swamp' && midHeronAllowed(this.options.difficulty) ? {
       x: this.world.w * MID_HERON.x, y: MID_HERON.y,
       hp: MID_HERON.hp, maxHp: MID_HERON.hp,
       phase: 1, state: 'idle', stateT: 2.0, hue: { red: 0, blue: 0, green: 0 },
@@ -3263,7 +1474,7 @@ _drawAtelier(ctx) {
     this.cam.x = PLAYER_START_X; this.cam.y = PLAYER_START_Y;
     this.zoomTarget = 1;
     this.shake = 0;
-    this.runT = 0;
+    this.runT = 0; this._floorStartT = 0;
     this.spawnT = 3.5;
     this._zoneI = 0;
     this._zoneTint = null; // M8 P12: { color, t, max } — fading zone-accent wash on entry
@@ -3284,13 +1495,6 @@ _drawAtelier(ctx) {
     this._surgeRainBase = null;
     this.score = 0;
     this.stock = { red: 0, blue: 0, green: 0 };
-    // A4 (v1.2 M9): the permanent 'Rehung Frame' gallery bonus grants +N pigment
-    // of each color at the start of every run (start ink). Capped at capacity.
-    if (this.tuning.galleryInkBonus > 0) {
-      for (const c of ['red', 'blue', 'green']) {
-        this.stock[c] = Math.min(this.tuning.capacity, this.tuning.galleryInkBonus);
-      }
-    }
     this.collected = { red: 0, blue: 0, green: 0 };
     this.dying = false;
     this.dieT = 0;
@@ -3298,30 +1502,6 @@ _drawAtelier(ctx) {
     this.help = false;   // M8 P6: start a run with the field guide closed
     this.banners = [];
     this.state = 'expedition';
-    // K7 (v1.5 M2): the CURATOR CHALLENGE per-run score tracking. `this.challenge`
-    // is set by _beginChallengeExpedition() (a {mode:'challenge', seed, loadout,
-    // modifier, restored0} object) and cleared at the end of the run (in
-    // _endRun). A NORMAL run (this.challenge null) keeps every one of these
-    // counters inert (the guarded hooks below no-op), so a first-time run is
-    // byte-identical in behavior. The counters accumulate ONLY in a challenge:
-    //   · enemies  — regular + mid + surge enemies defeated this run
-    //   · orbs     — pigment orbs collected this run
-    //   · bossTime — the heron fight duration (engage -> defeated), or null
-    //   · restored — the color-reveal fraction gained this run (0..1)
-    // `this.challenge._modApplied` latches so the modifier is applied once.
-    if (_chal) {
-      _chal.enemies = 0;
-      _chal.orbs = 0;
-      _chal.bossTime = null;
-      _chal._bossEngage = null;   // set when the heron leaves its intro (engaged)
-      // the color-restoration baseline is the REVEAL FRACTION (0..1) at the
-      // run's start, so the score's "restored" term is the fraction GAINED this
-      // run (end-of-run revealProgress minus this). Stored as a single number
-      // (no per-frame allocation) — read once at run start.
-      _chal.restored0 = revealProgressOf(this.world.worldColorSat());
-    } else {
-      this.challenge = null;   // a normal run — ensure no stale challenge state
-    }
     this._challengeResult = null; // a fresh run starts with no filed score (K7)
     // B5: one-time "progress may not persist" notice when persistent storage is
     // unavailable (we are running on the in-memory fallback). Emitted once per
@@ -3344,15 +1524,6 @@ _drawAtelier(ctx) {
     const firstRun = !this.save.flags.intro;
     if (firstRun) {
       this.save.flags.intro = true;
-      // PT4 (M7.5): one-time early-economy safety net — a brand-new player
-      // gets enough pigment to afford the cheapest upgrade (Swamp Vitality)
-      // plus a cushion, so a short first run can never soft-lock the bank.
-      // Guarded by flags.welcomeGranted so it fires exactly once, ever.
-      if (!this.save.flags.welcomeGranted) {
-        applyWelcomeGrant(this.save);
-        const total = WELCOME_GRANT.red + WELCOME_GRANT.blue + WELCOME_GRANT.green;
-        this.addBanner(`Starter gift: ${total} paint drops for upgrades after your walk.`, 4, this.ch * 0.72);
-      }
       SaveSys.save(this.save);
       // Staged first-run tutorial: one step at a time on a runT schedule, so
       // a newcomer reads a single instruction per beat instead of a wall of
@@ -3366,25 +1537,14 @@ _drawAtelier(ctx) {
       this._tutI = 0;
     } else {
       this._tut = null;
-      this.addBanner('Make the swamp yours. Paint plants, explore, or try the clearing bell.', 4.2);
+      this.addBanner(this.campaign.floor === 0
+        ? 'Make the swamp yours. Paint plants, explore, or try the clearing bell.'
+        : `${floor.name} · Follow the path right. L toggles your lantern.`, 4.2);
     }
     // The countdown begins only in the final arena, not when the run starts.
     this.heron._intro = 3.2;
-    // K7 (v1.5 M2): a CURATOR CHALLENGE run gets a distinct banner (it is a
-    // scored daily mode — same world, seeded loadout + modifier — that files a
-    // score to the atelier's challenge panel). A normal run shows nothing here.
-    if (_chal) {
-      const _mn = MODIFIERS[_chal.modifier] ? MODIFIERS[_chal.modifier].name : _chal.modifier;
-      this.addBanner('The Curator\u2019s Challenge — today\u2019s swamp, today\u2019s brush.', 4.6, this.ch * 0.3);
-      this.addBanner(`Today: ${_mn}. Paint the swamp, clear the heron — your score is filed at the Atelier.`, 5.2, this.ch * 0.3 + 40);
-    }
-    // T1 (v1.2 M13): a fresh save may start the guided first expedition. It is
-    // a SEPARATE pre-run layer — the timed clock is frozen and the boss deferred
-    // for its duration, so it never inflates the 15-20 min expedition timing.
-    // Returning players (a finished run OR a skip) never enter it: the title
-    // button only appears when tutorialEligible(save) is true, and this guard
-    // keeps the guided path out of play even if it is ever called otherwise.
-    if (guided && tutorialEligible(this.save)) this._startTutorial();
+    // Practice is optional on every visit; its clock and boss stay paused.
+    if (guided) this._startTutorial();
     this.studio = new FieldStudio(this);
     this.encounter = new OpeningEncounter(this);
     this.paint.onStroke = stroke => {
@@ -3819,16 +1979,7 @@ _drawAtelier(ctx) {
       }
     }
 
-    // K4 (v1.5 M2): derive whether the GILDED Heron's plume is absorbing the
-    // frog's heal sources THIS frame, and publish it on the player so BOTH heal
-    // sources read the same value — the standing-in-green heal (player.update,
-    // next line) and the paint-on-green heal (paint._applyHits, below). It is
-    // derived from heron.plumeT (the plume timer advanced in _updateBoss last
-    // frame — a 1-frame staleness is negligible on a ~30s cycle). No-op for the
-    // gray + green herons (they carry no `plumeT`), so a first-time / cycle-1-2
-    // run heals byte-identically.
-    p._plumeSuppress = !!(this.heron && this.heron.gilded && !this.heron.flying
-      && this.heron._intro <= 0 && this.heron.plumeT > 0);
+
     p.update(dt, this.input, this.tuning, this.world, this._view());
     // Q5 (Astra): the painted crossing's BRAMBLE — a red-painted mouth stings
     // ONCE when the frog enters the crossing's effect zone (a small hit; latched
@@ -3851,18 +2002,9 @@ _drawAtelier(ctx) {
       const _lowHp = p.alive && p.maxHp > 0 && (p.hp / p.maxHp) < 0.30;
       this.audio.setLowHp(_lowHp);
     }
-    // R3 (v1.6): detect the frame a hop STARTS (hopT goes from <=0 to >0) so the
-    // bestiary can peel a clinging leech (one hop breaks the cling). Reeds-only
-    // effect — a cycle-0 run has no leech to peel.
     this._hopStart = p.hopT > 0 && !this._hopWas;
     this._hopWas = p.hopT > 0;
     this.studio?.update(dt);
-    // R1 (v1.6): THE LANTERN (Reeds variant only). The L key toggles the paper
-    // lantern; the pure lanternTick drains the candle fuel (and auto-snuffs an
-    // empty lantern) and refills it at nearby fireflies / lantern-rest spots.
-    // Inactive outside the Reeds run (lanternReeds false) so the cycle-0 swamp
-    // path is byte-identical. lightFactor (0..1, the R3 bestiary key) is
-    // refreshed by _updateLantern for a Reeds run.
     this.lantern.lightFactor = 0;
     if (this.lanternReeds) {
       if (this.input.pressed('l')) {
@@ -3970,21 +2112,6 @@ _drawAtelier(ctx) {
           this._awakenHoldT = 1.2;
           this.addBanner('The Heron AWAKENS — paint it while it shimmers!', 3.4);
         }
-        // N3 (v1.3 M14): the Great Green Heron's swapped mechanic — painting it
-        // with MOSS (green) accumulates a reed pin. Once enough Moss is painted,
-        // it is HELD IN PLACE (pinned) for ~3s: no attacks, and 2x paint damage
-        // (the vulnerable window that rewards green play). Green heron only.
-        if (this.heron.green && res && res !== 0 && p.pigment === 'green' && !(this.heron.pinned > 0)) {
-          this.heron.pinCharge = (this.heron.pinCharge || 0) + this.tuning.bossPaintHit;
-          if (this.heron.pinCharge >= GREEN_HERON.pinNeed) {
-            this.heron.pinned = GREEN_HERON.pinDuration;
-            this.heron.pinCharge = 0;
-            this.sfx('awaken');
-            this.addShake(9);
-            this.particles.splatter(this.heron.x, this.heron.y - 120, GREEN_HERON.greenHue, 14, 220);
-            this.addBanner('Reeds catch the Great Green Heron — it is pinned! Paint while it holds!', 3.0);
-          }
-        }
       }
       // E1: paint the Painted Heron (mid-run set-piece) the same way
       if (this.midHeron && this.midHeron.hp > 0 && !this.midHeron.flying && this.midHeron._intro <= 0) {
@@ -4047,9 +2174,6 @@ _drawAtelier(ctx) {
     // seek/move/contact work is skipped. A 500px buffer keeps enemies from
     // visibly freezing at the edge. `p` is the player (declared above).
     const CULL2 = 500 * 500;
-    // R3 (v1.6): the Reeds bestiary's per-frame touch-up (wisp light refresh +
-    // leech cling-on-contact / hop-off). Reeds-only — a cycle-0 run's enemy list
-    // has no wisp/serpent/leech, so this is a no-op there (byte-identical).
     if (this.world.reedsVariant && !this._tutorialActive()) { this._mothEncounterTick(); this._bestiaryTick(dt, p); }
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
@@ -4158,20 +2282,10 @@ _drawAtelier(ctx) {
       this.heron._intro -= dt;
       if (this.heron._intro <= 0) {
         this.sfx('boss-growl');
-        // S2 (v1.4): crossfade the zone theme into the boss battle loop the
-        // moment the FINAL heron engages. The Great Green Heron (NG+) gets its
-        // own darker variant (this.heron.green). Presentation/audio only.
-        if (this.audio.setBossTheme) this.audio.setBossTheme(!!this.heron.green);
+        if (this.audio.setBossTheme) this.audio.setBossTheme(false);
         this.addBanner('THE GREAT GRAY HERON', 3.2, 150);
         this.addBanner('Paint red, blue, and green to wake it — then paint fast while it shimmers!', 4.4, 195);
-        // K9 (v1.5 M4): one-shot first-sight callout for the GILDED HERON
-        // (NG+ cycle-3+ final boss) — the gray/green herons never fire it.
-        if (this.heron.gilded) {
-          this._firstSightNote('gilded', 'The GILDED HERON — its gilded plume EATS your green healing. Heal in the 30s gaps between plumes.');
-        }
         this.zoomTarget = 0.92;
-        // K7 (v1.5 M2): the final heron has engaged — start the challenge's
-        // boss clock (the boss-time bonus is the fight duration).
         this._challengeAdd('bossEngage');
       }
     }
@@ -4602,11 +2716,7 @@ _drawAtelier(ctx) {
     if (this._tutorialActive() || this.studio?.sheltered() || this.encounter?.suppressesWaves) return;
     this.spawnT -= dt;
     if (this.spawnT > 0) return;
-    const t = this.runT;
-    // N2 (v1.3 M14): divide the spawn interval by the NG+ spawn-rate multiplier
-    // (1.0 on cycle 0, so the first-time run is byte-identical). The floor is
-    // scaled too, so the bump is felt in the late run (where the base interval
-    // is normally pinned at the floor), not just the first ~75s.
+    const t = this.runT - (this._floorStartT || 0);
     const sr = this.tuning.spawnRate || 1;
     const interval = Math.max(1.15 / sr, (2.7 - t / 60) / sr);
     this.spawnT = interval;
@@ -4624,36 +2734,12 @@ _drawAtelier(ctx) {
     const roll = Math.random();
     if (t > 12 && roll < 0.4) kind = 'mosquito';
     if (t > 25 && roll > 0.82) kind = 'toad';
-    // K1 (v1.5 M1): the MUD TURTLE is a zones-3+ creature — a first-time
-    // (cycle-0) Normal run must NEVER meet it before zone 3 (Bramble Thicket is
-    // _zoneI 2, so the turtle only enters the pool from zone 3 / _zoneI>=3
-    // onward). NG+ cycles (ngCycle>=1) may run turtles from the first named
-    // zone (a returning player is expected to handle the Living Swamp's new
-    // residents). Bounded: it shares the existing spawn cap (no extra list), so
-    // the enemy count can never grow unbounded. Turtle is the rarest pick so it
-    // doesn't crowd the pool.
-    const turtleAllowed = this._zoneI >= 3 || this.ngCycle >= 1;
+    const turtleAllowed = this._zoneI >= 3;
     if (turtleAllowed && t > 25 && roll > 0.9) kind = 'turtle';
-    // K2 (v1.5 M2): the BLIND CRAG FROG is also a zones-3+ creature (same cycle-0
-    // rule as the turtle — never before zone 3 on a first-time run; NG+ may run
-    // it from the first named zone). Bounded: it shares the same spawn cap. It
-    // is the rarest pick, just below the turtle, so it never crowds the pool.
-    const cragAllowed = this._zoneI >= 3 || this.ngCycle >= 1;
+    const cragAllowed = this._zoneI >= 3;
     if (cragAllowed && t > 30 && roll > 0.86 && roll <= 0.9) kind = 'cragfrog';
-    // R3 (v1.6 Module R): the LIGHT-REWRITTEN BESTIARY — three Reeds-only
-    // archetypes (wisp / serpent / leech). Reeds-mode ONLY (the victory-gated
-    // Reeds variant): a cycle-0 swamp run's _spawnWave never enters this branch,
-    // so the first-time run is byte-identical. Each is a RARE pick (the top of a
-    // separate roll, so they never crowd the swamp pool) and shares the EXISTING
-    // spawn cap (`cap` check above) — no extra list, so the enemy count can never
-    // grow unbounded.
     if (this.world.reedsVariant && t > 15) {
       const rr = Math.random();
-      // G1 (v1.8): the pick THRESHOLDS. A BLACK REEDS run uses this._reedsBestiary
-      // (REEDS_DARK_BESTIARY_DENSITY — denser: each light creature's pick band is
-      // WIDER, so the light-bestiary matters more in the darker descent). A
-      // cycle-0 Reeds run has this._reedsBestiary === null → the EXACT v1.6
-      // hardcoded ladder (0.965/0.935/0.905), byte-identical.
       const b = this._reedsBestiary;
       const wT = b ? b.wisp : 0.965;
       const sT = b ? b.serpent : 0.935;
@@ -4720,12 +2806,6 @@ _drawAtelier(ctx) {
   _bestiaryTick(dt, p) {
     const L = this.lantern;
     const cx = p.x, cy = p.y;   // the lantern is carried by the frog
-    // G1 (v1.8): thread the run's lantern TUNING into the wisp's light key.
-    // this._lanternTuning (set in _beginExpedition) is REEDS_DARK_LANTERN for a
-    // Black Reeds run (a shorter reach → the wisp "sees" less light) and LANTERN
-    // for a cycle-0 Reeds run (byte-identical — lanternLightFactor(state, x, y,
-    // cx, cy, LANTERN) === lightFactor(state, x, y, cx, cy)). Fallback LANTERN
-    // keeps any pre-run context identical.
     const ltBest = this._lanternTuning || LANTERN;
     for (const e of this.enemies) {
       if (e.kind === 'moth') {
@@ -4851,13 +2931,8 @@ _drawAtelier(ctx) {
         const v = base * mult;
         const boosted = mult > 1;
         this.collected[o.color] += v;
-        // G1 (v1.3 M15): count this expedition's orbs; the FIRST time a single
-        // run reaches 100 collected orbs, pay the orb-milestone gold. The
-        // goldEarn latch makes it fire exactly once across a career, so we can
-        // call the check every pickup — it is a silent no-op after the first.
         this.runOrbs += 1;
         this._challengeAdd('orb'); // K7 (v1.5 M2): count a challenge orb collected
-        if (this.runOrbs === 100) this._awardGold(goldEventOrbs(this.runOrbs), 'A hundred orbs in one expedition — GOLD for the Curator.');
         if (this.stock[o.color] < this.tuning.capacity) {
           this.stock[o.color] += v;
           this.sfx(boosted ? 'pickup-streak' : 'pickup');
@@ -4869,7 +2944,7 @@ _drawAtelier(ctx) {
           if (!this.save.flags.firstOrb) {
             this.save.flags.firstOrb = true;
             SaveSys.save(this.save);
-            this.addBanner('Pigment collected! Bank it at the Atelier to buy upgrades and paintings', 5.2, this.ch * 0.58);
+            this.addBanner('Paint is unlimited. Drops count toward this run’s score.', 4.2, this.ch * 0.58);
           }
           if (boosted) this.paint.note(o.x, o.y - 30, `streak ×${mult.toFixed(2)}`, 'red');
           // J5 (v1.4): a screen-space "+n" number pops up + fades near the
@@ -4948,214 +3023,53 @@ _drawAtelier(ctx) {
     if (!this.save.flags.firstDefeat) {
       this.save.flags.firstDefeat = true;
       SaveSys.save(this.save);
-      this.addBanner('Keep half your pigments — rest at the Atelier and come back stronger', 5.0, this.ch * 0.5);
+      this.addBanner('Your paintings are safe. A new descent starts with a fresh brush.', 4, this.ch * 0.5);
     }
     // the heron takes flight and the world starts to heal — even in defeat
     if (this.heron && !this.heron.flying) { this.heron.flying = 0.001; }
   }
 
   _endRun(kind) {
-    if (this.state === 'end') return;
-    this.studio?.archive(kind);
-    this.state = 'end';
-    this.endKind = kind;
-    // A1: remember the outcome so the atelier's one-liner can react to it
-    // (endKind itself resets when a new expedition begins).
-    this.lastResult = kind === 'victory' ? 'victory' : 'defeat';
-    this.endT = 0;
-    this.paused = false;
-    const victory = kind === 'victory';
-    const gains = bankGain(this.collected, { died: !victory, victory, tuning: this.tuning });
-    for (const k of ['red', 'blue', 'green']) this.save.bank[k] += gains[k];
-    this.save.stats.expeditions += 1;
-    // G1 (v1.3 M15): meta gold for a VICTORY's first-time moments — the first
-    // kill of the boss type (the gray heron the first time, the green heron on
-    // NG+) and the first completion of the active synergy duo. Both are
-    // idempotent (goldEarn latches each key once), and both fire BEFORE
-    // stats.victories is bumped so the victory bookkeeping stays intact.
-    if (victory) {
-      // G1 (v1.3 M15): the first kill of this boss type pays meta gold. The
-      // heron on a cycle-0 run is gray; an NG+ cycle's heron is green. The
-      // goldEarn latch makes each boss type fire exactly once across a career.
-      const bossKind = (this.heron && this.heron.green) ? 'green' : 'gray';
-      const bossEv = goldEventBoss(bossKind);
-      const heronLabel = bossKind === 'green'
-        ? 'The Great Green Heron is painted — GOLD settles in your palm.'
-        : 'The Great Gray Heron is painted — a sliver of GOLD settles in your palm.';
-      if (bossEv) this._awardGold(bossEv, heronLabel);
-      // the first completion of the active synergy duo (if any in the loadout)
-      const syn = activeSynergy(this.save.loadout);
-      const synEv = syn ? goldEventSynergy(syn) : null;
-      if (synEv) this._awardGold(synEv, 'A new pairing — the Curator adds GOLD to your ledger.');
-    }
-    if (victory) {
-      this.save.stats.victories += 1;
-      this.save.flags.heronDefeated = true;
-      // R5 (v1.6 Module R): the BENEATH-THE-REEDS gate. Set on the FIRST swamp
-      // victory — the SAME place ngUnlocked's victory is recorded (a victory is
-      // a victory). A victory-carrying save (victories >= 1) always has this set
-      // after the run that earned it; a first-time save that never won stays
-      // false (the entry is hidden, so the first-time run is byte-identical).
-      this.save.flags.reedsUnlocked = true;
-      // G1 (v1.8): the BLACK REEDS gate latch (the "a Reeds victory" half). Set
-      // ONLY when this victory came from a REEDS expedition — this.lanternReeds
-      // (set =_isReeds in _beginExpedition) marks a Reeds-biome run, and it
-      // survives to _endRun. The OTHER half of the gate is ngCycle >= 1 (read at
-      // the next _beginExpedition). A base-swamp victory does NOT set it: the
-      // Black Reeds is a Reeds-biome NG+ apex, so the player must have beaten
-      // the Reeds first. A legacy save with no flags.reedsVictory reads false,
-      // so the gate never fires before the player has actually won a Reeds run.
-      if (this.lanternReeds) this.save.flags.reedsVictory = true;
-      // H1 (v1.8): the "Full Collection" ledger — record that THIS boss type
-      // was defeated at least once (flags.bossDefeats is a de-duplicated list
-      // of BOSS_IDS). this.heron.kind maps straight onto a BOSS_ID (gray/green/
-      // gilded for the heron variants, 'wyrm' Silt Wyrm, 'warden', 'umbra'
-      // Umbral Wyrm). Pure bookkeeping on the save (no run time). A victory is
-      // a victory regardless of biome, so every end-of-run boss that is
-      // defeated here records its kind. The list is only ever appended to.
-      if (this.heron && typeof this.heron.kind === 'string'
-          && BOSS_IDS.includes(this.heron.kind)
-          && !(this.save.flags.bossDefeats || []).includes(this.heron.kind)) {
-        if (!Array.isArray(this.save.flags.bossDefeats)) this.save.flags.bossDefeats = [];
-        this.save.flags.bossDefeats.push(this.heron.kind);
-      }
-      // H1 (v1.8): the ONE-TIME "Full Collection" completion latch. The pure
-      // galleryCompletion check is true only when every painting is owned, every
-      // boss defeated at least once, AND there is a first-time + a Reeds
-      // victory. It latches save.galleryComplete exactly once (idempotent — the
-      // latch only flips once); on the flip it mints the permanent CAPSTONE
-      // galleryBonus level ("the museum keeps you better"), rebuilds the live
-      // tuning so it is active immediately, and opens the one-time completion
-      // cinematic (reusing the M1 first-victory beat machinery via _cine). No
-      // run time is added — it is meta + presentation, applied at run end.
-      if (!this.save.galleryComplete && galleryCompletion(this.save)) {
-        this.save.galleryComplete = true;
-        const cap = capstoneLevel(this.save);
-        this.save.galleryBonus = (Number(this.save.galleryBonus) || 0) + cap;
-        this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
-        this._cine = { t: 0, dur: 4, arpeggiated: false, collection: true };
-        this._cine.firstBeat = true;
-        if (this.audio && this.audio.cinematicArp) this.audio.cinematicArp();
-        // S1 (v1.9): the FULL COLLECTION fanfare (the H2 completion beat) — a
-        // triumphant major arpeggio + a gilded shimmer on the SFX bus, layered
-        // under the music-layer cinematicArp it accompanies. The "museum keeps
-        // you better" moment. Fires exactly once (the galleryComplete latch).
-        this.sfx('collection-fanfare');
-        // S2 (v1.9): the music-layer COLLECTION-SWELL — a short triumphant chord
-        // phrase on melodyMaster -> musicBus, UNDERNEATH the sfxBus fanfare +
-        // the cinematicArp (the full-collection moment's own musical beat).
-        if (this.audio.collectionSwell) this.audio.collectionSwell();
-        this.addBanner('THE FULL COLLECTION — the museum keeps you better.', 4.6, this.ch * 0.34);
+    if(this.state==='end'||this.state==='camp')return;
+    if(kind==='victory' && this.campaign && !this.campaign.complete){
+      if(!finishCampaignFloor(this.campaign,this.heron.kind))return;
+      if(!(this.save.flags.bossDefeats||[]).includes(this.heron.kind))this.save.flags.bossDefeats.push(this.heron.kind);
+      this.save.flags.heronDefeated ||= this.heron.kind==='gray';
+      this.studio?.archive('study',campaignFloor(this.campaign).name+' restored');
+      if(this.campaign.pendingReward){
+        this.state='camp';this._campChoice=null;this.paused=false;this.help=false;this.input.reset();
+        this.player.hp=Math.min(this.player.maxHp,this.player.hp+Math.ceil(this.player.maxHp*0.35));
+        this.audio.clearZoneTheme?.();this.audio.stopAmbientLife?.();SaveSys.save(this.save);return;
       }
     }
-    else this.save.stats.deaths += 1;
-    // K7 (v1.5 M2): file the CURATOR CHALLENGE score. Only a victory files a
-    // score (a defeat clears it silently), and only when this run WAS a
-    // challenge (this.challenge set by _beginChallengeExpedition). The score is
-    // the pure challengeScore (logic.js) of four signals, all gathered from the
-    // per-run counters _endRun's challenge hooks maintained:
-    //   · restored — the color-restoration fraction GAINED this run (the
-    //     revealProgress at end-of-run minus the run's starting baseline)
-    //   · enemies  — regular/mid/surge enemies defeated in time
-    //   · orbs     — pigment orbs collected
-    //   · bossTime — the heron fight duration (the boss-time bonus; faster is
-    //                better). `restored` is a single end-of-run read (no
-    //                per-frame allocation). The result is persisted to the
-    //                saved top-5 best-score list (challengeFileScore) and is
-    //                EXCLUDED from the first-time pacing band (this is a
-    //                scored mode, not a first-time run).
-    if (victory && this.challenge && this.challenge.mode === 'challenge') {
-      const _ch = this.challenge;
-      const _restoredEnd = this.world ? revealProgressOf(this.world.worldColorSat()) : 0;
-      const _restoredGained = Math.max(0, _restoredEnd - (_ch.restored0 != null ? _ch.restored0 : 0));
-      const _score = challengeScore({
-        restored: _restoredGained,
-        enemies: _ch.enemies || 0,
-        orbs: _ch.orbs || 0,
-        bossTimeSec: _ch.bossTime || 0,
-      });
-      challengeFileScore(this.save, _ch.seed, _score);
-      // K8: the challenge REWARD — first-ever completion mints the Masterpiece
-      // ("The Heron, Waking") + 15 gold (latched ONCE via the goldEarn map);
-      // subsequent completions pay a small repeatable bonus by rank (top-1 pays
-      // more). challengeComplete is the pure source (logic.js): it reads the
-      // filed list for the rank, latches the masterpiece, and banks the gold.
-      const _reward = challengeComplete(this.save, _ch.seed, _score);
-      SaveSys.save(this.save);
-      // rank = 1 + how many FILED scores are strictly better (deterministic;
-      // ties for the score count as the same rank). Shown on the end card so
-      // the player sees where today's run landed in the daily best list.
-      const _cs = this.save.challengeScores || [];
-      const _rank = 1 + _cs.reduce((n, s) => (s.score > _score ? n + 1 : n), 0);
-      this._challengeResult = {
-        score: _score, seed: _ch.seed, rank: _rank,
-        minted: _reward.minted, gold: _reward.gold,   // K8: the completion reward
-      };
-      // K8: the completion banner(s) — the masterpiece mint (once) + the rank
-      // gold. Shown as banners so the reward is felt the moment the run ends.
-      if (_reward.minted) {
-        this.addBanner(`The Curator frames a new Masterpiece — "${MASTERPIECE.name}".`, 5.4, this.ch * 0.30);
-        this.addBanner('A golden gift for the first clearing: +15 gold.', 4.6, this.ch * 0.30 + 34);
-        this.sfx('awaken');
-      } else if (_reward.gold > 0) {
-        this.addBanner(`A fine day's work — rank ${_rank} gold: +${_reward.gold}.`, 4.2, this.ch * 0.30);
-      }
-      this.challenge = null; // consumed — the run is over
-    }
-    this.save.stats.treasures += 0; // reserved for future content
-        // best run: a cleared victory with more pigments beats everything;
-        // otherwise the longer un-cleared run is the "furthest you got" record
-        const total = gains.red + gains.blue + gains.green;
-        const cand = { pigments: total, time: Math.round(this.runT), cleared: victory };
-        const prev = this.save.bestRun;
-        if (!prev
-          || (cand.cleared && !prev.cleared)
-          || (cand.cleared === prev.cleared &&
-             (victory ? total > prev.pigments : cand.time > prev.time))) {
-          this.save.bestRun = cand;
-        }
-        // M1 (v1.4): a FRESH player's very first victory opens a ~4s SKIPPABLE
-        // cinematic beat (letterbox bars, world blooms to full color, a soft
-        // arpeggio swell). The seen-flag is latched HERE, BEFORE the save below,
-        // so it persists the instant the beat is first shown and every returning
-        // player (flag already true) skips straight to the stinger + card. The
-        // stinger is deferred to beat-close (the card reveal) via firstBeat.
-        // Defeat (and every non-first victory) uses the immediate stinger path.
-        let playStingerNow = !victory;
-        if (victory) {
-          // H1 (v1.8): if the Full Collection completion beat already opened
-          // this._cine (the collection latch fired earlier in this _endRun), do
-          // NOT overwrite it — the collection cinematic owns the screen. In
-          // practice a fresh save can't be complete, so this is a defensive
-          // no-op; the two beats fire on different runs.
-          if (!this._cine && !this.save.firstVictoryCinematic) {
-            this.save.firstVictoryCinematic = true;
-            this._cine = { t: 0, dur: 4, arpeggiated: false };
-            this._cine.firstBeat = true;
-            if (this.audio && this.audio.cinematicArp) this.audio.cinematicArp();
-          } else {
-            playStingerNow = true;
-          }
-        }
-        SaveSys.save(this.save);
-        this.endGains = gains;
-        // S2 (v1.4) + M1 (v1.4): the end-screen stinger (rising major arpeggio
-        // on a victory, slow descending minor phrase on a defeat) rides the
-        // melody layer (music slider + mute). It plays now on a defeat or a
-        // returning player's victory, and is deferred to beat-close on a first
-        // victory (the cinematicArp already opened the beat).
-        if (playStingerNow) {
-          if (victory) { if (this.audio.stingerVictory) this.audio.stingerVictory(); else this.sfx('victory'); }
-          else { if (this.audio.stingerDefeat) this.audio.stingerDefeat(); else this.sfx('defeat'); }
-        }
-        // V3: fade out the per-zone ambient bed — the run's place has ended;
-        // the atelier keeps the base music bed (startMusic) but not a zone.
-        if (this.audio && this.audio.clearZoneAmbient) this.audio.clearZoneAmbient();
-        // S3 (v1.9): stop the sparse ambient-life events — the run's place has
-        // ended (the atelier keeps the base bed, not a zone's life).
-        if (this.audio && this.audio.stopAmbientLife) this.audio.stopAmbientLife();
-        // S1 (v1.4): the melodic theme ends with the run's place too.
-        if (this.audio && this.audio.clearZoneTheme) this.audio.clearZoneTheme();
+    this.studio?.archive(kind);this.state='end';this.endKind=kind;this.endT=0;this.paused=false;this.help=false;
+    this.save.stats.expeditions++;this.save.stats[kind==='victory'?'victories':'deaths']++;
+    this.save.stats.bestScore=Math.max(this.save.stats.bestScore||0,this.score||0);
+    const candidate={pigments:Object.values(this.collected||{}).reduce((a,b)=>a+b,0),time:Math.round(this.runT),cleared:kind==='victory'};
+    const best=this.save.bestRun;
+    if(!best||(candidate.cleared&&!best.cleared)||(candidate.cleared===best.cleared&&(candidate.cleared?candidate.pigments>best.pigments:candidate.time>best.time)))this.save.bestRun=candidate;
+    this.endGains={red:0,blue:0,green:0};this._cine=null;this.input.reset();SaveSys.save(this.save);
+    if(kind==='victory')this.audio.stingerVictory?.();else this.audio.stingerDefeat?.();
+    this.audio.clearZoneAmbient?.();this.audio.stopAmbientLife?.();this.audio.clearZoneTheme?.();
+  }
+
+  _updateCampaignCamp() {
+    const layout=dungeonCampLayout(this);
+    for(let i=0;i<3;i++)if(this.input.pressed(String(i+1)))this._campChoice=layout.cards[i].id;
+    if(this.input.mouse.lPressed){for(const card of layout.cards)if(this._mouseIn(card.x,card.y,card.w,card.h))this._campChoice=card.id;
+      const b=layout.descend;if(this._mouseIn(b.x,b.y,b.w,b.h))this._descendCampaign();}
+    if(this.input.pressed('enter')||this.input.pressed(' '))this._descendCampaign();
+    if(this.input.pressed('escape'))this._quitToTitle();
+  }
+
+  _descendCampaign() {
+    if(this.state!=='camp'||!chooseCampaignReward(this.campaign,this._campChoice))return false;
+    const carry={hp:this.player.hp,maxHp:this.player.maxHp,time:this.runT,score:this.score,enemies:this.runEnemies,orbs:this.collected};
+    this._beginExpedition(false,{campaignContinue:true});
+    this.player.hp=Math.min(this.player.maxHp,carry.hp+Math.max(0,this.player.maxHp-carry.maxHp));
+    this._prevHp=this.player.hp;
+    this.runT=carry.time;this.score=carry.score;this.runEnemies=carry.enemies;this.collected=carry.orbs;
+    this._floorStartT=this.runT;this._campChoice=null;return true;
   }
 
   // ================= part 3: boss ========================================
@@ -5165,37 +3079,6 @@ _drawAtelier(ctx) {
     // NOTE: let bossStep run even at hp<=0 — it emits the 'defeated' event
     if (!h || h.flying > 0 || this.dying) return;
     const v = this._view();
-    // K4 (v1.5 M2): the GILDED Heron's heal-absorbing plume — a boss-side phase
-    // timer (NOT a hold, unlike the green heron's pin). gildedPlumeTick (pure,
-    // logic.js) drives the ~30s active/cooldown cycle; on the frame the plume
-    // IGNITES it announces (the plumage glows) and the frog's green heal
-    // sources are suppressed until it fades. The gray + green herons never
-    // carry `plumeT` (undefined) so this is a no-op for them.
-    if (h.gilded) {
-      const plumeRes = gildedPlumeTick(h, dt);
-      if (plumeRes === 'plume-on') {
-        this.addBanner('The gilded plumage BLAZES — your healing is devoured!', 3.0, 232);
-        this.sfx('boss-growl');
-      } else if (plumeRes === 'plume-off') {
-        this.addBanner('The plumage dims — the swamp heals again.', 2.4, 232);
-      }
-    }
-    // N3 (v1.3 M14): the Great Green Heron's reed pin. While pinned (h.pinned>0)
-    // the heron is HELD IN PLACE — no bossStep attacks / no movement — and the
-    // player gets a 2x paint-damage window (rewarding green play). greenHeronPinTick
-    // (pure, logic.js) decays the hold; on the frame it releases we show a beat.
-    // The gray heron never carries `pinned`, so this is a no-op for it.
-    const pinnedNow = h.green && h.pinned > 0;
-    if (h.green && h.pinned > 0) {
-      const pinRes = greenHeronPinTick(h, dt);
-      if (pinRes === 'pin-off') this.addBanner('The reeds release the Great Green Heron…', 2.4, 240);
-    }
-    if (pinnedNow) {
-      // held: no attacks / movement this frame, but the 'defeated' event must
-      // still fire if it was painted to death during the vulnerable window.
-      if (h.hp <= 0) this._onHeronDefeated();
-      return;
-    }
     const ev = bossStep(h, dt, { left: v.x, right: v.x + v.w / v.scale, playerX: p.x }, this.tuning, this.now);
     for (const name of ev) {
       if (name === 'slam') {
@@ -5348,17 +3231,6 @@ _drawAtelier(ctx) {
     this.midHeron = null;
     }
 
-    // R4 (v1.6 Module R): drive THE SILT WYRM — the 4th boss archetype, the
-    // end-of-Reeds boss. It reuses the EXISTING 3-hue awaken machinery (paintBoss
-    // fires the identical 'awaken' latch via the shared paint path; h.awakened
-    // doubles paint damage in paintBossHit) but runs a NEW movement pattern
-    // (underground transit between surface points, via the pure wyrmStep) instead
-    // of the heron's flight/lunge. Between surfaces the wyrm is underground +
-    // INVULNERABLE + untargetable (paint is gated to the surfaced phase in the
-    // attack path) and its body line slithers beneath. Defeat hands off to the
-    // SAME _onHeronDefeated -> victory-flight -> _endRun('victory') path, so a
-    // Reeds victory is byte-for-byte the heron-defeat bookkeeping (it sets
-    // stats.victories + reedsUnlocked, as it should — a victory is a victory).
     _updateWyrm(dt) {
       const h = this.heron; const p = this.player;
       if (!h || h.flying > 0 || this.dying) return;
@@ -5476,16 +3348,6 @@ _drawAtelier(ctx) {
     // per-frame allocation).
   }
 
-  // F1 (v1.7): drive THE HOLLOW WARDEN (the 5th boss archetype, the Wander-apex)
-  // with the pure wardenStep state machine — the SAME maw-window rhythm as the
-  // Silt Wyrm, but PALE + a taste-seeded tempo. It reuses the existing 3-hue
-  // awaken machinery (paintBoss/bossStep) so the paint routing, the awaken
-  // handler, the camera, and _endRun('victory') all reuse the heron machinery.
-  // While the lantern is LIT it SIPHONS candle fuel (the pure wardenFuelSiphon
-  // tick); when the lantern is unlit/empty the siphon stops and the Warden is
-  // only as evasive as its (taste-scaled) maw-closed window makes it. The
-  // maw-strike hits the lane at the surface point (the frog dodges by standing
-  // clear of the marked point — the tell told it where to be).
   _updateWarden(dt) {
     const h = this.heron; const p = this.player;
     if (!h || h.flying > 0 || h.sinking > 0 || this.dying) return;
@@ -5570,8 +3432,6 @@ _drawAtelier(ctx) {
     const h = this.heron;
     this.save.stats.heronsPainted += 1;
     SaveSys.save(this.save);
-    // K7 (v1.5 M2): stop the challenge's boss clock (records the fight
-    // duration as bossTime; a no-op for a normal run).
     this._challengeAdd('bossDefeat');
     this.sfx('awaken');
     // S1 (v1.9): the BOSS KILL (big) sting — the final blow that drops any
@@ -5594,12 +3454,6 @@ _drawAtelier(ctx) {
     this.hitStop(0.8, 0.35);
     this.whiteFlash();
     this.addShake(22);
-        // N3 (v1.3 M14): the defeat line names whichever heron was painted — the
-        // Great Gray Heron on a first-time run, the Great Green Heron on NG+.
-        // R4 (v1.6): the Silt Wyrm has its own defeat beat (it is painted into
-        // the mud and sinks back under the water line — not a flight).
-        // F1 (v1.7): the Hollow Warden has the SAME defeat beat (it dissolves
-        // back into the pale reeds and sinks — not a flight) + its own banner.
         if (h.wyrm) {
           this.addBanner('The Silt Wyrm is painted — it sinks back beneath the reeds!', 4, 200);
         } else if (h.umbra) {
@@ -5607,7 +3461,7 @@ _drawAtelier(ctx) {
         } else if (h.warden) {
           this.addBanner('The Hollow Warden is painted — it drains the last of the light and sinks beneath the reeds!', 4.4, 200);
         } else {
-          this.addBanner(h.green ? 'The Great Green Heron blooms and takes flight!' : 'The Great Gray Heron blooms and takes flight!', 4, 200);
+          this.addBanner('The Great Gray Heron blooms and takes flight!', 4, 200);
         }
         for (const c of ORB_COLORS) this.particles.sparkles(h.x, h.y - 160, PIGMENTS[c].light, 10);
         // J3 (v1.9): the BOSS KILL ink-burst — a LARGER burst + a brief camera
@@ -5635,19 +3489,6 @@ _drawAtelier(ctx) {
         }
       }
 
-  // G1 (v1.3 M15): award meta gold for a single first-time event. The pure
-  // goldEarn (logic.js) is the single source of the amount + the idempotency
-  // latch (each event fires exactly once ever). A 0 award is a no-op (no
-  // re-save, no banner) so repeat calls / unmet milestones are silent.
-  _awardGold(event, label) {
-    const amt = goldEarn(this.save, { key: event.key, amount: event.amount });
-    if (amt <= 0) return 0;
-    this.sfx('pickup');
-    this.addBanner(label, 3.4, this.ch * 0.30);
-    SaveSys.save(this.save);
-    return amt;
-  }
-
   // ---------------- heron rendering (world space) ------------------------
   _drawHeron(ctx, h, now) {
     if (!h) return;
@@ -5655,22 +3496,7 @@ _drawAtelier(ctx) {
     const fy = h.y - dy;                    // feet level
     const flying = h.flying > 0;
     const gray = h.awakened || flying;      // painted body when awake / flying
-    // N3 (v1.3 M14): the Great Green Heron's distinct palette — moss green instead
-    // of the gray heron's gray-green. The gray heron keeps the original colors
-    // byte-identically (h.green is undefined for it).
-    // K4 (v1.5 M2): the GILDED Heron's gold palette (h.gilded) — a third, gold
-    // tint distinct from both the gray and the green herons (h.gilded/h.green
-    // are undefined for the gray heron, so its colors stay byte-identical).
-    const bodyCol = h.gilded
-      ? (gray ? GILDED_HERON.gildedHue : '#b69a55')  // gold (awake/flying) / muted gilded (asleep)
-      : h.green
-        ? (gray ? GREEN_HERON.greenHue : '#7a9a6a')  // moss green (awake/flying) / muted moss (asleep)
-        : (gray ? '#7d8f96' : '#98a19b');
-    // K4: the plume phase — while the GILDED Heron's plume is live (h.plumeT>0)
-    // the plumage GLOWS GOLD (the visible tell that the frog's heal is being
-    // devoured). Pure presentation (never affects logic); the plume timer is
-    // advanced in _updateBoss.
-    const plumeGlow = !!(h.gilded && h.plumeT > 0);
+    const bodyCol = gray ? '#7d8f96' : '#98a19b';
     const ink = INK;
 
     // ground shadow
@@ -5702,56 +3528,6 @@ _drawAtelier(ctx) {
       ctx.beginPath();
       ctx.arc(h.x, fy - 140, R, 0, TAU);
       ctx.fill();
-      ctx.restore();
-    }
-
-    // N3 (v1.3 M14): the Great Green Heron's reed-pin visual — when pinned, moss
-    // reeds wrap its feet and a faint pulsing ring shows the vulnerable window.
-    // Pure presentation; the gray heron never enters this branch (no `pinned`).
-    if (h.green && h.pinned > 0) {
-      const pulse = 0.5 + Math.sin(now * 6) * 0.25;
-      ctx.save();
-      ctx.globalAlpha = 0.55 * pulse + 0.25;
-      ctx.strokeStyle = GREEN_HERON.greenHue;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.ellipse(h.x, h.y + 4, 60, 18, 0, 0, TAU);
-      ctx.stroke();
-      // a few reed strokes around the feet
-      ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
-      for (let i = -2; i <= 2; i++) {
-        const rx = h.x + i * 20;
-        ctx.beginPath();
-        ctx.moveTo(rx, h.y + 8);
-        ctx.quadraticCurveTo(rx + 6, h.y - 30, rx + 2 + Math.sin(now * 3 + i) * 3, h.y - 58);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    // K4 (v1.5 M2): the GILDED Heron's plume glow — while the plume is live the
-    // plumage BLAZES gold (a soft radial halo + pulsing rim) so the player can
-    // see the heal-absorbing phase is active and time healing in the cooldown
-    // gap. Pure presentation (reads h.plumeT, set in _updateBoss); the gray +
-    // green herons never enter this branch (no `gilded`).
-    if (plumeGlow) {
-      const pulse = 0.5 + Math.sin(now * 7) * 0.3;
-      ctx.save();
-      ctx.globalAlpha = 0.28 + 0.22 * pulse;
-      const g = ctx.createRadialGradient(h.x, fy - 150, 10, h.x, fy - 150, 150);
-      g.addColorStop(0, GILDED_HERON.gildedHueLight);
-      g.addColorStop(1, 'rgba(212,175,55,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.ellipse(h.x, fy - 150, 150, 190, 0, 0, TAU);
-      ctx.fill();
-      ctx.globalAlpha = 0.6 * pulse + 0.3;
-      ctx.strokeStyle = GILDED_HERON.gildedHueLight;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.ellipse(h.x, fy - 150, 70, 95, 0, 0, TAU);
-      ctx.stroke();
       ctx.restore();
     }
 
@@ -6033,16 +3809,6 @@ _drawAtelier(ctx) {
     }
   }
 
-  // G2 (v1.8): draw THE UMBRAL WYRM (the 6th boss, the Black Reeds NG+ apex).
-  // Modeled on _drawWyrm (the Silt Wyrm's twin) but a DARKER, DUAL-PHASE
-  // creature: a violet-abyss palette (vs the Silt Wyrm's dark mud), a DUAL
-  // ripple-ring telegraph (BOTH maw points marked at once during 'dual-
-  // telegraph'), and a "deep dark" escalation (phase 2, hp <= deepDarkPhase)
-  // where the body/eyes deepen and the arena darkens further (the lantern is
-  // the only light left). A faint SIPHON stream runs from the frog's lit
-  // lantern to the head while the wyrm is draining fuel (the Warden-inherited
-  // lantern-eater, so the player sees its light being eaten). P10: a fixed
-  // body-segment count + a few arcs — 60fps-safe (no per-frame allocation).
   _drawUmbra(ctx, h, now) {
     const W = this.world.w;
     const surfY = UMBRA_WYRM.surfaceY;
@@ -6429,10 +4195,6 @@ _drawAtelier(ctx) {
     // world's paint/bar keep reading worldColorSat() (the single source of
     // truth); this just nudges how saturated the world is drawn for ~1s.
     const drawSatRaw = Math.min(1, sat01 + (this._bloomSurge || 0));
-    // N4 (v1.3 M14): Grey Morning desaturates the world — a render-only
-    // saturation CAP (tuning.satFloor), active only during the run it was
-    // chosen for (expedition). No modifier / not in-run -> no cap -> the
-    // first-time (cycle-0) render and every other screen are byte-identical.
     const drawSat = (this.state === 'expedition' && this.tuning && this.tuning.satFloor != null)
       ? Math.min(drawSatRaw, this.tuning.satFloor)
       : drawSatRaw;
@@ -6530,33 +4292,12 @@ _drawAtelier(ctx) {
 
     // ---- screen space ----
     this._screenSpace();
-    // K5 (v1.5 M2): Night Expedition — a RENDER-ONLY darkening over the world,
-    // drawn in SCREEN space (after the camera transform is restored) so it
-    // covers the whole visible frame; the HUD is drawn AFTER it, so the UI
-    // stays fully lit/legible. A semi-transparent near-black wash makes the
-    // swamp read as "night" without touching any logic/tuning. Active only
-    // when the modifier set tuning.nightDarkness (NG+ cycles); a cycle-0 run
-    // never carries it (byte-identical render).
     if ((this.state === 'expedition' || this.state === 'end') && this.tuning && this.tuning.nightDarkness) {
       ctx.save();
       ctx.fillStyle = 'rgba(10,14,30,0.34)';
       ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       ctx.restore();
     }
-    // R1 (v1.6): THE REEDS — the biome's dark-water darkness + THE LANTERN's
-    // light. A RENDER-ONLY pass in SCREEN space (after the camera transform is
-    // restored, before the HUD) so it covers the whole frame and the HUD stays
-    // fully lit/legible. It draws:
-    //   (a) a deep near-black wash (the flooded, deeper-swamp darkness),
-    //   (b) a single CACHED radial-gradient SPRITE (baked ONCE into an offscreen
-    //       canvas, keyed to the eased radius) drawn scaled via one drawImage at
-    //       the lantern's screen position (additive 'lighter'), plus a short
-    //       ambient radius when unlit.
-    // The sprite is cached: it is (re)built ONLY when the eased radius moves
-    // by >= 4px (this._lanternGradR), never per frame, so a full ~25s wick burn
-    // yields a handful of rebuilds, not thousands. No per-pixel work. Active
-    // ONLY when lanternReeds (the Reeds variant) — a cycle-0 swamp run never
-    // sets it, so its render is byte-identical.
     if ((this.state === 'expedition' || this.state === 'end') && this.lanternReeds && this.player) {
       this._drawReedsLight(ctx, v);
     }
@@ -6569,6 +4310,7 @@ _drawAtelier(ctx) {
       this._drawOffscreenEnemyArrows(ctx, v);
       if (this.state === 'expedition') drawCombatReadout(this, ctx, v);
       this._drawHud(ctx);
+      if(this.state==='expedition')drawDungeonProgress(this,ctx);
     }
     // T1 (v1.2 M13): the on-screen goal chip + SKIP button for the guided first
     // expedition (rendered above the HUD so it reads as the active instruction).
@@ -6577,13 +4319,9 @@ _drawAtelier(ctx) {
       this.encounter?.drawHint(ctx);
     }
     if (this.state === 'expedition' && this.tutorial && !this.tutorial.done) this._drawTutorialChip(ctx);
+    if (this.state === 'camp') drawDungeonCamp(this,ctx);
     if (this.state === 'title') this._drawTitle(ctx);
     if (this.state === 'title' && this.optionsOpen) this._drawOptions(ctx);
-    if (this.state === 'title' && this._modPrompt) this._drawModPrompt(ctx);  // N4
-    if (this.state === 'title' && this._seedCard) this._drawSeedCard(ctx);    // O1 (v1.7)
-    if (this.state === 'atelier') this._drawAtelier(ctx);
-    // M2: the Encore viewing screen overlays the atelier (drawn on top).
-    if (this.state === 'atelier' && this._encoreOpen) this._drawEncore(ctx);
     if (this.paused && this.state === 'expedition') this._drawPause(ctx);
     if (this.help && this.state === 'expedition') this._drawHelp(ctx);   // M8 P6
     if (this.state === 'end') this._drawEnd(ctx);
@@ -6594,7 +4332,7 @@ _drawAtelier(ctx) {
     // W2 (v1.6): the gamepad UI overlays — the title "pad connected" chip + the
     // focus-cursor highlight over the focused menu button. Drawn above the
     // screens so the cursor is visible on the highlighted button.
-    if (!this.optionsOpen && !this._encoreOpen && !this._modPrompt && !this._seedCard && !this._cine && (this.state !== 'expedition' || this.paused)) {
+    if (!this.optionsOpen && !this._cine && (this.state !== 'expedition' || this.paused)) {
       const b = sketchbookButton(this);
       uiButton(ctx, b.x, b.y, b.w, b.h, 'Sketchbook  [J]', this._mouseIn(b.x, b.y, b.w, b.h), false, { seed: 93, size: 14 });
       if (this.state === 'expedition' && this.paused && !this.help) {
@@ -6964,12 +4702,6 @@ _drawAtelier(ctx) {
       ctx.restore();
     }
 
-    // ---- R1 (v1.6): THE LANTERN — the CANDLE FUEL bar (top-right, under the
-    // orb streak) + the L-key lit/unlit state. REEDS-VARIANT ONLY (guarded by
-    // this.lanternReeds) so a cycle-0 swamp run's HUD is byte-identical. The bar
-    // fills with a warm amber (the candle) whose width = the lantern's fuel; the
-    // lit state is a tiny lit flame / a grayed-out "out" when unlit. A dim,
-    // quiet "L" key hint sits at the right so the player learns the toggle. ----
     if (this.lanternReeds && this.lantern) {
       const chipW = 150, chipH = 24, cx2 = this.cw - chipW - 14, cy2 = 108;
       const lit = !!this.lantern.lit;
@@ -7079,7 +4811,7 @@ _drawAtelier(ctx) {
     ctx.save();
     ctx.globalAlpha = 0.92;
     const sx = this.cw - 14;
-    centerText(ctx, this.challenge ? `Score  ${this.score}` : 'Drops for upgrades', sx - 94, 31, uiFont(15, { weight: 700 }), INK);
+    centerText(ctx, `Paint drops · ${this.score}`, sx - 94, 31, uiFont(15, { weight: 700 }), INK);
     for (let i = 0; i < 3; i++) {
       const c = ORB_COLORS[i];
       const pig = PIGMENTS[c];
@@ -7112,7 +4844,7 @@ _drawAtelier(ctx) {
       ctx.restore();
       const frac = Math.max(0, h.hp / h.maxHp);
       ctx.save();
-      const bossName = h.warden ? 'THE HOLLOW WARDEN' : h.umbra ? 'THE UMBRAL WYRM' : h.wyrm ? 'THE SILT WYRM' : h.gilded ? 'THE GILDED HERON' : h.green ? 'THE GREAT GREEN HERON' : 'THE GREAT GRAY HERON';
+      const bossName = h.warden ? 'THE HOLLOW WARDEN' : h.umbra ? 'THE UMBRAL WYRM' : h.wyrm ? 'THE SILT WYRM' : 'THE GREAT GRAY HERON';
       centerText(ctx, bossName, this.cw / 2, by + 4, uiFont(UI.sizes.small, { weight: 700 }), INK, 0.85);
       ctx.fillStyle = 'rgba(43,35,32,0.18)';
       this._blobRect(ctx, bx, by + 12, bw, 12, 1);
@@ -7225,72 +4957,16 @@ _drawAtelier(ctx) {
   // every title-screen rect, shared by _drawTitle and _updateTitle so the
   // visuals and the click targets can never drift apart.
   _titleLayout() {
-    const cx = this.cw / 2;
-    // C1 (v1.10): the controls panel was pinned at py=300, which left no room
-    // for the footer on an 800-tall canvas once a returning player's extra rows
-    // (NG+ / Curator Challenge / Beneath-the-Reeds entry + best-run line) stack
-    // in — the stats/help lines ran off the bottom (the A1 finding). Pull the
-    // panel up and tighten every inter-row gap so even the worst-case returning
-    // title fits above the 800px floor with a small margin. Geometry only —
-    // no sim/tuning number moves.
-    const pw = 520, ph = 254, px = cx - pw / 2, py = 236;
-    const bw = 260, bh = 54, bx = cx - bw / 2, by = py + ph + 12;
-    // T1 (v1.2 M13): the guided first expedition button (shown only to a fresh
-    // save — see tutorialEligible). Sits just under the start button and pushes
-    // the difficulty + secondary rows down one row ONLY for a fresh save, so a
-    // returning player's title keeps its original layout (no dead button).
-    const eligible = tutorialEligible(this.save);
-    const tw = 260, th = 40, tx = cx - tw / 2, ty = by + bh + 10;
-    // N1 (v1.3 M14): the "Next Expedition" (New Game+) button. Shown ONLY when
-    // a victory has been earned (ngUnlocked) so a first-time save (ngCycle 0)
-    // sees ZERO new UI. It occupies the same slot as the guided button (which
-    // only shows to a fresh save) — they never both appear, so the slot is
-    // unambiguous. It pushes the difficulty + secondary rows down one row only
-    // while visible, mirroring how the guided button already behaves.
-    const ngShow = ngUnlocked(this.save);
-    const ng = ngShow ? { x: cx - tw / 2, y: ty, w: tw, h: th } : null;
-    const slotPush = (eligible || ngShow) ? (ty + th + 8) : (by + bh + 8);
-    const dy = slotPush, dH = 30, dW = 88, dGap = 10;
-    const dTotal = dW * 3 + dGap * 2, dStartX = cx - dTotal / 2;
-    const diff = ['gentle', 'normal', 'bold'].map((id, i) => ({ id, x: dStartX + i * (dW + dGap), y: dy, w: dW, h: dH, label: (DIFFICULTIES[id] || {}).label }));
-    // K7 (v1.5 M2): the CURATOR CHALLENGE button. Gated behind a completed
-    // victory (challengeUnlocked = same gate as ngUnlocked) so a first-time
-    // player never sees it. It shares the difficulty row's Y with the
-    // Atelier/Options secondary pair (aby = dy + dH + 12) but sits in a WIDER
-    // centered 3-button row (Challenge | Atelier | Options) so it is a
-    // distinct, prominent entry — never stacked onto the difficulty pills.
-    // When absent (no victory) the Atelier/Options pair keeps its exact
-    // original centered geometry (challengeUnlocked false -> rowW 424).
-    const challShow = challengeUnlocked(this.save);
-    const chw = 150, chh = 44, cgap = 24;
-    const rowW = (challShow ? chw + cgap : 0) + 200 + cgap + 200;
-    const rowX = cx - rowW / 2;
-    const aby2 = dy + dH + 8, abw2 = 200, abh2 = 44;
-    const abx2 = rowX + (challShow ? chw + cgap : 0), ox2 = rowX + (challShow ? chw + cgap : 0) + 200 + cgap;
-    const ow2 = 200, oh2 = abh2;
-    const abx = abx2, aby = aby2, abw = abw2, abh = abh2, ox = ox2, ow = ow2, oh = oh2;
-    const chall = challShow ? { x: rowX, y: aby2, w: chw, h: chh } : null;
-    // R1 (v1.6): the "Beneath the Reeds" entry — the victory-gated new expedition
-    // VARIANT. It shares the SAME ngUnlocked-style gate as Next Expedition / the
-    // Curator Challenge (reedsUnlocked = at least one victory), so a first-time
-    // (cycle-0) save NEVER sees it and the first-time 15–20 min run stays
-    // byte-identical. It is a distinct, dimmer entry: a wide button on its own
-    // row just under the NG+ button (the NG/guided slot is above; the difficulty
-    // row is below it), carrying the "deeper" subtitle. When absent (no victory)
-    // the layout is exactly the pre-Reeds geometry (reeds null).
-    const reedsShow = reedsUnlocked(this.save);
-    const rw2 = 260, rh2 = 36, rx2 = cx - rw2 / 2, ry2 = aby2 + abh2 + 10;
-    const reeds = reedsShow ? { x: rx2, y: ry2, w: rw2, h: rh2 } : null;
-    // the footer stats sit below the atelier/options row; when the Reeds entry is
-    // shown they are pushed down one row so nothing overlaps.
-    const fpush = reedsShow ? (rh2 + 10) : 0;
-    return { cx, pw, ph, px, py, bx, by, bw, bh, tw, th, tx, ty, diff, abx, aby, abw, abh, ox, oy: aby2, ow, oh, ng, chall, reeds, fpush };
+    const cx=this.cw/2, pw=600, ph=220, px=cx-pw/2, py=250;
+    const bw=300,bh=52,bx=cx-bw/2,by=490,tw=300,th=38,tx=bx,ty=552;
+    const diff=['gentle','normal','bold'].map((id,i)=>({id,label:DIFFICULTIES[id].label,x:cx-152+i*104,y:608,w:96,h:30}));
+    return {cx,pw,ph,px,py,bx,by,bw,bh,tx,ty,tw,th,diff,abx:cx-210,aby:654,abw:200,abh:42,ox:cx+10,oy:654,ow:200,oh:42,fpush:0};
   }
   _setDifficulty(id) {
     if (!DIFFICULTIES[id] || this.options.difficulty === id) return;
     this.options.difficulty = id;
     SaveSys.saveOptions(this.options);
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
+    this.tuning = makeTuning({}, [], this.options.difficulty);
     this._prevHp = this.tuning.maxHp;
     this.sfx('ui');
   }
@@ -7300,21 +4976,11 @@ _drawAtelier(ctx) {
   // never drift. Sliders are horizontal bars: value = (handleX - x) / w.
   _optionsLayout() {
     const cx = this.cw / 2, cy = this.ch / 2;
-    // C3 (v1.3 M16): the panel grew 380→424 to fit a FOURTH toggle (paper
-    // grain) below the vignette; the back button stays anchored to the panel
-    // bottom (py + ph - 66), so its rect moves down with the taller panel.
-    // Q3 (v1.6): the Save section grows it 462->560 (clear of an 800-tall
-    // viewport and the smoke test's 900x700 canvas).
-    // D4 (v1.7): the Wandering Expeditions toggle (a FIFTH toggle, default OFF)
-    // grows it 560->598; the back button stays anchored to py + ph - 66.
     const pw = 460, ph = 598, px = cx - pw / 2, py = cy - ph / 2;
     const padX = 46;
     const trackX = px + padX, trackW = pw - padX * 2;
     const row = (baseY) => ({ x: trackX, y: baseY, w: trackW, h: 22 });
     const yMusic = py + 112, ySfx = py + 178, yShake = py + 240, yVign = py + 278, yGrain = py + 316;
-    // D4 (v1.7): the "Wandering Expeditions" toggle sits below the paper-grain
-    // row; the panel grows 560->598 to fit it and the gamepad + Save rows below
-    // shift down with it (the back button is anchored to py + ph - 66).
     const yWander = py + 354;
     // W1 (v1.6 Module W): the "Gamepad: Auto / Off" row sits below the paper
     // grain toggle; the panel grows 424->462 to fit it and the back button
@@ -7456,7 +5122,7 @@ _drawAtelier(ctx) {
     // Mirror the imported save into the live instance so a no-reload (test) path
     // sees it immediately.
     this.save = res.save;
-    this.tuning = makeTuning(this.save.upgrades, this.save.loadout, this.options.difficulty, galleryBonusTotal(this.save), this.save.owned, isGilded(this.save));
+    this.tuning = makeTuning({}, [], this.options.difficulty);
     return true;
   }
   // Q3 (v1.6): focus the paste field and, in a real browser, pull the current
@@ -7506,7 +5172,6 @@ _drawAtelier(ctx) {
       if (this._mouseIn(g.shake.x, g.shake.y, g.shake.w, g.shake.h)) { this._toggleOpt('shake'); return; }
       if (this._mouseIn(g.vignette.x, g.vignette.y, g.vignette.w, g.vignette.h)) { this._toggleOpt('vignette'); return; }
       if (this._mouseIn(g.grain.x, g.grain.y, g.grain.w, g.grain.h)) { this._toggleOpt('grain'); return; }
-      if (this._mouseIn(g.wander.x, g.wander.y, g.wander.w, g.wander.h)) { this._toggleOpt('wander'); return; }   // D4 (v1.7): the Wandering Expeditions toggle
       // W1: the gamepad Auto/Off row toggles the feed mode.
       if (this._mouseIn(g.gpad.x, g.gpad.y, g.gpad.w, g.gpad.h)) { this._setGamepadMode(); return; }
       // Q3: the Save section. Export writes the save blob to the clipboard.
@@ -7586,12 +5251,6 @@ _drawAtelier(ctx) {
     this._drawToggle(c, g.vignette, 'Low-HP vignette', this.options.vignette);
     // C3 (v1.3 M16): the paper-grain presentation toggle (default OFF).
     this._drawToggle(c, g.grain, 'Paper grain', this.options.grain);
-    // D4 (v1.7): the "Wandering Expeditions" toggle (default OFF). A FIFTH row,
-    // the same P9 machinery as the other toggles — clicking it flips
-    // options.wander and persists to the options blob.
-    this._drawToggle(c, g.wander, 'Wander · shuffled encounters', this.options.wander);
-    // W1 (v1.6 Module W): the "Gamepad: Auto / Off" row. A two-state pill:
-    // Auto (engages while a pad is connected + active) vs Off (feed skipped).
     this._drawGpad(c, g.gpad, this.options.gamepad);
     // Q3 (v1.6): the Save export/import section (Export / Import buttons + the
     // paper-styled paste field + the one-line outcome banner).
@@ -7720,217 +5379,35 @@ _drawAtelier(ctx) {
   }
 
   _drawTitle(ctx) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(30,25,22,0.45)';
-    ctx.fillRect(0, 0, this.cw, this.ch);
-    ctx.restore();
-
-    // L3: a frog sits idle on a lily pad in the corner — the swamp "breathes"
-    // even at rest. Reuses J4's watercolor blob pose (wobbly body + squash) and
-    // a slow breathing bob (draw-only; no world/player state). Sits in the
-    // lower-left, clear of the centered title panel.
+    const g=this._titleLayout(),cx=g.cx;
+    ctx.fillStyle='rgba(26,43,37,0.3)';ctx.fillRect(0,0,this.cw,this.ch);
     this._drawIdleFrog(ctx);
-    const keepsake = this.save.sketchPins?.includes(this.save.sketchExhibit) && this.save.sketchbook?.find(p => p.id === this.save.sketchExhibit);
-    if (keepsake) {
-      ctx.fillStyle = '#a87825'; ctx.fillRect(20, 268, 324, 204);
-      drawPostcard(ctx, keepsake, 26, 274, 312, 187.2, studyRewardEarned(this.save.studio?.completed || [], 'swamp'), studyRewardEarned(this.save.studio?.completed || [], 'reeds'), !!this.save.flags?.crossingPainted);
-      centerText(ctx, 'Your pinned keepsake · J to curate', 182, 498, uiFont(16), '#f6efdb');
-    }
+    outlineText(ctx,'Frogue Gallery',cx,132,uiFont(64,{weight:700}),'#f4ead8',INK,8);
+    centerText(ctx,'One descent. Four guardians. A swamp worth painting.',cx,184,uiFont(23),PAPER);
+    drawDungeonRoute(this,ctx,cx-470,205,940);
+    const c=paperPanel(ctx,g.px,g.py,g.pw,g.ph,{seed:11});
+    const lines=['WASD to move · Mouse + left click to paint nearby','Space to dodge · Q / E or wheel to change color','Red burns · Blue stops · Green heals','Hold right mouse, then release for a splash','Beat each guardian. Choose a brush gift. Descend.'];
+    lines.forEach((line,i)=>centerText(c,line,cx,g.py+36+i*36,uiFont(17,{weight:i===4?700:400}),INK));paperEnd(ctx);
+    uiButton(ctx,g.bx,g.by,g.bw,g.bh,'Enter the dungeon',this._mouseIn(g.bx,g.by,g.bw,g.bh),false,{size:21});
+    uiButton(ctx,g.tx,g.ty,g.tw,g.th,'Practice the controls',this._mouseIn(g.tx,g.ty,g.tw,g.th),false,{size:16});
+    for(const d of g.diff)uiButton(ctx,d.x,d.y,d.w,d.h,d.label,this._mouseIn(d.x,d.y,d.w,d.h),this.options.difficulty===d.id,{size:14});
+    uiButton(ctx,g.abx,g.aby,g.abw,g.abh,'Your sketchbook',this._mouseIn(g.abx,g.aby,g.abw,g.abh),false,{size:17});
+    uiButton(ctx,g.ox,g.oy,g.ow,g.oh,'Options',this._mouseIn(g.ox,g.oy,g.ow,g.oh),false,{size:17});
+    centerText(ctx,'Each new run starts fresh. Saved paintings and postcards stay.',cx,725,uiFont(15),PAPER);
+    centerText(ctx,'Erase saved artwork',140,this.ch-26,uiFont(13),PAPER,0.7);
+    centerText(ctx,'Frogue Gallery · v'+GAME_VERSION,cx,this.ch-26,uiFont(12),PAPER,0.65);
+    const keepsake=this.save.sketchbook?.find(p=>p.id===this.save.sketchExhibit);
+    if(keepsake)drawPostcard(ctx,keepsake,26,274,312,187.2,studyRewardEarned(this.save.studio?.completed||[],'swamp'),studyRewardEarned(this.save.studio?.completed||[],'reeds'),!!this.save.flags.crossingPainted);
+  }
 
-    const cx = this.cw / 2;
-    const bob = Math.sin(this.now * 1.4) * 4;
-    // L3: the title + tagline breathe in first (stagger step 0/1), AND gently
-    // "breathe" while shown — a small scale/opacity oscillation (titleBreatheSwell,
-    // ~4% over a slow sine) folded into a transform around the title point.
-    // Draw-only; the menu rects (hit-testing) are untouched, so input is stable.
-    ctx.save();
-    ctx.globalAlpha = titleItemAlpha(this._titleShowT, 0);
-    const swell = titleBreatheSwell(this.now); // a few % scale oscillation
-    ctx.translate(cx, 200);                    // pivot near the title text
-    ctx.scale(1 + swell, 1 + swell);
-    ctx.translate(-cx, -200);
-    outlineText(ctx, 'Frogue Gallery', cx, 150 + bob, uiFont(UI.sizes.mega, { weight: 700 }), '#f4ead8', INK, 10);
-    centerText(ctx, 'a tiny frog. a fading swamp. a painting of your own.', cx, 204 + bob, uiFont(UI.sizes.titlePlus, { italic: true }), '#fdf6e9', 0.92);
-    ctx.restore();
-
-    // H2 (v1.8): the title-screen "collection complete" badge — a small gilded
-    // plaque that appears ONLY when the Full Collection has latched
-    // (save.galleryComplete). Pure presentation over galleryCompletion(save);
-    // no run time, no input. A non-complete save draws nothing here (the title
-    // layout is untouched), so a first-time player sees the unchanged title.
-    if (this.save.galleryComplete && galleryCompletion(this.save)) {
-      const bw2 = 250, bh2 = 30, bx2 = cx - bw2 / 2, by2 = 220 + bob;
-      const bc = paperPanel(ctx, bx2, by2, bw2, bh2, { seed: 77, fill: '#f7edcf' });
-      bc.save();
-      bc.lineWidth = 2; bc.strokeStyle = '#b8912e';
-      bc.beginPath(); bc.roundRect(bx2 + 2, by2 + 2, bw2 - 4, bh2 - 4, 5); bc.stroke();
-      const gpulse = 0.55 + 0.45 * Math.sin(this.now * 2);
-      bc.fillStyle = '#c9922a';
-      bc.textAlign = 'center'; bc.textBaseline = 'middle';
-      bc.font = uiFont(UI.sizes.body, { weight: 700 });
-      bc.globalAlpha = 0.85 + 0.15 * gpulse;
-      bc.fillText('✦  The Full Collection  ✦', cx, by2 + bh2 / 2);
-      bc.restore();
-      paperEnd(ctx);
-    }
-
-    // M8 P7: single source of truth for every title-screen rect (shared with the
-    // click handling in _updateTitle).
-    const g = this._titleLayout();
-    const { pw, ph, px, py } = g;
-
-    // controls card
-    const c = paperPanel(ctx, px, py, pw, ph, { seed: 11 });
-    centerText(c, 'The swamp is fading to gray.', cx, py + 34, uiFont(UI.sizes.subPlus, { weight: 600 }));
-    centerText(c, 'Repaint the plants, dodge the bugs, and explore to the right.', cx, py + 58, uiFont(UI.sizes.subPlus, { weight: 600 }));
-    const rows = this._gp.connected ? [
-      ['Move / Aim', 'left stick / right stick'],
-      ['Paint', 'hold RT · LT selects dry brush'],
-      ['Splash burst', 'hold B, release when charged'],
-      ['Dodge hop', 'RB · hold RT for a learned brush-hop'],
-      ['Pigments', 'A red · X blue · Y green'],
-      ['Pause / Book', 'Start / Back'],
-    ] : [
-      ['Move', 'WASD / arrow keys'],
-      ['Paint nearby', 'aim with mouse · hold left button'],
-      ['Splash', 'hold right mouse until full, release'],
-      ['Dodge', 'Space — leap safely through attacks'],
-      ['Change color', 'Q / E or wheel · 1 red · 2 blue · 3 green'],
-      ['Pause', 'P or Esc'],
-    ];
-    rows.forEach((r, i) => {
-      const ry = py + 96 + i * 28;
-      centerText(c, r[0], px + 110, ry, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.9);
-      centerText(c, r[1], px + 330, ry, uiFont(UI.sizes.body), INK, 0.8);
-    });
-    paperEnd(ctx);
-
-    // start button (visual; Enter/Space handled in _updateTitle).
-    // Progress survives between expeditions; the active run does not resume.
-    // a returning player should see the difference without reading the footer.
-    const b = this.save.bank;
-    const hasProgress = this.save.stats.expeditions > 0 || this.save.owned.length > 0 ||
-      b.red > 0 || b.blue > 0 || b.green > 0 || this.save.loadout.length > 0 ||
-      (this.save.upgrades && (this.save.upgrades.power > 0 || this.save.upgrades.vitality > 0 || this.save.upgrades.capacity > 0));
-        // L3: the primary actions breathe in as a staggered step (step 1) after the title.
-        ctx.save();
-        ctx.globalAlpha = titleItemAlpha(this._titleShowT, 1);
-        uiButton(ctx, g.bx, g.by, g.bw, g.bh, hasProgress ? 'New Expedition' : 'Begin Expedition', this._mouseIn(g.bx, g.by, g.bw, g.bh), false, { seed: 5, size: 20, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-        // T1 (v1.2 M13): the guided first expedition — shown only to a fresh
-        // save (no finished run, never skipped). Clicking it begins a low-stakes
-        // teaching run on the opening zone instead of the timed expedition.
-        if (tutorialEligible(this.save)) {
-          uiButton(ctx, g.tx, g.ty, g.tw, g.th, 'Guided First Expedition', this._mouseIn(g.tx, g.ty, g.tw, g.th), false, { seed: 55, size: 14, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-        }
-        // N1 (v1.3 M14): the "Next Expedition" (New Game+) button — shown only
-        // after a victory (g.ng set only when ngUnlocked). It shares the guided
-        // slot (which is fresh-save-only), so the two never coexist.
-        if (g.ng) {
-          uiButton(ctx, g.ng.x, g.ng.y, g.ng.w, g.ng.h, 'Next Expedition  (New Game+)', this._mouseIn(g.ng.x, g.ng.y, g.ng.w, g.ng.h), false, { seed: 56, size: 14, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-        }
-        ctx.restore();
-        // M8 P7: difficulty pills (Gentle / Normal / Bold) between the two buttons.
-        // L3: staggered step 2.
-        ctx.save();
-        ctx.globalAlpha = titleItemAlpha(this._titleShowT, 2);
-        centerText(ctx, 'difficulty', cx - g.diff[0].x + 34, g.diff[0].y + 20, uiFont(UI.sizes.xsmall), INK, 0.55);
-        for (const p of g.diff) {
-          const sel = this.options.difficulty === p.id;
-          const hov = this._mouseIn(p.x, p.y, p.w, p.h);
-          ctx.save();
-          // multiply the per-pill emphasis by the group fade-in (step 2).
-          ctx.globalAlpha = ctx.globalAlpha * (sel ? 1 : (hov ? 0.92 : 0.78));
-          roundRectPath(ctx, p.x, p.y, p.w, p.h, 8);
-          ctx.fillStyle = sel ? '#3a5a3f' : (hov ? '#e8dcc4' : '#f2e8d4');
-          ctx.fill();
-          ctx.lineWidth = sel ? 2.4 : 1.4;
-          ctx.strokeStyle = sel ? '#2b4a34' : INK;
-          ctx.stroke();
-          centerText(ctx, p.label, p.x + p.w / 2, p.y + p.h / 2 + 4, sel ? uiFont(UI.sizes.label, { weight: 700 }) : uiFont(UI.sizes.small), sel ? '#fdf6e9' : INK, sel ? 1 : 0.85);
-          ctx.restore();
-        }
-        ctx.restore();
-        // atelier button (visual; A / click handled in _updateTitle) + options
-        // (O / click handled in _updateTitle). L3: staggered step 3.
-        ctx.save();
-        ctx.globalAlpha = titleItemAlpha(this._titleShowT, 3);
-        // K7 (v1.5 M2): the Curator Challenge button (victory-gated). It is a
-        // distinct, prominent entry (a gilded-ink "Curator's pick" frame) shown
-        // only when challengeUnlocked — a first-time save never sees it. It
-        // carries the day's seed hint so the shared-daily nature reads clearly.
-        if (g.chall) {
-          const chov = this._mouseIn(g.chall.x, g.chall.y, g.chall.w, g.chall.h);
-          uiButton(ctx, g.chall.x, g.chall.y, g.chall.w, g.chall.h, 'Challenge  [C]', chov, false, { seed: 58, size: 15, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-          const day = challengeDate(challengeDaySeed(Date.now()));
-          centerText(ctx, `today's pick · ${day}`, g.chall.x + g.chall.w / 2, g.chall.y - 8, uiFont(UI.sizes.tiny, { italic: true }), '#e8c86a', 0.9);
-        }
-        uiButton(ctx, g.abx, g.aby, g.abw, g.abh, 'Visit the Atelier', this._mouseIn(g.abx, g.aby, g.abw, g.abh), false, { seed: 6, size: 15 });
-        uiButton(ctx, g.ox, g.oy, g.ow, g.oh, 'Options', this._mouseIn(g.ox, g.oy, g.ow, g.oh), false, { seed: 7, size: 15 });
-        // R1 (v1.6): the "Beneath the Reeds" entry — the victory-gated new
-        // expedition VARIANT. Drawn only when g.reeds (a victory has been earned);
-        // a first-time save never sees it (byte-identical title). A distinct,
-        // dimmer "deeper" entry — the same painting, deeper — carrying the
-        // lantern hint. Clicking it (or pressing R) starts the Reeds run.
-        if (g.reeds) {
-          ctx.save();
-          ctx.globalAlpha = 0.92;
-          uiButton(ctx, g.reeds.x, g.reeds.y, g.reeds.w, g.reeds.h, 'Beneath the Reeds  [R]', this._mouseIn(g.reeds.x, g.reeds.y, g.reeds.w, g.reeds.h), false, { seed: 59, size: 14, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-          centerText(ctx, 'the deeper swamp · carry a lantern', g.reeds.x + g.reeds.w / 2, g.reeds.y + g.reeds.h + 9, uiFont(UI.sizes.tiny, { italic: true }), 'rgba(253,246,233,0.6)', 0.9);
-          ctx.restore();
-        }
-        ctx.restore();
-
-        // little footer stats (pushed down one row when the Reeds entry shows so
-        // nothing overlaps — see _titleLayout's fpush)
-        const s = this.save.stats;
-        const fpush = g.fpush || 0;
-        centerText(ctx, `expeditions ${s.expeditions}   ·   victories ${s.victories}   ·   herons painted ${s.heronsPainted}`, cx, g.aby + g.abh + 10 + fpush, uiFont(UI.sizes.label, { italic: true }), '#fdf6e9', 0.7);
-        const br = this.save.bestRun;
-        if (br) {
-          const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
-          centerText(ctx, `best run — ${what}`, cx, g.aby + g.abh + 30 + fpush, uiFont(UI.sizes.body, { weight: 700 }), '#e8c86a', 0.95);
-        }
-        centerText(ctx, 'G/N/B to set difficulty · M to mute · A for the atelier · R for the Reeds · J for your sketchbook', cx, g.aby + g.abh + (br ? 48 : 30) + fpush, uiFont(UI.sizes.small), '#fdf6e9', 0.5);
-        // erase-save link (bottom-left; two-click confirm, see _updateTitle)
-        const ex = 16, ey = this.ch - 40;
-        const armed = (this.now - (this._eraseArm || -99)) < 3;
-        centerText(ctx, armed ? 'click again to erase save data…' : 'erase save data', ex + 120, ey + 14, armed ? uiFont(UI.sizes.small, { weight: 700 }) : uiFont(UI.sizes.xsmall), armed ? '#d8543c' : 'rgba(253,246,233,0.45)', armed ? 1 : 0.8);
-        // R1 (v1.8): the release version stamp — a quiet bottom-right corner
-        // mark (clear of the erase link at bottom-left and the idle frog at
-        // (150, ch-150)). Display-only: it renders the single GAME_VERSION
-        // string from logic.js and touches no state.
-        centerText(ctx, 'Frogue Gallery · v' + GAME_VERSION, this.cw - 160, this.ch - 26, uiFont(UI.sizes.xsmall), 'rgba(253,246,233,0.5)', 0.9);
-      }
-
-  // M8 P6: the "?" field guide. A single source of truth for its layout so the
-  // click handling (in the frame router) and the draw never drift apart.
   _helpGeom() {
-    const cx = this.cw / 2, cw = this.cw;
-    const pw = 720, px = cx - pw / 2, py = 150;
-    // T4 (v1.2 M13): the "Watch me" retraining band — replay a single pigment
-    // drill or the sketch-heron phase ON DEMAND. Shown only when retraining is
-    // available for this save (a returning player) AND no guided run is already
-    // active. The panel grows a little to make room; a single source of truth
-    // for both the draw (_drawHelp) and the click handling (frame router).
-    const retrainOn = retrainAllowed(this.save) && !this._tutorialActive();
-    // K9 (v1.5 M4): the "Know your quarry" column grew by the four v1.5
-    // residents (turtle / crag frog / storm surge / gilded heron) — the panel
-    // grows to fit them (single source of truth shared by draw + click).
-    // R5 (v1.6 Module R): a Reeds-unlocked save grows the panel further to fit
-    // the four BENEATH-THE-REEDS placeholder Field Guide entries (a base save
-    // keeps its exact height — no overlap, no growth when locked).
-    const reedsGuide = reedsUnlocked(this.save);
-    const ph = (retrainOn ? 604 : 560) + (reedsGuide ? 200 : 0);
-    const bw = 150, bh = 34, gap = 16, totalW = 4 * bw + 3 * gap;
-    const bx0 = cx - totalW / 2, by = py + ph - 92;
-    const phases = [3, 4, 5, 6]; // burn / freeze / root drills, then the sketch heron
-    const labels = ['Burn drill', 'Freeze drill', 'Root drill', 'Sketch heron'];
-    const buttons = phases.map((phase, i) => ({
-      phase, label: labels[i], x: bx0 + i * (bw + gap), y: by, w: bw, h: bh,
-    }));
-    return { cx, pw, ph, px, py,
-      close: { x: px + pw - 120, y: py + 18, w: 100, h: 40 },
-      retrain: { enabled: retrainOn, titleY: by - 18, buttons } };
+    const cx=this.cw/2, pw=720, px=cx-pw/2, py=150;
+    const retrainOn=retrainAllowed(this.save)&&!this._tutorialActive();
+    const ph=(retrainOn?604:560)+(reedsUnlocked(this.save)?200:0);
+    const bw=150,bh=34,gap=16,bx0=cx-(4*bw+3*gap)/2,by=py+ph-92;
+    const labels=['Burn drill','Freeze drill','Root drill','Sketch heron'];
+    const buttons=[3,4,5,6].map((phase,i)=>({phase,label:labels[i],x:bx0+i*(bw+gap),y:by,w:bw,h:bh}));
+    return {cx,pw,ph,px,py,close:{x:px+pw-120,y:py+18,w:100,h:40},retrain:{enabled:retrainOn,titleY:by-18,buttons}};
   }
 
   _drawHelp(ctx) {
@@ -7984,23 +5461,12 @@ _drawAtelier(ctx) {
       this._wrapHelp(c, r[1], colR, y + 15, colW, 13);
     });
     const hy = y0 + 34 + foes.length * 48 + 12;
-    // K9 (v1.5 M4): the boss line adapts to the NG+ heron the player now faces.
-    const bossName = this.heron && this.heron.gilded ? 'The Gilded Heron (NG+)' : 'The Great Gray Heron';
-    c.font = uiFont(UI.sizes.bodyLg, { weight: 700 }); c.fillStyle = this.heron && this.heron.gilded ? GILDED_HERON.gildedHue : '#8d7bb0'; c.textAlign = 'left'; c.textBaseline = 'middle';
+    const bossName = campaignFloor(this.campaign)?.bossName || 'The guardian';
+    c.font = uiFont(UI.sizes.bodyLg, { weight: 700 }); c.fillStyle = '#8d7bb0'; c.textAlign = 'left'; c.textBaseline = 'middle';
     c.fillText(bossName, colR, hy);
     c.font = uiFont(UI.sizes.label); c.fillStyle = 'rgba(43,35,32,0.85)';
     this._wrapHelp(c, 'Watch the telegraph (a glow before it strikes). Move off the marked line when it swoops, sweeps, or dives. It gathers reinforcements and grows fiercer the lower its health falls — keep painting to keep it stunned.', colR, hy + 16, colW, 14);
-    if (this.heron && this.heron.gilded) {
-      this._wrapHelp(c, 'NEW: its gilded plume EATS your green healing — heal in the 30s gaps between plumes.', colR, hy + 44, colW, 14);
-    }
 
-    // R5 (v1.6 Module R): the BENEATH-THE-REEDS placeholder Field Guide cards.
-    // Shown only when the biome is unlocked (reedsUnlocked — a first-time save
-    // never sees them, so the cycle-0 guide is byte-identical). The creatures
-    // land in R3/R4; these placeholder entries may reference them by name and
-    // MUST render even before the creatures exist (pure display data from
-    // REEDS_CREATURES in logic.js). A new column heading + one card per
-    // creature, drawn with the same wrap helpers as the v1.5 entries.
     const reedsGuide = reedsUnlocked(this.save);
     if (reedsGuide) {
       const rgY = y0 + 34 + foes.length * 48 + 12 + 60 + 40;
@@ -8112,393 +5578,21 @@ _drawAtelier(ctx) {
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
-  // Q2 (v1.6): the end-screen "the last expedition" RECAP. A tiny minimap — the
-  // run's route through the swamp drawn as a wobbly ink line on a 6-zone strip
-  // (the run's visited x-range + the named zones crossed) — plus the run time and
-  // the boss outcome. PURE PRESENTATION: it reads only the run-local waypoint
-  // trail (sampled every ~500 ms, capped at ROUTE_WAYPOINT_CAP), the run's time,
-  // and the boss result. NO new persistence — the save is untouched by it.
-  _recapBossLine() {
-    if (this.endKind !== 'victory') return 'it buried you';
-    // F1 (v1.7): a WANDER run's apex is THE HOLLOW WARDEN (not the wyrm), so a
-    // victory over it gets its own line. The heron object (kind 'warden') is the
-    // live boss and persists to the end screen. (O2 expands this with the run's
-    // taste / seed flavor; this is the minimal F1-correct line.)
-    if (this.heron && this.heron.kind === 'warden') return 'the warden sleeps on';
-    return (this.world && this.world.reedsVariant) ? 'the wyrm sleeps on' : 'the heron bloomed';
-  }
-  // O2 (v1.7): the Wander run-recap line. Tells the story of a UNIQUE run — the
-  // "Wandering expedition" tag + the generated seed + the taste's name + its
-  // one-line flavor (e.g. "Feast Season — a swarm of mosquitos rides the warm
-  // current"). Run-local read only (wanderActive / wanderSeedRun / wanderTaste
-  // are set in _beginExpedition and never persisted); a hand-tuned (Wander-OFF)
-  // run's recap is UNCHANGED — this returns null for them so the strip draws
-  // exactly as before.
-  _recapWanderLine() {
-    if (!this.wanderActive || this.wanderSeedRun == null) return null;
-    const t = this.wanderTaste;
-    const tag = 'Wandering expedition · seed ' + this.wanderSeedRun;
-    if (!t) return tag;
-    return t.name + ' — ' + t.note + '   ·   ' + tag;
-  }
-  _drawRecap(ctx) {
-    const cx = this.cw / 2;
-    const py = this.ch / 2 - this._endCardH() / 2, H = this._endCardH();
-    // Q2: the strip floats ABOVE the end card (in the empty band between the
-    // swamp backdrop and the card's top). The card's bottom is crowded on a
-    // victory (Season / challenge block down to py+508) and the buttons live
-    // BELOW the card at py+H+16, so the top is the ONE place free on both a
-    // victory AND a defeat — keeping the card height + button rects unchanged
-    // (V4/N1/C2) and fitting every canvas size. Nothing existing moves.
-    const stripW = 300, stripH = 20, stripX = cx - stripW / 2, stripY = py - 62;
-    const w = (this.world && this.world.w) || 1;
-    const pts = routeTrail(this.runWaypoints, w, ROUTE_WAYPOINT_CAP);
-    // the named zones this run crossed. `_zoneI` is the authoritative count of
-    // zones the player entered this run (0 = still out in the open water before
-    // the first named zone). Fall back to the waypoint max-x when no run state
-    // is present (a drawn end-card with no live run). The strip draws a tick at
-    // every named zone; `crossed` is the count shown on the recap line.
-    const ticks = [];
-    for (const z of ZONES) ticks.push({ x: w * z.x, name: z.name });
-    let crossed;
-    if (typeof this._zoneI === 'number' && this._zoneI >= 0) {
-      crossed = Math.min(ZONES.length, this._zoneI);
-    } else {
-      const maxX = pts.reduce((m, p) => Math.max(m, p.x), 0);
-      crossed = ZONES.filter(z => maxX >= w * z.x).length;
-    }
-    ctx.save();
-    ctx.globalAlpha = 0.9;
-    // the strip's paper ground
-    ctx.fillStyle = 'rgba(247,240,224,0.85)';
-    ctx.strokeStyle = 'rgba(43,35,32,0.5)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(stripX, stripY, stripW, stripH, 5); else ctx.rect(stripX, stripY, stripW, stripH);
-    ctx.fill(); ctx.stroke();
-    // the named-zone tick marks (a "6-zone strip": 5 named zones + the open water)
-    ctx.strokeStyle = 'rgba(43,35,32,0.35)';
-    ctx.lineWidth = 1;
-    for (const t of ticks) {
-      const tx = stripX + clamp(t.x / w, 0, 1) * stripW;
-      ctx.beginPath(); ctx.moveTo(tx, stripY + stripH - 3); ctx.lineTo(tx, stripY + stripH); ctx.stroke();
-    }
-    // the route: a wobbly ink line through the sampled waypoints (oldest -> newest).
-    // The wobble is a tiny alternating vertical offset so the path reads as hand-
-    // drawn ink, not a ruler line — pure presentation over the waypoint trail.
-    if (pts.length >= 2) {
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 2;
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      for (let i = 0; i < pts.length; i++) {
-        const px = stripX + clamp(pts[i].x / w, 0, 1) * stripW;
-        const pyv = stripY + clamp((pts[i].y / (this.world.h || 1)) * stripH, 3, stripH - 3);
-        const wob = (i % 2 ? 1 : -1) * 0.7;
-        if (i === 0) ctx.moveTo(px, pyv + wob);
-        else ctx.lineTo(px, pyv + wob);
-      }
-      ctx.stroke();
-      // a small marker at the end (the frog's resting place)
-      const le = pts[pts.length - 1];
-      ctx.fillStyle = '#3a6d3a';
-      ctx.beginPath(); ctx.arc(stripX + clamp(le.x / w, 0, 1) * stripW, stripY + clamp((le.y / (this.world.h || 1)) * stripH, 3, stripH - 3), 2.6, 0, TAU); ctx.fill();
-    } else {
-      centerText(ctx, 'the route was not recorded', cx, stripY + stripH / 2 + 4, uiFont(UI.sizes.xsmall, { italic: true }), INK, 0.5);
-    }
-    // the recap line: run time + zones crossed + the boss outcome
-    centerText(ctx, `the last expedition — ${this._fmtClock(this.runT || 0)} · ${crossed} zone${crossed === 1 ? '' : 's'} crossed · ${this._recapBossLine()}`, cx, stripY + stripH + 14, uiFont(UI.sizes.small, { weight: 700 }), '#5a5a52', 0.92);
-    // O2 (v1.7): a SECOND line for a WANDER run only — the "Wandering expedition
-    // · seed N" tag + the taste's name + its flavor. Guarded by _recapWanderLine
-    // (null for hand-tuned runs), so a default-OFF run's recap strip is
-    // byte-identical to before. It sits 14px below the recap line and 14px above
-    // the card's top — in the same empty band, so nothing existing moves.
-    const wl = this._recapWanderLine();
-    if (wl) centerText(ctx, wl, cx, stripY + stripH + 30, uiFont(UI.sizes.xsmall, { italic: true }), '#8a6a3a', 0.9);
-    ctx.restore();
-  }
-
-  // V4 (v1.2 M11): the end-card height — taller on a victory (it carries the
-  // exhibition), same compact height on a defeat. Both the draw (_drawEnd) and
-  // the end-state click rects (input routing above) use this so the buttons
-  // stay in the same place on screen in both.
-  _endCardH() { return this.endKind === 'victory' ? 540 : 430; }
-
-  // N1 (v1.3 M14): the end-screen button geometry — single source of truth shared
-  // by the end-state click routing (input) and _drawEnd, so the buttons never
-  // drift. "Rest at the Atelier" (primary) and "Return to the Pond" (link) keep
-  // their exact original positions; a "Next Expedition (New Game+)" button is
-  // slotted between them ONLY when NG+ is unlocked (a victory has been earned),
-  // so a first-time save sees the identical two-button end screen as before.
-  _endButtons() {
-    const H = this._endCardH();
-    const cx = this.cw / 2, py = this.ch / 2 - H / 2, ph = H;
-    const bw = 300, bh = 54, bx = cx - bw / 2, by = py + ph - 24;
-    const primary = { x: bx, y: by, w: bw, h: bh };
-    const ngShow = ngUnlocked(this.save);
-    let ng = null;
-    let retY = by + bh + 10;
-    if (ngShow) {
-      const nbh = 44;
-      ng = { x: cx - bw / 2, y: by + bh + 8, w: bw, h: nbh };
-      retY = ng.y + ng.h + 8;
-    }
-    const ret = { x: cx - 105, y: retY, w: 210, h: 34 };
-    return { primary, ng, ret };
-  }
-
-  // C2 (v1.3 M16): the victory end-screen "Season" summary — a compact read of
-  // the NG+ season a victory belongs to. Pure display (no new persistence):
-  // every value is read from the run (ngCycle) and the save (ngModifier, gold,
-  // gildedFrame, loadout) exactly once at draw time. `goldThisRun` is the delta
-  // since run start (runGold captured in _beginExpedition; falls back to the
-  // full total if a run never started, as in headless end screens).
-  _seasonSummary() {
-    const gold = Math.max(0, Math.floor(this.save.gold) || 0);
-    const modId = saveModifier(this.save);
-    const names = (this.save.loadout || [])
-      .map((id) => PAINTINGS.find((p) => p.id === id))
-      .filter(Boolean)
-      .map((p) => p.name);
-    return {
-      cycle: Math.max(0, Math.floor(this.ngCycle) || 0),
-      mod: modId ? MODIFIERS[modId].name : 'none',
-      goldThisRun: Math.max(0, gold - (Number.isFinite(this.runGold) ? this.runGold : 0)),
-      goldTotal: gold,
-      gilded: isGilded(this.save) ? 'hung' : 'not yet',
-      paintings: names,
-    };
-  }
-
-  // M1 (v1.4): the first-victory cinematic beat's screen — letterbox bars
-  // slide in from top/bottom, a soft vignette, the caption "The Swamp Blooms…"
-  // fades up, and a "press any key / click to skip" hint pulses. The world
-  // behind (already blooming to full color in _drawAll) shows through the open
-  // center, so it reads as a cinematic "reveal" rather than a card. Pure draw.
-  _drawCineBeat(ctx) {
-    const { t, dur } = this._cine;
-    const in01 = clamp(t / 0.5, 0, 1);            // bars slide in over 0.5s
-    const ease = 0.5 - 0.5 * Math.cos(Math.PI * in01);
-    const barH = (0.16 * this.ch) * ease;
-    // letterbox bars
-    ctx.fillStyle = '#0a0d08';
-    ctx.fillRect(0, 0, this.cw, barH);
-    ctx.fillRect(0, this.ch - barH, this.cw, barH);
-    // soft vignette over the whole frame (deeper at the edges)
-    const vg = ctx.createRadialGradient(this.cw / 2, this.ch / 2, this.ch * 0.28,
-      this.cw / 2, this.ch / 2, this.ch * 0.72);
-    vg.addColorStop(0, 'rgba(10,13,8,0)');
-    vg.addColorStop(1, `rgba(10,13,8,${0.45 * in01})`);
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, this.cw, this.ch);
-    // caption + sub, fading up just after the bars settle
-    const capA = clamp((t - 0.35) / 0.7, 0, 1);
-    if (capA > 0) {
-      // H1 (v1.8): the Full Collection completion beat (this._cine.collection)
-      // carries its own caption + sub (the capstone payoff) — it reuses the
-      // M1 first-victory letterbox/bar/skip machinery but reads differently.
-      const cap = this._cine.collection
-        ? 'The Full Collection!'
-        : 'The Swamp Blooms!';
-      const sub = this._cine.collection
-        ? 'Every painting hung, every heron painted, every reed crossed. The museum keeps you better.'
-        : 'The Great Gray Heron takes flight, dripping in your colors. The swamp remembers.';
-      outlineText(ctx, cap, this.cw / 2, this.ch * 0.42,
-        uiFont(UI.sizes.displayXl, { weight: 700 }), '#eaf3e0', 'rgba(10,13,8,0.9)', 6);
-      centerText(ctx, sub,
-        this.cw / 2, this.ch * 0.42 + 44, uiFont(UI.sizes.subPlus, { italic: true }), '#eaf3e0', 0.85 * capA);
-    }
-    // "press any key to skip" hint — pulses, fades in late, never before 1.2s
-    const hintA = clamp((t - 1.2) / 0.6, 0, 1);
-    if (hintA > 0) {
-      const pulse = 0.55 + 0.45 * Math.sin((t - 1.2) * 4);
-      centerText(ctx, 'press any key or click to continue', this.cw / 2,
-        this.ch - barH - 26, uiFont(UI.sizes.label), '#cfe6c4', hintA * pulse);
-    }
-    // a thin gold rule between the caption and the skip hint on full reveal
-    if (in01 > 0.6) {
-      const rw = 220 * ease;
-      ctx.fillStyle = `rgba(201,146,42,${0.5 * in01})`;
-      ctx.fillRect(this.cw / 2 - rw / 2, this.ch * 0.42 + 70, rw, 1.5);
-    }
-  }
+  _endButtons() { const cx=this.cw/2; return {primary:{x:cx-150,y:590,w:300,h:50},ret:{x:cx-150,y:654,w:300,h:40}}; }
 
   _drawEnd(ctx) {
-    // M1 (v1.4): the first-victory cinematic beat owns the whole screen —
-    // letterbox bars slide in, the world (already blooming to full color in
-    // _drawAll) shows through, a caption + "press any key" hint read, and the
-    // normal card is HELD (no dim, no card) until the beat closes / is skipped.
-    // _drawAll routes the beat's own input (skip), so we only draw here.
-    if (this._cine) { this._drawCineBeat(ctx); return; }
-    const victory = this.endKind === 'victory';
-    const a = Math.min(1, this.endT / 0.5);
-    ctx.save();
-    ctx.globalAlpha = a;
-    ctx.fillStyle = victory ? 'rgba(40,50,30,0.55)' : 'rgba(30,25,22,0.6)';
-    ctx.fillRect(0, 0, this.cw, this.ch);
-    ctx.restore();
-    if (this.endT < 0.25) return; // let the heron fly a beat before the card
-
-    const cx = this.cw / 2;
-    const ph = this._endCardH();   // V4: taller on a victory (carries the exhibition)
-    const pw = 560, px = cx - pw / 2, py = this.ch / 2 - ph / 2;
-    const c = paperPanel(ctx, px, py, pw, ph, { seed: victory ? 31 : 37 });
-
-    // Q2 (v1.6): the "the last expedition" recap strip (a tiny minimap of the
-    // run's route + the run time + the boss outcome), drawn above the card. Pure
-    // presentation over the run-local waypoint trail + runT + the boss result;
-    // NO new persistence (the save is untouched, SAVE_VERSION stays 10).
-    // Shown for any begun run (runWaypoints is an array; the minimap falls back
-    // to "route not recorded" when <2 points, but the time + boss line always shows).
-    if (Array.isArray(this.runWaypoints)) this._drawRecap(c);
-
-    outlineText(c, victory ? 'The Swamp Blooms!' : 'The Brush Rests…', cx, py + 52, uiFont(UI.sizes.displayLg, { weight: 700 }), victory ? '#5a9e3d' : '#8d9aa0', INK, 6);
-    centerText(c, victory
-      ? 'The Heron takes flight, dripping in your colors. The swamp remembers.'
-      : 'The frog slips beneath the reeds… but the pigments you kept are yours.',
-      cx, py + 88, uiFont(UI.sizes.bodyLg, { italic: true }), INK, 0.8);
-
-    // gains
-    const g = this.endGains || {};
-    const gainsY = victory ? 122 : 150;
-    centerText(c, victory ? 'Pigments added to the bank' : 'Pigments kept (half, the swamp is unforgiving)', cx, py + gainsY, uiFont(UI.sizes.body, { weight: 700 }), INK, 0.85);
-    for (let i = 0; i < 3; i++) {
-      const col = ORB_COLORS[i];
-      const pig = PIGMENTS[col];
-      const ox = cx - 140 + i * 140, oy = py + gainsY + 38;
-      c.fillStyle = pig.color;
-      c.lineWidth = 2;
-      c.strokeStyle = INK;
-      c.beginPath();
-      c.arc(ox, oy, 14, 0, TAU);
-      c.fill(); c.stroke();
-      c.fillStyle = 'rgba(255,255,255,0.75)';
-      c.beginPath();
-      c.arc(ox - 4, oy - 5, 3.4, 0, TAU);
-      c.fill();
-      centerText(c, `+${g[col] || 0}`, ox, oy + 34, uiFont(UI.sizes.subLg, { weight: 700 }), INK);
-      centerText(c, pig.name, ox, oy + 54, uiFont(UI.sizes.small), INK, 0.7);
-    }
-
-    // V4 (v1.2 M11): on a victory, the paintings hung for this expedition
-    // (the 2-slot loadout) are shown as a small framed "curator's wall" — a
-    // row of gilded frames, each with its title and a soft reveal (staggered
-    // fade + rise). Pure presentation: no new art, reuses the P8 frame look
-    // (paperPanel + gilded double border + _drawPaintingMotif) + the painting
-    // data. The reveal animates on endT, so early frames show nothing.
-    const exh = victory ? (this.save.loadout || []).map(id => PAINTINGS.find(p => p.id === id)).filter(Boolean) : [];
-    let bankY = victory ? 250 : 272;
-    if (exh.length > 0) {
-      const reveal = clamp((this.endT - 0.4) / 0.9, 0, 1);
-      if (reveal > 0.02) {
-        centerText(c, `Curator's Wall — ${exh.length} painting${exh.length === 1 ? '' : 's'} from this expedition`, cx, py + 244, uiFont(UI.sizes.body, { weight: 700 }), '#5a9e3d', 0.9 * reveal);
-        const n = exh.length;
-        const fs = 66;
-        const gap = 96;
-        const total = n * fs + (n - 1) * (gap - fs);
-        const x0 = cx - total / 2;
-        for (let i = 0; i < n; i++) {
-          const pt = exh[i];
-          const ri = clamp(reveal - i * 0.12, 0, 1);
-          if (ri <= 0.02) continue;
-          const fx = x0 + i * gap;
-          const fy = py + 274 - (1 - ri) * 16;      // soft rise
-          c.save();
-          c.globalAlpha = ri;
-          // gilded double frame (P8 look) + a paper ground
-          c.fillStyle = '#f7f0e0';
-          c.beginPath(); c.rect(fx, fy, fs, fs); c.fill();
-          c.strokeStyle = '#d9b45a'; c.lineWidth = 3;
-          c.strokeRect(fx + 1.5, fy + 1.5, fs - 3, fs - 3);
-          c.strokeStyle = '#b08a3e'; c.lineWidth = 1.5;
-          c.strokeRect(fx + 6, fy + 6, fs - 12, fs - 12);
-          this._drawPaintingMotif(c, pt, fx + 8, fy + 8, fs - 16);
-          c.restore();
-          centerText(c, pt.name, fx + fs / 2, fy + fs + 15, uiFont(UI.sizes.small, { italic: true }), INK, 0.9 * ri);
-        }
-        bankY = 350;   // victory card: bank moves below the exhibition
-      }
-    }
-
-    // bank totals
-    const b = this.save.bank;
-    centerText(c, `Bank — red ${b.red} · blue ${b.blue} · green ${b.green}`, cx, py + bankY, uiFont(UI.sizes.bodyLg, { weight: 700 }), INK, 0.9);
-    const s = this.save.stats;
-    const statsY = victory ? 374 : 300;
-    centerText(c, `expeditions ${s.expeditions} · victories ${s.victories} · herons painted ${s.heronsPainted}`, cx, py + statsY, uiFont(UI.sizes.label), INK, 0.65);
-
-    // best run
-    const br = this.save.bestRun;
-    if (br) {
-      const what = br.cleared ? `cleared with ${br.pigments} pigment` : `lasted ${br.time}s`;
-      centerText(c, `best run — ${what}`, cx, py + (victory ? 396 : 322), uiFont(UI.sizes.label, { weight: 700 }), INK, 0.8);
-    }
-
-    // spend hint / challenge reward block. On a challenge victory the spend
-    // hint is replaced by the filed score + rank + the K8 reward (the more
-    // meaningful lines for that run), and the NG+ "Season" summary below is
-    // skipped (a challenge is its own scored mode, not an NG+ season).
-    if (victory && this._challengeResult) {
-      // K7 (v1.5 M2): the filed challenge score + where it ranked in the daily
-      // best list; K8: the completion reward (the minted Masterpiece / rank gold).
-      const cr = this._challengeResult;
-      const rankTxt = cr.rank <= 5 ? `#${cr.rank} of 5` : 'below the top 5';
-      centerText(c, `The Curator's Challenge — score ${cr.score} · filed ${rankTxt} on today's best list`, cx, py + 418, uiFont(UI.sizes.label, { weight: 700 }), '#a3762a', 0.95);
-      centerText(c, `the whole world shares today's swamp (${challengeDate(cr.seed)})`, cx, py + 436, uiFont(UI.sizes.small, { italic: true }), INK, 0.6);
-      if (cr.minted) {
-        centerText(c, `masterpiece minted: "${MASTERPIECE.name}"  ·  +${cr.gold} gold`, cx, py + 456, uiFont(UI.sizes.label, { weight: 700 }), '#c9922a', 0.95);
-      } else if (cr.gold > 0) {
-        centerText(c, `rank ${cr.rank} reward: +${cr.gold} gold`, cx, py + 456, uiFont(UI.sizes.label, { weight: 700 }), '#c9922a', 0.9);
-      } else {
-        centerText(c, 'the best list is already at its top-5 — beat your best to file again', cx, py + 456, uiFont(UI.sizes.small, { italic: true }), INK, 0.6);
-      }
-    } else {
-        centerText(c, 'Rest at the Atelier and spend what you gathered.', cx, py + (victory ? 420 : 346), uiFont(UI.sizes.small, { italic: true }), INK, 0.55);
-    }
-
-    // C2 (v1.3 M16): the "Season" summary (VICTORY ONLY, NOT a challenge) — a
-    // compact read of the NG+ season this victory belongs to: the cycle, the
-    // modifier chosen for it, the gold earned this expedition + the career
-    // total, the Gilded Frame state, and the paintings carried. Reuses the V4
-    // card's existing empty bottom band (the card is 540 tall and the spend
-    // hint ends at py+420), so NOTHING below it moves — the end-screen buttons
-    // (driven by _endButtons) keep their exact rects on a first-time save.
-    // Pure display: no new persistence, every value read live from the
-    // run/save at draw time.
-    if (victory && !this._challengeResult) {
-      const ss = this._seasonSummary();
-      const sy = py + 450;
-      c.save();
-      c.strokeStyle = 'rgba(43,35,32,0.30)';
-      c.lineWidth = 1;
-      c.beginPath(); c.moveTo(cx - 175, sy - 16); c.lineTo(cx + 175, sy - 16); c.stroke();
-      centerText(c, 'Season', cx, sy, uiFont(UI.sizes.label, { weight: 700 }), '#a3762a', 0.9);
-      centerText(c, `cycle ${ss.cycle} · modifier ${ss.mod} · Gilded Frame ${ss.gilded}`, cx, sy + 22, uiFont(UI.sizes.label), INK, 0.75);
-      centerText(c, `gold earned this expedition +${ss.goldThisRun} · gold total ${ss.goldTotal}`, cx, sy + 40, uiFont(UI.sizes.label), INK, 0.75);
-      centerText(c, `paintings from this expedition: ${ss.paintings.length ? ss.paintings.join(', ') : 'none'}`, cx, sy + 58, uiFont(UI.sizes.smallPlus), INK, 0.65);
-      c.restore();
-    }
+    const cx=this.cw/2,win=this.endKind==='victory',b=this._endButtons();
+    ctx.fillStyle='rgba(22,35,30,0.66)';ctx.fillRect(0,0,this.cw,this.ch);
+    const c=paperPanel(ctx,cx-370,130,740,590,{seed:9});
+    centerText(c,win?'The dungeon is painted.':'A new canvas awaits.',cx,195,uiFont(38,{weight:700}),INK);
+    centerText(c,win?'The Umbral Wyrm falls. Every guardian is behind you.':'Your run ends here. Your paintings stay in the sketchbook.',cx,238,uiFont(18),INK);
+    drawDungeonRoute(this,c,cx-320,278,640);
+    centerText(c,(this.campaign?.cleared.length||0)+' / 4 guardians · '+this._fmtClock(this.runT||0)+' · '+(this.runEnemies||0)+' bugs painted',cx,333,uiFont(20),INK);
+    const page=this.save.sketchbook?.[this.save.sketchbook.length-1];
+    if(page)drawPostcard(c,page,cx-150,358,300,180,studyRewardEarned(this.save.studio?.completed||[],'swamp'),studyRewardEarned(this.save.studio?.completed||[],'reeds'),!!this.save.flags.crossingPainted);
+    centerText(c,'Brush gifts belong to this run. A new descent begins at equal strength.',cx,565,uiFont(15),INK);
     paperEnd(ctx);
-
-        // primary: to the atelier (+ the N1 "Next Expedition" NG+ button, see
-        // end-state input routing and _endButtons for the shared rects)
-        const eb = this._endButtons();
-        uiButton(ctx, eb.primary.x, eb.primary.y, eb.primary.w, eb.primary.h, 'Rest at the Atelier', this._mouseIn(eb.primary.x, eb.primary.y, eb.primary.w, eb.primary.h), false, { seed: 9, size: 18, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-        if (eb.ng) {
-          uiButton(ctx, eb.ng.x, eb.ng.y, eb.ng.w, eb.ng.h, 'Next Expedition  (New Game+)', this._mouseIn(eb.ng.x, eb.ng.y, eb.ng.w, eb.ng.h), false, { seed: 90, size: 15, mouseX: this.input.mouse.x, mouseY: this.input.mouse.y, mouseClicked: false });
-        }
-        const lw = eb.ret.w, lh = eb.ret.h, lx = eb.ret.x, ly = eb.ret.y;
-        ctx.save();
-        ctx.globalAlpha = 0.85;
-        ctx.fillStyle = '#fdf6e9';
-        ctx.strokeStyle = INK;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(lx, ly, lw, lh, 17);
-        ctx.fill(); ctx.stroke();
-        ctx.restore();
-        centerText(ctx, 'return to the pond (Esc)', cx, ly + lh / 2 + 1, uiFont(UI.sizes.label), INK, 0.9);
-        // N4 (v1.3 M14): the expedition-modifier picker overlays the end screen.
-        if (this._modPrompt) this._drawModPrompt(ctx);
-      }
+    uiButton(ctx,b.primary.x,b.primary.y,b.primary.w,b.primary.h,'Start a fresh descent',this._mouseIn(b.primary.x,b.primary.y,b.primary.w,b.primary.h),false,{size:20});
+    uiButton(ctx,b.ret.x,b.ret.y,b.ret.w,b.ret.h,'Return to the pond',this._mouseIn(b.ret.x,b.ret.y,b.ret.w,b.ret.h),false,{size:17});
+  }
 }

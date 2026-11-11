@@ -22,8 +22,8 @@ index.html          entry point (Canvas 2D, ES module boot)
 src/game.js         frame loop, state machine, HUD/screens (biggest file)
 src/player.js       frog: movement, pigment paint, damage, death
 src/enemies.js      the bestiary: 3 base archetypes (beetle/mosquito/toad),
-                    the Reeds-biome wisp/serpent/leech, and the 6 bosses
-                    (gray/green/gilded heron, Silt Wyrm, Hollow Warden,
+                    the Reeds-biome wisp/serpent/leech, and the 4 bosses
+                    (Gray Heron, Silt Wyrm, Hollow Warden,
                     Umbral Wyrm) + per-boss step functions
 src/logic.js        PURE rule logic: save schema, migrations, balance,
                     economy, pacing, boss rules. No browser APIs — importable
@@ -50,8 +50,9 @@ tests/reedspace.mjs Reeds-biome pacing probe (wisp/serpent/leech + wyrm)
 tests/wardpace.mjs  Wander Hollow Warden pacing probe
 tests/blackpace.mjs Black Reeds (NG+ apex) pacing probe
 tests/umbrapace.mjs Umbral Wyrm (Black Reeds apex) pacing probe
-tests/ngpace.mjs    NG+ scaling pacing probe
-tests/wandpace.mjs  Wander content-generation pacing probe
+tests/campaign.mjs  finite four-floor progression and clean restart rules
+tests/campaignpace.mjs actual combat through all four guardians and rests
+tests/wandpace.mjs  historical generator diagnostic (not a shipped mode gate)
 tests/balance.mjs   v1.10 M1 balance-telemetry probe (per-enemy TTK × pigment,
                     zone-pressure curve, charged-splash value, pigment
                     economy, flagged imbalances) — the retune baseline
@@ -64,7 +65,7 @@ tests/vertical-slice.mjs  real Chromium opening/lessons/book/end/restart journey
 tests/package.mjs  deterministic ZIP and runtime-only server checks
 scripts/dev.mjs    dependency-free loopback server (no caching)
 scripts/build.mjs  static runtime folder + deterministic upload ZIP
-scripts/check.mjs  smoke, nine enforced pace gates, balance, UI/audio, package;
+scripts/check.mjs  smoke, campaign, seven retained pace bands, balance, UI/audio, package;
                     --browser adds source/dist journeys, 36 frames and perf
 docs/GAME_DESIGN.md current design pillars and mechanics
 docs/CURRENT_STATE.md  implemented architecture, systems and limitations
@@ -84,7 +85,7 @@ docs/PROJECT_STATUS.md   current milestone, bugs, debt, risks
 | All required gates | `node scripts/check.mjs`; add `--browser` for real-browser validation |
 | Build distributable | `node scripts/build.mjs` → `dist/frogue-gallery.zip`; verify with `node scripts/dev.mjs --dist` |
 | Run all tests | `node tests/smoke.mjs` (~111 stages; must end `ALL SMOKE TESTS PASSED`) |
-| Run pacing probes | the 9 probes: `node tests/{pace,humance,bosspace,reedspace,wardpace,blackpace,umbrapace,ngpace,wandpace}.mjs` — every one must stay IN band |
+| Run pacing probes | `node tests/{pace,humance,bosspace,reedspace,wardpace,blackpace,umbrapace}.mjs` — seven retained bands; `node tests/campaignpace.mjs` verifies the connected four-boss combat journey |
 | Run balance telemetry | `node tests/balance.mjs` (v1.10 M1 baseline; re-run after B1–B4 for the deltas) |
 | Run dev checks | `node tests/sfx.mjs` / `tests/music.mjs` / `tests/ui.mjs`; `node tests/frames.mjs` (dev-only playwright-core, free port) |
 | Check state | `git status --short`, `git log --oneline -8`, read `PROJECT_STATE.md` |
@@ -121,11 +122,13 @@ frozen and the probes were pure regression checks. v1.10 "The Tuned Swamp" is
 the first retune pass — `src/logic.js` tuning numbers **may** now legitimately
 change. It instead gates on:
 
-1. **All 9 pacing probes stay IN band** — the bands are the contract; a retune
-   may make runs *better*, never out-of-band.
+1. **Seven retained combat/biome pacing probes stay IN band.** The owner's
+   2026-11-11 removal of New Game+ and standalone modes supersedes the old
+   NG+/Wander gates. Campaign rules, migration, actual four-boss combat and
+   source/dist browser journeys replace those obsolete mode requirements.
 2. **The M1 balance targets are met** (per `tests/balance.mjs`): the flagged
-   imbalances (TTK spread, zone-pressure curve, charged-splash value, pigment
-   economy) are fixed and the re-run shows the deltas.
+   imbalances (TTK spread, zone-pressure curve and charged-splash value) stay
+   fixed. Campaign reward access/carry/reset replaces retired shop affordability.
 3. **Smoke stays green after every commit** (`ALL SMOKE TESTS PASSED`).
 
 `SAVE_VERSION` stays at 12 and `GAME_VERSION` at 1.0.0. The Astra milestone

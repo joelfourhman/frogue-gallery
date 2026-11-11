@@ -3,7 +3,7 @@
 //
 // A small screenshot tool built on the sanctioned dev tooling (playwright-core;
 // no runtime dep for the game itself). It boots the real game over loopback on
-// a FREE PORT (never 8765), drives it headless through 35 key scenes (seeded
+// a FREE PORT (never 8765), drives it headless through 36 key scenes (seeded
 // save states + fixed positions + a frozen rAF loop for determinism), and
 // writes real PNGs to tests/frames/ (gitignored EXCEPT the README.md index).
 //
@@ -33,7 +33,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // (e.g. tests/frames/after-J1/) by re-running this harness with --out. The
 // frames stay gitignored; the README index + the commit message reference them.
 //
-// CLI (all optional, default = the 35-scene baseline into tests/frames/):
+// CLI (all optional, default = the 36-scene current set into tests/frames/):
 //   node tests/frames.mjs [--out <dir>] [--scenes a,b,c] [--min <n>]
 //   --out     output directory (resolved against the repo root if not absolute)
 //   --scenes  comma-separated scene names to capture (subset; for after-sets)
@@ -109,25 +109,26 @@ await page.addInitScript(() => {
   window.__origRaf = origRaf;
 
   // ---- in-page scene library ----
-  const PAINTING_IDS = ['moonlit-pond', 'dancing-salamander', 'spring-garden', 'self-portrait',
-    'king-frog', 'storm-cloud', 'beetle-armor', 'croaksworth', 'gilded-meridian', 'verdant-crown'];
-  const BOSS_IDS = ['gray', 'green', 'gilded', 'wyrm', 'warden', 'umbra'];
-
   function toTitle(G) {
     G.state = 'title'; G.paused = false; G.help = false; G.optionsOpen = false;
     G.player = null; G.heron = null; G.midHeron = null; G.enemies = []; G.orbs = [];
-    G._seedCard = null; G._modPrompt = null; G._encoreOpen = false;
+    G._seedCard = null; G._bookOpen = false; G._atlasOpen = false;
     G.titleT = 3; G.now = 10;
   }
   // Begin a fresh seeded expedition. saveMut(save) mutates the save BEFORE the
-  // run starts (to gate Reeds / Black Reeds / NG+ / Wander / full collection).
+  // run starts. Direct floor selection is a deterministic rendering fixture.
   // opts -> G.options keys; runOpts -> _beginExpedition's second arg (reeds).
   function beginRun(G, saveMut, opts, runOpts) {
     toTitle(G);
+    G.options.wander = false;
     if (saveMut) saveMut(G.save);
     if (opts) for (const k in opts) G.options[k] = opts[k];
     G.challenge = null;
     G._beginExpedition(false, runOpts || {}); // deterministic: Math.random is seeded
+    if (G.campaign && runOpts?.campaignFloor > 0) {
+      G.campaign.cleared = ['gray', 'wyrm', 'warden'].slice(0, runOpts.campaignFloor);
+      G.campaign.rewards = Array(runOpts.campaignFloor).fill('power');
+    }
     return G;
   }
   function enemyScene(G, kind, pig) {
@@ -147,12 +148,11 @@ await page.addInitScript(() => {
   // (it has hue/hitFlash/diveH/facing/etc.) and overwrite the variant fields.
   // The wyrm/warden/umbra are built by the game only when the frog REACHES the
   // arena, so we hand-build them here from the same field contract.
-  function bossFrame(G, { flags, stats, ngCycle, opts, runOpts, variant, phase, surfIdx, awakened, hpFrac, arena }) {
+  function bossFrame(G, { flags, stats, opts, runOpts, variant, phase, surfIdx, awakened, hpFrac, arena }) {
     beginRun(G, (sv) => {
-      if (ngCycle != null) sv.ngCycle = ngCycle;
       if (flags) Object.assign(sv.flags, flags);
       if (stats) Object.assign(sv.stats, stats);
-    }, opts, runOpts);
+    }, opts, { ...runOpts, campaignFloor: { gray: 0, wyrm: 1, warden: 2, umbra: 3 }[variant] || 0 });
     const base = G.heron || { hue: { red: 0, blue: 0, green: 0 }, hitFlash: 0, diveH: 0, facing: -1, flying: 0, _intro: 0 };
     const w = G.world.w;
     // arena water line (SILT_WYRM/UMBRAL surfaceY); head x at the active point.
@@ -164,12 +164,11 @@ await page.addInitScript(() => {
       awakenedT: awakened ? 1.2 : 0, hue: { red: 0, blue: 0, green: 0 },
       hitFlash: 0, diving: false, sinking: false, _intro: 0,
     });
-    if (variant === 'wyrm') { h.kind = 'wyrm'; h.wyrm = true; h.warden = h.umbra = h.green = h.gilded = false; }
-    else if (variant === 'warden') { h.kind = 'warden'; h.warden = true; h.wyrm = h.umbra = h.green = h.gilded = false; h.tasteFactor = 1; }
-    else if (variant === 'umbra') { h.kind = 'umbra'; h.umbra = true; h.wyrm = h.warden = h.green = h.gilded = false; h._transitFromX = w - 900; }
-    else { h.wyrm = h.warden = h.umbra = false; if (variant === 'green') { h.green = true; h.gilded = false; } if (variant === 'gilded') { h.gilded = true; h.green = false; } }
-    if (variant === 'gilded') h.plumeT = 0.8; // the gold-plume phase (visible tell)
-    const maxHp = { gray: 30000, green: 36000, gilded: 42000, wyrm: 48000, warden: 50000, umbra: 60000 }[variant] || 30000;
+    if (variant === 'wyrm') { h.kind = 'wyrm'; h.wyrm = true; h.warden = h.umbra = false; }
+    else if (variant === 'warden') { h.kind = 'warden'; h.warden = true; h.wyrm = h.umbra = false; h.tasteFactor = 1; }
+    else if (variant === 'umbra') { h.kind = 'umbra'; h.umbra = true; h.wyrm = h.warden = false; h._transitFromX = w - 900; }
+    else { h.wyrm = h.warden = h.umbra = false; }
+    const maxHp = { gray: 30000, wyrm: 48000, warden: 48000, umbra: 60000 }[variant] || 30000;
     h.maxHp = maxHp; h.hp = Math.round(maxHp * (hpFrac != null ? hpFrac : 0.7));
     if (awakened) { h.awakened = true; h.awakenedT = 1.2; h.hp = Math.round(maxHp * 0.1); }
     G.heron = h;
@@ -189,35 +188,26 @@ await page.addInitScript(() => {
   // ---- title ----
   S['title'] = (G) => { toTitle(G); return { note: 'title' }; };
   S['options'] = (G) => { toTitle(G); G.optionsOpen = true; G.now = 11; return { note: 'options panel' }; };
-  S['wander-seed-card'] = (G) => { toTitle(G); G.options.wander = true; G._seedCard = { seed: 424242 }; G.now = 12; return { note: 'wander seed card' }; };
-  S['full-collection-badge'] = (G) => {
-    toTitle(G);
-    G.save.galleryComplete = true;
-    G.save.owned = PAINTING_IDS.slice();
-    G.save.flags.bossDefeats = BOSS_IDS.slice();
-    G.save.stats.victories = 6; G.save.flags.reedsVictory = true; G.save.flags.heronDefeated = true;
-    G.now = 13; return { note: 'title + full-collection badge' };
-  };
-
-  // ---- atelier (state = 'atelier') ----
-  function atelierTab(G, tab, saveMut) {
-    G._beginAtelier();
-    if (saveMut) saveMut(G.save);
-    G.atelierTab = tab; G.atelierT = 1; G.now = 20;
+  function campFrame(G, floor, choice = null) {
+    beginRun(G, null, null, { campaignFloor: floor });
+    G._endRun('victory'); G._campChoice = choice;
+    G.banners = []; G.now = 20;
+    return { note: `campaign rest after depth ${floor + 1}${choice ? ' / reward selected' : ''}` };
   }
-  S['atelier-upgrades'] = (G) => { toTitle(G); atelierTab(G, 0); return { note: 'atelier / studio upgrades' }; };
-  S['atelier-loadout'] = (G) => { toTitle(G); atelierTab(G, 1); return { note: 'atelier / paintings + loadout' }; };
-  S['gallery-wall-empty'] = (G) => {
-    toTitle(G); G.save.owned = []; G.save.loadout = [];
-    atelierTab(G, 2); return { note: 'gallery wall (empty)' };
+  S['camp-depth-one'] = G => campFrame(G, 0);
+  S['camp-depth-two'] = G => campFrame(G, 1);
+  S['camp-depth-three'] = G => campFrame(G, 2);
+  S['camp-selected-reward'] = G => campFrame(G, 0, 'power');
+  S['sketchbook-empty'] = G => {
+    beginRun(G); G.save.sketchbook = []; G._openSketchbook(); G.banners = [];
+    return { note: 'sketchbook keepsakes, no permanent upgrade shop' };
   };
-  S['gallery-wall-full'] = (G) => {
-    toTitle(G);
-    G.save.owned = PAINTING_IDS.slice();
-    G.save.flags.bossDefeats = BOSS_IDS.slice();
-    G.save.stats.victories = 6; G.save.flags.reedsVictory = true; G.save.flags.heronDefeated = true;
-    G.save.galleryComplete = true;
-    atelierTab(G, 2); return { note: 'gallery wall (full-collection glow)' };
+  S['free-repainting'] = G => {
+    beginRun(G); G.enemies = []; G.banners = [];
+    const props = G.studio.garden.props;
+    for (let i = 0; i < Math.min(8, props.length); i++) props[i].pigment = ['red', 'blue', 'green'][i % 3];
+    G.cam.x = 620; G.cam.y = 750; G.now = 3;
+    return { note: 'freely recolored opening scenery' };
   };
 
   // ---- expedition / paint in flight ----
@@ -292,9 +282,9 @@ await page.addInitScript(() => {
   S['enemy-beetle'] = (G) => { beginRun(G, null); return enemyScene(G, 'beetle', 'plain'); };
   S['enemy-mosquito'] = (G) => { beginRun(G, null); return enemyScene(G, 'mosquito', 'plain'); };
   S['enemy-toad'] = (G) => { beginRun(G, null); return enemyScene(G, 'toad', 'plain'); };
-  S['enemy-wisp'] = (G) => { beginRun(G, (sv) => { sv.flags.reedsUnlocked = true; sv.stats.victories = 1; }, null, { reeds: true }); return enemyScene(G, 'wisp', 'plain'); };
-  S['enemy-serpent'] = (G) => { beginRun(G, (sv) => { sv.flags.reedsUnlocked = true; sv.stats.victories = 1; }, null, { reeds: true }); return enemyScene(G, 'serpent', 'plain'); };
-  S['enemy-leech'] = (G) => { beginRun(G, (sv) => { sv.flags.reedsUnlocked = true; sv.stats.victories = 1; }, null, { reeds: true }); return enemyScene(G, 'leech', 'plain'); };
+  S['enemy-wisp'] = (G) => { beginRun(G, null, null, { campaignFloor: 1 }); return enemyScene(G, 'wisp', 'plain'); };
+  S['enemy-serpent'] = (G) => { beginRun(G, null, null, { campaignFloor: 1 }); return enemyScene(G, 'serpent', 'plain'); };
+  S['enemy-leech'] = (G) => { beginRun(G, null, null, { campaignFloor: 1 }); return enemyScene(G, 'leech', 'plain'); };
   // status examples
   S['status-burn'] = (G) => { beginRun(G, null); return enemyScene(G, 'beetle', 'burn'); };
   S['status-freeze'] = (G) => { beginRun(G, null); return enemyScene(G, 'mosquito', 'freeze'); };
@@ -443,7 +433,7 @@ await page.addInitScript(() => {
   //      mist-breathing pair differs ONLY by `now` (~2.2 s apart), proving the
   //      alpha/offset oscillation reads (the two frames md5-differ).
   function worldAmbient(G, { reeds, now, x, y }) {
-    beginRun(G, (sv) => { if (reeds) { sv.flags.reedsUnlocked = true; sv.stats.victories = 1; } }, null, { reeds });
+    beginRun(G, null, null, { campaignFloor: reeds ? 1 : 0 });
     G.enemies = []; G.orbs = []; G.heron = null; G.midHeron = null;
     G.player.x = x; G.player.y = y; G.player.vx = 0; G.player.vy = 0; G.player.hopT = 0;
     G.player._staggerT = 0; G.player._victoryHopT = 0;
@@ -524,7 +514,7 @@ await page.addInitScript(() => {
   // a wisp DRIFTS AWAY from the lantern when lit — set _light=1 (fully lit) and
   // frame at the flee-sway peak (cos(now*1.9+1.3)≈1 at now≈1.37 for _seed=1.3).
   S['wisp-flee-from-lantern'] = (G) => {
-    beginRun(G, (sv) => { sv.flags.reedsUnlocked = true; sv.stats.victories = 1; }, null, { reeds: true });
+    beginRun(G, null, null, { campaignFloor: 1 });
     const e = G.__modsEnemy('wisp', G.player.x + 120, G.player.y - 40, G.tuning);
     e._seed = 1.3; e.hitFlash = 0; e.hp = e.maxHp; e.dead = false; e.status = null;
     e._light = 1;                                  // fully lit → the flee sway is maxed
@@ -536,34 +526,46 @@ await page.addInitScript(() => {
 
   S['boss-gray-heron'] = (G) => bossFrame(G, { variant: 'gray', hpFrac: 0.75 });
   S['boss-gray-heron-awaken'] = (G) => bossFrame(G, { variant: 'gray', awakened: true });
-  S['boss-green-heron'] = (G) => bossFrame(G, { variant: 'green', hpFrac: 0.75 });
-  S['boss-gilded-heron'] = (G) => bossFrame(G, { variant: 'gilded', hpFrac: 0.75 });
-  S['boss-silt-wyrm'] = (G) => bossFrame(G, { variant: 'wyrm', phase: 'surfaced', hpFrac: 0.75, runOpts: { reeds: true }, flags: { reedsUnlocked: true }, stats: { victories: 1 } });
-  S['boss-hollow-warden'] = (G) => bossFrame(G, { variant: 'warden', phase: 'mawOpen', hpFrac: 0.75, opts: { wander: true } });
-  S['boss-hollow-warden-awaken'] = (G) => bossFrame(G, { variant: 'warden', phase: 'mawOpen', awakened: true, opts: { wander: true } });
-  S['boss-umbral-wyrm'] = (G) => bossFrame(G, { variant: 'umbra', phase: 'surfaced', hpFrac: 0.7, runOpts: { reeds: true }, ngCycle: 2, flags: { reedsUnlocked: true, reedsVictory: true }, stats: { victories: 1 } });
-  S['boss-umbral-deep-dark'] = (G) => bossFrame(G, { variant: 'umbra', phase: 'surfaced', awakened: true, hpFrac: 0.3, runOpts: { reeds: true }, ngCycle: 2, flags: { reedsUnlocked: true, reedsVictory: true }, stats: { victories: 1 } });
+  S['clearing-warning'] = G => {
+    beginRun(G); G.enemies = []; G.banners = []; G._tut = [];
+    G.player.x = 990; G.player.y = 730; G.cam.x = 990; G.cam.y = 730;
+    G.encounter.onStroke({ kind: 'swipe', x: 990, y: 730, a: 0, range: 74, pigment: 'blue' });
+    const enemy = G.encounter.members[0];
+    enemy.x = 1100; enemy.y = 730; enemy.clearingPhase = 'tell'; enemy.clearingT = 0.4; enemy.clearingDX = -1; enemy.clearingDY = 0;
+    G.now = 3; return { note: 'authored clearing warning and dodge direction' };
+  };
+  S['clearing-complete'] = G => {
+    beginRun(G); G.enemies = []; G.banners = []; G._tut = [];
+    G.player.x = 990; G.player.y = 730; G.cam.x = 990; G.cam.y = 730;
+    G.encounter.phase = 'complete'; G.encounter.completed = true; G.encounter.round = 2;
+    G.now = 3; return { note: 'completed clearing and replay invitation' };
+  };
+  S['boss-silt-wyrm'] = (G) => bossFrame(G, { variant: 'wyrm', phase: 'surfaced', hpFrac: 0.75 });
+  S['boss-hollow-warden'] = (G) => bossFrame(G, { variant: 'warden', phase: 'mawOpen', hpFrac: 0.75 });
+  S['boss-hollow-warden-awaken'] = (G) => bossFrame(G, { variant: 'warden', phase: 'mawOpen', awakened: true });
+  S['boss-umbral-wyrm'] = (G) => bossFrame(G, { variant: 'umbra', phase: 'surfaced', hpFrac: 0.7 });
+  S['boss-umbral-deep-dark'] = (G) => bossFrame(G, { variant: 'umbra', phase: 'surfaced', awakened: true, hpFrac: 0.3 });
 
   // ---- Reeds descent (lantern) / Black Reeds ----
   S['reeds-descent'] = (G) => {
-    beginRun(G, (sv) => { sv.flags.reedsUnlocked = true; sv.stats.victories = 1; }, null, { reeds: true });
+    beginRun(G, null, null, { campaignFloor: 1 });
     G.enemies = []; G.orbs = [];
     G.player.x = 2000; G.player.y = 780; G.cam.x = 2000; G.cam.y = 780;
     G.lantern.fuel = 1; G.lantern.lit = true;
     G.now = 9; return { note: 'Reeds descent — lantern lit' };
   };
   S['black-reeds-descent'] = (G) => {
-    beginRun(G, (sv) => { sv.ngCycle = 1; sv.flags.reedsUnlocked = true; sv.flags.reedsVictory = true; sv.stats.victories = 1; }, null, { reeds: true });
+    beginRun(G, null, null, { campaignFloor: 3 });
     G.enemies = []; G.orbs = [];
     G.player.x = 2400; G.player.y = 800; G.cam.x = 2400; G.cam.y = 800;
     G.lantern.fuel = 0.6; G.lantern.lit = true;
-    G.now = 9; return { note: 'Black Reeds descent (NG+, darker)' };
+    G.now = 9; return { note: 'Black Reeds, the fourth and final dungeon depth' };
   };
   S['warden-maw-open'] = (G) => {
-    beginRun(G, null, { wander: true });
+    beginRun(G, null, null, { campaignFloor: 2 });
     // Force the Warden into its maw-open window and frame the arena.
     const w = G.world.w;
-    G.heron = { kind: 'warden', warden: true, maxHp: 52000, hp: 40000,
+    G.heron = { kind: 'warden', warden: true, maxHp: 48000, hp: 40000,
       phase: 'mawOpen', phaseT: 5, surfIdx: 0, tasteFactor: 1, awakened: false };
     G.player.x = w - 700; G.player.y = 760; G.cam.x = w - 500; G.cam.y = 780; G.zoom = 1; G.now = 7;
     return { note: "Warden's maw open (paintable window)" };
@@ -571,8 +573,8 @@ await page.addInitScript(() => {
 
   // ---- end-screen recap ----
   S['end-recap'] = (G) => {
-    beginRun(G, null);
-    G.state = 'end'; G.endKind = 'victory'; G.endT = 2; G.runT = 40;
+    beginRun(G, null, null, { campaignFloor: 3 });
+    G._endRun('victory'); G.endT = 2; G.runT = 2400;
     G.runWaypoints = [{ x: 260, y: 750 }, { x: 900, y: 800 }, { x: 1800, y: 780 },
       { x: 2700, y: 820 }, { x: 3600, y: 760 }, { x: 4500, y: 800 }, { x: 5100, y: 780 }];
     G.runEnemies = 24; G.runOrbs = 18; G.bossTime = 90;
@@ -644,18 +646,16 @@ console.log('[frames] booted:', JSON.stringify(boot));
 
 fs.mkdirSync(FRAMES_DIR, { recursive: true });
 
-// The T0 BASELINE set is the 35 pre-polish scenes — this is the canonical
-// "before" reference every v1.9 polish item is diffed against. The per-item
-// AFTER scenes (J1 hitstop, J2 paint arc, ...) are added as they land and are
-// captured ONLY via --scenes into their own subdirs (so the baseline run and
-// its "before" meaning stay stable as the polish items accumulate).
+// Current 36-scene set. The finite dungeon replaces retired shops/prestige and
+// cycle-boss variants with camp choices, free painting and the clearing. Older
+// polish-specific captures remain individually selectable for visual comparison.
 const BASELINE_SCENES = [
-  'title', 'options', 'wander-seed-card', 'full-collection-badge',
-  'atelier-upgrades', 'atelier-loadout', 'gallery-wall-empty', 'gallery-wall-full',
+  'title', 'options', 'camp-depth-one', 'camp-depth-two',
+  'camp-depth-three', 'camp-selected-reward', 'sketchbook-empty', 'free-repainting',
   'paint-red', 'paint-blue', 'paint-green', 'paint-dry', 'paint-water', 'paint-vegetation',
   'enemy-beetle', 'enemy-mosquito', 'enemy-toad', 'enemy-wisp', 'enemy-serpent', 'enemy-leech',
   'status-burn', 'status-freeze', 'status-root',
-  'boss-gray-heron', 'boss-gray-heron-awaken', 'boss-green-heron', 'boss-gilded-heron',
+  'boss-gray-heron', 'boss-gray-heron-awaken', 'clearing-warning', 'clearing-complete',
   'boss-silt-wyrm', 'boss-hollow-warden', 'boss-hollow-warden-awaken',
   'boss-umbral-wyrm', 'boss-umbral-deep-dark',
   'reeds-descent', 'black-reeds-descent', 'warden-maw-open', 'end-recap',

@@ -95,8 +95,6 @@ const S1_BANK = [
   'pickup', 'pickup-streak', 'ui', 'ui-back', 'ui-hover', 'paint-create', 'frog-chime',
   // pause open/close
   'pause-open', 'pause-close',
-  // the full-collection beat
-  'collection-fanfare',
 ];
 
 function voicesFor(name, opt) {

@@ -140,6 +140,12 @@ function assert(cond, msg) {
   console.log(`  ok — ${msg}`);
 }
 
+function finishRun(g) {
+  g.campaign = { seed: 1, floor: 3, cleared: ['gray','wyrm','warden'], rewards: ['heart','heart','heart'], pendingReward: false, complete: false };
+  if (!g.heron) g.heron = { kind: 'umbra' }; else g.heron.kind = 'umbra';
+  g._endRun('victory');
+}
+
 // ---------------- the test ----------------
 const { Game } = await import('../src/game.js');
 
@@ -237,23 +243,15 @@ game.input.mouse.lDown = true;
 frames(240); // ~4s
 game.input.mouse.lDown = false;
 assert(h.hp <= 0 || h.flying > 0, `boss defeated or fleeing (hp=${h.hp.toFixed(1)}, flying=${h.flying.toFixed(2)})`);
-// Let the heron's victory flight (~3s, then _endRun('victory')) play out. The
-// main flow's save is FRESH, so the first victory opens the M1 cinematic beat.
-frames(240); // let the flight play out to the end state
-assert(game.state === 'end' && game.endKind === 'victory', 'victory end state reached');
-assert(game.save.stats.victories === 1, 'victory recorded in save stats');
-assert(game.save.stats.heronDefeated === true || game.save.flags.heronDefeated === true, 'heronDefeated flag set');
-// M1 (v1.4): the seen-flag is latched + persisted the moment the beat is first
-// shown. The beat lives in state==='end' (runT already frozen), so it never
-// touches a timed run. (It may already be mid-beat or just closed by the 240
-// flight frames; the dedicated stage 69 asserts the open/skip/close states
-// precisely. Here we assert the flag + that the card eventually reveals and
-// the run never jumped to the atelier.)
-assert(game.save.firstVictoryCinematic === true, 'M1: the seen-flag latched on the main flow first victory');
-assert(JSON.parse(store.get('frogue_gallery_save')).firstVictoryCinematic === true, 'M1: the seen-flag persisted to (stub) localStorage');
-frames(260); // ~4.3s more: the beat (if still open) plays out with no input
-assert(game.state === 'end', 'end screen survived the beat (still the victory card, not the atelier)');
-assert(game._cine === null, 'M1: the beat is gone after ~4s — the victory card reveals');
+// The first boss opens an in-run camp; only the final floor files victory.
+frames(240);
+assert(game.state === 'camp', 'first boss opens the campaign rest');
+assert(game.save.stats.victories === 0, 'first boss does not end the dungeon');
+game._beginExpedition(false, { campaignFloor: 3 });
+finishRun(game);
+assert(game.state === 'end' && game.endKind === 'victory', 'final boss files dungeon victory');
+assert(game.save.stats.victories === 1, 'one complete dungeon victory recorded');
+frames(260);
 
 console.log('== stage 5b: awakened boss takes 2x paint damage ==');
 {
@@ -281,45 +279,9 @@ console.log('== stage 5b: awakened boss takes 2x paint damage ==');
   assert(cycles >= 10 && cycles <= 60, `boss pacing is in the epic range (${cycles.toFixed(1)} awaken cycles by the conservative model; bosspace bot measures the real fight)`);
 }
 
-console.log('== stage 6: end screen -> atelier (the between-run loop) ==');
-fireKey('keydown', 'Enter');
-frames(2);
-assert(game.state === 'atelier', 'Enter from end screen opened the atelier');
-frames(30);
-assert(game.state === 'atelier', 'atelier survived 30 frames (draw pass runs clean)');
-
-// fund the bank deterministically (we are testing atelier logic, not the economy)
-game.save.bank = { red: 20, blue: 20, green: 20 };
-
-// buy the level-1 Brush Craft upgrade by clicking its real hitbox
-const findRow = (tag) => game._atelierRows().find(r => r.tag === tag);
-let row = findRow('buy:power');
-assert(row && row.enabled, 'buy:power row exists and is affordable');
-fireMouse(canvas, row.x + row.w / 2, row.y + row.h / 2);
-frames(1);
-assert(game.save.upgrades.power === 1, 'power upgrade purchased via click');
-assert(game.save.bank.red === 16 && game.save.bank.blue === 18 && game.save.bank.green === 18, `bank debited correctly (got ${JSON.stringify(game.save.bank)})`);
-const rawSave = JSON.parse(store.get('frogue_gallery_save'));
-assert(rawSave.upgrades.power === 1, 'purchase persisted to (stub) localStorage');
-
-// switch to the paintings tab and buy + hang + unhang a painting
-fireKey('keydown', '2');
-frames(1);
-assert(game.atelierTab === 1, 'key 2 switched to the paintings tab');
-row = findRow('paint:spring-garden');
-assert(row && row.enabled, 'spring-garden row exists and is affordable');
-fireMouse(canvas, row.x + row.w / 2, row.y + row.h / 2);
-frames(1);
-assert(game.save.owned.includes('spring-garden'), 'spring-garden purchased');
-assert(game.save.loadout.includes('spring-garden'), 'new painting auto-hung in loadout');
-fireMouse(canvas, row.x + row.w / 2, row.y + row.h / 2); // toggle it off
-frames(1);
-assert(game.save.owned.includes('spring-garden') && !game.save.loadout.includes('spring-garden'), 'unhang removed it from loadout but kept ownership');
-
-// Esc returns to the title
-fireKey('keydown', 'Escape');
-frames(2);
-assert(game.state === 'title', 'Escape returned to the title');
+console.log('== stage 6: completed dungeon returns to title ==');
+game._quitToTitle(); frames(2);
+assert(game.state === 'title', 'completed dungeon can return to title');
 
 console.log('== stage 7: defeat run, save persistence ==');
 fireKey('keydown', 'Enter');
@@ -349,30 +311,13 @@ fireKey('keydown', 'm');
 frames(2);
 assert(game.audio.muted === wasMuted, 'M again restored the previous state');
 
-// Croaksworth story beat: seal lifts after the first victory
-game.save.flags.heronDefeated = true; // the stage-5 victory already earned it
-game.save.bank = { red: 20, blue: 20, green: 20 };
-game.save.flags.croaksworthGiven = false;
-fireKey('keydown', 'Enter'); // end screen -> atelier
-frames(2);
-assert(game.state === 'atelier', 'back in the atelier for the portrait purchase');
-fireKey('keydown', '2');
-frames(1);
-const croakRow = findRow('paint:croaksworth');
-assert(croakRow && croakRow.enabled, `Croaksworth portrait unlocked + affordable after first victory (got ${croakRow ? JSON.stringify(croakRow.tag) : 'missing row'})`);
-fireMouse(canvas, croakRow.x + croakRow.w / 2, croakRow.y + croakRow.h / 2);
-frames(1);
-assert(game.save.owned.includes('croaksworth'), 'Croaksworth portrait purchased');
-assert(game.save.flags.croaksworthGiven, 'Croaksworth story beat fired');
-// cost (5 each) and the silver coin (+5 each) net to zero — bank unchanged proves BOTH fired;
-// a missing bonus would leave 15/15/15
-assert(game.save.bank.red === 20 && game.save.bank.blue === 20 && game.save.bank.green === 20, `cost + coin balanced (got ${JSON.stringify(game.save.bank)})`);
-assert(game.banners.some(b => String(b.text).includes('Croaksworth')), 'Croaksworth banner is showing');
+// The former portrait-purchase loop is retired; keepsakes survive the run.
+game._quitToTitle();
 
 console.log('== stage 9: M5 polish — pause, vignette, intro ==');
-fireKey('keydown', 'Escape'); // atelier -> back to the title
+game._quitToTitle(); // return from the completed dungeon
 frames(2);
-assert(game.state === 'title', 'Escape from the atelier returned to the title');
+assert(game.state === 'title', 'completed dungeon returned to the title');
 game.save.flags.intro = false;
 fireKey('keydown', 'Enter');
 frames(2);
@@ -453,38 +398,22 @@ game.orbs.push({ x: game.player.x, y: game.player.y, color: 'red', t: 0 });
 game.player.iframes = 99; // survive the rest of this stage
 frames(2);
 assert(game.save.flags.firstOrb, 'first-orb tip flagged on pickup');
-assert(game.banners.some(b => b.text.includes('Atelier')), 'first-orb teaching banner shown');
-// first-atelier teaching
-fireKey('keydown', 'Escape'); // pause
-frames(1);
-fireKey('keydown', 'Escape'); // quit to the title
-frames(2);
-assert(game.state === 'title', 'quit to the title for the atelier visit');
-fireKey('keydown', 'a');
-frames(2);
-assert(game.state === 'atelier', 'atelier opened from the title');
-assert(game.save.flags.firstAtelier, 'first-atelier tip flagged');
+assert(game.banners.some(b => b.text.includes('Paint is unlimited')), 'first-orb instruction explains drops without implying ammo');
+// A fresh run follows defeat; there is no intervening power shop.
+game._quitToTitle();
 // first-defeat teaching
-fireKey('keydown', 'Escape');
-frames(2);
-fireKey('keydown', 'Enter');
-frames(2);
+game._beginExpedition();
 game.player.iframes = 0;
 game.player.hurt(99, game.tuning);
 frames(2);
 assert(game.save.flags.firstDefeat, 'first-defeat tip flagged');
-assert(game.banners.some(b => b.text.includes('half your pigments')), 'defeat teaching banner shown');
+assert(game.banners.some(b => b.text.includes('fresh brush')), 'defeat teaching banner explains the fresh start');
 frames(150); // let the dying sequence finish
 assert(game.state === 'end', 'run ended cleanly after the test kill');
 
 console.log('== stage 12: P2 — juice (damage numbers, pickup text, enemy arrows) ==');
 // damage numbers: swipe a pinned beetle, expect a floating "-N" note
-fireKey('keydown', 'Enter'); // end -> atelier (route around)
-frames(2);
-fireKey('keydown', 'Escape');
-frames(2);
-fireKey('keydown', 'Enter'); // new expedition
-frames(2);
+game._beginExpedition(); frames(2);
 game.player.iframes = 99;
 const { spawnEnemy: mk } = await import('../src/enemies.js');
 const target = mk('beetle', game.player.x + 45, game.player.y, game.tuning);
@@ -517,27 +446,11 @@ game.player.hurt(99, game.tuning);
 frames(140);
 assert(game.state === 'end', 'run ended cleanly after the P2 stage');
 
-console.log('== stage 13: P3 — atelier onboarding ==');
-game.save.flags.firstAtelier = false; // simulate a player who has never been here
-game._beginAtelier();
-frames(2);
-assert(game._atelierIntro === true, 'first-visit how-it-works panel is shown');
-fireKey('keydown', '2');
-frames(2);
-assert(game.atelierTab === 1, 'Paintings tab switches over');
-assert(game._atelierIntro === false, 'any action dismisses the intro panel');
-fireKey('keydown', 'Enter');
-frames(3);
-assert(game.state === 'expedition', 'departing from the atelier starts a run');
-game.player.hurt(99, game.tuning);
-frames(140);
-assert(game.state === 'end', 'run ended cleanly after the P3 stage');
+// Superseded by the finite campaign: Atelier onboarding.
+// Historical assertions remain in Git at 856eab7:tests/smoke.mjs.
 
 console.log('== stage 14: P5 — named zones + rest checkpoints + longer run ==');
-fireKey('keydown', 'Enter'); // end -> atelier
-frames(2);
-assert(game.state === 'atelier', 'end screen routed to the atelier');
-fireKey('keydown', 'Enter'); // atelier -> new expedition
+fireKey('keydown', 'Enter'); // end -> new dungeon
 frames(2);
 assert(game.state === 'expedition', 'run restarted');
 const W = game.world.w;
@@ -1130,40 +1043,8 @@ console.log('== stage 26: M8 P7 — difficulty select (Gentle/Normal/Bold) ==');
   assert(g4.state === 'end', 'run ended cleanly after the P7 stage');
 }
 
-console.log('== stage 27: M8 P8 — the Gallery Wall in the Atelier ==');
-{
-  const cv5 = makeCanvas();
-  const g5 = new Game(cv5);
-  g5.start();
-  fireKey('keydown', 'Enter'); frames(3);        // title -> expedition (empty save)
-  g5.player.iframes = 0; g5.player.hurt(99, g5.tuning); frames(140);
-  fireKey('keydown', 'Enter'); frames(3);        // end -> atelier (empty collection)
-
-  // the third tab is reachable by key and by its click target
-  const findRow = (tag) => g5._atelierRows().find(r => r.tag === tag);
-  assert(findRow('tab2'), 'a tab2 (Gallery) row exists in the click map');
-  fireKey('keydown', '3'); frames(2);
-  assert(g5.atelierTab === 2, 'key 3 switched to the Gallery tab');
-  const t2 = findRow('tab2');
-  fireMouse(cv5, t2.x + t2.w / 2, t2.y + t2.h / 2); frames(2);
-  assert(g5.atelierTab === 2, 'clicking the Gallery tab keeps it active');
-  // Gallery is display-only: no buy/hang rows, but depart/leave still present
-  const rows = g5._atelierRows();
-  assert(!rows.some(r => /^paint:/.test(r.tag)), 'the Gallery tab exposes no buy/hang rows (display-only)');
-  assert(rows.some(r => r.tag === 'depart') && rows.some(r => r.tag === 'leave'), 'depart/leave rows remain on the Gallery tab');
-  frames(30);
-  assert(g5.state === 'atelier', 'the Gallery tab drew cleanly for 30 frames (no JS errors)');
-
-  // now own a couple of paintings + one loadout slot, and confirm the lit path
-  // (full-color art + placard + "hung") also renders without error.
-  g5.save.owned = ['spring-garden', 'moonlit-pond'];
-  g5.save.loadout = ['spring-garden'];
-  g5._atelierIntro = false;
-  frames(30);
-  assert(g5.state === 'atelier', 'Gallery drew cleanly with owned + hung paintings (lit + "★ hung" path)');
-  fireKey('keydown', 'Escape'); frames(2);
-  assert(g5.state === 'title', 'Escape returned from the Gallery to the title');
-}
+// Superseded by the finite campaign: legacy Gallery Wall purchase UI.
+// Historical assertions remain in Git at 856eab7:tests/smoke.mjs.
 
 console.log('== stage 28: M8 P6 — the "?" field guide overlay ==');
 {
@@ -1202,8 +1083,7 @@ console.log('== stage 28: M8 P6 — the "?" field guide overlay ==');
   // a fresh run always starts closed
   fireKey('keydown', 'Enter'); frames(3);        // back into a run
   g6.player.iframes = 0; g6.player.hurt(99, g6.tuning); frames(140);
-  fireKey('keydown', 'Enter'); frames(3);        // -> end -> atelier
-  fireKey('keydown', 'Escape'); frames(3);       // -> title
+  g6._quitToTitle(); frames(3);
   assert(g6.state === 'title', 'returned to the title after the P6 stage');
 }
 
@@ -1306,57 +1186,9 @@ console.log('== stage 29: M8 P9 — Options overlay (music/SFX sliders + shake/v
 // ---------------------------------------------------------------------
 // stage 30 — v1.2 M9 A1: atelier one-liners (context pools + typewriter)
 // ---------------------------------------------------------------------
-console.log('== stage 30: v1.2 M9 A1 — atelier one-liners ==');
-{
-  const cv30 = makeCanvas();
-  const g30 = new Game(cv30);
-  g30.start();
-  g30._quitToTitle();
-  g30._beginAtelier();
-  // a line is always present with a known speaker + typewriter state
-  assert(g30._atelierSay && ['Mabel', 'Giuseppe', 'Monet'].includes(g30._atelierSay.name), 'A1: a resident speaks on atelier entry');
-  assert(typeof g30._atelierSay.text === 'string' && g30._atelierSay.text.length > 0, 'A1: one-liner has text');
-  assert(g30._atelierSay.revealed === 0, 'A1: typewriter starts unrevealed');
+// Superseded by the finite campaign: legacy Atelier dialogue UI.
+// Historical assertions remain in Git at 856eab7:tests/smoke.mjs.
 
-  // typewriter advances over frames and clamps at the full line length
-  const before = g30._atelierSay.revealed;
-  frames(60); // ~1s at 60fps -> 28 chars/s should reveal most of a ~50-char line
-  assert(g30._atelierSay.revealed > before, 'A1: typewriter reveal advances over frames');
-  frames(120);
-  assert(g30._atelierSay.revealed === g30._atelierSay.text.length, 'A1: reveal clamps at the full line');
-
-  // context: a finished victory still resolves a valid speaker + line
-  for (const name of ['Mabel', 'Giuseppe', 'Monet']) {
-    g30._atelierSayIdx = { [name]: 0 };
-    g30.lastResult = 'victory';
-    g30._lastPurchase = null;
-    g30._pickAtelierSay();
-    assert(['Mabel', 'Giuseppe', 'Monet'].includes(g30._atelierSay.name), 'A1: victory context resolves (speaker ' + g30._atelierSay.name + ')');
-    assert(g30._atelierSay.revealed === 0, 'A1: each pick starts the typewriter fresh');
-  }
-
-  // purchase context re-rolls from the purchase pool (reacts to a just-made buy)
-  g30._lastPurchase = false;
-  g30._noteAtelierPurchase();
-  assert(g30._lastPurchase === true, 'A1: purchase is noted');
-  assert(g30._atelierSay.revealed === 0, 'A1: purchase re-rolls a fresh line (typewriter reset)');
-
-  // rotation: consecutive picks across visits produce varied lines
-  g30._lastPurchase = null; g30.lastResult = 'defeat';
-  const lines = new Set();
-  for (let i = 0; i < 12; i++) { g30._pickAtelierSay(); lines.add(g30._atelierSay.name + ':' + g30._atelierSay.text); }
-  assert(lines.size >= 3, 'A1: rotation produces varied lines across visits');
-
-  // nothing persisted: a fresh atelier visit does not touch the saved save
-  const KEY = 'frogue_gallery_save';
-  const before2 = JSON.stringify(store.get(KEY));
-  g30._beginAtelier();
-  assert(JSON.stringify(store.get(KEY)) === before2, 'A1: one-liners persist nothing new to the save');
-}
-
-// ---------------------------------------------------------------------
-// stage 31 — v1.2 M9 A2: painting synergy pairs (pure SYNERGIES table)
-// ---------------------------------------------------------------------
 console.log('== stage 31: v1.2 M9 A2 — painting synergy pairs ==');
 {
   const L = await import('../src/logic.js');
@@ -1430,187 +1262,9 @@ console.log('== stage 31: v1.2 M9 A2 — painting synergy pairs ==');
 // wrapping the canvas 2d context's fillText so every placard string is
 // captured, then checking the names + states.
 // ---------------------------------------------------------------------
-console.log('== stage 32: v1.2 M9 A3 — the Curator\'s Ledger ==');
-{
-  // a Game whose canvas records every fillText call (cached recording proxy)
-  const recCanvas = makeCanvas();
-  const drawnTexts = [];
-  const baseCtx = makeCtx(recCanvas);
-  const recCtx = new Proxy(baseCtx, {
-    get(t, prop) {
-      if (prop === 'fillText') return (str, ...rest) => { drawnTexts.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; };
-      return t[prop];
-    },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-  recCanvas.getContext = () => recCtx;
-  const g32 = new Game(recCanvas);
-  g32.start();
-  g32._quitToTitle();
-  g32._beginAtelier();
-  // a partial collection: 3 of 8 owned (one also hung in the loadout)
-  g32.save.owned = ['moonlit-pond', 'spring-garden', 'king-frog'];
-  g32.save.loadout = ['king-frog'];
-  g32._atelierIntro = false;
-  g32.lastResult = 'victory';
+// Superseded by the finite campaign: Curator purchase ledger and repeatable prestige.
+// Historical assertions remain in Git at 856eab7:tests/smoke.mjs.
 
-  // the 4th tab is reachable by key and by its click target
-  const findRow = (tag) => g32._atelierRows().find(r => r.tag === tag);
-  assert(findRow('tab3'), 'a tab3 (Ledger) row exists in the click map');
-  fireKey('keydown', '4'); frames(2);
-  assert(g32.atelierTab === 3, 'key 4 switched to the Ledger tab');
-  const t3 = findRow('tab3');
-  fireMouse(recCanvas, t3.x + t3.w / 2, t3.y + t3.h / 2); frames(2);
-  assert(g32.atelierTab === 3, 'clicking the Ledger tab keeps it active');
-
-  // the Ledger is display-only: no buy/hang rows, but depart/leave remain
-  const rows = g32._atelierRows();
-  assert(!rows.some(r => /^paint:/.test(r.tag)), 'the Ledger tab exposes no buy/hang rows (display-only)');
-  assert(rows.some(r => r.tag === 'depart') && rows.some(r => r.tag === 'leave'), 'depart/leave rows remain on the Ledger tab');
-
-  // draw the ledger and capture every string it writes (one frame = one render
-  // pass, so per-painting tags are counted exactly once)
-  drawnTexts.length = 0;
-  frames(1);
-  const joined = drawnTexts.join('\u0001');
-  const L = await import('../src/logic.js');
-  const expected = L.PAINTINGS; // 10 entries (8 pigment + 2 gold-tier, G2)
-  const goldIds = L.PAINTINGS.filter(p => p.goldTier).map(p => p.id);
-  assert(expected.length === 10, `A3: the collection holds 10 paintings (8 pigment + 2 gold-tier; got ${expected.length})`);
-  // every painting name appears at least once
-  for (const pt of expected) {
-    assert(joined.includes(pt.name), `A3: ledger renders "${pt.name}"`);
-  }
-  // the correct collected / not-yet state is asserted per painting:
-  //  - the 3 owned (pigment) ones must carry "collected" (king-frog: "hung")
-  //  - the unowned PIGMENT ones carry "not yet collected"
-  //  - the unowned GOLD-tier ones carry their gold price + "NG+ only" (G4b: the
-  //    gold price is now shown distinctly on the row, e.g. "25g · NG+ only")
-  const owned = g32.save.owned;
-  const hung = g32.save.loadout;
-  const ownedNonGold = owned.filter(id => !goldIds.includes(id));
-  const notYetPigment = (L.PAINTINGS.filter(p => !p.goldTier).length) - ownedNonGold.length;
-  const notYetCount = (joined.match(/not yet collected/g) || []).length;
-  assert(notYetCount === notYetPigment, `A3: exactly ${notYetPigment} PIGMENT entries marked "not yet collected"`);
-  const notYetGold = (joined.match(/g · NG\+ only/g) || []).length;
-  assert(notYetGold === goldIds.length, `A3: exactly ${goldIds.length} unowned gold-tier entries carry their gold price + "NG+ only" (G4b)`);
-  // exact "collected" tag count = owned non-gold minus the ones flagged as hung
-  const ownedNotHung = ownedNonGold.filter(id => !hung.includes(id)).length;
-  const collectedExact = (joined.match(/\u0001collected\u0001/g) || []).length;
-  assert(collectedExact === ownedNotHung, `A3: ${ownedNotHung} owned (non-hung) pigment entries carry the exact "collected" tag`);
-  // the hung one is flagged distinctly
-  assert(joined.includes('hung in the loadout'), 'A3: the hung painting is flagged "★ hung in the loadout"');
-  // the curator caption + display-only note render (10 paintings + gold-tier count)
-  assert(joined.includes('of 10 collected') || joined.includes("curator's ledger"), 'A3: the ledger footer caption renders (10 paintings)');
-  assert(joined.includes('gold-tier') || joined.includes("gold"), 'A3: the ledger footer notes the gold-tier works');
-  assert(joined.includes('a display only'), 'A3: the display-only note renders');
-
-  // drew cleanly for a sustained stretch (no JS errors in the render path)
-  frames(30);
-  assert(g32.state === 'atelier', 'the Ledger tab drew cleanly for 30 frames (no JS errors)');
-  fireKey('keydown', 'Escape'); frames(2);
-  assert(g32.state === 'title', 'Escape returned from the Ledger to the title');
-}
-
-// stage 33 — v1.2 M9 A4: 'Rehung Frame' (prestige-lite gallery bonus)
-// The bonus is a permanent, saved tuning bump (NOT a save-wipe) minted by
-// retiring a completed collection. Asserts: OFF on a fresh save, ON after a
-// simulated retire, persists across a save/load round-trip, an OLD-format
-// save (no field) migrates without error, and the atelier UI mints it.
-// ---------------------------------------------------------------------
-console.log('== stage 33: v1.2 M9 A4 — Rehung Frame (gallery bonus) ==');
-{
-  const L = await import('../src/logic.js');
-  const S = await import('../src/save.js');
-  const KEY = 'frogue_gallery_save';
-
-  // (1) OFF on a fresh save: no bonus, tuning carries zero ink / 1.0x orb.
-  const fresh = L.freshSave();
-  assert(fresh.galleryBonus === 0, 'A4: a fresh save has galleryBonus 0');
-  const tOff = L.makeTuning({}, [], 'normal', fresh.galleryBonus);
-  assert(tOff.galleryInkBonus === 0 && tOff.galleryOrbMult === 1, `A4: bonus OFF on a fresh save (ink ${tOff.galleryInkBonus}, orb ${tOff.galleryOrbMult})`);
-
-  // (2) ON after a simulated retire: eligibility + mint + tuning reflects it.
-  assert(!L.canRetireCollection(L.freshSave()), 'A4: an empty collection is not eligible to retire');
-  const s = L.freshSave();
-  s.owned = L.PAINTINGS.map(p => p.id);      // all 8 paintings owned
-  s.loadout = [L.PAINTINGS[0].id];          // at least one ★-hung
-  assert(L.canRetireCollection(s), 'A4: a completed collection (all 8 + one hung) is eligible to retire');
-  assert(L.retireCollection(s) === 1 && s.galleryBonus === 1, 'A4: retiring mints galleryBonus level 1');
-  // repeatable: a second retire advances the counter
-  assert(L.retireCollection(s) === 2 && s.galleryBonus === 2, 'A4: the bonus is repeatable (retire again -> level 2)');
-  const tOn = L.makeTuning({}, s.loadout, 'normal', s.galleryBonus);
-  assert(tOn.galleryInkBonus === L.GALLERY_BONUS.inkPerLevel * 2 && tOn.galleryOrbMult > 1, `A4: bonus ON after retire (ink ${tOn.galleryInkBonus}, orb ${tOn.galleryOrbMult.toFixed(2)})`);
-  // the orb value bump is applied to the live tuning's pickupValue
-  const baseOrb = L.makeTuning({}, s.loadout, 'normal', 0).pickupValue;
-  assert(tOn.pickupValue > baseOrb, `A4: orb value is bumped by the bonus (pickup ${baseOrb} -> ${tOn.pickupValue.toFixed(2)})`);
-
-  // (3) persists across a save/load round-trip.
-  S.SaveSys.save(s);
-  const reloaded = S.SaveSys.load();
-  assert(reloaded && reloaded.galleryBonus === 2, `A4: galleryBonus persists across a save/load round-trip (got ${reloaded && reloaded.galleryBonus})`);
-  const tReload = L.makeTuning({}, reloaded.loadout, 'normal', reloaded.galleryBonus);
-  assert(tReload.galleryInkBonus === tOn.galleryInkBonus, 'A4: the reloaded save rebuilds the same tuned bonus');
-
-  // (4) an OLD-format save (no galleryBonus field) migrates without error.
-  store.set(KEY, JSON.stringify({
-    v: 1,
-    bank: { red: 9, blue: 9, green: 9 },
-    owned: ['moonlit-pond'], loadout: ['moonlit-pond'],
-    upgrades: { capacity: 1, power: 0, vitality: 0 },
-    flags: { intro: true },
-    stats: { expeditions: 3, victories: 1, deaths: 0, heronsPainted: 0, treasures: 0 },
-    bestRun: null,
-    // NOTE: no galleryBonus field on purpose — this is the old schema.
-  }));
-  const oldMigrated = S.SaveSys.load();
-  assert(oldMigrated !== null, 'A4: an OLD-format save (no galleryBonus field) still loads');
-  assert(oldMigrated.saveVersion === L.SAVE_VERSION, 'A4: the old save re-stamps to the current schema version');
-  assert(oldMigrated.galleryBonus === 0, 'A4: the old save migrates with galleryBonus defaulted to 0 (no error)');
-  // and the legacy fields survived the migration
-  assert(oldMigrated.bank.red === 9 && oldMigrated.owned.includes('moonlit-pond'), 'A4: legacy fields survive the old->new migration');
-
-  // (5) the atelier UI mints the bonus: eligible save -> the Ledger tab exposes
-  // a 'retire' row; clicking it raises the level and rebuilds the tuning.
-  const recCanvas = makeCanvas();
-  const g33 = new Game(recCanvas);
-  g33.start();
-  g33._quitToTitle();
-  g33._beginAtelier();
-  g33._atelierIntro = false;
-  g33.save = L.freshSave();
-  g33.save.owned = L.PAINTINGS.map(p => p.id);
-  g33.save.loadout = [L.PAINTINGS[0].id];
-  const retireRow = () => g33._atelierRows().find(r => r.tag === 'retire');
-  fireKey('keydown', '4'); frames(2); // onto the Ledger tab
-  let rr = retireRow();
-  assert(rr && rr.enabled === true, 'A4: the Ledger tab exposes an enabled retire row for a completed collection');
-  const before = L.galleryBonusLevel(g33.save);
-  rr.act(); frames(2);
-  const after = L.galleryBonusLevel(g33.save);
-  assert(after === before + 1, `A4: clicking Retire mints the next bonus level (${before} -> ${after})`);
-  assert(g33.tuning.galleryInkBonus > 0, 'A4: the live tuning is rebuilt with the bonus active');
-  // the run-start ink grant: a fresh expedition starts with the ink bonus in stock
-  g33._beginExpedition();
-  assert(g33.stock.red === g33.tuning.galleryInkBonus && g33.stock.blue === g33.tuning.galleryInkBonus && g33.stock.green === g33.tuning.galleryInkBonus,
-    `A4: a run starts with +${g33.tuning.galleryInkBonus} start ink of every color (bonus ${after})`);
-  // a non-complete collection shows a disabled retire row (no accidental mint)
-  g33._quitToTitle(); g33._beginAtelier(); g33._atelierIntro = false;
-  g33.save = L.freshSave(); g33.save.owned = ['moonlit-pond']; g33.save.loadout = ['moonlit-pond'];
-  fireKey('keydown', '4'); frames(2);
-  const rr2 = retireRow();
-  assert(rr2 && rr2.enabled === false, 'A4: an incomplete collection shows a disabled retire row');
-  const beforeIneligible = L.galleryBonusLevel(g33.save);
-  rr2.act(); frames(2); // must be a no-op (hurt, no mint)
-  assert(L.galleryBonusLevel(g33.save) === beforeIneligible, 'A4: retiring an incomplete collection does nothing (no mint)');
-  // restore the live game save for any later stage
-  g33._quitToTitle();
-}
-
-// stage 34 — v1.2 M10 E1: the Painted Heron (mid-run half-heron set-piece)
-// A small re-use of the real heron's bossStep + 3-hue awaken machinery at
-// reduced scale, on Normal+ at a zone boundary. Optional (non-blocking), so it
-// must SPAWN, be DAMAGEABLE, and its DEFEAT must not end the run (no victory).
 console.log('== stage 34: v1.2 M10 E1 — the Painted Heron (mid-run half-heron) ==');
 {
   const L = await import('../src/logic.js');
@@ -2107,73 +1761,7 @@ console.log('\n== stage 39: V2 — heron awaken bloom ==');
 // generative motif + the PAINTINGS data. We verify it with a canvas that
 // records every fillText (string + the globalAlpha it was drawn at), so we
 // can assert the titles render AND the reveal animation ramps 0 -> 1.
-console.log('== stage 41: V4 — end-screen exhibition ==');
-{
-  const recCanvas = makeCanvas();
-  const baseCtx = recCanvas.getContext('2d');
-  const textLog = [];            // { str, alpha }
-  const recCtx = new Proxy(baseCtx, {
-    get(t, prop) {
-      if (prop === 'fillText') return (str, ...rest) => { textLog.push({ str: String(str), alpha: t.globalAlpha }); return t.fillText ? t.fillText(str, ...rest) : undefined; };
-      return t[prop];
-    },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-  recCanvas.getContext = () => recCtx;
-  const g41 = new Game(recCanvas);
-  g41.start();
-  g41._quitToTitle();
-
-  // a loadout of two paintings for this expedition
-  g41.save.owned = ['moonlit-pond', 'storm-cloud', 'spring-garden'];
-  g41.save.loadout = ['moonlit-pond', 'storm-cloud'];
-  g41.endKind = 'victory';
-  g41.endT = 0;
-  g41.endGains = { red: 5, blue: 5, green: 5 };
-  g41.state = 'end';
-  // clear any lingering mouse/key state from earlier stages so the end-screen
-  // buttons (which fire on lPressed when endT>0.6) don't send us to the atelier
-  g41.input.mouse.lPressed = false;
-  g41.input.mouse.lDown = false;
-  g41.input.mouse.x = 0;
-  g41.input.mouse.y = 0;
-
-  // the victory card is taller than the defeat card
-  assert(g41._endCardH() === 540, 'V4: the victory end-card carries the exhibition (taller card)');
-  const L = await import('../src/logic.js');
-  const expected = L.PAINTINGS.filter(p => g41.save.loadout.includes(p.id));
-  assert(expected.length === 2, 'V4: two paintings were carried this expedition');
-
-  // Note: _frame advances endT by its dt (~0.0167), so we set endT just below
-  // the target so it lands right on it after the frame.
-  // early in the reveal: the exhibition is fading in (titles drawn at <1 alpha)
-  textLog.length = 0;
-  g41.endT = 0.6;
-  g41._frame(g41.now * 1000 + 1000);
-  const early = textLog.filter(t => t.str === 'Moonlit Pond').length;
-  assert(early >= 1, 'V4: the first carried painting is titled on the victory screen');
-  const earlyAlpha = Math.min(...textLog.filter(t => t.str === 'Moonlit Pond').map(t => t.alpha));
-  assert(earlyAlpha < 0.9, `V4: the exhibition is mid-reveal early on (alpha ${earlyAlpha.toFixed(2)})`);
-
-  // fully revealed: both titles present at full alpha, and NOT on a defeat
-  g41.endT = 5;
-  textLog.length = 0;
-  g41._frame(g41.now * 1000 + 2000);
-  for (const pt of expected) {
-    // title alpha = 0.9 * ri; at full reveal ri>=0.88 so alpha>=0.79
-    assert(textLog.some(t => t.str === pt.name && t.alpha >= 0.7), `V4: the exhibition renders "${pt.name}" at full reveal`);
-  }
-  // neither of the other owned-but-not-carried paintings appears
-  assert(!textLog.some(t => t.str === 'Spring Garden'), 'V4: only the carried loadout is shown (not all owned)');
-  // the exhibition is a victory-only presentation
-  g41.endKind = 'defeat';
-  g41.endT = 5;
-  textLog.length = 0;
-  g41._frame(g41.now * 1000 + 3000);
-  assert(!textLog.some(t => t.str === 'Moonlit Pond'), 'V4: the exhibition is victory-only (not on a defeat)');
-  assert(g41._endCardH() === 430, 'V4: the defeat card keeps its compact height');
-}
-
+// Old end-screen exhibition is superseded by the final dungeon outcome; campaign UI tests cover it.
 console.log('== stage 42: T1 — guided first expedition (tutorial) ==');
 {
   const S42 = await import('../src/save.js');
@@ -2196,9 +1784,9 @@ console.log('== stage 42: T1 — guided first expedition (tutorial) ==');
   assert(L42.tutorialEligible(skipped) === false, 'T1: a previously-skipped save is NOT eligible');
   // a fresh save's title carries the guided button; a returning save's does not.
   g42.save = L42.freshSave(); fr42(2);
-  assert(L42.tutorialEligible(g42.save), 'T1: title shows the guided button for a fresh save');
+  assert(L42.tutorialEligible(g42.save), 'T1: a fresh save is eligible for tutorial hints');
   g42.save = returning; fr42(2);
-  assert(!L42.tutorialEligible(g42.save), 'T1: title hides the guided button for a returning save');
+  assert(!L42.tutorialEligible(g42.save), 'T1: a returning save no longer needs tutorial hints');
 
   // ---- enter the guided expedition on a fresh save ----
   g42.save = L42.freshSave();
@@ -2289,8 +1877,7 @@ console.log('== stage 42: T1 — guided first expedition (tutorial) ==');
   assert(S42.SaveSys.load().flags.tutorialSkipped === true, 'T1: SKIP persists tutorialSkipped to disk (survives a reload)');
   assert(L42.tutorialEligible(S42.SaveSys.load()) === false, 'T1: after a skip the player is no longer eligible (never sees it again)');
 
-  // ---- a returning save (skip OR finished run) can never enter the tutorial,
-  // even on the guided path — the eligibility guard in _beginExpedition holds. ----
+  // Explicit practice stays available to returning players; it never auto-starts.
   const g42c = new Game(makeCanvas());
   g42c.start();
   g42c.save = L42.freshSave(); g42c.save.flags.tutorialSkipped = true;
@@ -2298,14 +1885,14 @@ console.log('== stage 42: T1 — guided first expedition (tutorial) ==');
   let t42c = 1000;
   const fr42c = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t42c += step; g42c._frame(t42c); } };
   fr42c(6);
-  assert(g42c.tutorial === null, 'T1: a skipped save is refused the guided run (guard) and starts straight in');
+  assert(g42c.tutorial && g42c.runT === 0, 'T1: explicit practice replay remains available after skipping, with the run clock frozen');
   assert(g42c.state === 'expedition', 'T1: the skipped save is in the timed expedition');
   // and a finished-run save is refused too
   const g42d = new Game(makeCanvas());
   g42d.start();
   g42d.save = L42.freshSave(); g42d.save.flags.heronDefeated = true;
   g42d._beginExpedition(true); // guided path on an ineligible (finished) save
-  assert(g42d.tutorial === null, 'T1: a finished-run save is refused the guided run (guard)');
+  assert(g42d.tutorial && g42d.runT === 0, 'T1: explicit practice replay remains available after finishing');
 }
 
 console.log('== stage 43: T2 — interactive pigment drills (real status/death) ==');
@@ -2568,980 +2155,9 @@ console.log('== stage 45: T4 — tutorial progress + "Watch me" re-entry ==');
   assert(g45c.tutorial.idx === 0 && g45c.tutorial.retrain !== true, 'T4: _startRetrain is a no-op while a guided run is active (no nesting / no hijack)');
 }
 
-console.log('== stage 46: N1 — NG+ unlock + Next Expedition flow ==');
-{
-  const L46 = await import('../src/logic.js');
-  const S46 = await import('../src/save.js');
-  const KEY46 = 'frogue_gallery_save';
+// Superseded by the finite campaign: NG+ cycles, scaling, variants, modifiers, gold and prestige UI.
+// Historical assertions remain in Git at 856eab7:tests/smoke.mjs.
 
-  // ---- (0) SAVE_VERSION bumped 3 -> 4; fresh save carries ngCycle 0 ----
-  assert(Number.isInteger(L46.SAVE_VERSION) && L46.SAVE_VERSION >= 5, `N1: SAVE_VERSION is at least 5 (NG+ era; got ${L46.SAVE_VERSION})`);
-  assert(L46.freshSave().ngCycle === 0, 'N1: a fresh save has ngCycle 0 (first-time player)');
-  assert(L46.freshSave().saveVersion === L46.SAVE_VERSION, 'N1: a fresh save is stamped the current saveVersion');
-
-  // ---- (1) a v3 save (no ngCycle field) migrates forward unchanged (ngCycle 0) ----
-  store.set(KEY46, JSON.stringify({
-    v: 3,
-    bank: { red: 7, blue: 3, green: 9 },
-    owned: ['moonlit-pond'], loadout: ['moonlit-pond'],
-    upgrades: { capacity: 2, power: 1, vitality: 0 },
-    flags: { intro: true, heronDefeated: true },
-    stats: { expeditions: 4, victories: 1, deaths: 0, heronsPainted: 1, treasures: 0 },
-    bestRun: { pigments: { red: 5, blue: 0, green: 0 }, time: 900, cleared: true },
-    galleryBonus: 1,
-    tutorialDrills: { burn: true, freeze: true, root: true, awaken: true },
-    // NOTE: no ngCycle field on purpose — this is the old v3 schema.
-  }));
-  const migrated46 = S46.SaveSys.load();
-  assert(migrated46 !== null, 'N1: a v3 save (no ngCycle) still loads');
-  assert(migrated46.saveVersion === L46.SAVE_VERSION, 'N1: the v3 save re-stamps to the current schema version');
-  assert(migrated46.ngCycle === 0, 'N1: a v3 save migrates with ngCycle defaulted to 0 (first-time player)');
-  assert(migrated46.galleryBonus === 1 && migrated46.tutorialDrills.burn === true, 'N1: v3 legacy fields survive the migration');
-  // a corrupt/garbled ngCycle normalizes back to 0 (the loader never throws)
-  store.set(KEY46, JSON.stringify({ v: 4, ngCycle: 'not-a-number', bank: { red: 1, blue: 0, green: 0 }, stats: { victories: 1 } }));
-  const corrupt46 = S46.SaveSys.load();
-  assert(corrupt46 && corrupt46.ngCycle === 0, 'N1: a garbled ngCycle field normalizes to 0 on load');
-  // restore the migrated save for the run-flow tests below
-  S46.SaveSys.save(migrated46);
-
-  // ---- (2) a returning first-time player (ngCycle 0) sees ZERO new UI ----
-  const freshTitle = makeCanvas();
-  const gN1a = new Game(freshTitle);
-  gN1a.start();
-  gN1a.save = L46.freshSave();            // ngCycle 0, no victory
-  assert(gN1a._titleLayout().ng === null, 'N1: a fresh save (ngCycle 0) shows NO Next Expedition button on the title');
-  assert(gN1a._endButtons().ng === null, 'N1: a fresh save (ngCycle 0) shows NO Next Expedition button on the end screen');
-  // ngUnlocked is the shared gate: false with no victory, true after one
-  assert(L46.ngUnlocked(L46.freshSave()) === false, 'N1: ngUnlocked is false for a save with no victory');
-  const withVic = L46.freshSave(); withVic.stats.victories = 1;
-  assert(L46.ngUnlocked(withVic) === true, 'N1: ngUnlocked is true once a victory is recorded');
-
-  // ---- (3) a save with a completed victory offers Next Expedition ----
-  const gN1b = new Game(makeCanvas());
-  gN1b.start();
-  const saved46 = L46.freshSave();
-  saved46.stats.victories = 1; saved46.flags.heronDefeated = true; saved46.ngCycle = 0;
-  gN1b.save = saved46;
-  const tng = gN1b._titleLayout().ng;
-  assert(tng && typeof tng.x === 'number', 'N1: a save with a victory shows the Next Expedition button on the title');
-  // the end screen offers it too (drive a victory end screen)
-  gN1b._endRun('victory');
-  frames(20);
-  const eng = gN1b._endButtons().ng;
-  assert(eng && typeof eng.x === 'number', 'N1: a completed-victory end screen shows the Next Expedition button');
-
-  // ---- (4) choosing Next Expedition starts a run with ngCycle 1 + persists ----
-  gN1b.state = 'title';
-  gN1b.save = L46.freshSave();
-  gN1b.save.stats.victories = 1; gN1b.save.flags.heronDefeated = true; gN1b.save.ngCycle = 0;
-  gN1b._beginNextExpedition();
-  // N4 (v1.3 M14): the "Next Expedition" button now OPENS the expedition-
-  // modifier picker (instead of immediately advancing the cycle); the run
-  // starts when the picker is confirmed. A fresh save has no modifier yet.
-  assert(gN1b._modPrompt && gN1b.state === 'title', 'N1/N4: choosing Next Expedition opens the modifier picker (state stays on the title)');
-  gN1b._confirmNextExpedition();
-  assert(gN1b.state === 'expedition', 'N1: confirming the picker starts a run');
-  assert(gN1b.save.ngCycle === 1, `N1: the NG+ cycle advances to 1 and is persisted (got ${gN1b.save.ngCycle})`);
-  assert(gN1b.ngCycle === 1, 'N1: the run carries ngCycle 1 (drives NG+ scaling / boss selection)');
-  // the persisted on-disk blob carries ngCycle 1 at the current schema version
-  const persisted46 = JSON.parse(store.get(KEY46));
-  assert(persisted46 && persisted46.ngCycle === 1 && persisted46.saveVersion === L46.SAVE_VERSION,
-    `N1: ngCycle 1 is persisted on disk at the current saveVersion (got ${persisted46 && persisted46.ngCycle} / ${persisted46 && persisted46.saveVersion})`);
-  // round-trip through the real loader: the persisted blob reads back as ngCycle 1
-  const roundtrip46 = L46.migrateSave(persisted46);
-  assert(roundtrip46 && roundtrip46.ngCycle === 1, 'N1: the persisted NG+ save round-trips through the loader with ngCycle intact');
-
-  // ---- (5) the button is NOT reachable on a first-time save (no accidental NG+) ----
-  const gN1c = new Game(makeCanvas());
-  gN1c.start();
-  gN1c.save = L46.freshSave();   // no victory -> _beginNextExpedition is a no-op
-  const before46 = gN1c.save.ngCycle;
-  gN1c._beginNextExpedition();
-  assert(gN1c.state === 'title', 'N1: _beginNextExpedition is a no-op for a first-time save (no victory)');
-  assert(gN1c.save.ngCycle === before46 && gN1c.save.ngCycle === 0, 'N1: a first-time save cannot accidentally advance ngCycle');
-  // restore the migrated save so any later stage sees a consistent save
-  S46.SaveSys.save(migrated46);
-}
-
-console.log('== stage 47: N2 — NG+ scaling (ngPlusScaling / applyNGPlus) ==');
-{
-  const L47 = await import('../src/logic.js');
-  const { spawnEnemy } = await import('../src/enemies.js');
-
-  // ---- (0) the pure scaling table: cycle 0 is all-ones (NO change); growth capped at cycle 3 ----
-  const s0 = L47.ngPlusScaling(0);
-  assert(s0.hp === 1 && s0.dmg === 1 && s0.spawn === 1, 'N2: ngPlusScaling(0) returns all-ones (first-time run unchanged)');
-  const s1 = L47.ngPlusScaling(1);
-  // cycle-1 target: ~+25-35% enemy HP, ~+10-20% damage, modest spawn bump
-  assert(s1.hp >= 1.25 && s1.hp <= 1.35, `N2: cycle-1 enemy HP is +25-35% (got ×${s1.hp})`);
-  assert(s1.dmg >= 1.10 && s1.dmg <= 1.20, `N2: cycle-1 enemy damage is +10-20% (got ×${s1.dmg})`);
-  assert(s1.spawn > 1, `N2: cycle-1 spawn rate is bumped (got ×${s1.spawn})`);
-  // K6 (v1.5 M2): the Master tier — growth now has a MASTER step at cycle 4:
-  // cycle 4 > cycle 3 (HP +50% / dmg +25% over cycle 3), then capped:
-  // cycle 4 == cycle 5 == cycle 99 (no unbounded spiral).
-  const s3 = L47.ngPlusScaling(3), s4 = L47.ngPlusScaling(4), s5 = L47.ngPlusScaling(5), s99 = L47.ngPlusScaling(99);
-  assert(s4.hp > s3.hp && s4.dmg > s3.dmg, 'N2+K6: the Master tier (cycle 4) is strictly harder than cycle 3 (HP +50% / dmg +25% over cycle 3)');
-  assert(s4.hp === s5.hp && s4.dmg === s5.dmg && s4.spawn === s5.spawn, 'N2+K6: the Master tier is capped at cycle 4 (cycle 4 == cycle 5)');
-  assert(s4.hp === s99.hp && s4.dmg === s99.dmg && s4.spawn === s99.spawn, 'N2+K6: the Master cap holds for arbitrarily large cycles');
-  assert(s3.hp > s1.hp && s3.dmg > s1.dmg && s3.spawn > s1.spawn, 'N2: cycle 3 is strictly harder than cycle 1 (the escalation is an upper bound, not a plateau at cycle 1)');
-  // non-finite / negative input normalizes to the cycle-0 all-ones row (never a NaN multiplier)
-  assert(L47.ngPlusScaling(-5).hp === 1 && L47.ngPlusScaling('garbage').hp === 1, 'N2: non-finite / negative cycle normalizes to cycle 0');
-
-  // ---- (1) cycle 0 tuning is byte-identical to pre-NG+ (the 15-20 min first-time invariant) ----
-  // The scaling fields must NOT be added when ngCycle is 0: a fresh makeTuning()
-  // (exactly what the pre-NG+ code produced) and the NG+ path for cycle 0 must be
-  // the same object with no extra keys.
-  const { Game } = await import('../src/game.js');
-  const g47a = new Game(makeCanvas());
-  g47a.start();
-  g47a.save = L47.freshSave();       // ngCycle 0, base upgrades
-  g47a.save.upgrades = { capacity: 1, power: 2, vitality: 1 };
-  g47a._beginExpedition();
-  const base47 = g47a.tuning;
-  assert(g47a.ngCycle === 0, 'N2: the fresh-save run is cycle 0');
-  // The scaling must NOT alter anything for cycle 0: applyNGPlus is only called
-  // when ngCycle >= 1, so a cycle-0 run's tuning is the literal pre-NG+ makeTuning
-  // object (enemyHp stays at its base value of 1; no enemyDmg/spawnRate added).
-  assert(base47.enemyHp === 1, `N2: cycle-0 enemyHp stays at base 1 (got ${base47.enemyHp})`);
-  assert(base47.enemyDmg === undefined && base47.spawnRate === undefined,
-    'N2: cycle-0 tuning adds no NG+ enemyDmg/spawnRate fields (applyNGPlus not run)');
-  // and it equals a plain makeTuning (the literal pre-NG+ code path)
-  const plain47 = L47.makeTuning({ capacity: 1, power: 2, vitality: 1 }, [], 'normal');
-  assert(JSON.stringify(base47) === JSON.stringify(plain47), 'N2: cycle-0 tuning deep-equals a plain makeTuning (no NG+ delta)');
-
-  // ---- (2) cycle-1 tuning differs as specified, applied only when ngCycle >= 1 ----
-  const g47b = new Game(makeCanvas());
-  g47b.start();
-  g47b.save = L47.freshSave();
-  g47b.save.ngCycle = 1;
-  g47b.save.upgrades = { capacity: 1, power: 2, vitality: 1 };
-  g47b._beginExpedition();
-  const ng47 = g47b.tuning;
-  assert(ng47.enemyHp === s1.hp, `N2: cycle-1 run carries enemyHp ×${s1.hp} (got ${ng47.enemyHp})`);
-  assert(ng47.enemyDmg === s1.dmg, `N2: cycle-1 run carries enemyDmg ×${s1.dmg} (got ${ng47.enemyDmg})`);
-  assert(ng47.spawnRate === s1.spawn, `N2: cycle-1 run carries spawnRate ×${s1.spawn} (got ${ng47.spawnRate})`);
-
-  // ---- (3) the multipliers actually reach the enemies ----
-  const baseBeetle = spawnEnemy('beetle', 200, 100, base47);
-  const ngBeetle = spawnEnemy('beetle', 200, 100, ng47);
-  assert(ngBeetle.hp > baseBeetle.hp, `N2: NG+ enemies are tankier (beetle ${baseBeetle.hp} -> ${ngBeetle.hp})`);
-  assert(ngBeetle.hp === Math.round(baseBeetle.hp * s1.hp), `N2: NG+ beetle HP == base × ${s1.hp} (got ${ngBeetle.hp})`);
-  assert(ngBeetle.dmg > baseBeetle.dmg, `N2: NG+ enemies hit harder (beetle dmg ${baseBeetle.dmg} -> ${ngBeetle.dmg})`);
-
-  // ---- (4) the heron is NOT scaled (its HP is a fixed tuning value, not NG+-bumped) ----
-  assert(base47.bossMaxHp === ng47.bossMaxHp, 'N2: the final heron HP is not NG+-scaled in run setup (fixed 30k; N3 replaces it with a different boss)');
-  console.log('ok — N2: NG+ scaling is pure, cycle-0 is byte-identical, cycle-1 is applied only when ngCycle>=1, the Master tier (cycle 4+) is strictly harder + bounded, and cycles 0-3 are unchanged');
-}
-
-console.log('== stage 48: N3 — The Great Green Heron (NG+ second boss) ==');
-{
-  const L48 = await import('../src/logic.js');
-  const { paintDamage } = await import('../src/paint.js');
-
-  // ---- (1) boss selection: cycle 0 fights the GRAY heron, cycle 1 the GREEN ----
-  const gGray = new Game(makeCanvas()); gGray.start();
-  gGray.save = L48.freshSave();                 // ngCycle 0 (first-time)
-  gGray._beginExpedition();
-  assert(gGray.heron.kind === 'gray', `N3: ngCycle 0 fights the GRAY heron (got kind=${gGray.heron.kind})`);
-  assert(gGray.heron.green === undefined, 'N3: the gray heron carries no green flag (first-time UI/behavior unchanged)');
-  assert(gGray.heron.hp === 30000, `N3: the gray heron keeps its 30k HP (got ${gGray.heron.hp})`);
-  assert(gGray.heron.pinned === undefined, 'N3: the gray heron has no reed-pin field (the pin mechanic is green-only)');
-
-  const gGreen = new Game(makeCanvas()); gGreen.start();
-  const gsave = L48.freshSave(); gsave.stats.victories = 1; gsave.ngCycle = 1; gsave.flags.heronDefeated = true;
-  gGreen.save = gsave;
-  gGreen._beginExpedition();
-  assert(gGreen.ngCycle === 1, 'N3: the NG+ run carries ngCycle 1');
-  assert(gGreen.heron.kind === 'green', `N3: ngCycle 1 fights the GREAT GREEN HERON (got kind=${gGreen.heron.kind})`);
-  assert(gGreen.heron.green === true, 'N3: the green heron is flagged for the distinct green palette');
-  assert(gGreen.heron.hp === 36000, `N3: the green heron carries 36k HP (got ${gGreen.heron.hp})`);
-  assert(gGreen.heron.maxHp === 36000 && gGreen.heron.hp > 0, 'N3: the green heron is live at 36k max HP');
-  assert(gGreen.heron.awakenNeed && gGreen.heron.awakenNeed.red === 45 && gGreen.heron.awakenNeed.blue === 45 && gGreen.heron.awakenNeed.green === 45,
-    'N3: the green heron keeps the 3-hue awakening rhythm (core pillar unchanged)');
-  assert(gGreen.heron.pinned === 0, 'N3: the green heron starts unpinned (pin is earned, not passive)');
-
-  // ---- (2) the reed pin is a PURE timer (testable without a browser) ----
-  const ph = { pinned: 1.0 };
-  assert(L48.greenHeronPinTick(ph, 0.3) === 'pinned' && ph.pinned === 0.7, 'N3: greenHeronPinTick decays the hold while pinned');
-  assert(L48.greenHeronPinTick(ph, 10) === 'pin-off' && ph.pinned === 0, 'N3: greenHeronPinTick reports pin-off on the frame it releases');
-  const ph2 = { pinned: 0 };
-  assert(L48.greenHeronPinTick(ph2, 0.3) === 0, 'N3: greenHeronPinTick is a no-op when not pinned (gray heron never pins)');
-
-  // ---- (3) the pin ENGAGES by painting the green heron with Moss (the swapped mechanic) ----
-  const h = gGreen.heron, p = gGreen.player;
-  h._intro = 0;                                   // reveal the boss so it can be painted
-  p.maxHp = 9999; p.hp = 9999; p.iframes = 999;    // invulnerable so the pin loop can't short-circuit on death
-  p.x = h.x; p.y = h.y - 60;                        // within swipeRange+30 of the heron's paint point
-  p.pigment = 'green';                              // MOSS triggers the reed pin
-  gGreen.input.mouse.lDown = true;
-  let pinFrame = -1;
-  for (let i = 0; i < 500; i++) {
-    p.x = h.x; p.y = h.y - 60; p.vx = 0; p.vy = 0;  // hold the brush on the heron (knockback-free)
-    gGreen._updateExpedition(0.016);
-    if (h.pinned > 0) { pinFrame = i; break; }
-  }
-  gGreen.input.mouse.lDown = false;
-  assert(h.pinned > 0, `N3: painting the green heron with Moss pins it (engaged at frame ${pinFrame})`);
-  assert(h.green === true && h.awakened === false, 'N3: the pin is a distinct window — it engages while the heron is NOT yet awakened');
-
-  // the pin HELDS it in place: while pinned, _updateBoss skips bossStep so the heron does not move
-  const xPinned = h.x;
-  for (let i = 0; i < 20; i++) { p.x = h.x; p.y = h.y - 60; gGreen._updateExpedition(0.016); }
-  assert(h.pinned > 0, 'N3: the pin holds for a sustained window (not a one-frame blip)');
-  assert(h.x === xPinned, `N3: the pinned heron is HELD IN PLACE (x frozen at ${xPinned})`);
-
-  // the pin is a VULNERABLE window: while pinned the green heron takes 2x paint damage
-  const t48 = gGreen.tuning, px = p.x, py = p.y;
-  const mkH = (pinned) => ({ x: px, y: py, hp: 1000, maxHp: 1000, hue: { red: 0, blue: 0, green: 0 }, awakened: false, awakenedT: 0, pinned, diveH: 0, green: pinned > 0 });
-  const paint48 = new (await import('../src/paint.js')).Paint(p, gGreen.world, t48, () => {}, gGreen.particles);
-  const hBase = mkH(0), hPin = mkH(2.0);
-  p.pigment = 'red';
-  paint48.paintBossHit(hBase, 'red', t48.bossPaintHit);
-  paint48.paintBossHit(hPin, 'red', t48.bossPaintHit);
-  const dmgBase = 1000 - hBase.hp, dmgPin = 1000 - hPin.hp;
-  assert(dmgPin === 2 * dmgBase, `N3: the pinned green heron takes 2x paint damage (base ${dmgBase} -> pinned ${dmgPin})`);
-
-  // the pin decays on its own (greenHeronPinTick in _updateBoss)
-  let decays = 0;
-  for (let i = 0; i < 260 && h.pinned > 0; i++) { p.x = h.x; p.y = h.y - 60; decays++; gGreen._updateExpedition(0.016); }
-  assert(h.pinned === 0, `N3: the reed pin releases on its own after ~${L48.GREEN_HERON.pinDuration}s (decayed over ${decays} frames)`);
-
-  // ---- (4) the green heron can be damaged / awakened / defeated, and defeat ends the run correctly ----
-  // reset for the awaken + defeat beat (the pin test consumed some green hue)
-  h.hue = { red: 0, blue: 0, green: 0 }; h.pinned = 0; h.pinCharge = 0; h.awakened = false; h.awakenedT = 0; h.hp = h.maxHp; h.state = 'idle'; h.stateT = 999;
-  const pigCycle = ['red', 'blue', 'green'];
-  gGreen.input.mouse.lDown = true;
-  let awakeFrame = -1;
-  for (let i = 0; i < 900; i++) {
-    p.x = h.x; p.y = h.y - 60; p.vx = 0; p.vy = 0; p.pigment = pigCycle[i % 3];
-    gGreen._updateExpedition(0.016);
-    if (h.awakened) { awakeFrame = i; break; }
-  }
-  gGreen.input.mouse.lDown = false;
-  assert(h.awakened === true, `N3: the green heron can be AWAKENED through the real 3-hue path (frame ${awakeFrame})`);
-  // defeat: paint the (now low-HP, awakened) heron to death through the real paint path
-  h.hp = 2; p.pigment = 'red';
-  gGreen.input.mouse.lDown = true;
-  let died = false;
-  for (let i = 0; i < 60; i++) { p.x = h.x; p.y = h.y - 60; p.vx = 0; p.vy = 0; gGreen._updateExpedition(0.016); if (h.flying > 0) { died = true; break; } }
-  gGreen.input.mouse.lDown = false;
-  assert(died && h.flying > 0, `N3: the green heron can be DEFEATED (it blooms and takes flight, flying=${h.flying.toFixed(2)})`);
-  // let the victory flight play out -> _endRun('victory')
-  frames(300);
-  assert(gGreen.state === 'end' && gGreen.endKind === 'victory', 'N3: defeating the green heron ends the run in VICTORY (-> the end screen)');
-  // NG+ progression intact: a second victory is recorded, the heron is painted, and the NG+ cycle is preserved
-  assert(gGreen.save.stats.victories >= 2, `N3: the victory is recorded in the save (victories=${gGreen.save.stats.victories})`);
-  assert(gGreen.save.stats.heronsPainted >= 1, 'N3: the green heron counts as a heron painted');
-  assert(gGreen.save.flags.heronDefeated === true, 'N3: the heronDefeated flag is set');
-  assert(gGreen.save.ngCycle === 1, `N3: NG+ progression is INTACT through the victory (ngCycle=${gGreen.save.ngCycle})`);
-  assert(gGreen.save.saveVersion === L48.SAVE_VERSION, 'N3: the save round-trips at the current schema version (saveVersion 4)');
-  // the victory -> atelier route works (the between-run loop), with the NG+ button offered
-  gGreen._beginAtelier();
-  frames(30);
-  assert(gGreen.state === 'atelier', 'N3: defeat -> victory -> the atelier (the NG+ loop closes)');
-  assert(gGreen._endButtons !== undefined, 'N3: the end-screen button layout (incl. the Next Expedition button) is present');
-  console.log('ok — N3: the Great Green Heron appears on NG+ cycles, reuses the heron AI, its reed pin pins it + deals 2x, it is damageable/awakenable/defeatable, and defeat ends the run into victory with NG+ intact');
-}
-
-console.log('== stage 49: N4 — Player-chosen expedition modifiers ==');
-{
-  const L49 = await import('../src/logic.js');
-  const { spawnEnemy } = await import('../src/enemies.js');
-  const { Game } = await import('../src/game.js');
-
-  // ---- (0) the MODIFIERS table: 6 data entries (N4 x3 + K5 x3), each with name/desc/apply ----
-  assert(Object.keys(L49.MODIFIERS).length === 6, `N4+K5: the MODIFIERS table has 6 entries (got ${Object.keys(L49.MODIFIERS).length})`);
-  assert(L49.MODIFIER_ORDER.length === 6, `N4+K5: MODIFIER_ORDER lists the 6 modifier ids (got ${L49.MODIFIER_ORDER.length})`);
-  for (const id of L49.MODIFIER_ORDER) {
-    const m = L49.MODIFIERS[id];
-    assert(m && m.id === id && typeof m.name === 'string' && typeof m.desc === 'string' && typeof m.apply === 'function',
-      `N4: modifier '${id}' is a data entry (id/name/desc/apply)`);
-  }
-
-  // ---- (1) cycle-0 (first-time) is COMPLETELY untouched: no modifier may be applied ----
-  // applyModifier is guarded by the caller (ngCycle >= 1) and the save default is
-  // null, so a fresh-save run's tuning must deep-equal a plain makeTuning.
-  const g49a = new Game(makeCanvas()); g49a.start();
-  g49a.save = L49.freshSave();                 // ngCycle 0, ngModifier null
-  g49a._beginExpedition();
-  const base49 = g49a.tuning;
-  assert(g49a.ngCycle === 0, 'N4: the fresh-save run is cycle 0');
-  assert(!base49.waterWidthMult && !base49.enemySpeedMult && !base49.contactDmgMult && base49.satFloor == null,
-    'N4: a cycle-0 run adds NO modifier tuning fields (first-time is byte-identical)');
-  const plain49 = L49.makeTuning(g49a.save.upgrades, g49a.save.loadout, g49a.options.difficulty, g49a.save.galleryBonus || 0);
-  assert(JSON.stringify(base49) === JSON.stringify(plain49), 'N4: cycle-0 tuning deep-equals a plain makeTuning (no modifier delta)');
-
-  // ---- (2) each modifier is selectable and mutates the tuning as specified ----
-  // (a) High Tide: water zones wider (waterWidthMult > 1) + enemies 10% faster (enemySpeedMult == 1.1)
-  const g49ht = new Game(makeCanvas()); g49ht.start();
-  const htSave = L49.freshSave(); htSave.ngCycle = 1; htSave.ngModifier = 'high-tide'; htSave.stats.victories = 1; htSave.flags.heronDefeated = true;
-  g49ht.save = htSave;
-  g49ht._beginExpedition();
-  assert(g49ht.tuning.waterWidthMult === 1.25, `N4: High Tide widens the water (waterWidthMult ×${g49ht.tuning.waterWidthMult})`);
-  assert(g49ht.tuning.enemySpeedMult === 1.1, `N4: High Tide makes enemies 10% faster (enemySpeedMult ×${g49ht.tuning.enemySpeedMult})`);
-  assert(g49ht.world.waterWidthMult === 1.25, 'N4: High Tide hands the water-width multiplier to the fresh per-run world');
-  assert(!g49ht.tuning.satFloor, 'N4: High Tide does NOT desaturate (no satFloor)');
-
-  // (b) Grey Morning: desaturated world (satFloor < 1) + enemy contact dmg +20% (contactDmgMult == 1.2)
-  const g49gm = new Game(makeCanvas()); g49gm.start();
-  const gmSave = L49.freshSave(); gmSave.ngCycle = 1; gmSave.ngModifier = 'grey-morning'; gmSave.stats.victories = 1; gmSave.flags.heronDefeated = true;
-  g49gm.save = gmSave;
-  g49gm._beginExpedition();
-  assert(g49gm.tuning.satFloor == null || (g49gm.tuning.satFloor > 0 && g49gm.tuning.satFloor < 1), `N4: Grey Morning desaturates the world (satFloor=${g49gm.tuning.satFloor})`);
-  assert(g49gm.tuning.contactDmgMult === 1.2, `N4: Grey Morning raises enemy contact dmg +20% (contactDmgMult ×${g49gm.tuning.contactDmgMult})`);
-
-  // (c) Dry Brush Season: brush splash charge +35% slower (splashCharge ×1.35) + orb value +25% (pickupValue ×1.25)
-  const g49db = new Game(makeCanvas()); g49db.start();
-  const dbSave = L49.freshSave(); dbSave.ngCycle = 1; dbSave.ngModifier = 'dry-brush-season'; dbSave.stats.victories = 1; dbSave.flags.heronDefeated = true;
-  g49db.save = dbSave;
-  g49db._beginExpedition();
-  const baseSplash = L49.makeTuning({ capacity: 1, power: 0, vitality: 0 }, [], 'normal', 0).splashCharge;
-  assert(g49db.tuning.splashCharge === Math.round(baseSplash * 1.35 * 100) / 100,
-    `N4: Dry Brush slows the splash charge +35% (splashCharge ${baseSplash} -> ${g49db.tuning.splashCharge})`);
-  assert(g49db.tuning.pickupValue === 1.25, `N4: Dry Brush raises orb value +25% (pickupValue ×${g49db.tuning.pickupValue})`);
-  assert(!g49db.tuning.waterWidthMult && !g49db.tuning.enemySpeedMult, 'N4: Dry Brush does NOT widen water or speed enemies');
-
-  // ---- (3) the modifiers reach the enemies (High Tide speed + Grey Morning contact dmg) ----
-  // All three games use a fresh save (identical base upgrades), so the only delta
-  // between them is the modifier itself — a relative comparison isolates it.
-  const htBeetle = spawnEnemy('beetle', 200, 100, g49ht.tuning);
-  const gmBeetle = spawnEnemy('beetle', 200, 100, g49gm.tuning);
-  const gmNoModTuning = L49.makeTuning(g49gm.save.upgrades, g49gm.save.loadout, g49gm.options.difficulty, 0);
-  L49.applyNGPlus(gmNoModTuning, 1); // same NG+ cycle 1 scaling as g49gm (isolates the modifier delta)
-  const gmNoModBeetle = spawnEnemy('beetle', 200, 100, gmNoModTuning);
-  assert(gmBeetle.speed === gmNoModBeetle.speed, 'N4: Grey Morning does NOT speed enemies (beetle speed unchanged)');
-  const noModTuning = L49.makeTuning(g49ht.save.upgrades, g49ht.save.loadout, g49ht.options.difficulty, 0);
-  L49.applyNGPlus(noModTuning, 1); // same NG+ cycle 1 scaling as g49ht (isolates the modifier delta)
-  const noModBeetle = spawnEnemy('beetle', 200, 100, noModTuning);
-  // no-modifier base tuning (same NG+ cycle 1 scaling) for a clean relative read
-  assert(Math.round(htBeetle.speed / noModBeetle.speed * 1000) / 1000 === 1.1,
-    `N4: High Tide enemies move 10% faster than a no-modifier enemy (beetle ${noModBeetle.speed} -> ${htBeetle.speed})`);
-  assert(Math.round(gmBeetle.dmg / noModBeetle.dmg * 1000) / 1000 === 1.2,
-    `N4: Grey Morning enemies deal +20% contact dmg vs no-modifier (beetle ${noModBeetle.dmg} -> ${gmBeetle.dmg})`);
-
-  // ---- (4) the picker UI: Next Expedition opens it; each modifier is selectable ----
-  const g49p = new Game(makeCanvas()); g49p.start();
-  const pSave = L49.freshSave(); pSave.stats.victories = 1; pSave.flags.heronDefeated = true; pSave.ngCycle = 0;
-  g49p.save = pSave;
-  g49p._beginNextExpedition();
-  assert(g49p._modPrompt && g49p._modPrompt.sel === 0, `N4: "Next Expedition" opens the modifier picker (pre-selects 'no modifier', sel=${g49p._modPrompt && g49p._modPrompt.sel})`);
-  // select each of the 3 modifiers by its card index and confirm the choice persists
-  const order = L49.MODIFIER_ORDER;
-  for (let i = 1; i <= order.length; i++) {
-    g49p._modPrompt.sel = i;
-    g49p._chooseModPrompt();
-    assert(g49p.save.ngModifier === order[i - 1], `N4: selecting card ${i} persists the modifier '${order[i - 1]}' to the save`);
-    // and a fresh NG+ run with that save carries the modifier's tuning
-    const run = new Game(makeCanvas()); run.start(); run.save = L49.freshSave(); run.save.ngCycle = 1; run.save.ngModifier = order[i - 1]; run.save.stats.victories = 1; run.save.flags.heronDefeated = true;
-    run._beginExpedition();
-    assert(run.tuning, `N4: a run with modifier '${order[i - 1]}' begins cleanly`);
-  }
-  // the "no modifier" card (sel 0) clears the choice
-  g49p._modPrompt.sel = 0;
-  g49p._chooseModPrompt();
-  assert(g49p.save.ngModifier === null, 'N4: the "no modifier" card clears the saved modifier to null');
-
-  // ---- (5) confirming the picker advances the cycle AND begins the expedition ----
-  const g49c = new Game(makeCanvas()); g49c.start();
-  const cSave = L49.freshSave(); cSave.stats.victories = 1; cSave.flags.heronDefeated = true; cSave.ngCycle = 0; cSave.ngModifier = 'high-tide';
-  g49c.save = cSave;
-  g49c._beginNextExpedition();
-  g49c._confirmNextExpedition();
-  assert(g49c.state === 'expedition', 'N4: confirming the picker starts the expedition');
-  assert(g49c.save.ngCycle === 1, `N4: confirming advances ngCycle 0 -> 1 (got ${g49c.save.ngCycle})`);
-  assert(g49c.save.ngModifier === 'high-tide', 'N4: the chosen modifier is preserved through the cycle advance');
-  assert(g49c.tuning.waterWidthMult === 1.25 && g49c.tuning.enemySpeedMult === 1.1, 'N4: the confirmed run carries the chosen High Tide tuning');
-
-  // ---- (6) old saves load as no-modifier; a bad/unknown modifier normalizes to null ----
-  const legacy = L49.migrateSave({ v: 4, bank: { red: 3, blue: 0, green: 0 }, owned: ['moonlit-pond'], loadout: ['moonlit-pond'], upgrades: { capacity: 1, power: 0, vitality: 0 }, flags: { heronDefeated: true }, stats: { victories: 1 }, bestRun: { pigments: { red: 0, blue: 0, green: 0 }, time: 100, cleared: true }, ngCycle: 1 });
-  assert(legacy.ngModifier === null, 'N4: a v4 save (no ngModifier field) migrates forward as no-modifier (null)');
-  const badMod = L49.migrateSave({ v: 5, bank: { red: 0, blue: 0, green: 0 }, owned: [], loadout: [], upgrades: { capacity: 1, power: 0, vitality: 0 }, flags: {}, stats: {}, bestRun: { pigments: { red: 0, blue: 0, green: 0 }, time: 0, cleared: false }, ngCycle: 1, ngModifier: 'not-a-real-modifier' });
-  assert(badMod.ngModifier === null, 'N4: an unknown ngModifier value normalizes to null (no crash, no phantom tuning)');
-
-  console.log('ok — N4: 3 data-driven modifiers feed the existing tuning/spawn/render paths, are selectable + persist, and a cycle-0 (first-time) run stays byte-identical');
-}
-
-// ---- stage 50: G1 — Gold pigment meta economy (core) ----------------------
-console.log('== stage 50: G1 — Gold pigment meta economy (core) ==');
-{
-  const L50 = await import('../src/logic.js');
-
-  // ---- (0) schema: SAVE_VERSION bumped to 6; a fresh save starts gold 0 / empty latch ----
-  assert(L50.SAVE_VERSION >= 6, `G1: SAVE_VERSION is now >= 6 (gold era; got ${L50.SAVE_VERSION})`);
-  const f50 = L50.freshSave();
-  assert(f50.gold === 0, 'G1: a fresh save starts with 0 gold');
-  assert(typeof f50.goldEarned === 'object' && f50.goldEarned !== null && Object.keys(f50.goldEarned).length === 0, 'G1: a fresh save starts with an empty goldEarned latch');
-
-  // ---- (1) each earn RULE fires EXACTLY ONCE (idempotent) ----
-  const s = L50.freshSave();
-  const gray1 = L50.goldEarn(s, L50.goldEventBoss('gray'));
-  const gray2 = L50.goldEarn(s, L50.goldEventBoss('gray'));
-  assert(gray1 === 15, `G1: the first Gray Heron kill pays 15 gold (got ${gray1})`);
-  assert(gray2 === 0, 'G1: the Gray Heron kill does NOT pay again (latched)');
-  assert(s.goldEarned['boss:gray'] === true, 'G1: the gray-boss latch is set after the first kill');
-
-  const green1 = L50.goldEarn(s, L50.goldEventBoss('green'));
-  const green2 = L50.goldEarn(s, L50.goldEventBoss('green'));
-  assert(green1 === 20, `G1: the first Green Heron (NG+) kill pays 20 gold (got ${green1})`);
-  assert(green2 === 0, 'G1: the Green Heron kill does NOT pay again (latched)');
-  assert(s.goldEarned['boss:green'] === true, 'G1: the green-boss latch is set after the first kill');
-
-  // each of the 3 synergy duos fires once (stable sorted-pair key)
-  const duos = [
-    { pair: ['moonlit-pond', 'storm-cloud'] },
-    { pair: ['dancing-salamander', 'storm-cloud'] },
-    { pair: ['spring-garden', 'king-frog'] },
-  ];
-  for (const d of duos) {
-    const once = L50.goldEarn(s, L50.goldEventSynergy(d));
-    const again = L50.goldEarn(s, L50.goldEventSynergy(d));
-    assert(once === 8, `G1: a first synergy duo (${d.pair.join('+')}) pays 8 gold (got ${once})`);
-    assert(again === 0, `G1: that synergy duo does NOT pay again (latched)`);
-  }
-
-  // the orb milestone: 100 orbs in a run pays once; below the threshold pays nothing
-  assert(L50.goldEventOrbs(50) === null, 'G1: below 100 orbs there is no orb milestone (yet)');
-  const orbs1 = L50.goldEarn(s, L50.goldEventOrbs(100));
-  const orbs2 = L50.goldEarn(s, L50.goldEventOrbs(100));
-  assert(orbs1 === 8, `G1: the first 100-orb run pays 8 gold (got ${orbs1})`);
-  assert(orbs2 === 0, 'G1: the 100-orb milestone does NOT pay again (latched)');
-
-  // ---- (2) totals are correct ----
-  // max gold a career can bank = 15 + 20 + 3*8 + 8 = 67
-  assert(L50.goldTotal() === 67, `G1: the total career gold is 67 (got ${L50.goldTotal()})`);
-  assert(s.gold === 67, `G1: after every first-time event, the save has banked all 67 gold (got ${s.gold})`);
-  assert(s.gold >= 25 && s.gold >= 40, 'G1: a career can afford BOTH G2 gold paintings (25 and 40 gold)');
-  // firing the entire event set a SECOND time earns nothing (global idempotency)
-  const secondPass =
-    L50.goldEarn(s, L50.goldEventBoss('gray')) +
-    L50.goldEarn(s, L50.goldEventBoss('green')) +
-    duos.reduce((acc, d) => acc + L50.goldEarn(s, L50.goldEventSynergy(d)), 0) +
-    L50.goldEarn(s, L50.goldEventOrbs(100));
-  assert(secondPass === 0, `G1: re-firing every event earns 0 (each fires exactly once; got ${secondPass})`);
-  assert(s.gold === 67, 'G1: the total gold is unchanged after the second pass');
-
-  // an unknown boss kind produces no event / no gold
-  assert(L50.goldEventBoss('purple') === null, 'G1: an unknown boss kind produces no gold event');
-
-  // ---- (3) a live Game wires the award (banner + persist) end-to-end ----
-  const gGold = new Game(makeCanvas()); gGold.start();
-  const gsave = L50.freshSave(); gsave.stats.victories = 0; gsave.heronDefeated = false;
-  gGold.save = gsave; gGold.state = 'expedition';
-  // a gray-heron run ends in victory -> the first gray boss kill pays gold
-  gGold.heron = { green: false };
-  gGold._endRun('victory');
-  assert(gGold.save.gold === 15, `G1: a first-time victory (gray heron) banks 15 gold (got ${gGold.save.gold})`);
-  assert(gGold.save.goldEarned['boss:gray'] === true, 'G1: a first-time victory latches the gray-boss gold');
-  // a SECOND victory (same boss type) does NOT re-pay the boss gold
-  const before2 = gGold.save.gold;
-  gGold.state = 'expedition'; gGold.heron = { green: false };
-  gGold._endRun('victory');
-  assert(gGold.save.gold === before2, 'G1: a second victory does NOT re-pay the gray-boss gold (latched)');
-  // an NG+ (green heron) victory pays the DISTINCT green-boss gold
-  gGold.state = 'expedition'; gGold.heron = { green: true };
-  gGold._endRun('victory');
-  assert(gGold.save.gold === before2 + 20, `G1: an NG+ (green heron) victory banks the 20 gold green-boss (got ${gGold.save.gold})`);
-
-  // the atelier displays the gold counter (a gold dot distinct from the pigments)
-  gGold._beginAtelier();
-  gGold._drawAll(); // exercise the atelier render path (gold chip drawn) without throwing
-
-  // ---- (4) old saves migrate forward as gold 0 / empty latch ----
-  const legacy = L50.migrateSave({ v: 5, bank: { red: 5, blue: 2, green: 1 }, owned: ['moonlit-pond'], loadout: ['moonlit-pond'], upgrades: { capacity: 1, power: 0, vitality: 0 }, flags: { heronDefeated: true }, stats: { victories: 1 }, bestRun: { pigments: { red: 0, blue: 0, green: 0 }, time: 60, cleared: true }, ngCycle: 1, ngModifier: 'high-tide' });
-  assert(legacy.gold === 0, `G1: a v5 save (no gold field) migrates forward to gold 0 (got ${legacy.gold})`);
-  assert(legacy.goldEarned !== null && Object.keys(legacy.goldEarned).length === 0, 'G1: a v5 save migrates to an empty goldEarned latch');
-  assert(legacy.ngCycle === 1 && legacy.ngModifier === 'high-tide', 'G1: the migration preserves the existing NG+ fields (ngCycle + ngModifier)');
-  // a corrupt/garbled gold field normalizes to 0 (the loader never throws)
-  const corrupt = L50.migrateSave({ v: 5, bank: { red: 1, blue: 0, green: 0 }, owned: [], loadout: [], upgrades: { capacity: 0, power: 0, vitality: 0 }, flags: {}, stats: {}, bestRun: null, gold: 'lots', goldEarned: 'bad' });
-  assert(corrupt.gold === 0, `G1: a garbled gold field normalizes to 0 (got ${corrupt.gold})`);
-  assert(typeof corrupt.goldEarned === 'object' && Object.keys(corrupt.goldEarned).length === 0, 'G1: a garbled goldEarned field normalizes to {}');
-
-  console.log('ok — G1: gold is a META-ONLY currency earned exactly once per first-time event (boss kill / synergy duo / 100-orb run), totals to 67 (clears the G2 gold set), old saves migrate to gold 0, and the atelier displays it');
-}
-
-// ---- stage 51: G2 — two gold-tier paintings (catalog 8→10) -----------------
-// The PAINTINGS catalog grows 8 → 10 with two gold-tier works (a `goldTier`
-// flag + `goldCost`, priced in the meta gold currency, not pigment):
-//   · Gilded Meridian — +10% all orb/pickup value permanently — 25 gold
-//   · Verdant Crown   — +1 green heal per touch permanently      — 40 gold
-// They are purchasable ONLY on NG+ cycles (ngCycle >= 1) — a first-time
-// player never sees them in the shop — bought with gold via the existing
-// atelier purchase flow, and their effects apply in makeTuning when OWNED
-// (a permanent meta bonus, not a loadout slot). The Curator's Ledger lists
-// all 10 with gold-tier styling.
-console.log('== stage 51: G2 — Two gold-tier paintings (catalog 8→10) ==');
-{
-  const L51 = await import('../src/logic.js');
-
-  // ---- (1) the catalog grew 8 → 10, with the two gold-tier entries ----
-  assert(L51.PAINTINGS.length === 10, `G2: the PAINTINGS catalog holds 10 paintings (got ${L51.PAINTINGS.length})`);
-  assert(L51.PAINTINGS.filter(p => !p.goldTier).length === 8, 'G2: the 8 pigment paintings are unchanged');
-  const gold = L51.goldPaintings();
-  assert(gold.length === 2, `G2: goldPaintings() returns the 2 gold-tier works (got ${gold.length})`);
-  const gm = L51.PAINTINGS.find(p => p.id === 'gilded-meridian');
-  const vc = L51.PAINTINGS.find(p => p.id === 'verdant-crown');
-  assert(!!gm && gm.goldTier === true && gm.goldCost === 25 && !gm.cost, `G2: Gilded Meridian is goldTier, priced 25 gold, has NO pigment cost (got goldCost=${gm && gm.goldCost})`);
-  assert(!!vc && vc.goldTier === true && vc.goldCost === 40 && !vc.cost, `G2: Verdant Crown is goldTier, priced 40 gold, has NO pigment cost (got goldCost=${vc && vc.goldCost})`);
-
-  // ---- (2) the tuning effects apply when OWNED (via the makeTuning owned param) ----
-  const base = L51.makeTuning({}, [], 'normal', 0, []);
-  const gOnly = L51.makeTuning({}, [], 'normal', 0, ['gilded-meridian']);
-  const vOnly = L51.makeTuning({}, [], 'normal', 0, ['verdant-crown']);
-  const both = L51.makeTuning({}, [], 'normal', 0, ['gilded-meridian', 'verdant-crown']);
-  assert(gOnly.pickupValue === Math.round(base.pickupValue * 1.1 * 1000) / 1000, `G2: Gilded Meridian raises orb value +10% when owned (pickupValue ${base.pickupValue} -> ${gOnly.pickupValue})`);
-  assert(vOnly.greenHeal === base.greenHeal + 1, `G2: Verdant Crown adds +1 green heal when owned (greenHeal ${base.greenHeal} -> ${vOnly.greenHeal})`);
-  assert(Math.abs(both.pickupValue - base.pickupValue * 1.1) < 1e-9 && both.greenHeal === base.greenHeal + 1, 'G2: both gold paintings apply at once when both owned');
-  // owning nothing (a first-time / cycle-0 save) keeps the tuning byte-identical
-  assert(JSON.stringify(base) === JSON.stringify(L51.makeTuning({}, [], 'normal', 0, [])), 'G2: a save that owns no gold paintings leaves the tuning unchanged');
-
-  // ---- (3) canAffordGold gates on the gold balance ----
-  assert(L51.canAffordGold({ gold: 25 }, gm) === true, 'G2: a save with 25 gold can afford Gilded Meridian');
-  assert(L51.canAffordGold({ gold: 24 }, gm) === false, 'G2: a save with 24 gold cannot afford Gilded Meridian');
-  assert(L51.canAffordGold({ gold: 40 }, vc) === true, 'G2: a save with 40 gold can afford Verdant Crown');
-  assert(L51.canAffordGold({ gold: 0 }, vc) === false, 'G2: a save with 0 gold cannot afford Verdant Crown');
-  assert(L51.canAffordGold({ gold: 99 }, L51.PAINTINGS.find(p => p.id === 'king-frog')) === false, 'G2: canAffordGold never purchases a NON-gold painting with gold');
-
-  // ---- (4) the atelier shop: NG+-gated (hidden/blocked at cycle 0), buy with gold ----
-  const cv51 = makeCanvas();
-  const g51 = new Game(cv51); g51.start(); g51._quitToTitle(); g51._beginAtelier(); g51._atelierIntro = false; g51.atelierTab = 1;
-
-  // a FIRST-TIME save (ngCycle 0) — gold paintings must NOT be buyable
-  const ftSave = L51.freshSave(); ftSave.ngCycle = 0; ftSave.gold = 67; // plenty of gold, but cycle 0
-  g51.save = ftSave;
-  let rows = g51._atelierRows();
-  const gmRow0 = rows.find(r => r.tag === 'paint:gilded-meridian');
-  assert(!!gmRow0 && gmRow0.enabled === false, 'G2: at cycle 0 the Gilded Meridian buy row is present but DISABLED (NG+ only)');
-  g51._buyGoldPainting('gilded-meridian'); // direct call must be refused at cycle 0
-  assert(!ftSave.owned.includes('gilded-meridian') && ftSave.gold === 67, 'G2: buying a gold painting at cycle 0 is refused (no purchase, gold unchanged)');
-
-  // an NG+ save (ngCycle 1) with enough gold — the buy goes through
-  const ngSave = L51.freshSave(); ngSave.ngCycle = 1; ngSave.gold = 67; ngSave.stats.victories = 1;
-  g51.save = ngSave;
-  rows = g51._atelierRows();
-  const gmRow = rows.find(r => r.tag === 'paint:gilded-meridian');
-  assert(!!gmRow && gmRow.enabled === true, `G2: on an NG+ cycle with gold, the Gilded Meridian buy row is ENABLED (enabled=${gmRow && gmRow.enabled})`);
-  g51._buyGoldPainting('gilded-meridian');
-  assert(ngSave.owned.includes('gilded-meridian'), 'G2: the Gilded Meridian is purchased (owned)');
-  assert(ngSave.gold === 67 - 25, `G2: buying Gilded Meridian spends 25 gold (gold now ${ngSave.gold})`);
-  assert(!ngSave.loadout.includes('gilded-meridian'), 'G2: a gold painting is NOT hung into the 2-slot loadout (permanent meta bonus)');
-  assert(g51.tuning.pickupValue === Math.round(base.pickupValue * 1.1 * 1000) / 1000, 'G2: the Gilded Meridian effect is live in the run tuning after purchase');
-  // Verdant Crown likewise
-  g51._buyGoldPainting('verdant-crown');
-  assert(ngSave.owned.includes('verdant-crown') && ngSave.gold === 67 - 25 - 40, `G2: Verdant Crown is purchased for 40 gold (gold now ${ngSave.gold})`);
-  assert(g51.tuning.greenHeal === base.greenHeal + 1, 'G2: the Verdant Crown effect (+1 green heal) is live in the run tuning after purchase');
-  // re-buying is a no-op (already owned)
-  const goldAfter = ngSave.gold;
-  g51._buyGoldPainting('gilded-meridian');
-  assert(ngSave.gold === goldAfter, 'G2: re-buying an owned gold painting is a no-op (gold unchanged)');
-  // spending more gold than held is refused
-  g51.save = L51.freshSave(); g51.save.ngCycle = 1; g51.save.gold = 10;
-  g51._buyGoldPainting('gilded-meridian');
-  assert(!g51.save.owned.includes('gilded-meridian') && g51.save.gold === 10, 'G2: a gold purchase is refused when gold is insufficient (gold unchanged)');
-
-  // ---- (5) the Curator's Ledger lists ALL 10 with gold-tier styling ----
-  const recCanvas = makeCanvas();
-  const drawnTexts = [];
-  const baseCtx = makeCtx(recCanvas);
-  const recCtx = new Proxy(baseCtx, {
-    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawnTexts.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-  recCanvas.getContext = () => recCtx;
-  const g51l = new Game(recCanvas); g51l.start(); g51l._quitToTitle(); g51l._beginAtelier(); g51l._atelierIntro = false;
-  g51l.save = L51.freshSave(); g51l.save.owned = ['gilded-meridian', 'verdant-crown']; g51l.save.ngCycle = 1;
-  fireKey('keydown', '4'); frames(4);
-  assert(g51l.atelierTab === 3, 'G2: the Ledger tab is reached by key 4');
-  const joined51 = drawnTexts.join('\u0001');
-  assert(joined51.includes('Gilded Meridian') && joined51.includes('Verdant Crown'), 'G2: the Ledger lists both gold-tier paintings');
-  assert(joined51.includes('Moonlit Pond') && joined51.includes('Sir Croaksworth (Portrait)'), 'G2: the Ledger still lists the pigment paintings (all 10)');
-  // the ledger lists ALL 10 (verified by the pigment + gold names above) and
-  // marks the gold-tier entries with the gilded "◆ GOLD" tag (gold-tier styling)
-  assert((joined51.match(/◆ GOLD/g) || []).length >= 2, 'G2: the Ledger marks the gold-tier entries with the "◆ GOLD" tag (gold-tier styling)');
-  assert(joined51.includes('not yet gold') === false, 'G2: the owned gold paintings no longer read "not yet gold" (they are collected)');
-  frames(20);
-  assert(g51l.state === 'atelier', 'G2: the Ledger tab drew cleanly (all 10, no JS errors)');
-  fireKey('keydown', 'Escape'); frames(2);
-  assert(g51l.state === 'title', 'G2: Escape returned from the Ledger to the title');
-
-  console.log('ok — G2: the catalog grows 8→10 with two gold-tier works (Gilded Meridian +10% orb value @25g, Verdant Crown +1 green heal @40g) that are NG+-gated, bought with gold via the existing atelier flow, apply in makeTuning when owned, and are listed (all 10) in the Curator\'s Ledger with gold-tier styling');
-}
-
-// ---------------------------------------------------------------------
-// stage 52: G3 (v1.3 M15) — the ONE-TIME 'Gilded Frame' prestige tier.
-// A permanent, saved, 50g tuning bump (NG+ + gold-gated) applied LAST in
-// makeTuning, ON TOP OF the Rehung Frame gallery bonus. We verify: a fresh
-// save has no effect; after purchase the tuning shows the gilded bump; it
-// persists across save/load; it STACKS with an existing galleryBonus; gold
-// is deducted and the purchase is NOT repeatable; the NG+ gate holds; and
-// old-format (v6, no gildedFrame) saves migrate to not-gilded.
-// ---------------------------------------------------------------------
-console.log('== stage 52: v1.3 M15 G3 — Gilded Frame (NG+ prestige tier) ==');
-{
-  const L52 = await import('../src/logic.js');
-  const S52 = await import('../src/save.js');
-  const KEY = 'frogue_gallery_save';
-
-  // (0) schema: a fresh save is NOT gilded, SAVE_VERSION is now 11 (D1: 10 -> 11
-  // adds the wanderSeed latch; the reedsUnlocked gate at 9 -> 10 is unchanged).
-  assert(L52.SAVE_VERSION === 12, `G3: SAVE_VERSION is now 12 (H1 Full Collection era, 11 -> 12; got ${L52.SAVE_VERSION})`);
-  const fresh = L52.freshSave();
-  assert(fresh.gildedFrame === false, 'G3: a fresh save has gildedFrame false');
-  assert(L52.isGilded(fresh) === false, 'G3: isGilded is false on a fresh save');
-  assert(L52.GILDED_FRAME.cost === 50 && L52.GILDED_FRAME.ink === 3 && L52.GILDED_FRAME.orbMult === 1.15,
-    `G3: the Gilded Frame is 50g, +3 ink, +15% orb (got cost ${L52.GILDED_FRAME.cost}, ink ${L52.GILDED_FRAME.ink}, orb ${L52.GILDED_FRAME.orbMult})`);
-
-  // (1) fresh save has NO gilded effect: a cycle-0 tuning has no gilded keys
-  // and a byte-identical base (pickup 1, galleryInkBonus 0).
-  const tOff = L52.makeTuning({}, [], 'normal', fresh.galleryBonus, fresh.owned);
-  assert(!('gildedInkBonus' in tOff) && !('gildedOrbMult' in tOff), 'G3: a fresh save\'s tuning has no gilded keys (byte-identical base)');
-  assert(tOff.pickupValue === 1 && tOff.galleryInkBonus === 0, `G3: a fresh save\'s tuning is untouched (pickup ${tOff.pickupValue}, ink ${tOff.galleryInkBonus})`);
-
-  // (2) NG+ gate: a cycle-0 save cannot buy even with plenty of gold.
-  const gated = L52.freshSave();
-  gated.ngCycle = 0; gated.gold = 200;
-  assert(!L52.canBuyGildedFrame(gated), 'G3: a cycle-0 save cannot buy the Gilded Frame (NG+ gate), even with 200 gold');
-  assert(L52.buyGildedFrame(gated) === false && !gated.gildedFrame && gated.gold === 200, 'G3: the cycle-0 buy is refused (no gold change, not gilded)');
-
-  // (3) after a purchase (NG+, 60 gold): gold deducted, gilded set, tuning bumps.
-  const s = L52.freshSave();
-  s.ngCycle = 1; s.gold = 60;
-  assert(L52.canBuyGildedFrame(s), 'G3: an NG+ save with 60 gold can buy the Gilded Frame');
-  assert(L52.buyGildedFrame(s) === true, 'G3: the buy succeeds on an NG+ save with enough gold');
-  assert(s.gold === 10 && s.gildedFrame === true, `G3: 50g is deducted and gildedFrame is set (gold ${s.gold}, gilded ${s.gildedFrame})`);
-  const tOn = L52.makeTuning({}, [], 'normal', s.galleryBonus, s.owned, L52.isGilded(s));
-  assert(tOn.gildedInkBonus === 3 && tOn.gildedOrbMult === 1.15, `G3: the tuning carries the gilded bump (ink ${tOn.gildedInkBonus}, orb ${tOn.gildedOrbMult})`);
-  assert(tOn.galleryInkBonus === 3 && tOn.pickupValue === 1.15, `G3: the gilded bump is applied (galleryInkBonus ${tOn.galleryInkBonus}, pickup ${tOn.pickupValue})`);
-
-  // (4) NOT repeatable: a second attempt refuses (no gold change, no error).
-  assert(!L52.canBuyGildedFrame(s), 'G3: the Gilded Frame is one-time (canBuy is false after purchase)');
-  assert(L52.buyGildedFrame(s) === false && s.gold === 10, 'G3: a second buy is refused (gold unchanged at 10)');
-
-  // (5) it STACKS with the existing Rehung Frame galleryBonus (both effects).
-  const st = L52.freshSave();
-  st.ngCycle = 1; st.gold = 50; st.galleryBonus = 2;   // Rehung Frame level 2
-  L52.buyGildedFrame(st);
-  const tStack = L52.makeTuning({}, [], 'normal', st.galleryBonus, st.owned, L52.isGilded(st));
-  assert(tStack.galleryInkBonus === 7, `G3: gilded STACKS on the Rehung Frame ink (2 levels * 2 + 3 = ${tStack.galleryInkBonus})`);
-  assert(tStack.gildedInkBonus === 3 && tStack.gildedOrbMult === 1.15, 'G3: the gilded keys are present on top of the Rehung Frame effect');
-  assert(Math.abs(tStack.pickupValue - 1.38) < 1e-6, `G3: the orb multipliers multiply (1.2 * 1.15 = ${tStack.pickupValue.toFixed(3)})`);
-  // the Rehung Frame's own orb multiplier is still applied (1.2) — a gilded-only
-  // save (level 0) gets 1.15, so the stack is distinctively 1.38.
-  const tGildOnly = L52.makeTuning({}, [], 'normal', 0, st.owned, true);
-  assert(tGildOnly.pickupValue === 1.15 && tStack.pickupValue > tGildOnly.pickupValue, 'G3: the stack pickup exceeds the gilded-only pickup (Rehung Frame still contributes)');
-
-  // (6) persists across a save/load round-trip.
-  S52.SaveSys.save(s);
-  const reloaded = S52.SaveSys.load();
-  assert(reloaded && reloaded.gildedFrame === true && reloaded.gold === 10, `G3: gildedFrame + gold persist across save/load (got ${reloaded && reloaded.gildedFrame} / ${reloaded && reloaded.gold})`);
-  const tReload = L52.makeTuning({}, reloaded.loadout, 'normal', reloaded.galleryBonus, reloaded.owned, L52.isGilded(reloaded));
-  assert(tReload.gildedInkBonus === 3 && tReload.pickupValue === 1.15, 'G3: the reloaded save rebuilds the same gilded tuning');
-
-  // (7) an OLD-format save (v6, no gildedFrame field) migrates to not-gilded.
-  store.set(KEY, JSON.stringify({
-    v: 6,
-    bank: { red: 9, blue: 9, green: 9 },
-    owned: ['gilded-meridian'], loadout: ['moonlit-pond'],
-    upgrades: { capacity: 1, power: 0, vitality: 0 },
-    flags: { intro: true },
-    stats: { expeditions: 5, victories: 2, deaths: 0, heronsPainted: 1, treasures: 0 },
-    bestRun: null,
-    galleryBonus: 1,
-    ngCycle: 1, ngModifier: null, gold: 75, goldEarned: { 'boss-gray-heron': true },
-    // NOTE: no gildedFrame field on purpose — this is a v6 save.
-  }));
-  const oldMigrated = S52.SaveSys.load();
-  assert(oldMigrated !== null, 'G3: an OLD v6-format save (no gildedFrame field) still loads');
-  assert(oldMigrated.saveVersion === L52.SAVE_VERSION, `G3: the old v6 save re-stamps to the current schema version (${L52.SAVE_VERSION})`);
-  assert(oldMigrated.gildedFrame === false, 'G3: the old v6 save migrates to gildedFrame false (not-yet-gilded, no error)');
-  assert(oldMigrated.gold === 75 && oldMigrated.ngCycle === 1, 'G3: the old v6 save keeps its gold + ngCycle through the migration');
-  assert(oldMigrated.firstVictoryCinematic === false, 'M1: a legacy v6 save migrates through 6->7->8 with firstVictoryCinematic false (they get the beat once)');
-  // and a v6 save that WAS gilded keeps that through the migration.
-  const v6Gilded = S52.SaveSys.load(); // (reload the same blob — not gilded)
-  const v6g2 = { ...v6Gilded, saveVersion: 6, gildedFrame: true };
-  // re-write with gildedFrame true to exercise the preserved-true path:
-  store.set(KEY, JSON.stringify({ ...v6Gilded, gildedFrame: true }));
-  const v6gLoaded = S52.SaveSys.load();
-  assert(v6gLoaded.gildedFrame === true, 'G3: a v6 save that WAS gilded keeps gildedFrame true through the migration');
-
-  // (8) the Curator's Ledger draws the Gilded Frame bar + a state-aware gild
-  // button. (A fresh recording instance g52: NG+, 70g, not gilded → the
-  // price is shown; toggling gildedFrame → the owned state is shown. The
-  // cycle-0 NG+ gate is verified at the LOGIC level below rather than by a
-  // second live instance, which would share the window key listeners.)
-  const recCanvas = makeCanvas();
-  const drawnTexts = [];
-  const baseCtx = makeCtx(recCanvas);
-  const recCtx = new Proxy(baseCtx, {
-    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawnTexts.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-  recCanvas.getContext = () => recCtx;
-  const g52 = new Game(recCanvas); g52.start(); g52._quitToTitle(); g52._beginAtelier(); g52._atelierIntro = false;
-  g52.save = L52.freshSave(); g52.save.ngCycle = 1; g52.save.gold = 70;
-  g52.atelierTab = 3;                 // draw the Ledger tab directly
-  frames(4);
-  const joined = drawnTexts.join('\u0001');
-  assert(joined.includes('Gilded Frame'), 'G3: the Ledger draws the "Gilded Frame" bar');
-  assert(joined.includes('Gild · 50g'), 'G3: the gild button shows its price when NG+ + affordable');
-  assert(joined.includes('the curator\'s ledger'), 'G3: the Ledger still draws its header (all 10 + the two prestige bars)');
-  // after a gilded buy, the button label flips to the owned state.
-  g52.save.gildedFrame = true;
-  drawnTexts.length = 0;
-  frames(4);
-  assert(drawnTexts.join('\u0001').includes('Gilded'), 'G3: after buying, the gild button shows the owned "Gilded" state');
-  // the NG+ gate at the logic level: a cycle-0 save (even with plenty of gold)
-  // can never buy, so the button would show its gate hint, not a price.
-  const gated2 = L52.freshSave(); gated2.ngCycle = 0; gated2.gold = 999;
-  assert(!L52.canBuyGildedFrame(gated2) && !L52.ngUnlocked(gated2), 'G3: a cycle-0 save is NG+-gated (no NG+ unlock), so the gild button shows the gate hint, not a price');
-  frames(20);
-  assert(g52.state === 'atelier', 'G3: the Ledger tab (with the Gilded Frame bar) drew cleanly');
-
-  console.log('ok — G3: the ONE-TIME Gilded Frame (50g, +3 start ink, +15% orb) is an NG+/gold-gated, permanent, saved prestige tier that applies LAST in makeTuning ON TOP OF the Rehung Frame (stacking to +7 ink / 1.38x orb at Rehung level 2), is not repeatable, persists across save/load, migrates old v6 saves to not-gilded, and surfaces in the Curators Ledger as a gild bar with a state-aware button');
-}
-
-// stage 53 — v1.3 M15 G4: the gold UI + ledger completion (presentation-only).
-// G4 polishes the gold economy's PRESENTATION with pure UI/data reuse — no new
-// mechanics, no new persistent state. We record every fillText and assert:
-//   (a) the gold BALANCE READOUT renders on the atelier header AND on the
-//       "Next Expedition" (modifier picker) prompt, with a hint of what it buys;
-//   (b) the gold-tier rows in the Curator's Ledger show their gold price +
-//       owned state distinctly ("25g · NG+ only" / "40g · NG+ only");
-//   (c) a short gold LEGEND line explains what gold is + where it comes from.
-// ---------------------------------------------------------------------
-console.log('== stage 53: v1.3 M15 G4 — gold UI + ledger completion ==');
-{
-  const L53 = await import('../src/logic.js');
-  const recCanvas = makeCanvas();
-  const drawn = [];
-  const baseCtx = makeCtx(recCanvas);
-  const recCtx = new Proxy(baseCtx, {
-    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-  recCanvas.getContext = () => recCtx;
-
-  // ---- (a1) the atelier HEADER shows the gold balance readout ----
-  // A cycle-0 save (0 gold) shows the "meta pigment" hint; an NG+ save with 70g
-  // shows the "spend 50g ... Gilded Frame" hint. Both render the "gold N" count.
-  const gA = new Game(recCanvas); gA.start(); gA._quitToTitle(); gA._beginAtelier(); gA._atelierIntro = false;
-  gA.save = L53.freshSave(); gA.save.gold = 0;
-  drawn.length = 0; frames(3);
-  let joined = drawn.join('\u0001');
-  assert(joined.includes('gold 0'), 'G4(a): the atelier header renders the gold balance ("gold 0") on a fresh save');
-  assert(/meta pigment/.test(joined) && /spend in NG\+/.test(joined), 'G4(a): the compact cycle-0 header explains gold and its NG+ spending gate');
-  // now an NG+ save with 70 gold → the readout switches to the Gilded-Frame hint
-  gA.save.ngCycle = 1; gA.save.gold = 70;
-  drawn.length = 0; frames(3);
-  joined = drawn.join('\u0001');
-  assert(joined.includes('gold 70'), 'G4(a): the atelier header renders "gold 70" for an NG+ save');
-  assert(/Curator.*Gilded Frame 50g/.test(joined), 'G4(a): the compact NG+ header names the purchase location, frame and price');
-
-  // ---- (a2) the "Next Expedition" prompt (modifier picker) shows the readout ----
-  // A returning NG+ player (victory earned, ngCycle 1 — the Next Expedition
-  // button only appears at ngCycle >= 1) opens the modifier picker from the
-  // title; the gold balance + "spend 50g ... Gilded Frame" hint renders below
-  // the "Swim On" button.
-  const gB = new Game(makeCanvas()); gB.start();
-  const bSave = L53.freshSave(); bSave.stats.victories = 1; bSave.flags.heronDefeated = true; bSave.ngCycle = 1; bSave.gold = 55;
-  gB.save = bSave;
-  gB._beginNextExpedition();
-  assert(gB._modPrompt && gB.state === 'title', 'G4(a): "Next Expedition" opens the modifier picker (title state)');
-  // point the drawing canvas at the recording proxy so the picker text is captured
-  gB.canvas = recCanvas; gB.ctx = recCtx;
-  drawn.length = 0; frames(3);
-  joined = drawn.join('\u0001');
-  assert(joined.includes('gold 55'), 'G4(a): the Next Expedition prompt renders the gold balance ("gold 55")');
-  assert(/Gilded Frame/.test(joined) && /50g/.test(joined), 'G4(a): the Next Expedition readout hints at the Gilded Frame (50g)');
-  gB._modPrompt = null;
-
-  // ---- (b) the gold-tier LEDGER rows show price + owned state distinctly ----
-  const gC = new Game(recCanvas); gC.start(); gC._quitToTitle(); gC._beginAtelier(); gC._atelierIntro = false;
-  gC.save = L53.freshSave(); gC.save.ngCycle = 1; gC.save.gold = 70;
-  gC.atelierTab = 3;   // the Curator's Ledger (holds the gold-tier works + Gilded Frame)
-  drawn.length = 0; frames(3);
-  joined = drawn.join('\u0001');
-  const goldPts = L53.PAINTINGS.filter(p => p.goldTier);
-  assert(goldPts.length === 2, `G4(b): the catalog holds exactly 2 gold-tier works (got ${goldPts.length})`);
-  for (const pt of goldPts) {
-    assert(joined.includes(`${pt.goldCost}g · NG+ only`), `G4(b): the unowned "${pt.name}" row shows its gold price + NG+ gate ("${pt.goldCost}g · NG+ only")`);
-    assert(joined.includes('◆ GOLD'), `G4(b): the "${pt.name}" row carries the gilded "◆ GOLD" tag`);
-  }
-  // once owned, the same row flips to the OWNED state (no longer a price)
-  gC.save.owned = [goldPts[0].id]; gC.save.loadout = [goldPts[0].id];
-  drawn.length = 0; frames(3);
-  joined = drawn.join('\u0001');
-  assert(joined.includes('★ hung in the loadout'), 'G4(b): an owned + hung gold-tier row shows the "★ hung in the loadout" state');
-  assert(!joined.includes(`${goldPts[0].goldCost}g · NG+ only`), `G4(b): the owned gold-tier row no longer shows its price`);
-
-  // ---- (c) the gold LEGEND line explains what gold is + where it comes from ----
-  // (the ledger tab is still active, so its legend line is the gold one)
-  assert(/gold is a meta pigment/.test(joined), 'G4(c): the Curator\'s Ledger shows the gold legend line ("gold is a meta pigment — earned from boss defeats, first synergies & the 100-orb run ...")');
-  assert(joined.includes('Gilded Frame') && joined.includes('boss defeats'), 'G4(c): the gold legend names its sources + what it buys (boss defeats / Gilded Frame)');
-
-  console.log('ok — G4: the gold economy\'s presentation is complete — the gold BALANCE READOUT (balance + "what it buys") renders on the atelier header AND the Next Expedition prompt, the gold-tier Curator\'s Ledger rows show their gold price + owned state distinctly ("25g/40g · NG+ only", "★ hung in the loadout"), and a short gold LEGEND line explains what gold is + where it comes from — all pure UI/data reuse (no new mechanics, no new persistent state)');
-}
-
-// stage 54 — v1.3 M16 C1: atelier one-liner batch 2 (NG+ reactions).
-// ---------------------------------------------------------------------
-console.log('== stage 54: v1.3 M16 C1 — atelier one-liner batch 2 (NG+) ==');
-{
-  const L54 = await import('../src/game.js'); // Game is global from line 112
-  const cv54 = makeCanvas();
-  const g54 = new Game(cv54); g54.start(); g54._quitToTitle();
-  const KEY = 'frogue_gallery_save';
-  // Clean slate: no purchase hook, no last result, no best run — so the ONLY
-  // thing steering the context is ngCycle.
-  g54._lastPurchase = null; g54.lastResult = null; g54.save.bestRun = null;
-  g54._atelierSayIdx = {};
-
-  const collect = (n) => { const s = new Set(); for (let i = 0; i < n; i++) { g54._pickAtelierSay(); s.add(g54._atelierSay.name + ':' + g54._atelierSay.text); } return s; };
-
-  // (1) An NG+ save (ngCycle >= 1) draws the SECOND, NG+ pool — every line is
-  // DISTINCT from the cycle-0 pool (victory/defeat/general union).
-  g54.save.ngCycle = 1; const ngSet = collect(18);
-  assert(ngSet.size > 0, 'C1: an NG+ save produces one-liner lines');
-  g54.save.ngCycle = 0; g54._lastPurchase = null; g54.lastResult = null; g54.save.bestRun = null; g54._atelierSayIdx = {};
-  const c0Set = collect(18);
-  assert(c0Set.size > 0, 'C1: a cycle-0 save produces one-liner lines');
-  const overlap = [...ngSet].filter(x => c0Set.has(x));
-  assert(overlap.length === 0, `C1: the NG+ pool is DISTINCT from the cycle-0 pool (no overlap; got ${overlap.length} shared lines)`);
-
-  // (2) Rotation / no-repeat-last still holds in the NG+ pool: the same
-  // resident never repeats their last line across consecutive picks.
-  g54.save.ngCycle = 1; g54._lastPurchase = null; g54.lastResult = null; g54.save.bestRun = null; g54._atelierSayIdx = {};
-  let prev = null, noRepeatOK = true, distinct = new Set();
-  for (let i = 0; i < 24; i++) {
-    g54._pickAtelierSay();
-    const cur = g54._atelierSay;
-    if (prev && prev.name === cur.name && prev.text === cur.text) noRepeatOK = false;
-    distinct.add(cur.name + ':' + cur.text);
-    prev = { name: cur.name, text: cur.text };
-  }
-  assert(noRepeatOK, 'C1: no-repeat-last holds in the NG+ pool (a resident never re-says their last line)');
-  assert(distinct.size >= 3, `C1: the NG+ pool rotates across multiple lines (distinct=${distinct.size})`);
-
-  // (3) Context priority: a just-made purchase STILL beats the NG+ pool
-  // (purchase > ng), so a fresh gold buy during NG+ gets a purchase reaction,
-  // not an NG+ line.
-  g54.save.ngCycle = 1; g54._lastPurchase = true; g54.lastResult = null; g54.save.bestRun = null;
-  g54._noteAtelierPurchase();
-  assert(g54._lastPurchase === true && g54._atelierSay.revealed === 0, 'C1: a purchase during NG+ is noted and re-rolls a fresh line');
-  const purchaseLine = g54._atelierSay.name + ':' + g54._atelierSay.text;
-  assert(!ngSet.has(purchaseLine), 'C1: the NG+ just-bought reaction is NOT an NG+-pool line (purchase context still wins over ng)');
-
-  // (4) Typewriter still starts fresh on an NG+ line (the reveal machinery is
-  // shared with A1).
-  g54.save.ngCycle = 1; g54._lastPurchase = null; g54.lastResult = null; g54.save.bestRun = null;
-  g54._pickAtelierSay();
-  assert(g54._atelierSay.revealed === 0, 'C1: the NG+ one-liner starts the typewriter fresh (unrevealed)');
-
-  // (5) No new persist: an NG+ atelier visit touches nothing new in the save.
-  const before54 = JSON.stringify(store.get(KEY));
-  g54._beginAtelier();
-  assert(JSON.stringify(store.get(KEY)) === before54, 'C1: the NG+ one-liner pool persists nothing new to the save');
-
-  console.log('ok — C1: the atelier one-liner system gains a SECOND, NG+-context line pool (drawn only when ngCycle >= 1, above the cycle-0 victory/defeat/general pools but below the just-made-purchase hook) — reusing the EXACT A1 machinery (rotating pools, no-repeat-last, typewriter reveal, context priority) with NO new persistent state');
-}
-
-// stage 55 — v1.3 M16 C2: the victory end-screen "Season" summary block.
-// On a VICTORY end card (below the V4 exhibition, in the card's spare bottom
-// band) a compact season read renders: the NG+ cycle, the modifier chosen for
-// the run, the gold earned this expedition (the delta since run start) + the
-// career gold total, the Gilded Frame state, and the paintings carried this
-// expedition. Pure display — every value is read live from the run/save;
-// nothing new is persisted. We verify with a fillText-recording canvas:
-//   (a) a representative NG+ save renders the correct cycle/modifier/gold/
-//       gilded/paintings values;
-//   (b) the "gold earned this expedition" delta tracks the run-start capture
-//       (runGold) — 17 earned on top of a 53g start reads +17 / total 70;
-//   (c) a first-time (cycle-0) victory still renders the block with its own
-//       correct values (cycle 0, no modifier, 0 gold, no frame);
-//   (d) a DEFEAT end screen renders NO Season block (victory only);
-//   (e) NO new persistence: the end screen touches nothing new in the save.
-console.log('== stage 55: v1.3 M16 C2 — victory end-screen "Season" summary ==');
-{
-  const L55 = await import('../src/logic.js');
-  const recCanvas = makeCanvas();
-  const drawn = [];
-  const baseCtx = makeCtx(recCanvas);
-  const recCtx = new Proxy(baseCtx, {
-    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-  recCanvas.getContext = () => recCtx;
-
-  // ---- (a)+(b) a representative NG+ save: cycle 2, High Tide modifier,
-  // 53g at run start -> 70g now, Gilded Frame hung, 2-painting loadout.
-  const gA = new Game(recCanvas); gA.start();
-  const saveA = L55.freshSave();
-  saveA.ngCycle = 2; saveA.stats.victories = 2; saveA.flags.heronDefeated = true;
-  saveA.ngModifier = 'high-tide';
-  saveA.gold = 70; saveA.gildedFrame = true;
-  saveA.owned = ['moonlit-pond', 'storm-cloud'];
-  saveA.loadout = ['moonlit-pond', 'storm-cloud'];
-  gA.save = saveA;
-  gA.ngCycle = 2; gA.runGold = 53;            // the run-start gold capture (17 earned in-run)
-  gA.endKind = 'victory'; gA.endT = 5;        // fully revealed
-  gA.endGains = { red: 5, blue: 5, green: 5 };
-  gA.state = 'end';
-  gA.input.mouse.lPressed = false; gA.input.mouse.lDown = false;
-  // the helper reads the right values for this representative save
-  const ssA = gA._seasonSummary();
-  assert(ssA.cycle === 2, 'C2: the summary reports the NG+ cycle (2)');
-  assert(ssA.mod === 'High Tide', `C2: the summary reports the chosen modifier name (got "${ssA.mod}")`);
-  assert(ssA.goldThisRun === 17, `C2: "gold earned this expedition" is the delta since run start (70 - 53 = 17; got ${ssA.goldThisRun})`);
-  assert(ssA.goldTotal === 70, `C2: the summary reports the career gold total (70; got ${ssA.goldTotal})`);
-  assert(ssA.gilded === 'hung', `C2: the summary reports the Gilded Frame state (got "${ssA.gilded}")`);
-  assert(ssA.paintings.join(',') === 'Moonlit Pond,Storm Cloud', `C2: the summary lists the carried paintings (got "${ssA.paintings}")`);
-  // and the end screen actually DRAWS them
-  drawn.length = 0; gA._frame(gA.now * 1000 + 5000);
-  const joinedA = drawn.join('\u0001');
-  assert(joinedA.includes('Season'), 'C2: the victory end screen renders the "Season" heading');
-  assert(joinedA.includes('cycle 2 · modifier High Tide · Gilded Frame hung'), 'C2: the summary renders cycle + modifier + frame state for the representative save');
-  assert(joinedA.includes('gold earned this expedition +17 · gold total 70'), 'C2: the summary renders the earned-this-run delta + the career gold total');
-  assert(joinedA.includes('paintings from this expedition: Moonlit Pond, Storm Cloud'), 'C2: the summary renders the paintings carried this expedition');
-  // the block sits INSIDE the existing card (below the exhibition, above the
-  // unchanged buttons): the card height is untouched and the buttons keep
-  // their original geometry
-  assert(gA._endCardH() === 540, 'C2: the victory card height is unchanged (540)');
-  const ebA = gA._endButtons();
-  assert(ebA.primary.y === gA.ch / 2 - 540 / 2 + 540 - 24, 'C2: the primary button keeps its rect (v1.10 C1 re-flowed the end buttons up so the return label clears the 800px floor even on a full NG+ victory; nothing else moved)');
-
-  // ---- (c) a first-time (cycle-0) victory: the block still renders, with
-  // its own correct values (cycle 0, no modifier, 0 gold, no frame).
-  const saveC = L55.freshSave();
-  saveC.stats.victories = 1; saveC.flags.heronDefeated = true;
-  saveC.owned = ['moonlit-pond']; saveC.loadout = ['moonlit-pond'];
-  gA.save = saveC; gA.ngCycle = 0; gA.runGold = 0;
-  drawn.length = 0; gA._frame(gA.now * 1000 + 5100);
-  const joinedC = drawn.join('\u0001');
-  assert(joinedC.includes('cycle 0 · modifier none · Gilded Frame not yet'), 'C2: a first-time victory renders the Season block with its own values (cycle 0, no modifier, no frame)');
-  assert(joinedC.includes('gold earned this expedition +0 · gold total 0'), 'C2: a first-time victory reports 0 gold earned / 0 total');
-  assert(joinedC.includes('paintings from this expedition: Moonlit Pond'), 'C2: a first-time victory lists its carried painting');
-
-  // ---- (d) a defeat end screen renders NO Season block (victory only) ----
-  gA.endKind = 'defeat';
-  drawn.length = 0; gA._frame(gA.now * 1000 + 5200);
-  assert(!drawn.join('\u0001').includes('Season'), 'C2: the Season block is victory-only (absent on a defeat)');
-
-  // ---- (e) NO new persistence: the end screen touches nothing new in the save
-  gA.endKind = 'victory';
-  const before55 = JSON.stringify(store.get('frogue_gallery_save'));
-  gA._frame(gA.now * 1000 + 5300);
-  assert(JSON.stringify(store.get('frogue_gallery_save')) === before55, 'C2: the Season summary persists nothing new to the save');
-
-  console.log('ok — C2: the victory end screen gains a compact "Season" summary block (cycle / modifier / gold earned this expedition + total / Gilded Frame state / paintings carried) in the spare bottom band of the V4 card — pure display, no new persistence, button geometry untouched');
-}
-
-// stage 56 — v1.3 M16 C3: the "paper grain" presentation toggle. An options
-// toggle (default OFF) that overlays a subtle PROCEDURAL paper-grain texture
-// (two cached offscreen tiles of low-opacity noise speckles — a fine + a coarse
-// scale — tiled across the canvas at low alpha, drawn LAST in the render loop).
-// NO image assets, NO scanlines/CRT. We assert: the option defaults OFF; the
-// render path skips the grain when off and builds+draws it when on (the
-// _grainDraws counter is the test-observable signal); the tile cache is built
-// once and reused; toggling from the options screen flips the flag and persists
-// it; and old options blobs (no `grain` field) migrate without error.
 console.log('== stage 56: v1.3 M16 C3 — paper-grain presentation toggle ==');
 {
   const L56 = await import('../src/logic.js');
@@ -4521,15 +3137,6 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
   // faster step rate than any zone theme
   assert(au._bossThemeData().gray.stepDur < Math.min(...zData.map((z) => z.stepDur)), 'S2: the boss loop step rate is faster than every zone theme');
 
-  // ---- the Great Green Heron gets its own (darker) variant ----
-  au._bossMusic = false; au._bossThemes.length = 0; // reset so a re-engage is tested cleanly
-  au.setBossTheme(true);
-  const bossGreen = au._bossThemes.find((t) => !t.muted && t.zone === -1);
-  assert(bossGreen && bossGreen.green === true, 'S2: the Great Green Heron starts its own boss loop');
-  const bd = au._bossThemeData();
-  assert(JSON.stringify([bd.gray.root, bd.gray.pattern]) !== JSON.stringify([bd.green.root, bd.green.pattern]), 'S2: the green-heron boss loop is a distinct variant from the gray');
-  assert(bd.green.root < bd.gray.root, `S2: the green-heron boss is darker (lower root ${bd.green.root} < ${bd.gray.root})`);
-
   // ---- the boss loop still rides the music bus (slider + mute) ----
   const bossGain = au._bossThemes.find((t) => !t.muted);
   assert(bossGain.gain._connections.includes(au._melodyMaster) && au._melodyMaster._connections.includes(au.musicBus), 'S2: the boss loop rides melodyMaster -> musicBus (slider + mute)');
@@ -4699,283 +3306,11 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
 // off EACH game's own audio, and each game is driven with frames() right
 // after it is created (only the most recent start()'s rAF is live).
 // --------------------------------------------------------------------------
-{
-  console.log('== stage 69: v1.4 M1 — first-victory cinematic beat (headless) ==');
-  const L = await import('../src/logic.js');
-  assert(L.SAVE_VERSION === 12, 'M1: SAVE_VERSION is 12 (H1 bumped 11 -> 12 for the Full Collection ledger; the cinematic seen-flag from 7 -> 8 is unchanged)');
-  // Headless AudioContext that RECORDS every tone scheduled, so we can assert
-  // the arpeggio shape (a soft RISING sequence) + that it rides the melody
-  // layer (musicBus), not the sfx bus. Mirrors the S1/S2 stage pattern.
-  let tones = [];
-  const P = (v) => ({ value: v, _v: v, setValueAtTime(x) { this._v = x; },
-    exponentialRampToValueAtTime(x) { this._v = x; },
-    linearRampToValueAtTime(x) { this._v = x; },
-    setTargetAtTime(x) { this._v = x; } });
-  const mkN = () => ({ type: 'sine', frequency: P(440), Q: P(1), detune: P(0), gain: P(1),
-    buffer: null, _connections: [], connect(n) { this._connections.push(n); return n; },
-    disconnect() {}, start() {}, stop() {}, getChannelData() { return new Float32Array(0); } });
-  class FakeAC69 {
-    constructor() { this.currentTime = 0; this._dest = mkN(); }
-    get sampleRate() { return 22050; }
-    get destination() { return this._dest; }
-    createGain() { const n = mkN(); n.isGain = true; return n; }
-    createOscillator() {
-      const n = mkN();
-      const f = n.frequency;
-      f.exponentialRampToValueAtTime = (x) => { f._f1 = x; };
-      n.start = () => { tones.push({ type: n.type, f0: f._v, target: n._tgt || null }); };
-      const sv = f.setValueAtTime.bind(f);
-      f.setValueAtTime = (x) => { sv(x); };
-      const oc = n.connect.bind(n);
-      n.connect = (t) => { n._tgt = t; return oc(t); };
-      return n;
-    }
-    createBiquadFilter() { return mkN(); }
-    createDynamicsCompressor() { return mkN(); }
-    createBuffer() { return { getChannelData: () => new Float32Array(0) }; }
-    createBufferSource() { return mkN(); }
-  }
-  window.AudioContext = class extends FakeAC69 {};
-  assert(L.freshSave().firstVictoryCinematic === false, 'M1: a fresh save loads with the seen-flag false (they have NOT seen it)');
-  // a v7 save (no field) migrates up to v8 with the seen-flag false (they get the beat ONCE)
-  assert(L.migrateSave({ ...L.freshSave(), saveVersion: 7, firstVictoryCinematic: undefined }).firstVictoryCinematic === false, 'M1: a legacy v7 save migrates to v8 with the seen-flag false');
+// Retired four-second first-win cinematic; final dungeon screen is immediate and tested.
 
-  // ---- (1) a FRESH save's first victory opens the beat ----
-  store.clear();                       // guarantee a brand-new player (no seen-flag)
-  const g1 = new Game(makeCanvas());
-  g1.start();
-  assert(g1.audio.ensure() === true, 'M1: the headless AudioContext lets the audio graph build');
-  const mel1 = g1.audio._melodyMaster, sfx1 = g1.audio.sfxBus;
-  g1.collected = { red: 10, blue: 8, green: 9 };
-  const runT0 = g1.runT;
-  tones = [];
-  g1._endRun('victory');               // the real victory bookkeeping + beat trigger
-  // NOTE: _endRun also fires a first-time boss-gold pickup (2 SINE tones on the
-  // sfx bus) for a fresh save; the cinematic arpeggio is all on the MELODY
-  // layer, so we assert on the arpeggio's TRIANGLE notes specifically.
-  assert(g1.state === 'end' && g1.endKind === 'victory', 'M1: the victory end-state is reached');
-  assert(g1._cine !== null && g1._cine.t === 0, 'M1: a FRESH player first victory OPENS the cinematic beat');
-  assert(g1.save.firstVictoryCinematic === true, 'M1: the seen-flag latched the moment the beat was first shown');
-  assert(g1.runT === runT0, 'M1: the beat never touches the timed run (runT unchanged)');
-  // the soft arpeggio is scheduled on the MELODY layer (a rising sequence).
-  // _tone connects osc -> per-note gain -> target (the stinger gain), and that
-  // gain connects to _melodyMaster; so "on the melody layer" = the tone's
-  // target REACHES _melodyMaster through its connection chain (not the raw sfx
-  // bus). Walk the chain (per-note gain -> stinger gain -> melodyMaster).
-  const reaches = (n, mel) => !n ? false
-    : (n === mel) || (n._connections || []).some((c) => reaches(c, mel));
-  const onMelody = (x) => x.target && x.target !== sfx1 && reaches(x.target, mel1);
-  const melTones = tones.filter(onMelody);
-  assert(melTones.length >= 10, `M1: the cinematic arpeggio schedules a full sequence on the melody layer (${melTones.length} notes)`);
-  const arpF = tones.filter((x) => onMelody(x) && x.type === 'triangle').map((x) => x.f0);
-  let rising = arpF.length >= 4; for (let i = 1; i < arpF.length; i++) { if (arpF[i] < arpF[i - 1]) { rising = false; break; } }
-  assert(arpF.length >= 8 && rising, `M1: the beat arpeggio is a SOFT RISING sequence of >= 8 notes (got ${arpF.length}: ${arpF.map((f) => Math.round(f)).join(' ')})`);
-  const sfxTriangles = tones.filter((x) => x.type === 'triangle' && x.target === sfx1);
-  assert(sfxTriangles.length === 0, 'M1: the beat arpeggio rides the melody layer, NOT the sfx bus (no triangle notes on the sfx bus)');
-  // ---- (2) SKIP dismisses it immediately, and does NOT open the atelier ----
-  const st0 = g1.state;
-  fireKey('keydown', 'a');             // ANY key skips (a "just-pressed" key)
-  frames(1);
-  assert(g1._cine === null, 'M1: ANY key skips the beat immediately');
-  assert(g1.state === st0 && g1.state === 'end', 'M1: the skip closes the beat WITHOUT opening the atelier (end buttons gated)');
+// Superseded by the finite campaign: post-victory Encore shop flow.
+// Historical assertions remain in Git at 856eab7:tests/smoke.mjs.
 
-  // ---- (3) a RETURNING player (flag true) skips straight to the card ----
-  store.clear();
-  const seenSave = L.freshSave(); seenSave.firstVictoryCinematic = true;
-  store.set('frogue_gallery_save', JSON.stringify(seenSave));
-  const g2 = new Game(makeCanvas());   // loads the seen-flag save
-  g2.start();
-  assert(g2.save.firstVictoryCinematic === true, 'M1: a returning save loads with the seen-flag true');
-  g2.audio.ensure();
-  const mel2 = g2.audio._melodyMaster;
-  g2.collected = { red: 5, blue: 5, green: 5 };
-  tones = [];
-  g2._endRun('victory');
-  assert(g2._cine === null, 'M1: a RETURNING player skips the beat and goes straight to the card');
-  const onMelody2 = (n) => !n ? false : (n === mel2) || (n._connections || []).some((c) => onMelody2(c));
-  const stingerTones = tones.filter((x) => x.type === 'triangle' && x.target && onMelody2(x.target));
-  assert(stingerTones.length >= 5, `M1: the returning-player victory fires the triumphant stinger at the card reveal (${stingerTones.length} notes, no beat)`);
-  assert(g2.save.firstVictoryCinematic === true, 'M1: the seen-flag stays true across a second victory (it fires exactly once)');
-
-  // ---- (4) a DEFEAT never opens the beat (fresh save) ----
-  store.clear();
-  const g3 = new Game(makeCanvas());
-  g3.start();
-  g3.audio.ensure();
-  g3.collected = { red: 3, blue: 3, green: 3 };
-  g3._endRun('defeat');
-  assert(g3._cine === null, 'M1: a defeat never opens the cinematic beat (victory only)');
-  assert(g3.save.firstVictoryCinematic === false, 'M1: a defeat does NOT latch the seen-flag (a future victory still gets it)');
-
-  delete window.AudioContext; // restore
-}
-
-// STAGE 70: v1.4 M2 — the "Encore" gallery-viewing screen (headless)
-// ---------------------------------------------------------------------
-// The Encore screen is an overlay opened FROM the atelier: a leisurely
-// one-at-a-time walk of the Gallery Wall. Each painting is shown large with
-// its title + the Curator's Ledger lore blurb; owned gold-tier works get a
-// gilded (gold) frame; unowned works sit in a shadowed silhouette frame with
-// "not yet". A soft S1-style arpeggio plays (low-level, on the melody layer),
-// arrows / click advance, Esc returns to the atelier.
-//
-// We verify with a fillText-recording canvas (every placard string is logged)
-// + a headless AudioContext (the arpeggio schedules on the melody layer):
-//   (a) opening Encore renders ALL 10 paintings in sequence — each owned one
-//       shows its title, each unowned one shows "not yet", and an owned
-//       gold-tier one shows the "★ gold tier" gilded marker;
-//   (b) the soft arpeggio is scheduled on the melody layer at a LOW level;
-//   (c) the right-arrow (and a click on the right half) advance to the next
-//       painting;
-//   (d) Esc returns to the atelier (overlay closed, arpeggio stopped).
-console.log('== stage 70: v1.4 M2 — "Encore" gallery viewing screen (headless) ==');
-{
-  const L70 = await import('../src/logic.js');
-  // A minimal headless AudioContext (same shape as stages 66/67): enough for
-  // AudioSys.ensure() + the melody step-sequencer to build the graph and to
-  // SCHEDULE the encore arpeggio on the melody layer.
-  const param = (v) => ({ value: v, setValueAtTime(x) { this.value = x; }, linearRampToValueAtTime(x) { this.value = x; },
-    exponentialRampToValueAtTime(x) { this.value = x; }, setTargetAtTime(x) { this.value = x; } });
-  const makeNode = () => ({
-    type: 'sine', frequency: param(440), Q: param(1), detune: param(0), gain: param(1),
-    buffer: null, _connections: [],
-    connect(node) { this._connections.push(node); return node; },
-    disconnect() { this._connections.length = 0; },
-    start() {}, stop() {}, getChannelData() { return new Float32Array(0); },
-  });
-  class FakeAudioContext {
-    constructor() { this.currentTime = 0; this._sr = 22050; this._dest = makeNode(); }
-    get sampleRate() { return this._sr; }
-    get destination() { return this._dest; }
-    createGain() { return makeNode(); }
-    createOscillator() { return makeNode(); }
-    createBiquadFilter() { return makeNode(); }
-    createDynamicsCompressor() { return makeNode(); }
-    createBuffer(ch, len) { return { getChannelData: () => new Float32Array(len) }; }
-    createBufferSource() { return makeNode(); }
-  }
-  window.AudioContext = FakeAudioContext;
-
-  const recCanvas = makeCanvas();
-  const drawn = [];
-  const baseCtx = makeCtx(recCanvas);
-  const recCtx = new Proxy(baseCtx, {
-    get(t, prop) {
-      if (prop === 'fillText') return (str, ...rest) => { drawn.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; };
-      return t[prop];
-    },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-  recCanvas.getContext = () => recCtx;
-
-  const g = new Game(recCanvas);
-  g.start();
-  g.audio.ensure();
-  // A save that owns a mix: two ordinary paintings + one owned GOLD-TIER
-  // (gilded-meridian), so the gilded-frame marker is exercised. The rest are
-  // unowned (shadowed). croaksworth stays locked-but-unowned -> "sealed".
-  const sv = L70.freshSave();
-  sv.owned = ['moonlit-pond', 'spring-garden', 'gilded-meridian'];
-  sv.ngCycle = 1; sv.gold = 60;
-  g.save = sv;
-  // the encore button exists in the atelier's click map.
-  const encoreRow = g._atelierRows().find((r) => r.tag === 'encore');
-  assert(!!encoreRow, 'M2: the atelier offers an "Encore" entry (click row present)');
-
-  // enter the atelier first so the encore overlays it (it is an overlay, not a state).
-  g.state = 'title'; g._beginAtelier();
-  assert(g.state === 'atelier', 'M2: the atelier state is active before opening Encore');
-
-  // ---- (a) open the encore + walk every one of the 10 paintings ----
-  g._openEncore();
-  assert(g._encoreOpen === true && g.state === 'atelier', 'M2: opening Encore keeps the atelier underneath (overlay, not a new state)');
-  assert(g.audio._encoreThemes.length === 1, `M2: the encore arpeggio loop is created on the melody layer (1, got ${g.audio._encoreThemes.length})`);
-  g._encoreIdx = 0;   // pin to painting 0 so the walk below is deterministic
-
-  const seenOwned = new Set();
-  let sawGoldTierMarker = false;
-  let sawNotYet = false;
-  // the first painting (index 0 = moonlit-pond, owned) renders immediately.
-  drawn.length = 0; frames(3);
-  const joined0 = drawn.join('\u0001');
-  assert(joined0.includes('Encore'), `M2: the encore screen renders its header ("The Encore")`);
-  assert(joined0.includes('Moonlit Pond'), 'M2: the first (owned) painting renders its TITLE on the large placard');
-  assert(joined0.includes('/ 10'), 'M2: the counter reads "1 / 10"');
-  // the Curator's Ledger lore blurb renders for the owned work (LEDGER_LORE
-  // feeds the placard — assert the moonlit-pond's specific ledger line).
-  assert(joined0.includes('Mabel paints it by memory'), 'M2: the Curator\'s Ledger lore blurb shows on the owned painting');
-  // walk forward through all 10 — collect the placard text each stop.
-  for (let step = 0; step < 10; step++) {
-    const pt = L70.PAINTINGS[step];
-    drawn.length = 0; frames(2);
-    const joined = drawn.join('\u0001');
-    const owned = sv.owned.includes(pt.id);
-    if (owned) {
-      assert(joined.includes(pt.name), `M2(${step}): owned "${pt.name}" renders its title`);
-      seenOwned.add(pt.id);
-    } else {
-      // unowned (incl. the sealed portrait) -> shadowed frame with "not yet".
-      assert(joined.includes('not yet'),
-        `M2(${step}): unowned "${pt.name}" renders a shadowed "not yet" placard`);
-      sawNotYet = true;
-    }
-    if (owned && pt.goldTier) { sawGoldTierMarker = joined.includes('gold tier'); }
-    // advance to the next painting (wraps around at the end).
-    g._encoreStep(1);
-    frames(1);
-  }
-  assert(seenOwned.has('moonlit-pond') && seenOwned.has('spring-garden') && seenOwned.has('gilded-meridian'),
-    `M2: all owned paintings were reached and titled while walking (got ${[...seenOwned].join(', ')})`);
-  assert(sawGoldTierMarker === true, 'M2: the owned gold-tier work shows the gilded "★ gold tier" marker');
-  assert(sawNotYet === true, 'M2: unowned paintings render as shadowed "not yet" frames');
-
-  // ---- (b) the arpeggio is scheduled at a LOW level on the melody layer ----
-  const et = g.audio._encoreThemes[0];
-  assert(et.gain.gain.value < 1, `M2: the encore arpeggio rides a LOW gain (${et.gain.gain.value < 0.7 ? 'set' : 'target'}) under the melody master`);
-  const onMelody = (n) => !n ? false : (n === g.audio._melodyMaster) || (n._connections || []).some((c) => onMelody(c));
-  assert(onMelody(et.gain), 'M2: the encore arpeggio gain is connected UNDER the melody layer (inherits the music slider + mute)');
-  g.audio.ctx.currentTime += 3.0;   // advance the fake clock past several steps
-  g.audio.tickMusic();
-  assert(et.step > 0, `M2: tickMusic schedules the encore arpeggio (step advanced to ${et.step})`);
-
-  // ---- (c) navigation: the LEFT arrow works (real keyboard); a click advances ----
-  fireKey('keydown', 'ArrowLeft');
-  frames(1);
-  fireKey('keydown', 'ArrowLeft');
-  frames(1);
-  assert(g._encoreIdx === (0 - 2 + L70.PAINTINGS.length) % L70.PAINTINGS.length, 'M2: the left arrow steps back to the previous painting');
-  // a click on the RIGHT half of the screen advances (mouse routing in _updateEncore).
-  // Drive the real canvas mousedown listener with a press on the right half.
-  const beforeClick = g._encoreIdx;
-  const md = (recCanvas._ev && recCanvas._ev['mousedown']);
-  assert(!!md, 'M2: the canvas mousedown listener is bound (for click navigation)');
-  md({ clientX: g.cw - 40, clientY: g.ch / 2, button: 0, preventDefault() {} });
-  frames(1);
-  assert(g._encoreIdx === (beforeClick + 1) % L70.PAINTINGS.length, 'M2: a click on the right half advances to the next painting');
-
-  // ---- (d) Esc returns to the atelier + stops the arpeggio ----
-  fireKey('keydown', 'Escape');
-  frames(1);
-  assert(g._encoreOpen === false, 'M2: Esc closes the encore overlay');
-  assert(g.state === 'atelier', 'M2: Esc returns to the atelier');
-  assert(g.audio._encoreThemes.length === 0, `M2: the encore arpeggio loop is stopped when leaving (got ${g.audio._encoreThemes.length})`);
-  // no new persistence: the save is byte-identical (still 3 owned, same gold).
-  assert(g.save.owned.length === 3 && g.save.gold === 60, 'M2: the encore is pure presentation — nothing is persisted');
-
-  delete window.AudioContext; // restore
-}
-
-// STAGE 71: v1.4 M3 — the two title easter eggs (headless)
-// ---------------------------------------------------------------------
-// (a) EGG A: hold 'F' (or click the title frog 3x) and the title frog does a
-//     little spin-and-blink + a unique chime + a ONE-TIME "didYouKnow" banner.
-// (b) EGG B: painting the title frog with a dry-brush gesture, or the
-//     SLEEPING heron (pre-engage) with the dry brush, leaves a tiny temporary
-//     smile/cheek-blush that fades in a few seconds.
-//
-// We verify (headless): both triggers FIRE (egg state latches + the banner is
-// added / the chime is scheduled) and both CLEAR (the spin ends, the blush
-// fades to 0) — and that NOTHING is persisted (the save is untouched).
 console.log('== stage 71: v1.4 M3 — two title easter eggs (headless) ==');
 {
   const L71 = await import('../src/logic.js');
@@ -5174,8 +3509,8 @@ console.log('== stage 72: v1.5 K1 — MUD TURTLE (armored plodder, front-arc she
   const origRand = Math.random;
   Math.random = () => 0.95; // roll=0.95: toad (roll>0.82) then turtle (roll>0.9) if allowed
   try {
-    const spawnKindAt = (zoneI, ngCycle) => {
-      g72._zoneI = zoneI; g72.ngCycle = ngCycle;
+    const spawnKindAt = (zoneI) => {
+      g72._zoneI = zoneI;
       g72.runT = 60; g72.spawnT = 0; // force a wave this tick
       g72.enemies.length = 0;        // under cap
       P72.x = 200; P72.y = 760;       // not in the boss arena
@@ -5185,11 +3520,9 @@ console.log('== stage 72: v1.5 K1 — MUD TURTLE (armored plodder, front-arc she
     const kZ0 = spawnKindAt(0, 0);
     const kZ2 = spawnKindAt(2, 0);
     const kZ3 = spawnKindAt(3, 0);
-    const kNG = spawnKindAt(0, 1);
     assert(kZ0 !== 'turtle' && kZ2 !== 'turtle',
       `cycle-0: turtle is GATED OUT before zone 3 (zone0=${kZ0}, zone2=${kZ2})`);
     assert(kZ3 === 'turtle', `cycle-0: turtle is ALLOWED from zone 3 (got ${kZ3})`);
-    assert(kNG === 'turtle', `NG+ (cycle 1): turtle is allowed from the first named zone (got ${kNG})`);
   } finally {
     Math.random = origRand;
   }
@@ -5260,8 +3593,8 @@ console.log('== stage 73: v1.5 K2 — BLIND CRAG FROG (hunts by sound; sleeps wh
   const origRand = Math.random;
   Math.random = () => 0.88; // toad(>0.82) then cragfrog(>0.86, <=0.9) if allowed
   try {
-    const spawnKindAt = (zoneI, ngCycle) => {
-      g73._zoneI = zoneI; g73.ngCycle = ngCycle;
+    const spawnKindAt = (zoneI) => {
+      g73._zoneI = zoneI;
       g73.runT = 90; g73.spawnT = 0; // force a wave this tick (t>30)
       g73.enemies.length = 0;        // under cap
       P73.x = 200; P73.y = 760;      // not in the boss arena
@@ -5271,11 +3604,9 @@ console.log('== stage 73: v1.5 K2 — BLIND CRAG FROG (hunts by sound; sleeps wh
     const k2Z0 = spawnKindAt(0, 0);
     const k2Z2 = spawnKindAt(2, 0);
     const k2Z3 = spawnKindAt(3, 0);
-    const k2NG = spawnKindAt(0, 1);
     assert(k2Z0 !== 'cragfrog' && k2Z2 !== 'cragfrog',
       `K2: cycle-0: cragfrog is GATED OUT before zone 3 (zone0=${k2Z0}, zone2=${k2Z2})`);
     assert(k2Z3 === 'cragfrog', `K2: cycle-0: cragfrog is ALLOWED from zone 3 (got ${k2Z3})`);
-    assert(k2NG === 'cragfrog', `K2: NG+ (cycle 1): cragfrog allowed from the first named zone (got ${k2NG})`);
   } finally {
     Math.random = origRand;
   }
@@ -5357,639 +3688,8 @@ console.log('== stage 74: v1.5 K3 — STORM SURGE (zone-5 final-stretch set-piec
   assert(g74._surgeEnemies.length === 0, 'K3: on expiry the surge enemy tracking is cleared');
 }
 
-console.log('== stage 75: v1.5 K4 — THE GILDED HERON (NG+ cycle-3+ third boss; gold palette, 42k HP, plume absorbs green heal) ==');
-{
-  const L75 = await import('../src/logic.js');
-  const { spawnEnemy } = await import('../src/enemies.js');
-
-  // ---- (1) boss selection: cycle 3+ fights the GILDED heron; cycle 0/1-2 unchanged ----
-  const gG3 = new Game(makeCanvas()); gG3.start();
-  const g3save = L75.freshSave(); g3save.stats.victories = 3; g3save.ngCycle = 3; g3save.flags.heronDefeated = true;
-  gG3.save = g3save; gG3._beginExpedition();
-  assert(gG3.heron.kind === 'gilded', `K4: ngCycle 3 fights THE GILDED HERON (got kind=${gG3.heron.kind})`);
-  assert(gG3.heron.gilded === true, 'K4: the gilded heron is flagged for the distinct gold palette');
-  assert(gG3.heron.hp === 42000 && gG3.heron.maxHp === 42000, `K4: the gilded heron carries 42k HP (got ${gG3.heron.hp})`);
-  assert(gG3.heron.awakenNeed && gG3.heron.awakenNeed.red === 45 && gG3.heron.awakenNeed.blue === 45 && gG3.heron.awakenNeed.green === 45,
-    'K4: the gilded heron keeps the 3-hue awaken rhythm (core pillar unchanged)');
-  assert(gG3.heron.plumeT === 0 && gG3.heron.plumeCd === 0, 'K4: the gilded heron starts out of its plume phase (the gap)');
-  assert(L75.GILDED_HERON.gildedHue === '#d9a52e' && L75.GILDED_HERON.gildedHueLight === '#ffe9a8', 'K4: the gilded heron has a distinct gold palette');
-  assert(L75.goldEventBoss('gilded') === null, 'K4: the gilded heron awards no NEW meta gold of its own (a later-cycle NG+ escalation)');
-  assert(L75.goldTotal() === 67, `K4: adding the gilded boss leaves career gold total at 67 (got ${L75.goldTotal()})`);
-
-  // cycle 0 = gray (first-time byte-identical), cycles 1-2 = green (K4 must not shift them)
-  const gC0 = new Game(makeCanvas()); gC0.start(); gC0.save = L75.freshSave(); gC0._beginExpedition();
-  assert(gC0.heron.kind === 'gray' && gC0.heron.gilded === undefined && gC0.heron.plumeT === undefined,
-    'K4: ngCycle 0 still fights the GRAY heron (first-time byte-identical; no gilded/plume fields)');
-  const gC1 = new Game(makeCanvas()); gC1.start();
-  const c1save = L75.freshSave(); c1save.stats.victories = 1; c1save.ngCycle = 1; c1save.flags.heronDefeated = true;
-  gC1.save = c1save; gC1._beginExpedition();
-  assert(gC1.heron.kind === 'green' && gC1.heron.gilded === undefined, 'K4: ngCycle 1 still fights the GREEN heron (not the gilded)');
-  const gC2 = new Game(makeCanvas()); gC2.start();
-  const c2save = L75.freshSave(); c2save.stats.victories = 2; c2save.ngCycle = 2; c2save.flags.heronDefeated = true;
-  gC2.save = c2save; gC2._beginExpedition();
-  assert(gC2.heron.kind === 'green', 'K4: ngCycle 2 still fights the GREEN heron (gilded starts at cycle 3)');
-  // cycle 4+ also gilded (the minCycle cap, not a single cycle)
-  const gC4 = new Game(makeCanvas()); gC4.start();
-  const c4save = L75.freshSave(); c4save.stats.victories = 4; c4save.ngCycle = 4; c4save.flags.heronDefeated = true;
-  gC4.save = c4save; gC4._beginExpedition();
-  assert(gC4.heron.kind === 'gilded', 'K4: ngCycle 4 fights the GILDED heron (cycle 3+ is the band, not just 3)');
-
-  // ---- (2) the plume phase is a PURE timer (testable without a browser) ----
-  const ph = { gilded: true, plumeT: 0, plumeCd: 0 };
-  // from the gap the plume ignites once the cooldown elapses (plume-on)
-  ph.plumeCd = L75.GILDED_HERON.plumeCooldown;
-  let r = L75.gildedPlumeTick(ph, 0.5);
-  assert(r === 0 && ph.plumeCd === L75.GILDED_HERON.plumeCooldown - 0.5, 'K4: gildedPlumeTick counts down the cooldown gap');
-  r = L75.gildedPlumeTick(ph, 99);
-  assert(r === 'plume-on' && ph.plumeT === L75.GILDED_HERON.plumeActive, 'K4: gildedPlumeTick reports plume-on and re-arms the plume on the frame it ignites');
-  // while active the plume burns down (absorbing) then releases (plume-off -> the heal gap)
-  r = L75.gildedPlumeTick(ph, 0.5);
-  assert(r === 0 && ph.plumeT === L75.GILDED_HERON.plumeActive - 0.5, 'K4: gildedPlumeTick counts down the active plume');
-  r = L75.gildedPlumeTick(ph, 99);
-  assert(r === 'plume-off' && ph.plumeCd === L75.GILDED_HERON.plumeCooldown, 'K4: gildedPlumeTick reports plume-off and re-arms the cooldown on release');
-  // the ~30s cycle is 10s active + 20s gap as specced
-  assert(L75.GILDED_HERON.plumeActive + L75.GILDED_HERON.plumeCooldown === 30, 'K4: the plume cycle is ~30s (10s active + 20s heal gap)');
-  assert(L75.gildedPlumeActive({ gilded: true, plumeT: 5 }) === true && L75.gildedPlumeActive({ gilded: true, plumeT: 0 }) === false,
-    'K4: gildedPlumeActive reports the heal-absorbing window (plumeT>0) only');
-  // no-op for a non-gilded heron (gray/green never carry `gilded`)
-  const phG = { pinned: 2 };
-  assert(L75.gildedPlumeTick(phG, 99) === 0, 'K4: gildedPlumeTick is a no-op for a non-gilded heron (byte-identical for gray/green)');
-
-  // ---- (3) the plume ABSORBS the frog's green heal while active, and heal works in the gap ----
-  const g75 = new Game(makeCanvas()); g75.start();
-  const s75 = L75.freshSave(); s75.stats.victories = 3; s75.ngCycle = 3; s75.flags.heronDefeated = true;
-  g75.save = s75; g75._beginExpedition();
-  const h = g75.heron, p = g75.player;
-  h._intro = 0;                                   // reveal the boss so its plume + paint path run
-  p.maxHp = 9999; p.hp = 100; p.iframes = 999; p._healAcc = 0;   // low HP + invulnerable (heal test, not combat)
-  const foe = spawnEnemy('beetle', h.x, h.y - 50, g75.tuning); g75.enemies.push(foe); foe.hp = 10000; foe.maxHp = 10000; // a tanky green-paintable enemy
-  // HYGIENE (v1.7): the heal-in-gap vs absorb-while-active assertion must be
-  // DETERMINISTIC. The target beetle's AI wander uses Math.random (enemies.js)
-  // and would drift its y over the paint window, so the frog (repositioned to
-  // foe.y - 40 each frame) intermittently paints a moving target and the
-  // green-paint-heal vs standing-cell-drain race flaps (~1-in-12 the net
-  // healAcc goes negative). Pin the target to a fixed coordinate each frame so
-  // the test isolates the K4 plume behavior, not a wandering target.
-  const TX = h.x, TY = h.y - 50;
-  const greenPaint = (n) => {
-    g75.input.mouse.lDown = true;
-    p.pigment = 'green';
-    for (let i = 0; i < n; i++) {
-      // pin the target + aim the brush at it (the brush fan aims at
-      // p.aimA, derived from the mouse world position) so the swipe
-      // connects deterministically; the K4 assertion isolates the
-      // plume heal/absorb behavior, not a wandering target or a
-      // drifting brush aim.
-      foe.x = TX; foe.y = TY; foe.vx = 0; foe.vy = 0;
-      p.x = TX; p.y = TY - 40; p.vx = 0; p.vy = 0;
-      g75.input.mouse.worldX = foe.x; g75.input.mouse.worldY = foe.y;
-      g75._updateExpedition(0.016);
-    }
-    g75.input.mouse.lDown = false;
-  };
-  // (a) GAP: the plume is off (h.plumeT = 0) -> painting green heals the frog
-  p._healAcc = 0;
-  const healGapBefore = p._healAcc;
-  greenPaint(40);
-  assert(h.plumeT === 0 && (p._healAcc > healGapBefore || p.hp > 100), `K4: in the plume GAP green paint HEALS the frog (healAcc ${healGapBefore.toFixed(2)} -> ${p._healAcc.toFixed(2)})`);
-  // (b) ACTIVE: force the plume on -> green paint heals 0 (suppressed)
-  h.plumeT = L75.GILDED_HERON.plumeActive;
-  p._healAcc = 0;
-  const hpActBefore = p.hp;
-  greenPaint(40);
-  assert(h.plumeT > 0 && p._healAcc <= 0.001 && p.hp === hpActBefore, `K4: while the plume is ACTIVE green paint heals 0 (suppressed; hp ${hpActBefore}, healAcc ${p._healAcc.toFixed(2)})`);
-  // (c) the standing-in-green heal is also suppressed while active (player.update path)
-  h.plumeT = L75.GILDED_HERON.plumeActive;
-  const cell = g75.world.pigmentAt(p.x, p.y); cell.green = 3; cell.age = 3.2;   // standing in fresh green
-  p._plumeSuppress = true;                 // the flag game.js publishes each frame (drives player.update)
-  p._healAcc = 0.6;
-  const hpStandBefore = p.hp;
-  p.update(0.5, g75.input, g75.tuning, g75.world, { x: 0, y: 0, scale: 1 });
-  assert(p._healAcc <= 0.6 && p.hp === hpStandBefore, 'K4: the standing-in-green heal is ALSO suppressed while the plume is active');
-  // ...and works when the plume is off
-  p._plumeSuppress = false;
-  p._healAcc = 0.6;
-  const hpStandGap = p.hp;
-  p.update(3.0, g75.input, g75.tuning, g75.world, { x: 0, y: 0, scale: 1 });
-  assert(p.hp > hpStandGap, `K4: the standing-in-green heal works in the plume gap (hp ${hpStandGap} -> ${p.hp})`);
-  cell.green = 0; cell.age = 0;
-  console.log('ok — K4: the Gilded Heron appears on NG+ cycle 3+ (42k, gold palette), its plume is a ~30s phase timer that ABSORBS both green heal sources while active (heal works in the gap), and cycle 0/1-2 boss selection is unchanged');
-}
-
-console.log('== stage 76: v1.5 K5 — 3 NEW EXPEDITION MODIFIERS (Night Expedition / Still Waters / Master\'s Palette) ==');
-{
-  const L76 = await import('../src/logic.js');
-  const { spawnEnemy } = await import('../src/enemies.js');
-  const { Game } = await import('../src/game.js');
-
-  // ---- (0) the 3 new modifiers are in the MODIFIERS table ----
-  for (const id of ['night-expedition', 'still-waters', 'masters-palette']) {
-    const m = L76.MODIFIERS[id];
-    assert(m && m.id === id && typeof m.name === 'string' && typeof m.desc === 'string' && typeof m.apply === 'function',
-      `K5: modifier '${id}' is a data entry (id/name/desc/apply)`);
-  }
-
-  // ---- (1) NIGHT EXPEDITION: darker lighting + 20% mosquito speed + 10% orb value ----
-  const gNight = new Game(makeCanvas()); gNight.start();
-  const nightSave = L76.freshSave(); nightSave.ngCycle = 1; nightSave.ngModifier = 'night-expedition'; nightSave.stats.victories = 1; nightSave.flags.heronDefeated = true;
-  gNight.save = nightSave; gNight._beginExpedition();
-  assert(gNight.tuning.nightDarkness === 1, 'K5: Night Expedition sets the nightDarkness flag (render-only darkening)');
-  assert(gNight.tuning.mosquitoSpeedMult === 1.2, `K5: Night Expedition speeds mosquitoes +20% (mosquitoSpeedMult ×${gNight.tuning.mosquitoSpeedMult})`);
-  assert(Math.abs(gNight.tuning.pickupValue - 1.10) < 1e-9, `K5: Night Expedition raises orb value +10% (pickupValue ${gNight.tuning.pickupValue})`);
-  // the mosquito speed multiplier actually affects the enemy (feeds the existing spawn path)
-  const nightMq = spawnEnemy('mosquito', 200, 100, gNight.tuning);
-  const plainMqTuning = L76.makeTuning({}, [], 'normal', 0);
-  L76.applyNGPlus(plainMqTuning, 1); // same NG+ cycle 1, no modifier
-  const plainMq = spawnEnemy('mosquito', 200, 100, plainMqTuning);
-  assert(nightMq.speed > plainMq.speed, `K5: Night Expedition mosquito is faster (speed ${nightMq.speed} > ${plainMq.speed})`);
-  // a beetle (non-mosquito) is NOT sped by night (only mosquitoes)
-  const nightBeetle = spawnEnemy('beetle', 200, 100, gNight.tuning);
-  const plainBeetle = spawnEnemy('beetle', 200, 100, plainMqTuning);
-  assert(nightBeetle.speed === plainBeetle.speed, 'K5: Night Expedition does NOT speed beetles (mosquito-specific only)');
-  assert(!gNight.tuning.stillWaters && !gNight.tuning.preLockLoadout, 'K5: Night Expedition does NOT set stillWaters or preLock fields');
-
-  // ---- (2) STILL WATERS: no weather phases + 15% enemy HP ----
-  const gSW = new Game(makeCanvas()); gSW.start();
-  const swSave = L76.freshSave(); swSave.ngCycle = 1; swSave.ngModifier = 'still-waters'; swSave.stats.victories = 1; swSave.flags.heronDefeated = true;
-  gSW.save = swSave; gSW._beginExpedition();
-  assert(gSW.tuning.stillWaters === 1, 'K5: Still Waters sets the stillWaters flag (no weather phases)');
-  // enemy HP is 15% over the NG+ cycle-1 base (1.30 * 1.15 = 1.50)
-  const swBeetle = spawnEnemy('beetle', 200, 100, gSW.tuning);
-  const plainC1Tuning = L76.makeTuning({}, [], 'normal', 0);
-  L76.applyNGPlus(plainC1Tuning, 1); // cycle 1, no modifier
-  const plainC1Beetle = spawnEnemy('beetle', 200, 100, plainC1Tuning);
-  assert(swBeetle.hp > plainC1Beetle.hp, `K5: Still Waters makes enemies tougher (beetle HP ${swBeetle.hp} > ${plainC1Beetle.hp})`);
-  // the tuning.enemyHp reflects the 15% bump (1.30 * 1.15 ≈ 1.50)
-  assert(Math.abs(gSW.tuning.enemyHp - 1.50) < 0.01, `K5: Still Waters enemy HP multiplier is ~1.50 (got ${gSW.tuning.enemyHp})`);
-  // the weather gate is active (weatherFor is skipped when stillWaters)
-  assert(gSW.tuning.stillWaters === 1 && gSW.weatherPending === null, 'K5: Still Waters run starts with no weather pending');
-  assert(!gSW.tuning.nightDarkness && !gSW.tuning.preLockLoadout, 'K5: Still Waters does NOT set nightDarkness or preLock fields');
-
-  // ---- (3) MASTER'S PALETTE: pre-locked synergy duo + 10% contact damage ----
-  const gMP = new Game(makeCanvas()); gMP.start();
-  const mpSave = L76.freshSave(); mpSave.ngCycle = 1; mpSave.ngModifier = 'masters-palette'; mpSave.stats.victories = 1; mpSave.flags.heronDefeated = true;
-  gMP.save = mpSave; gMP._beginExpedition();
-  assert(Math.abs(gMP.tuning.contactDmgMult - 1.10) < 1e-9, `K5: Master's Palette raises contact dmg +10% (contactDmgMult ×${gMP.tuning.contactDmgMult})`);
-  // the pre-locked loadout is the Flooded Night duo (moonlit-pond + storm-cloud)
-  assert(Array.isArray(gMP.tuning.preLockLoadout) && gMP.tuning.preLockLoadout.length === 2, 'K5: Master\'s Palette sets a pre-locked 2-slot loadout');
-  assert(gMP.tuning.synergy === 'Flooded Night', `K5: Master's Palette pre-locks the Flooded Night synergy (got ${gMP.tuning.synergy})`);
-  // the contact damage multiplier actually affects the enemy
-  const mpBeetle = spawnEnemy('beetle', 200, 100, gMP.tuning);
-  const noModC1Tuning = L76.makeTuning({}, [], 'normal', 0);
-  L76.applyNGPlus(noModC1Tuning, 1);
-  const noModC1Beetle = spawnEnemy('beetle', 200, 100, noModC1Tuning);
-  assert(mpBeetle.dmg > noModC1Beetle.dmg, `K5: Master's Palette increases contact damage (beetle dmg ${mpBeetle.dmg.toFixed(1)} > ${noModC1Beetle.dmg.toFixed(1)})`);
-  assert(!gMP.tuning.nightDarkness && !gMP.tuning.stillWaters, 'K5: Master\'s Palette does NOT set nightDarkness or stillWaters fields');
-
-  // ---- (4) cycle-0 (first-time) is COMPLETELY untouched: no modifier fields ----
-  const gC0 = new Game(makeCanvas()); gC0.start();
-  gC0.save = L76.freshSave();
-  gC0._beginExpedition();
-  assert(!gC0.tuning.nightDarkness && !gC0.tuning.mosquitoSpeedMult && !gC0.tuning.stillWaters && !gC0.tuning.preLockLoadout,
-    'K5: a cycle-0 run carries NO new modifier fields (first-time byte-identical)');
-  const plainC0 = L76.makeTuning(gC0.save.upgrades, gC0.save.loadout, gC0.options.difficulty, gC0.save.galleryBonus || 0);
-  assert(JSON.stringify(gC0.tuning) === JSON.stringify(plainC0), 'K5: cycle-0 tuning deep-equals a plain makeTuning (no modifier delta)');
-
-  console.log(`ok — K5: the 3 new modifiers (Night Expedition / Still Waters / Master's Palette) each apply their distinct tuning/render effect (darker lighting + mosquito speed + orb value / no weather + enemy HP / pre-locked duo + contact dmg), and cycle-0 is untouched`);
-}
-
-console.log('== stage 77: v1.5 K6 — NG+ "MASTER" TIER (cycle 4+ capped escalation step: enemy HP +50% / dmg +25% over cycle 3) ==');
-{
-  const L77 = await import('../src/logic.js');
-
-  // ---- (1) the pure scaling table: cycle 0-3 unchanged; cycle 4 is the Master step ----
-  const s0 = L77.ngPlusScaling(0);
-  const s1 = L77.ngPlusScaling(1);
-  const s2 = L77.ngPlusScaling(2);
-  const s3 = L77.ngPlusScaling(3);
-  const s4 = L77.ngPlusScaling(4);
-  const s5 = L77.ngPlusScaling(5);
-  const s99 = L77.ngPlusScaling(99);
-
-  // cycle 0-3 are UNCHANGED by K6 (the exact committed values)
-  assert(s0.hp === 1 && s0.dmg === 1 && s0.spawn === 1, 'K6: cycle 0 is all-ones (first-time byte-identical, unchanged by K6)');
-  assert(s1.hp === 1.30 && s1.dmg === 1.15 && s1.spawn === 1.10, `K6: cycle 1 is unchanged (HP x${s1.hp}, dmg x${s1.dmg}, spawn x${s1.spawn})`);
-  assert(s2.hp === 1.60 && s2.dmg === 1.30 && s2.spawn === 1.20, `K6: cycle 2 is unchanged (HP x${s2.hp}, dmg x${s2.dmg}, spawn x${s2.spawn})`);
-  assert(s3.hp === 1.90 && s3.dmg === 1.45 && s3.spawn === 1.30, `K6: cycle 3 is unchanged (HP x${s3.hp}, dmg x${s3.dmg}, spawn x${s3.spawn})`);
-
-  // ---- (2) the Master step: cycle 4 = HP +50% / dmg +25% OVER cycle 3 ----
-  //   HP: 1.90 x 1.50 = 2.85  (cycle-3 HP +50%)
-  //   dmg: 1.45 x 1.25 = 1.8125 -> 1.81 (cycle-3 dmg +25%)
-  //   spawn: held at cycle 3 (1.30) — the Master tier is about toughness, not spawn rate
-  assert(Math.abs(s4.hp - 2.85) < 0.001, `K6: cycle-4 enemy HP = cycle-3 HP +50% (1.90 x 1.50 = 2.85, got ${s4.hp})`);
-  assert(Math.abs(s4.dmg - 1.81) < 0.001, `K6: cycle-4 enemy dmg = cycle-3 dmg +25% (1.45 x 1.25 = 1.81, got ${s4.dmg})`);
-  assert(Math.abs(s4.spawn - 1.30) < 0.001, `K6: cycle-4 spawn held at cycle 3 (got x${s4.spawn})`);
-  assert(s4.hp > s3.hp && s4.dmg > s3.dmg, 'K6: the Master tier (cycle 4) is strictly harder than cycle 3');
-  assert(s4.hp > s2.hp && s4.dmg > s2.dmg, 'K6: the Master tier is strictly harder than cycle 2');
-
-  // ---- (3) bounded: cycle 4 == cycle 5 == cycle 99 (no unbounded spiral) ----
-  assert(s4.hp === s5.hp && s4.dmg === s5.dmg && s4.spawn === s5.spawn, 'K6: the Master tier is capped at cycle 4 (cycle 4 == cycle 5)');
-  assert(s4.hp === s99.hp && s4.dmg === s99.dmg && s4.spawn === s99.spawn, 'K6: the Master cap holds for arbitrarily large cycles (cycle 4 == cycle 99)');
-  assert(L77.NG_CAP_CYCLE === 4, `K6: the NG+ escalation cap is cycle 4 (got ${L77.NG_CAP_CYCLE})`);
-
-  // ---- (4) applyNGPlus: the Master step applies ONLY at cycle 4+, not cycle 0-3 ----
-  //   cycle 0: all-ones (byte-identical)
-  const a0 = L77.applyNGPlus({ enemyHp: 1, enemyDmg: 1, spawnRate: 1 }, 0);
-  assert(a0.enemyHp === 1 && a0.enemyDmg === 1 && a0.spawnRate === 1, 'K6: applyNGPlus(cycle 0) is a no-op (byte-identical)');
-  //   cycle 3: the cycle-3 values (1.90/1.45/1.30) — NOT the Master step
-  const a3 = L77.applyNGPlus({ enemyHp: 1, enemyDmg: 1, spawnRate: 1 }, 3);
-  assert(Math.abs(a3.enemyHp - 1.90) < 0.001 && Math.abs(a3.enemyDmg - 1.45) < 0.001 && Math.abs(a3.spawnRate - 1.30) < 0.001, `K6: applyNGPlus(cycle 3) = cycle-3 values (HP ${a3.enemyHp}, dmg ${a3.enemyDmg}, spawn ${a3.spawnRate})`);
-  //   cycle 4: the Master step (2.85/1.81/1.30)
-  const a4 = L77.applyNGPlus({ enemyHp: 1, enemyDmg: 1, spawnRate: 1 }, 4);
-  assert(Math.abs(a4.enemyHp - 2.85) < 0.001 && Math.abs(a4.enemyDmg - 1.81) < 0.001 && Math.abs(a4.spawnRate - 1.30) < 0.001, `K6: applyNGPlus(cycle 4) = the Master step (HP ${a4.enemyHp}, dmg ${a4.enemyDmg}, spawn ${a4.spawnRate})`);
-  assert(a4.enemyHp > a3.enemyHp && a4.enemyDmg > a3.enemyDmg, 'K6: cycle-4 applied tuning > cycle-3 applied tuning (the Master step is strictly harder)');
-  //   cycle 5: same Master step (capped)
-  const a5 = L77.applyNGPlus({ enemyHp: 1, enemyDmg: 1, spawnRate: 1 }, 5);
-  assert(a5.enemyHp === a4.enemyHp && a5.enemyDmg === a4.enemyDmg && a5.spawnRate === a4.spawnRate, 'K6: applyNGPlus(cycle 5) == applyNGPlus(cycle 4) (the Master cap)');
-
-  console.log('ok — K6: the NG+ Master tier (cycle 4+) is a capped scaling step (HP +50% / dmg +25% over cycle 3, spawn held), strictly harder than cycle 3, bounded (cycle 4 == cycle 5 == cycle 99), and cycles 0-3 are unchanged (pure logic, no game.js change)');
-}
-
-// stage 78 — v1.5 M2 K7: the CURATOR CHALLENGE. A victory-gated title button
-// that runs a SEEDED daily expedition: seed = current UTC day (shared worldwide),
-// loadout = a seeded 2-painting draw from owned paintings, modifier = a seeded
-// pick from MODIFIERS. A victory computes a SCORE (restored + enemies + orbs +
-// boss-time bonus) and files it to a saved top-5 best-score list, shown in a NEW
-// atelier panel. Pure logic lives in logic.js (day seed / loadout / modifier /
-// score / file); game.js only wires it. We assert the gate, the deterministic
-// seed (same day -> same draw), the score math, the top-5 file (ordered desc,
-// max 5, older dropped), the v8->v9 migration, and an END-TO-END challenge
-// victory that files a score to the save (persisted).
-console.log('== stage 78: v1.5 M2 K7 — Curator Challenge (seeded daily expedition) ==');
-{
-  const L78 = await import('../src/logic.js');
-
-  // (1) GATE: a fresh save (no victory) does NOT unlock the challenge; a save
-  // with a victory does. Same predicate shape as ngUnlocked.
-  assert(L78.challengeUnlocked(L78.freshSave()) === false, 'K7: a fresh save (no victory) does NOT unlock the challenge');
-  const won78 = L78.freshSave(); won78.stats.victories = 1;
-  won78.owned = ['moonlit-pond', 'dancing-salamander', 'spring-garden', 'king-frog', 'storm-cloud'];
-  assert(L78.challengeUnlocked(won78) === true, 'K7: a save with a completed victory unlocks the challenge');
-  // The title layout shows the button only when unlocked (g.chall set/null).
-  const cv78a = makeCanvas(); const g78a = new Game(cv78a); g78a.start();
-  g78a.save = L78.freshSave(); // no victory
-  const layFresh = g78a._titleLayout();
-  assert(layFresh.chall === null, 'K7: the title layout has NO challenge button on a fresh (no-victory) save');
-  g78a.save = won78;
-  const layWon = g78a._titleLayout();
-  assert(layWon.chall && layWon.chall.w > 0, 'K7: the title layout EXPOSES the challenge button on a victory save');
-
-  // (2) DETERMINISM: the seed is the current UTC day and the loadout/modifier
-  // are derived deterministically from it — the SAME day yields the SAME
-  // (seed, loadout, modifier) triple for a given owned set (the whole world
-  // shares one challenge per day).
-  const day = L78.challengeDaySeed();
-  assert(typeof day === 'number' && Number.isFinite(day) && day > 0, `K7: the day seed is a finite positive UTC-day number (${day})`);
-  const owned78 = ['moonlit-pond', 'dancing-salamander', 'spring-garden', 'self-portrait', 'king-frog'];
-  const lo1 = L78.challengeDrawLoadout(day, owned78), lo2 = L78.challengeDrawLoadout(day, owned78);
-  assert(lo1.length === 2 && lo2.length === 2, `K7: the challenge loadout is a 2-painting draw (${lo1.join(', ')})`);
-  assert(lo1[0] === lo2[0] && lo1[1] === lo2[1], 'K7: the loadout is DETERMINISTIC for the same (day, owned) (same draw twice)');
-  assert(lo1.every(id => owned78.includes(id)), "K7: the loadout is drawn only from the player's OWNED paintings");
-  const mod1 = L78.challengeDrawModifier(day), mod2 = L78.challengeDrawModifier(day);
-  assert(mod1 === mod2 && L78.MODIFIERS[mod1], `K7: the modifier is DETERMINISTIC + valid for the same day (${mod1})`);
-  // A different day can (and for most pairs does) yield a different draw.
-  const dayB = day + 1;
-  const loB = L78.challengeDrawLoadout(dayB, owned78);
-  // (not asserting inequality — a different day CAN coincide; we assert the
-  //  different-seed path still returns a valid 2-subset of owned.)
-  assert(loB.length === 2 && loB.every(id => owned78.includes(id)), 'K7: a different day still yields a valid 2-subset of owned paintings');
-
-  // (3) SCORE: the pure score is restored + enemies + orbs + a boss-time bonus,
-  // with faster boss times scoring higher.
-  const s0 = L78.challengeScore({ restored: 0, enemies: 0, orbs: 0, bossTimeSec: 0 });
-  assert(Number.isFinite(s0) && s0 >= 0, `K7: an empty score is a finite non-negative number (${s0})`);
-  const sFull = L78.challengeScore({ restored: 1, enemies: 40, orbs: 120, bossTimeSec: 40 });
-  const sSlow = L78.challengeScore({ restored: 1, enemies: 40, orbs: 120, bossTimeSec: 400 });
-  assert(sFull > sSlow, `K7: a FASTER boss time scores higher than a slow one (fast ${sFull} > slow ${sSlow})`);
-  const sMore = L78.challengeScore({ restored: 1, enemies: 60, orbs: 160, bossTimeSec: 40 });
-  assert(sMore > sFull, 'K7: more enemies + orbs + full restoration score higher');
-
-  // (4) FILE: challengeFileScore persists a {seed,date,score} entry, ordered
-  // DESC by score, capped at top 5 (older dropped). A corrupt/missing list is
-  // normalized to a valid list.
-  const fs = L78.freshSave();
-  L78.challengeFileScore(fs, 100, 10);
-  L78.challengeFileScore(fs, 101, 90);
-  L78.challengeFileScore(fs, 102, 50);
-  assert(fs.challengeScores.length === 3, 'K7: each filed score is added to the save list');
-  assert(fs.challengeScores[0].score === 90 && fs.challengeScores[2].score === 10, 'K7: the list is ordered DESC by score (90, 50, 10)');
-  assert(fs.challengeScores[0].seed === 101 && typeof fs.challengeScores[0].date === 'string' && fs.challengeScores[0].date.length === 10, 'K7: each entry is {seed, date(YYYY-MM-DD), score}');
-  for (let i = 0; i < 6; i++) L78.challengeFileScore(fs, 200 + i, 1000 + i);
-  assert(fs.challengeScores.length === 5, `K7: the list is capped at the top ${L78.CHALLENGE_TOP_N} (older scores dropped)`);
-  assert(fs.challengeScores[0].score === 1005 && fs.challengeScores[4].score === 1001, 'K7: after 6 more filings the top 5 keep the HIGHEST 5 (1005..1001)');
-  // The v8 -> v9 migration adds challengeScores [] to a legacy save (no field)
-  // and re-stamps the version; a fresh save is already v9.
-  const legacy78 = L78.freshSave(); legacy78.saveVersion = 8; delete legacy78.challengeScores;
-  const mig78 = L78.migrateSave(legacy78);
-  assert(mig78.saveVersion === L78.SAVE_VERSION, 'K7: a v8 save migrates to the current saveVersion');
-  assert(Array.isArray(mig78.challengeScores) && mig78.challengeScores.length === 0, 'K7: a legacy save (no challengeScores) migrates to an empty list (no error)');
-  assert(L78.freshSave().challengeScores.length === 0, 'K7: a fresh save carries an empty challengeScores list');
-
-  // (5) END-TO-END: a seeded challenge expedition is started from a victory
-  // save, the heron is painted to a victory, and a score is FILED to the save
-  // (persisted). A second expedition on a normal path files nothing.
-  const cv78 = makeCanvas(); const g78 = new Game(cv78); g78.start();
-  g78.save = won78; // has a victory -> challenge unlocked
-  let t78 = 1000;
-  const fr78 = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t78 += step; g78._frame(t78); } };
-  g78._beginChallengeExpedition();
-  assert(g78.state === 'expedition', 'K7: a challenge expedition starts (state expedition)');
-  assert(g78.challenge && g78.challenge.mode === 'challenge', 'K7: the run carries the challenge mode flag');
-  assert(g78.challenge.seed === day, `K7: the challenge run uses the current UTC day as its seed (${g78.challenge.seed} == ${day})`);
-  assert(g78.challenge.loadout.length === 2 && g78.challenge.loadout.every(id => won78.owned.includes(id)), 'K7: the challenge run has a 2-painting seeded loadout drawn from owned paintings');
-  assert(JSON.stringify(g78.challenge.loadout) === JSON.stringify(L78.challengeDrawLoadout(day, won78.owned)), "K7: the run's seeded loadout matches the deterministic draw for (day, owned)");
-  assert(L78.MODIFIERS[g78.challenge.modifier], `K7: the challenge run has a valid seeded modifier (${g78.challenge.modifier})`);
-  // Now paint the heron to a victory.
-  const h78 = g78.heron;
-  h78._intro = 0; h78.awakened = true; h78.awakenedT = 99; h78.hp = 12; h78.state = 'idle'; h78.stateT = 999;
-  g78.player.x = h78.x - 55; g78.player.y = h78.y - 60; g78.player.iframes = 999;
-  const v78 = g78._view();
-  g78.input.mouse.x = (h78.x - v78.x) * v78.scale; g78.input.mouse.y = (h78.y - 100 - v78.y) * v78.scale;
-  g78.input.mouse.lDown = true;
-  fr78(240);
-  g78.input.mouse.lDown = false;
-  assert(h78.hp <= 0 || h78.flying > 0, 'K7: the challenge heron is defeated/fleeing');
-  fr78(260); // let the victory flight play out to the end state
-  assert(g78.state === 'end' && g78.endKind === 'victory', 'K7: the challenge run reaches the victory end state');
-  assert(g78.save.stats.victories === 2, 'K7: the challenge victory is recorded in save stats');
-  assert(g78.save.challengeScores.length === 1, `K7: the challenge victory FILED exactly one score to the save (${JSON.stringify(g78.save.challengeScores)})`);
-  assert(g78.save.challengeScores[0].seed === day && typeof g78.save.challengeScores[0].score === 'number' && g78.save.challengeScores[0].score >= 0, 'K7: the filed entry is {seed: today, score: >=0}');
-  assert(g78._challengeResult && g78._challengeResult.score === g78.save.challengeScores[0].score, 'K7: the run\'s challenge result matches the filed score');
-  // The save's CHOSEN loadout was untouched by the challenge (the seeded
-  // loadout is per-run, not persisted).
-  assert(Array.isArray(g78.save.loadout), 'K7: a challenge does not corrupt the save\'s loadout field');
-
-  console.log('ok — K7: a victory-gated "Challenge" button runs a SEEDED daily expedition (day seed -> seeded 2-painting loadout + seeded modifier), a victory files a deterministic score (restored + enemies + orbs + boss-time bonus) to a saved top-5 best-score list (ordered desc, max 5), shown in a new atelier panel; pure logic in logic.js (deterministic + testable), migration v8->v9 safe');
-}
-
-// stage 79 — v1.5 K8: the CHALLENGE REWARD. First-EVER challenge completion
-// mints a special MASTERPIECE painting ("The Heron, Waking") — a unique
-// unbuyable collection piece shown in the Gallery Wall + Curator's Ledger — +
-// 15 gold; SUBSEQUENT completions give small repeatable gold bonuses by rank
-// (top-1 pays more). Reuses the goldEarn idempotency-latch pattern (no new
-// save field / SAVE_VERSION bump — the mint is latched by
-// save.goldEarned.masterpiece). Pure logic in logic.js.
-console.log('== stage 79: v1.5 K8 — Challenge Reward (Masterpiece + rank gold) ==');
-{
-  const L79 = await import('../src/logic.js');
-  const MP = L79.MASTERPIECE;
-
-  // (0) The Masterpiece config + it is NOT a PAINTINGS id (so it is invisible
-  // to the shop / loadout / retirement threshold / makeTuning; the catalog
-  // stays at 10).
-  assert(typeof MP.id === 'string' && MP.name === 'The Heron, Waking', 'K8: the Masterpiece is "The Heron, Waking"');
-  assert(MP.firstGold === 15, 'K8: the first-completion gold is 15');
-  assert(MP.rankGold['1'] > MP.rankGold['5'] && MP.rankGold['1'] > 0, `K8: top-1 pays more rank gold than top-5 (${MP.rankGold['1']} > ${MP.rankGold['5']})`);
-  assert(L79.PAINTINGS.length === 10, 'K8: the PAINTINGS catalog stays at 10 (the Masterpiece is not a shop painting)');
-  assert(!L79.PAINTINGS.some(p => p.id === MP.id), 'K8: the Masterpiece is NOT a PAINTINGS id (unbuyable / never hung / never in tuning)');
-
-  // (1) Gate: a fresh save has not minted the Masterpiece yet.
-  const fresh79 = L79.freshSave();
-  assert(L79.isMasterpieceMinted(fresh79) === false, 'K8: a fresh save has not minted the Masterpiece yet');
-
-  // (2) FIRST completion mints the Masterpiece + 15 gold EXACTLY ONCE.
-  let s = L79.freshSave();
-  const seedA = 1000;
-  L79.challengeFileScore(s, seedA, 900);
-  const r1 = L79.challengeComplete(s, seedA, 900);
-  assert(r1.minted === true, 'K8: the first completion mints the Masterpiece');
-  assert(r1.gold === 15, `K8: the first completion pays 15 gold (got ${r1.gold})`);
-  assert(s.gold === 15, 'K8: the 15 gold is banked on the save');
-  assert(L79.isMasterpieceMinted(s) === true, 'K8: after the first completion the Masterpiece is minted (latched)');
-  assert(s.goldEarned.masterpiece === true, 'K8: the mint is latched via the goldEarned map (no new save field)');
-
-  // (3) A SECOND completion does NOT re-mint — only a rank-based gold bonus,
-  // and it does not add the 15 again.
-  const seedB = 2000; // a different day (so the rank key is fresh)
-  L79.challengeFileScore(s, seedB, 120); // a lower score -> rank 2
-  const r2 = L79.challengeComplete(s, seedB, 120);
-  assert(r2.minted === false, 'K8: the second completion does NOT re-mint the Masterpiece');
-  assert(r2.rank === 2, `K8: the second completion ranks 2nd (got ${r2.rank})`);
-  assert(r2.gold === MP.rankGold['2'], `K8: the second completion pays the rank-2 gold (got ${r2.gold})`);
-  assert(s.gold === 15 + MP.rankGold['2'], 'K8: total gold = 15 (first) + rank-2 (second)');
-  // a repeat of the SAME (day, rank) pays again nothing (latched per key)
-  const seedC = 3000;
-  L79.challengeFileScore(s, seedC, 120); // same score -> rank 2 again, but a new day
-  const r3 = L79.challengeComplete(s, seedC, 120);
-  assert(r3.minted === false && r3.gold === MP.rankGold['2'], 'K8: a later day at the same rank pays the same rank gold again (repeatable per day)');
-
-  // (4) The rank gold is rank-based (top-1 pays the most).
-  const s4 = L79.freshSave();
-  L79.challengeFileScore(s4, 4000, 5000);
-  const rTop = L79.challengeComplete(s4, 4000, 5000); // first (mints 15) + rank 1
-  const s5 = L79.freshSave(); s5.goldEarned.masterpiece = true; // simulate already minted
-  L79.challengeFileScore(s5, 5000, 4000);
-  L79.challengeFileScore(s5, 5001, 9999); // a higher score already filed -> this ranks 2
-  const rLow = L79.challengeComplete(s5, 5000, 4000);
-  assert(rTop.gold === 15 && rLow.gold === MP.rankGold['2'], 'K8: a fresh (unminted) save mints 15; an already-minted save pays only rank gold');
-  assert(MP.rankGold['1'] > MP.rankGold['2'], 'K8: rank-1 gold exceeds rank-2 gold');
-
-  // (5) An OLD save (pre-K8, no goldEarned.masterpiece) loads fine and reads
-  // as not-yet-minted (the latch is absent -> minted false; migrateSave keeps
-  // goldEarned as a map).
-  const legacy79 = L79.freshSave(); legacy79.saveVersion = 9; delete legacy79.goldEarned; // a pre-K8 blob
-  const mig79 = L79.migrateSave(legacy79);
-  assert(Array.isArray(mig79.goldEarned) === false && typeof mig79.goldEarned === 'object', 'K8: a legacy save migrates with a goldEarned map (no error)');
-  assert(L79.isMasterpieceMinted(mig79) === false, 'K8: a legacy save (no masterpiece latch) reads as not-yet-minted');
-
-  // (6) END-TO-END: a challenge victory files the score AND pays the reward via
-  // _endRun (the first completion mints + 15; the banner/reward state is set).
-  const won79 = L79.freshSave(); won79.stats.victories = 1;
-  const cv79 = makeCanvas(); const g79 = new Game(cv79); g79.start();
-  g79.save = won79;
-  let t79 = 1000;
-  const fr79 = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t79 += step; g79._frame(t79); } };
-  const goldBefore = g79.save.gold;
-  g79._beginChallengeExpedition();
-  assert(g79.state === 'expedition' && g79.challenge.mode === 'challenge', 'K8: the challenge run is active');
-  const h79 = g79.heron;
-  h79._intro = 0; h79.awakened = true; h79.awakenedT = 99; h79.hp = 12; h79.state = 'idle'; h79.stateT = 999;
-  g79.player.x = h79.x - 55; g79.player.y = h79.y - 60; g79.player.iframes = 999;
-  const v79 = g79._view();
-  g79.input.mouse.x = (h79.x - v79.x) * v79.scale; g79.input.mouse.y = (h79.y - 100 - v79.y) * v79.scale;
-  g79.input.mouse.lDown = true; fr79(240); g79.input.mouse.lDown = false;
-  fr79(260);
-  assert(g79.state === 'end' && g79.endKind === 'victory', 'K8: the challenge run reached the victory end state');
-  assert(L79.isMasterpieceMinted(g79.save) === true, 'K8: the first challenge victory minted the Masterpiece (end-to-end)');
-  // the 15 masterpiece gold is banked on top of the heron-defeat boss gold
-  // (this fresh save also earns its first gray-heron gold in the same run), so
-  // the save total is >= baseline + 15. The MASTERPIECE contribution itself is
-  // exactly 15 (_challengeResult.gold) — asserted precisely below.
-  assert(g79.save.gold >= goldBefore + 15, `K8: the first victory banked the 15 masterpiece gold (on top of any boss gold; pre ${goldBefore} -> now ${g79.save.gold})`);
-  assert(g79._challengeResult && g79._challengeResult.minted === true && g79._challengeResult.gold === 15, 'K8: the end card carries the completion reward (minted + 15)');
-  // the Gallery Wall (tab 2) + the Ledger (tab 3) render with the masterpiece
-  // present without throwing.
-  g79._quitToTitle();
-  g79._beginAtelier();
-  g79._atelierIntro = false;
-  g79.atelierTab = 2; fr79(2);
-  assert(g79.state === 'atelier', 'K8: the Gallery Wall tab rendered with the masterpiece present (no error)');
-  g79.atelierTab = 3; fr79(2);
-  assert(g79.state === 'atelier', "K8: the Curator's Ledger tab rendered with the masterpiece entry (no error)");
-
-  console.log('ok — K8: the first-ever challenge completion mints a unique MASTERPIECE painting ("The Heron, Waking", unbuyable collection, shown in the Gallery Wall + Curator\'s Ledger) + 15 gold EXACTLY ONCE (goldEarn latch, no new save field); subsequent completions pay small REPEATABLE rank gold (top-1 pays more); a legacy save (no latch) loads as not-yet-minted; pure logic in logic.js (challengeComplete / isMasterpieceMinted / challengeRank)');
-}
-
-// stage 80 — v1.5 M4 K9: the FIELD GUIDE grows with the v1.5 creatures +
-// ONE-SHOT first-sight callouts for the new residents. Two halves:
-//   (a) "Know your quarry" (P6 field guide) renders the four NEW entries —
-//       Mud Turtle / Blind Crag Frog / Storm Surge (creature rows) + the
-//       GILDED HERON's extra plume line — verified with a fillText-recording
-//       canvas (the guide's text is drawn through the 2d context only).
-//   (b) the first-sight callout (A1/M3-style, one in-memory flag per creature,
-//       NO new save field) fires a banner exactly once per creature per
-//       session: turtle & cragfrog on their first spawn (zone-3 allowed), the
-//       surge on beat activation, the gilded heron on boss engage — and a
-//       repeat never re-fires.
-{
-  const L80 = await import('../src/logic.js');
-
-  // ---- (a) the field guide's "Know your quarry" carries the v1.5 entries ----
-  const recCanvas = makeCanvas();
-  const drawn = [];
-  const baseCtx80 = makeCtx(recCanvas);
-  const recCtx80 = new Proxy(baseCtx80, {
-    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-  recCanvas.getContext = () => recCtx80;
-  const g80 = new Game(recCanvas); g80.start(); g80._quitToTitle();
-  g80.save = L80.freshSave(); // pin a clean save: no completed run -> no retrain band (ph 560)
-  g80._beginExpedition();
-  assert(g80.state === 'expedition', 'K9: the recording game started an expedition');
-  const geom80 = g80._helpGeom();
-  // the panel grew to fit the four new quarry rows (470 -> 560 base)
-  assert(geom80.ph === 560, `K9: the field-guide panel grew to fit the v1.5 quarry list (ph ${geom80.ph})`);
-  fireKey('keydown', 'h'); frames(2);
-  assert(g80.help === true, 'K9: pressing H opens the field guide (the v1.5 quarry reference)');
-  frames(3);
-  const joined80 = drawn.join('\u0001');
-  assert(joined80.includes('Know your quarry'), 'K9: the field guide renders the "Know your quarry" heading');
-  assert(joined80.includes('Mud Turtle'), 'K9: the field guide lists the MUD TURTLE (new v1.5 quarry)');
-  assert(joined80.includes('circle behind, or burn it with red'), 'K9: the Mud Turtle entry teaches the front-shell / red-burn counterplay');
-  assert(joined80.includes('Blind Crag Frog'), 'K9: the field guide lists the BLIND CRAG FROG (new v1.5 quarry)');
-  assert(joined80.includes('hunts by sound'), 'K9: the Blind Crag Frog entry teaches the sound/sleep (+50% damage) counterplay');
-  assert(joined80.includes('Storm Surge'), 'K9: the field guide lists the STORM SURGE (new v1.5 set-piece)');
-  assert(joined80.includes('bonus orbs'), 'K9: the Storm Surge entry teaches the clear-the-swarm orb reward');
-  // the cycle-0 boss line is still the gray heron...
-  assert(joined80.includes('The Great Gray Heron'), 'K9: the field guide still lists the gray heron on a first-time run');
-  // ...and on an NG+ cycle-3+ save it swaps to the GILDED HERON + the plume
-  // callout (the fourth K9 creature entry lives in the boss block).
-  g80.save = L80.freshSave(); g80.save.flags.heronDefeated = true; g80.save.ngCycle = 3;
-  g80.help = false;
-  g80._beginExpedition();
-  assert(g80.heron && g80.heron.gilded === true, 'K9: the cycle-3 expedition faces the gilded heron');
-  const geom80b = g80._helpGeom();
-  assert(geom80b.ph === 604, `K9: the field-guide panel grows further on retrain (ph ${geom80b.ph})`);
-  fireKey('keydown', 'h'); frames(2);
-  assert(g80.help === true, 'K9: the gilded-heron guide opened');
-  frames(3);
-  const joined80b = drawn.join('\u0001');
-  assert(joined80b.includes('The Gilded Heron (NG+)'), 'K9: the field guide names the GILDED HERON on an NG+ cycle-3+ save');
-  assert(joined80b.includes('gilded plume EATS your green healing'), 'K9: the Gilded Heron entry teaches the plume / heal-gap counterplay');
-  fireKey('keydown', 'h'); frames(2);
-  assert(g80.help === false, 'K9: H closes the gilded-heron guide again');
-
-  // ---- (b) the one-shot first-sight callouts ----
-  const fCanvas = makeCanvas();
-  const g81 = new Game(fCanvas); g81.start(); g81._quitToTitle(); g81._beginExpedition();
-  // a returning player (a completed run) so the turtle/cragfrog are zone-3
-  // eligible without forcing NG+ (keeps the boss gray — the gilded check is
-  // exercised separately below). The localStorage stub is shared across
-  // stages, so pin a cycle-0 run explicitly (an NG+ save would let the
-  // creatures spawn from zone 0 by design — the K1/K2 rule).
-  g81.save.flags.heronDefeated = true;
-  g81.save.ngCycle = 0; g81.ngCycle = 0;
-  const fs81 = g81._firstSight;
-  assert(fs81 && fs81.turtle === false && fs81.cragfrog === false && fs81.surge === false && fs81.gilded === false, 'K9: the first-sight flags start unset (in-memory, per session)');
-
-  // TURTLE + CRAGFROG: force deterministic spawns of each new creature in
-  // the allowed zone (zone 3, runT 40) by pinning the roll:
-  //   turtle: t>25 && roll>0.9; cragfrog: t>30 && 0.86<roll<=0.9.
-  // The first spawn must banner + set the flag; a repeat must be a no-op.
-  const realRand = Math.random;
-  // ---- turtle: roll 0.95 (only the turtle branch fires) ----
-  Math.random = () => 0.95;
-  g81._firstSight.turtle = false; g81.banners = [];
-  g81._zoneI = 3; g81.runT = 40; g81.spawnT = 0;
-  g81._spawnWave(0.016);
-  assert(g81.enemies.some(e => e.kind === 'turtle'), 'K9: a forced roll >0.9 in zone 3 spawned the turtle');
-  assert(g81._firstSight.turtle === true, 'K9: the turtle first-sight flag latched on its first spawn');
-  const turtleBanners = g81.banners.filter(b => String(b.text).includes('Mud Turtle')).length;
-  assert(turtleBanners === 1, `K9: the turtle first-sight banner fired exactly once (saw ${turtleBanners})`);
-  g81.spawnT = 0; g81._spawnWave(0.016); // repeat spawn, same roll
-  assert(g81.banners.filter(b => String(b.text).includes('Mud Turtle')).length === 1, 'K9: a second turtle spawn did NOT re-fire the callout (one-shot)');
-  // ---- cragfrog: roll 0.88 (only the cragfrog branch fires) ----
-  Math.random = () => 0.88;
-  g81._firstSight.cragfrog = false; g81.banners = [];
-  g81._zoneI = 3; g81.runT = 40; g81.spawnT = 0;
-  g81._spawnWave(0.016);
-  assert(g81.enemies.some(e => e.kind === 'cragfrog'), 'K9: a forced roll in (0.86,0.9] in zone 3 spawned the cragfrog');
-  assert(g81._firstSight.cragfrog === true, 'K9: the cragfrog first-sight flag latched on its first spawn');
-  assert(g81.banners.filter(b => String(b.text).includes('Crag Frog')).length === 1, 'K9: the cragfrog first-sight banner fired exactly once');
-  g81.spawnT = 0; g81._spawnWave(0.016);
-  assert(g81.banners.filter(b => String(b.text).includes('Crag Frog')).length === 1, 'K9: a second cragfrog spawn did NOT re-fire the callout (one-shot)');
-  Math.random = realRand;
-
-  // the callouts must NOT fire in an early zone (zone 2: the K1/K2 gate)
-  g81.enemies = []; // clear the zone-3 test spawns so the gate check reads clean
-  g81._zoneI = 2; g81.runT = 40; g81.banners = [];
-  g81._firstSight.turtle = false; g81._firstSight.cragfrog = false;
-  Math.random = () => 0.95;
-  g81.spawnT = 0; g81._spawnWave(0.016);
-  assert(g81._firstSight.turtle === false, 'K9: no turtle callout before zone 3 (the K1 spawn gate is respected)');
-  assert(g81._firstSight.cragfrog === false, 'K9: no cragfrog callout before zone 3 (the K2 spawn gate is respected)');
-  assert(g81.banners.filter(b => String(b.text).includes('Mud Turtle')).length === 0, 'K9: no turtle banner before zone 3');
-  assert(g81.banners.filter(b => String(b.text).includes('Crag Frog')).length === 0, 'K9: no cragfrog banner before zone 3');
-  Math.random = realRand;
-
-  // ---- surge: the beat activation fires the callout once ----
-  g81.banners = [];
-  g81._firstSight.surge = false;
-  g81.surge = L80.stormSurgeFor(1234); g81.surge.t = g81.surge.leadIn + 0.01; // just past the lead-in
-  g81._updateSurge(0.016);
-  assert(g81.surge.active === true, 'K9: the surge beat activated');
-  assert(g81._firstSight.surge === true, 'K9: the surge first-sight flag latched on activation');
-  assert(g81.banners.filter(b => String(b.text).includes('STORM SURGE') && String(b.text).includes('bonus orbs')).length === 1, 'K9: the surge first-sight callout fired exactly once');
-  // repeat check: a pre-latched flag (as if it had already fired this session)
-  // suppresses the callout on a second surge activation.
-  const calloutsBefore = g81.banners.filter(b => String(b.text).includes('STORM SURGE') && String(b.text).includes('bonus orbs')).length;
-  g81.surge = L80.stormSurgeFor(1234); g81.surge.t = g81.surge.leadIn + 0.01;
-  g81._firstSight.surge = true; // pre-latched
-  g81._updateSurge(0.016);
-  assert(g81.surge.active === true, 'K9: the second surge beat also activated');
-  assert(g81.banners.filter(b => String(b.text).includes('STORM SURGE') && String(b.text).includes('bonus orbs')).length === calloutsBefore, 'K9: a pre-latched surge flag suppresses the second callout (one-shot)');
-
-  // ---- gilded heron: the boss-engage block fires the callout once ----
-  const g82 = new Game(makeCanvas()); g82.start(); g82._quitToTitle();
-  const s82 = L80.freshSave(); s82.flags.heronDefeated = true; s82.ngCycle = 3;
-  g82.save = s82; g82._beginExpedition();
-  assert(g82.heron && g82.heron.gilded === true, 'K9: the cycle-3 expedition\'s heron is gilded');
-  g82.heron._intro = 0.016; g82.banners = [];
-  // the engage block lives in _updateExpedition (boss trigger section)
-  g82.player.alive = true; g82.player.hp = 100; g82.player.x = g82.world.w - 600; g82.player.y = 500;
-  g82._prevHp = 100;
-  g82._updateExpedition(0.016);
-  assert(g82._firstSight.gilded === true, 'K9: the gilded-heron first-sight flag latched on boss engage');
-  assert(g82.banners.filter(b => String(b.text).includes('GILDED HERON') && String(b.text).includes('plume')).length === 1, 'K9: the gilded-heron first-sight callout fired exactly once');
-  // a cycle-0 (gray heron) run must NEVER fire the gilded callout
-  const g83 = new Game(makeCanvas()); g83.start(); g83._quitToTitle();
-  g83.save.ngCycle = 0; // pin before _beginExpedition reads it (the shared localStorage stub may carry a later cycle)
-  g83._beginExpedition();
-  assert(g83.heron && g83.heron.gilded === undefined, 'K9: the cycle-0 heron is not gilded');
-  g83.heron._intro = 0.016; g83.banners = [];
-  g83.player.alive = true; g83.player.hp = 100; g83.player.x = g83.world.w - 600; g83.player.y = 500; g83._prevHp = 100;
-  g83._updateExpedition(0.016);
-  assert(g83._firstSight.gilded === false, 'K9: a cycle-0 (gray heron) engage never fires the gilded callout');
-  assert(g83.banners.filter(b => String(b.text).includes('GILDED HERON')).length === 0, 'K9: no gilded callout on a first-time run');
-  // K9 itself introduced no save field (the first-sight flags are a plain
-  // in-memory object on the Game, absent from the save). R5 (later) bumped the
-  // schema 9 -> 10 for the reedsUnlocked gate flag — the current version is 10.
-  assert(L80.SAVE_VERSION === 12, 'K9: SAVE_VERSION is 12 (chain: 9 -> 10 at R5, 10 -> 11 at D1, 11 -> 12 at H1; K9 first-sight flags remain in-memory, not persisted)');
-  assert(g81.save._firstSight === undefined, 'K9: the first-sight flags live on the Game (in-memory), not the save');
-
-  console.log('ok — K9: the field guide\'s "Know your quarry" renders the four v1.5 residents (Mud Turtle / Blind Crag Frog / Storm Surge + the Gilded Heron\'s plume line on NG+ c3+ saves), and each new creature fires a ONE-SHOT first-sight banner (one in-memory flag per creature — A1/M3-style, no new save field, SAVE_VERSION 9) that never repeats');
-}
+// Superseded by the finite campaign: NG+ boss/modifiers/master tier and standalone Challenge modes.
+// Historical assertions remain in Git at 856eab7:tests/smoke.mjs.
 
 console.log('== stage 83: v1.6 R1 — THE REEDS BIOME shell + THE LANTERN (victory-gated entry, L-key fuel loop, cheap cached light) ==');
 {
@@ -5997,19 +3697,10 @@ console.log('== stage 83: v1.6 R1 — THE REEDS BIOME shell + THE LANTERN (victo
   const { World } = await import('../src/world.js');
   const { mulberry32 } = await import('../src/math.js');
 
-  // ---- (a) victory gate: fresh save offers NO Reeds entry; a victory save DOES ----
-  assert(L83.reedsUnlocked(L83.freshSave()) === false, 'R1: a fresh (no-victory) save does NOT offer the Reeds entry (reedsUnlocked false)');
-  const vSave = L83.freshSave(); vSave.stats.victories = 1; vSave.flags.heronDefeated = true;
-  assert(L83.reedsUnlocked(vSave) === true, 'R1: a victory-carrying save DOES offer the Reeds entry (reedsUnlocked true)');
-  // the title layout only exposes the Reeds button for an unlocked save
-  const gF = new Game(makeCanvas()); gF.start(); gF._quitToTitle();
-  gF.save = L83.freshSave(); gF.state = 'title';
-  const lf = gF._titleLayout();
-  assert(lf.reeds === null, 'R1: the title layout has no Reeds button for a fresh (no-victory) save');
-  const gV = new Game(makeCanvas()); gV.start(); gV._quitToTitle();
-  gV.save = vSave; gV.state = 'title';
-  const lv = gV._titleLayout();
-  assert(lv.reeds !== null && lv.fpush > 0, 'R1: the title layout exposes the Reeds button (+ pushes the footer) for a victory save');
+  // Reeds now belongs to floor two, with no standalone menu entry.
+  const vSave = L83.freshSave();
+  const gF = new Game(makeCanvas()); gF.save = vSave;
+  assert(!gF._titleLayout().reeds, 'R1: the title offers one dungeon, not a separate Reeds run');
 
   // ---- (b) the Reeds WORLD variant is populated; a base world is not ----
   const wReeds = new World(mulberry32(1234), 1234, { reeds: true });
@@ -6266,7 +3957,7 @@ console.log('== stage 84: v1.6 R2 — FLOODED LOWER BANKS + INVERTED-GRAVITY POC
 }
 function makeCanvasCtx(w) { const cv = makeCanvas(); return cv.getContext ? cv.getContext('2d') : cv; }
 
-console.log('== stage 85: v1.6 R5 — REEDS SAVE GATE (save.flags.reedsUnlocked, SAVE_VERSION 9 -> 10) + Field Guide Reeds entries ==');
+console.log('== stage 85: legacy Reeds flag migration and Field Guide entries ==');
 {
   const L85 = await import('../src/logic.js');
 
@@ -6291,28 +3982,8 @@ console.log('== stage 85: v1.6 R5 — REEDS SAVE GATE (save.flags.reedsUnlocked,
   const mig10 = L85.migrateSave({ saveVersion: 10, flags: { reedsUnlocked: true } });
   assert(mig10.flags.reedsUnlocked === true && mig10.saveVersion === L85.SAVE_VERSION, 'R5: a v10 save with the flag set round-trips reedsUnlocked true at the current version');
 
-  // ---- (b) the GATE reads the flag (with a victory fallback for legacy saves) ----
-  assert(L85.reedsUnlocked(fresh85) === false, 'R5: a fresh (no-victory, no-flag) save does NOT unlock the Reeds');
-  const flagSave = L85.freshSave(); flagSave.flags.reedsUnlocked = true;
-  assert(L85.reedsUnlocked(flagSave) === true, 'R5: a save with flags.reedsUnlocked true UNLOCKS the Reeds (the entry reads the field)');
-  // a legacy save that has victories but never set the flag still gets access
-  // (the victory fallback), so existing players keep what they earned.
-  const legacySave = L85.freshSave(); legacySave.stats.victories = 2; legacySave.flags.heronDefeated = true;
-  assert(L85.reedsUnlocked(legacySave) === true, 'R5: a legacy victory-carrying save (no flag) still unlocks the Reeds via the victory fallback');
-
-  // ---- (c) a VICTORY flips reedsUnlocked (the same place ngUnlocked's victory is recorded) ----
-  const vCanvas = makeCanvas();
-  const gV = new Game(vCanvas); gV.start(); gV._quitToTitle();
-  gV.save = L85.freshSave(); gV._beginExpedition();
-  assert(gV.save.flags.reedsUnlocked === false, 'R5: before a victory, a fresh save has reedsUnlocked false');
-  gV._endRun('victory');
-  assert(gV.save.flags.reedsUnlocked === true, 'R5: a swamp VICTORY sets flags.reedsUnlocked true (same place ngUnlocked is set)');
-  assert(gV.save.stats.victories === 1 && gV.save.flags.heronDefeated === true, 'R5: the victory bookkeeping (victories + heronDefeated) is intact alongside the flag');
-  // a defeat does NOT unlock the biome.
-  const gD = new Game(makeCanvas()); gD.start(); gD._quitToTitle();
-  gD.save = L85.freshSave(); gD._beginExpedition();
-  gD._endRun('defeat');
-  assert(gD.save.flags.reedsUnlocked === false, 'R5: a DEFEAT does not set reedsUnlocked (the biome stays locked for a first-timer)');
+  // Historical unlock flags still migrate for the cosmetic field guide;
+  // dungeon access is controlled by the current run, tested in campaign.mjs.
 
   // ---- (d) the P6 Field Guide renders the four Reeds entries (fillText recording) ----
   const recCanvas = makeCanvas();
@@ -6362,7 +4033,7 @@ console.log('== stage 85: v1.6 R5 — REEDS SAVE GATE (save.flags.reedsUnlocked,
   assert(!joinedL.includes('Beneath the Reeds'), 'R5: a first-time (locked) field guide renders NO "Beneath the Reeds" section (cycle-0 guide byte-identical)');
   assert(!joinedL.includes('The Silt Wyrm'), 'R5: a first-time field guide lists NO Reeds creatures');
 
-  console.log('ok — R5: the Reeds save gate works — save.flags.reedsUnlocked (set on the first swamp victory, same place ngUnlocked is set; a defeat never sets it) opens the title/atelier entry, SAVE_VERSION bumped 9 -> 10 with a v9->v10 migration + normalizeReedsUnlocked (every pre-v1.6 save loads false — nobody backfills access; a legacy victory save keeps access via the victory fallback), and the P6 Field Guide renders the four BENEATH-THE-REEDS placeholder cards (Wisp / Serpent / Leech / The Silt Wyrm, with their counterplay notes) only when unlocked (a first-time guide is byte-identical).');
+  console.log('ok — Reeds legacy flags migrate; field-guide creatures and counterplay still render correctly.');
 }
 
 // ====================================================================
@@ -7141,137 +4812,7 @@ console.log('== stage 92: v1.6 Q1 — PAUSE-MENU RUN SUMMARY (the "this expediti
 // ========================================================================
 // stage 93: v1.6 Q2 — END-SCREEN RUN RECAP
 // ========================================================================
-console.log('== stage 93: v1.6 Q2 — END-SCREEN RUN RECAP (minimap route + time + boss line on victory AND defeat) ==');
-{
-  const L93 = await import('../src/logic.js');
-  const S93 = await import('../src/save.js');
-  const recCanvas93 = makeCanvas();
-  const drawn93 = [];
-  const baseCtx93 = makeCtx(recCanvas93);
-  const recCtx93 = new Proxy(baseCtx93, {
-    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn93.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-  recCanvas93.getContext = () => recCtx93;
-
-  // ---- (a) routeTrail: pure — capped at 40, oldest dropped; out-of-bounds filtered
-  const many = [];
-  for (let i = 0; i < 50; i++) many.push({ x: i * 100, y: 500 });
-  const capped = L93.routeTrail(many, 5400);
-  assert(capped.length === 40, `Q2: routeTrail caps at 40 (50 in -> 40 out; oldest dropped) got ${capped.length}`);
-  assert(capped[0].x === 1000 && capped[39].x === 4900, `Q2: routeTrail keeps the NEWEST 40 (x 1000..4900), drops the oldest 10`);
-  // out-of-bounds x is filtered (x < 0 or x > worldW)
-  const mixed = [{x:-10,y:0},{x:0,y:0},{x:6000,y:0},{x:5400,y:0},{x:2700,y:0}];
-  const filtered = L93.routeTrail(mixed, 5400);
-  assert(filtered.length === 3, `Q2: routeTrail filters out-of-bounds x (5 in -> 3 out; x -10 and x 6000 dropped; got ${filtered.length})`);
-  // cap applies AFTER filtering
-  const manyOOB = [];
-  for (let i = 0; i < 60; i++) manyOOB.push({ x: i < 10 ? -1 : i * 100, y: 500 });
-  const cappedFiltered = L93.routeTrail(manyOOB, 5400);
-  assert(cappedFiltered.length === 40, `Q2: routeTrail filters THEN caps (60 in, 10 OOB -> 50 valid -> 40 capped; got ${cappedFiltered.length})`);
-  // null / empty / non-array inputs
-  assert(L93.routeTrail(null, 5400).length === 0, 'Q2: routeTrail(null) -> []');
-  assert(L93.routeTrail([], 5400).length === 0, 'Q2: routeTrail([]) -> []');
-  assert(L93.routeTrail('garbage', 5400).length === 0, 'Q2: routeTrail(non-array) -> []');
-
-  // ---- (b) the Game exposes _drawRecap + _recapBossLine; the run-local waypoint
-  // trail is capped at ROUTE_WAYPOINT_CAP and is IN-MEMORY ONLY (never on save)
-  const g93 = new Game(recCanvas93); g93.start();
-  const cv93 = recCanvas93;
-  const fr93 = (n, step = 16.7) => { for (let i = 0; i < n; i++) { g93._frame(g93.now * 1000 + n * step); } };
-  // begin an expedition so runWaypoints is initialised
-  g93._beginExpedition();
-  assert(Array.isArray(g93.runWaypoints) && g93.runWaypoints.length === 0, 'Q2: _beginExpedition initialises runWaypoints as an array');
-  // end-to-end sampling: stepping REAL frames records waypoints on the ~500 ms
-  // gate (the gate is the ONLY writer, so a real run leaves a bounded trail).
-  // Hardened so runT actually advances: no tutorial freeze, not paused/dying,
-  // an invulnerable alive player (the gate keys off runT + player.alive).
-  g93.tutorial = null; g93._tut = null; g93._tutI = 0;
-  g93.paused = false; g93.dying = false; g93.state = 'expedition';
-  g93.player.iframes = 999; g93.player.alive = true;
-  {
-    let t93b = 1000;
-    const fr93b = (n, step = 16.7) => { for (let i = 0; i < n; i++) { t93b += step; g93._frame(t93b); } };
-    const before = g93.runWaypoints.length;
-    fr93b(140); // ~2.3 s of run time
-    const sampled = g93.runWaypoints.length - before;
-    assert(sampled >= 2, `Q2: real frames sample waypoints on the ~500 ms gate (${sampled} over ~2.3 s of runT)`);
-    assert(g93.runWaypoints.length <= L93.ROUTE_WAYPOINT_CAP, 'Q2: the sampled trail never exceeds the cap');
-    assert(g93.runWaypoints.every(p => p.x >= 0 && p.x <= g93.world.w), 'Q2: every sampled waypoint lies within the world x-range');
-  }
-  assert(typeof g93._drawRecap === 'function', 'Q2: _drawRecap is defined');
-  assert(typeof g93._recapBossLine === 'function', 'Q2: _recapBossLine is defined');
-
-  // simulate a run that crosses 3 zones — set the waypoint trail + run state directly
-  // (driving 1800 frames to get 30 real samples is slow; the waypoint array is
-  // the same data structure either way, and _drawRecap reads it)
-  const w93 = g93.world.w;
-  g93.runWaypoints = [];
-  g93._lastWpT = 0;
-  // simulate 30 waypoints across 3 zones (x from 0.1*w to 0.75*w, y = 750)
-  for (let i = 0; i < 30; i++) {
-    const xf = 0.1 + (i / 29) * 0.65; // 0.1w -> 0.75w
-    g93.runWaypoints.push({ x: w93 * xf, y: 750 });
-  }
-  g93._zoneI = 3;  // entered 3 zones (Reed Flats, Slick Hollow, Bramble Thicket)
-  g93.runT = 330;  // 5:30
-  assert(g93.runWaypoints.length === 30, `Q2: 30 waypoints in the simulated run trail (got ${g93.runWaypoints.length})`);
-  // the trail is bounded by ROUTE_WAYPOINT_CAP — add 20 more, verify it caps at 40
-  for (let i = 0; i < 20; i++) g93.runWaypoints.push({ x: w93 * (0.75 + (i / 19) * 0.2), y: 750 });
-  while (g93.runWaypoints.length > L93.ROUTE_WAYPOINT_CAP) g93.runWaypoints.shift();
-  assert(g93.runWaypoints.length === 40, `Q2: the run trail is capped at ${L93.ROUTE_WAYPOINT_CAP} (oldest dropped; got ${g93.runWaypoints.length})`);
-  // in-memory only: NOT on the save
-  assert(!('runWaypoints' in g93.save), 'Q2: runWaypoints is NOT on the save object (in-memory only)');
-  assert(!('runT' in g93.save) && !('_lastWpT' in g93.save), 'Q2: runT / _lastWpT are NOT on the save object (in-memory only)');
-
-  // ---- (c) the end screen renders the recap strip: VICTORY
-  // capture the save blob BEFORE the end screen (to prove nothing is persisted)
-  const saveBlobBefore = JSON.stringify(g93.save);
-  g93.endKind = 'victory'; g93.endT = 5;
-  g93.endGains = { red: 3, blue: 2, green: 4 };
-  g93.state = 'end';
-  g93.input.mouse.lPressed = false; g93.input.mouse.lDown = false;
-  g93.input.mouse.x = 0; g93.input.mouse.y = 0;
-  g93._zoneI = 3;
-  drawn93.length = 0;
-  g93._frame(g93.now * 1000 + 5000);
-  const joinedV = drawn93.join('\u0001');
-  assert(joinedV.includes('the last expedition'), 'Q2: the victory end screen renders the "the last expedition" recap strip');
-  assert(joinedV.includes('5:30'), `Q2: the victory recap shows the run time 5:30 (runT=330s)`);
-  assert(joinedV.includes('3 zones crossed'), `Q2: the victory recap shows 3 zones crossed (_zoneI=3)`);
-  assert(joinedV.includes('the heron bloomed'), `Q2: the victory recap shows "the heron bloomed" (swamp victory)`);
-
-  // ---- (d) the end screen renders the recap strip: DEFEAT
-  g93.endKind = 'defeat'; g93.endT = 5;
-  g93._zoneI = 3;
-  drawn93.length = 0;
-  g93._frame(g93.now * 1000 + 6000);
-  const joinedD = drawn93.join('\u0001');
-  assert(joinedD.includes('the last expedition'), 'Q2: the defeat end screen renders the "the last expedition" recap strip');
-  assert(joinedD.includes('5:30'), `Q2: the defeat recap shows the run time 5:30`);
-  assert(joinedD.includes('3 zones crossed'), `Q2: the defeat recap shows 3 zones crossed`);
-  assert(joinedD.includes('it buried you'), `Q2: the defeat recap shows "it buried you"`);
-
-  // ---- (e) the boss line switches on a Reeds victory (wyrm)
-  g93.endKind = 'victory'; g93.endT = 5;
-  // simulate a Reeds world (world.reedsVariant = true)
-  const savedVariant = g93.world.reedsVariant;
-  g93.world.reedsVariant = true;
-  g93._zoneI = 3;
-  assert(g93._recapBossLine() === 'the wyrm sleeps on', 'Q2: a Reeds victory shows "the wyrm sleeps on" (not "the heron bloomed")');
-  g93.world.reedsVariant = savedVariant;
-  assert(g93._recapBossLine() === 'the heron bloomed', 'Q2: a swamp victory shows "the heron bloomed" (not "the wyrm sleeps on")');
-
-  // ---- (f) the save is BYTE-IDENTICAL before/after the end screen (no persistence)
-  const saveBlobAfter = JSON.stringify(g93.save);
-  assert(saveBlobBefore === saveBlobAfter, 'Q2: the save is BYTE-IDENTICAL before and after the end screen (no new persistence)');
-
-  console.log('ok — Q2: the end screen gains a "the last expedition" recap strip (a tiny minimap of the run route on a 6-zone strip + the run time + the boss outcome) on BOTH victory AND defeat. The waypoint trail is a run-local capped list (~40, oldest dropped, sampled every ~500ms) that is IN-MEMORY ONLY. The recap is pure presentation over existing run data + the P8-style painting-motif rendering; NO new persistence — the save is byte-identical before/after the end screen (SAVE_VERSION stays 10).');
-}
-
-// ========================================================================
-// stage 94: v1.6 Q3 — SAVE EXPORT/IMPORT (paste-based)
-// ========================================================================
+// Former standalone-run recap replaced by the continuous dungeon summary.
 console.log('== stage 94: v1.6 Q3 — SAVE EXPORT/IMPORT (Export->clipboard + Import->validate->replace; corrupt paste refused; v1-era blob migrates) ==');
 {
   const L = await import('../src/logic.js');
@@ -7354,7 +4895,7 @@ console.log('== stage 94: v1.6 Q3 — SAVE EXPORT/IMPORT (Export->clipboard + Im
   assert(migrated.saveVersion === L.SAVE_VERSION, `Q3: the v1-era blob migrated to the current saveVersion (${migrated.saveVersion})`);
   assert(migrated.bank.red === 5 && migrated.bank.blue === 7 && migrated.bank.green === 2, 'Q3: the v1-era recognizable fields carried forward through the migration chain');
   assert(migrated.stats.expeditions === 40, 'Q3: the v1-era stats carried forward');
-  assert(typeof migrated.gold === 'number' && migrated.ngCycle === 0 && Array.isArray(migrated.challengeScores), 'Q3: the migration chain filled in the post-v1 fields (gold / ngCycle / challengeScores) to the current schema');
+  assert(!('gold' in migrated) && !('ngCycle' in migrated), 'Q3: legacy import removes retired gold and cycle fields');
 
   // ---- (e) the typed paste FIELD accumulates + import commits its text ----
   g._saveFieldText = '';
@@ -7453,7 +4994,7 @@ console.log('== stage 95: D1 (v1.7) — THE WANDER bounded procedural expedition
   assert(goff.save.wanderSeed === 0, 'D1: default-OFF -> save.wanderSeed stays 0 (the latch never fires)');
   assert(JSON.stringify(goff.zones) === JSON.stringify(ZONES95), 'D1: default-OFF zone content is byte-identical to the hand-tuned ZONES');
   // and cycle-0 swamp tuning is untouched (makeTuning was not routed through wander).
-  const plainTuning = L95.makeTuning(goff.save.upgrades, goff.save.loadout, goff.options.difficulty, goff.save.galleryBonus || 0, goff.save.owned, L95.isGilded(goff.save));
+  const plainTuning = L95.makeTuning(goff.save.upgrades, goff.save.loadout, goff.options.difficulty, goff.save.galleryBonus || 0, goff.save.owned, false);
   assert(JSON.stringify(goff.tuning) === JSON.stringify(plainTuning), 'D1: default-OFF cycle-0 tuning deep-equals a plain makeTuning (wander never touched tuning)');
 
   // ---- (f) flag ON: a real run latches a non-zero seed + generated zones (deterministic) ----
@@ -7581,81 +5122,10 @@ console.log('== stage 96: D2 (v1.7) — THE WANDER "taste": a seeded flavor arch
   console.log('ok — D2: THE WANDER taste is a small hand-tuned set of flavor archetypes (4 distinct: quiet-reeds / feast-season / long-dark / ink-bloom) picked PURE + deterministically from the seed (own salted lane, no Math.random, all 4 reachable, corrupt-seed-safe). Each taste biases the run (mosquito-heavy / beetle-heavy / toad-heavy / mixed) by re-weighting which KINDS fill the zones WITHOUT changing the per-zone or total enemy counts, so a biased run stays inside WANDER_BUDGET exactly as the neutral one is (repeat-avoidance is the D1 seed latch). The run taste is reproducible from the latched seed, its name is the one line of flavor in the Wandering badge (seed line + taste line, fillText-verified), and a default-OFF run draws no badge (hand-tuned HUD byte-identical).');
 }
 
-console.log('== stage 97: D3 (v1.7) — THE WANDER NG+ + Reeds parity (NG+ applied exactly once; the Reeds light economy + R3 bestiary apply on top of generated content; Wander-OFF runs byte-identical) ==');
-{
-  const L97 = await import('../src/logic.js');
-  const G97 = await import('../src/game.js');
-  const ZONES97 = G97.ZONES;
+// Superseded by the finite campaign: Wander plus NG+ scaling.
+// Historical assertions remain in Git at 856eab7:tests/smoke.mjs.
 
-  // ---- (a) Wander × NG+: applyNGPlus scaling applies EXACTLY ONCE (no Wander
-  //     double-scale). applyNGPlus runs BEFORE the Wander gate and only touches
-  //     `this.tuning` — the gate generates CONTENT, never scaling — so a
-  //     Wander NG+ run's tuning must deep-equal makeTuning + applyNGPlus(cycle)
-  //     applied once, and differ from the double-applied (compounded) tuning.
-  const gng = new G97.Game(makeCanvas());
-  gng.save = L97.freshSave();
-  gng.save.ngCycle = 2; gng.save.flags.heronDefeated = true;
-  gng.options.wander = true;
-  gng._beginExpedition();
-  assert(gng.wanderActive === true && gng.ngCycle === 2, 'D3: Wander × NG+ (cycle 2) is a valid layered run');
-  const once = L97.makeTuning(gng.save.upgrades, gng.save.loadout, gng.options.difficulty, gng.save.galleryBonus || 0, gng.save.owned, L97.isGilded(gng.save));
-  L97.applyNGPlus(once, gng.ngCycle);
-  assert(JSON.stringify(gng.tuning) === JSON.stringify(once), 'D3: Wander × NG+ — the live tuning deep-equals makeTuning + applyNGPlus(cycle) applied ONCE');
-  const twice = L97.makeTuning(gng.save.upgrades, gng.save.loadout, gng.options.difficulty, gng.save.galleryBonus || 0, gng.save.owned, L97.isGilded(gng.save));
-  L97.applyNGPlus(twice, gng.ngCycle); L97.applyNGPlus(twice, gng.ngCycle);
-  assert(JSON.stringify(gng.tuning) !== JSON.stringify(twice), 'D3: the NG+ scaling is NOT compounded (the live tuning is not the double-applied one)');
-  // the generated CONTENT is present AND in-band (NG+ does not scale the enemy
-  // counts — it scales tuning; the Wander envelope still holds on the content).
-  assert(gng.zones.length === L97.WANDER_BUDGET.zones && gng.zones !== ZONES97, 'D3: Wander × NG+ — the generated content is present (4 zones, not the hand-tuned ZONES)');
-  assert(L97.wanderInBudget({ zones: gng.zones, bossEligible: true }).ok, 'D3: Wander × NG+ — the generated content is inside the envelope (NG+ does not over/under-populate it)');
-
-  // ---- (b) Wander × Reeds: the Reeds light economy (R1) + the R3 bestiary
-  //     apply ON TOP of the generated content; a valid victory-gated variant.
-  const gr = new G97.Game(makeCanvas());
-  gr.save = L97.freshSave();
-  gr.save.flags.heronDefeated = true; gr.save.flags.reedsUnlocked = true;
-  gr.options.wander = true;
-  gr._beginExpedition(false, { reeds: true });
-  assert(gr.wanderActive === true && gr.lanternReeds === true, 'D3: Wander × Reeds — the Wander run is active AND the Reeds light economy (lantern) is on');
-  assert(gr.world.reedsVariant === true && gr.world.w === L97.REEDS_WIDTH, 'D3: Wander × Reeds — the Reeds world variant (deeper layout) is in effect');
-  assert(gr.lantern && gr.lantern.lit === true && gr.lantern.fuel === 1, 'D3: Wander × Reeds — the lantern fuel loop starts lit at full fuel (the R1 mechanic is live)');
-  // F1 (v1.7): in a WANDER expedition the end-of-run boss is THE HOLLOW WARDEN
-  // (the 5th boss archetype), NOT the Silt Wyrm. The Warden takes the Wander end
-  // boss slot (the D1 "Wander ON" run); the Silt Wyrm stays the end boss of a
-  // Wander-OFF Reeds run (asserted in (c) below) — so a generated (Wander ON)
-  // Reeds run now carries the Warden apex on top of the generated content + the
-  // Reeds light economy / R3 bestiary. The Reeds variant is still intact.
-  assert(!!gr.heron && gr.heron.warden === true && gr.heron.wyrm !== true, 'F1: Wander × Reeds — the HOLLOW WARDEN (the 5th boss) is the end boss (the Wander run takes the apex; the Silt Wyrm is the Wander-OFF Reeds boss, asserted below)');
-  // the R3 bestiary (wisp/serpent/leech) applies on top of the generated content.
-  assert(L97.REEDS_BESTIARY && ['wispHoming', 'serpentTelegraph', 'leechDrainDps'].every(k => k in L97.REEDS_BESTIARY),
-    'D3: the R3 Reeds bestiary (wisp/serpent/leech) mechanic set is the Reeds enemy set');
-  assert(gr.world.reedsVariant === true, 'D3: the Reeds world variant routes background spawns to the bestiary (on top of generated content)');
-  // the generated zone content is present + distinct from the hand-tuned ZONES.
-  assert(gr.zones.length === 4 && JSON.stringify(gr.zones) !== JSON.stringify(ZONES97), 'D3: Wander × Reeds — the generated zone content is present (differs from the hand-tuned ZONES)');
-  assert(L97.wanderInBudget({ zones: gr.zones, bossEligible: true }).ok, 'D3: Wander × Reeds — the generated content is inside the envelope');
-
-  // ---- (c) the hand-tuned (Wander-OFF) runs are STILL byte-identical ----
-  // default-OFF expedition: the hand-tuned ZONES + cycle-0 tuning are untouched.
-  const gOff = new G97.Game(makeCanvas());
-  gOff.save = L97.freshSave();
-  gOff.options.wander = false;
-  gOff._beginExpedition();
-  assert(gOff.wanderActive === false && gOff.zones === ZONES97, 'D3: Wander-OFF expedition -> the hand-tuned ZONES (same reference)');
-  const offTuning = L97.makeTuning(gOff.save.upgrades, gOff.save.loadout, gOff.options.difficulty, gOff.save.galleryBonus || 0, gOff.save.owned, L97.isGilded(gOff.save));
-  assert(JSON.stringify(gOff.tuning) === JSON.stringify(offTuning), 'D3: Wander-OFF cycle-0 tuning deep-equals a plain makeTuning (hand-tuned run byte-identical)');
-  // default-OFF Reeds: the hand-tuned Reeds run (lantern + wyrm + hand-tuned zones).
-  const gReedsOff = new G97.Game(makeCanvas());
-  gReedsOff.save = L97.freshSave();
-  gReedsOff.save.flags.heronDefeated = true; gReedsOff.save.flags.reedsUnlocked = true;
-  gReedsOff.options.wander = false;
-  gReedsOff._beginExpedition(false, { reeds: true });
-  assert(gReedsOff.wanderActive === false && gReedsOff.zones === ZONES97, 'D3: Wander-OFF Reeds -> the hand-tuned ZONES (the Reeds run is unchanged when Wander is OFF)');
-  assert(gReedsOff.lanternReeds === true && gReedsOff.heron.wyrm === true, 'D3: Wander-OFF Reeds keeps the lantern + the Silt Wyrm (the v1.6 Reeds run is intact)');
-
-  console.log('ok — D3: THE WANDER LAYERS ON TOP of the other variants without double-application. (a) Wander × NG+ applies the applyNGPlus N2 scaling exactly ONCE on top of the generated content (the live tuning deep-equals makeTuning + applyNGPlus applied once and differs from the double-applied one; the generated enemy CONTENT is NOT scaled by NG+, and stays inside the envelope). (b) Wander × Reeds keeps the Reeds light economy (lantern fuel loop, live at full fuel) + the R3 bestiary + the Silt Wyrm boss on top of the generated zone content (a valid victory-gated variant, in-band). (c) The hand-tuned (Wander-OFF) expedition + Reeds runs remain byte-identical (hand-tuned ZONES + cycle-0 tuning untouched).');
-}
-
-console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/import parity (toggle persists; legacy options migrate to OFF; wanderSeed round-trips; a generated run is byte-identical across a save/load cycle) ==');
+console.log('== stage 98: seeded content save export/import parity ==');
 {
   const L98 = await import('../src/logic.js');
   const G98 = await import('../src/game.js');
@@ -7670,43 +5140,10 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
   });
   cv98.getContext = () => rec98;
 
-  // ---- (a) the Options panel carries a "Wandering Expeditions" toggle row ----
+  // Standalone Wander entry is retired; seeded generator/export coverage stays.
   const g98 = new G98.Game(cv98); g98.start(); g98._quitToTitle();
-  g98.optionsOpen = true;
-  const lay = g98._optionsLayout();
-  assert(lay.wander && lay.wander.w > 0 && lay.wander.h > 0, 'D4: the options layout exposes a "Wandering Expeditions" toggle row');
   g98._drawOptions(rec98);
-  assert(drawn98.some(s => s.includes('Wander · shuffled encounters')), 'D4: the Options panel draws the "Wandering Expeditions" label');
-  // default OFF for a fresh options blob (freshOptions / a legacy blob without the field).
-  assert(G98.Game.prototype !== undefined && g98.options.wander === false, 'D4: options.wander defaults OFF (fresh options)');
-
-  // ---- (b) clicking the toggle flips options.wander AND persists to the options blob ----
-  const before = g98.options.wander;
-  fireMouse(cv98, lay.wander.x + 40, lay.wander.y + 10);
-  frames(1);
-  assert(g98.options.wander === !before, `D4: clicking the Wandering toggle flips it (was ${before}, now ${g98.options.wander})`);
-  assert(g98.options.wander === true, 'D4: the toggle is now ON');
-  const persistedOpts = JSON.parse(store.get(OPTKEY));
-  assert(persistedOpts && persistedOpts.wander === true, 'D4: the toggle persists to the options blob (wander: true saved to localStorage)');
-  // a second click flips it back OFF (do this BEFORE constructing g98b, which
-  // re-registers the rAF callback the frames() helper drives).
-  fireMouse(cv98, lay.wander.x + 40, lay.wander.y + 10);
-  frames(1);
-  assert(g98.options.wander === false, 'D4: clicking again flips it back OFF');
-  // a freshly-constructed Game re-reads the persisted options (the toggle sticks
-  // after a save — wander was ON when we checked the blob; re-set it ON and
-  // verify a fresh load re-reads it).
-  fireMouse(cv98, lay.wander.x + 40, lay.wander.y + 10);
-  frames(1);
-  assert(g98.options.wander === true, 'D4: the toggle is ON again (for the re-read check)');
-  const g98b = new G98.Game(makeCanvas()); g98b.start();
-  assert(g98b.options.wander === true, 'D4: a newly-loaded Game re-reads options.wander = true from the options blob');
-
-  // ---- (c) a legacy options blob (no `wander` field) migrates to OFF, no error ----
-  const legacyOpts = L98.migrateOptions({ volume: 0.8, difficulty: 'normal', grain: true, gamepad: 'auto' });
-  assert(legacyOpts.wander === false, 'D4: a legacy options blob (no wander field) migrates to OFF without error');
-  const explicitOn = L98.migrateOptions({ wander: true });
-  assert(explicitOn.wander === true, 'D4: an explicit persisted wander: true is honored');
+  assert(!drawn98.some(s => s.includes('Wander · shuffled encounters')), 'D4: options do not offer a standalone Wander mode');
 
   // ---- (d) export -> import round-trips the wanderSeed save field ----
   // a save WITH a non-zero wanderSeed, written to the (stub) localStorage.
@@ -7757,7 +5194,7 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
   assert(JSON.stringify(repro2.zones.map(z => ({ mix: z.mix, sig: z.sig }))) === zones1,
     'D4: a second load of the latched seed reproduces identical generated content (byte-identical across a save/load cycle)');
 
-  console.log('ok — D4: the Options panel carries a "Wandering Expeditions" toggle (default OFF; a legacy options blob with no field migrates to OFF; clicking it flips + persists to the options blob and a freshly-loaded Game re-reads it), and the existing save export/import round-trips the wanderSeed field (the exported blob carries wanderSeed + saveVersion 11, validates through validateSaveBlob, a v1-era blob imports to v11 with wanderSeed 0, a malformed wanderSeed is refused) — so a generated run is reproducible from its latched seed across a save/load cycle.');
+  console.log('ok — Seeded dungeon generation remains reproducible across save/export/import; standalone Wander toggle is absent.');
 }
 
 // ====================================================================
@@ -7809,10 +5246,6 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
   const gR1 = new G1.Game(makeCanvas()); gR1.start(); gR1._quitToTitle();
   gR1.save = vSave; gR1._beginExpedition(false, { reeds: true });
   assert(gR1.heron && gR1.heron.wyrm === true && !gR1.heron.warden, 'F1: a Wander-OFF REEDS run still spawns the Silt Wyrm (the Warden only takes the WANDER end-boss slot; the Reeds apex is unchanged)');
-  // an NG+ (Wander-OFF) green heron run also never meets the Warden.
-  const gN1 = new G1.Game(makeCanvas()); gN1.start(); gN1._quitToTitle();
-  gN1.save = F1.freshSave(); gN1.save.ngCycle = 1; gN1._beginExpedition();
-  assert(gN1.heron && !gN1.heron.warden && gN1.heron.kind === 'green', 'F1: a Wander-OFF NG+ (cycle 1) run still spawns the green heron — the Warden is never a hand-tuned apex');
   // ---- BYTE-IDENTICAL when Wander OFF: the Warden wiring is a pure ADDITIVE
   //      branch. A hand-tuned cycle-0 heron's identity fields are exactly the
   //      pre-F1 heron (kind gray, the heron HP, no warden/wardenStep field). ----
@@ -7922,173 +5355,10 @@ console.log('== stage 98: D4 (v1.7) — THE WANDER options toggle + save export/
 //     culling) is a separate probe; this stage proves the presentation +
 //     byte-identity.
 // ====================================================================
-console.log('== stage 100: O2 (v1.7) — the WANDER run-recap line (seed + taste + "Wandering expedition" tag on the end screen; absent for hand-tuned; nothing persisted) ==');
-{
-  const L = await import('../src/logic.js');
-  const G = await import('../src/game.js');
+// Superseded by the finite campaign: standalone Wander entry and recap.
+// Historical assertions remain in Git at 856eab7:tests/smoke.mjs.
 
-  // Reset the options blob (stage 99 may have persisted wander: true; a
-  // default-OFF run below must NOT inherit it — so the "absent for
-  // hand-tuned" leg is clean).
-  try { (globalThis.localStorage || {}).setItem('frogue_gallery_options', JSON.stringify(L.freshOptions())); } catch {}
-
-  // ---- (0) the _recapWanderLine helper: exact string for a known seed, null
-  //      for a hand-tuned (Wander-OFF) run. A recording canvas so the render
-  //      leg can capture fillText.
-  const recCanvas = makeCanvas();
-  const drawn = [];
-  const baseCtx = makeCtx(recCanvas);
-  const recCtx = new Proxy(baseCtx, {
-    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-  recCanvas.getContext = () => recCtx;
-  const g = new G.Game(recCanvas); g.start();
-
-  const seed = 987654321;
-  const taste = L.wanderTaste(seed);
-  // a WANDER run (helper level): set the run-local fields _beginExpedition sets.
-  g.wanderActive = true; g.wanderSeedRun = seed; g.wanderTaste = taste;
-  const wantLine = taste.name + ' \u2014 ' + taste.note + '   \u00b7   Wandering expedition \u00b7 seed ' + seed;
-  assert(g._recapWanderLine() === wantLine, `O2: a Wander run's recap line is the taste name + flavor + the "Wandering expedition · seed N" tag (got: ${JSON.stringify(g._recapWanderLine())})`);
-  assert(g._recapWanderLine().includes(taste.name) && g._recapWanderLine().includes(taste.note), 'O2: the recap line carries the taste NAME + its one-line FLAVOR (the run\'s story)');
-  assert(g._recapWanderLine().includes('Wandering expedition \u00b7 seed ' + seed), 'O2: the recap line carries the "Wandering expedition · seed N" TAG');
-  // a hand-tuned (Wander-OFF) run: the helper returns null (no second line).
-  g.wanderActive = false; g.wanderSeedRun = null; g.wanderTaste = null;
-  assert(g._recapWanderLine() === null, 'O2: a hand-tuned (Wander-OFF) run has NO wander recap line (the helper returns null — the recap strip is unchanged)');
-
-  // ---- (1) the CARD renders the line for a real WANDER run (headless
-  //      fillText-recording): drive a full Wander expedition end-to-end, reach
-  //      the end screen (victory), and confirm the strip's second line is
-  //      painted with this run's own seed + taste.
-  const vSave = L.freshSave(); vSave.stats.victories = 1; vSave.flags.heronDefeated = true; vSave.flags.reedsUnlocked = true;
-  const gW = new G.Game(recCanvas); gW.start(); gW._quitToTitle();
-  gW.save = vSave; gW.options.wander = true; gW._beginExpedition();
-  assert(gW.wanderActive === true && typeof gW.wanderSeedRun === 'number' && gW.wanderTaste, 'O2 (setup): a real Wander expedition carries the run-local seed + taste');
-  // reach the end screen (victory) and render just the recap strip.
-  gW.runT = 330; gW._zoneI = 3; gW.runWaypoints = []; gW._lastWpT = 0;
-  const wWorld = (gW.world && gW.world.w) || 1;
-  for (let i = 0; i < 12; i++) gW.runWaypoints.push({ x: wWorld * (0.1 + (i / 11) * 0.6), y: 750 });
-  const saveBlobBefore = JSON.stringify(gW.save);
-  gW.endKind = 'victory'; gW.endT = 5; gW.endGains = { red: 3, blue: 2, green: 4 }; gW.state = 'end';
-  drawn.length = 0;
-  gW._drawRecap(gW.ctx);
-  const drawnW = drawn.join('\u0001');
-  assert(drawnW.includes('the last expedition'), 'O2: the Wander victory end screen renders the "the last expedition" recap strip (the Q2 line is still there)');
-  assert(drawnW.includes('Wandering expedition \u00b7 seed ' + gW.wanderSeedRun), `O2: the Wander victory recap RENDERS the "Wandering expedition · seed N" tag with this run's own seed (${gW.wanderSeedRun})`);
-  assert(drawnW.includes(gW.wanderTaste.name) && drawnW.includes(gW.wanderTaste.note), `O2: the Wander victory recap RENDERS the taste's name + flavor (${gW.wanderTaste.name})`);
-
-  // ---- (2) the same line is present on a Wander DEFEAT (it is run-local, not
-  //      outcome-gated — a unique run's story is told whether it won or not).
-  gW.endKind = 'defeat';
-  drawn.length = 0;
-  gW._drawRecap(gW.ctx);
-  const drawnWD = drawn.join('\u0001');
-  assert(drawnWD.includes('the last expedition') && drawnWD.includes('it buried you'), 'O2: the Wander defeat recap still shows the Q2 boss-outcome line ("it buried you")');
-  assert(drawnWD.includes('Wandering expedition \u00b7 seed ' + gW.wanderSeedRun), 'O2: the Wander DEFEAT recap also renders the "Wandering expedition · seed N" tag (the story is told on a defeat too)');
-
-  // ---- (3) ABSENT for a hand-tuned (Wander-OFF) run: the end screen renders
-  //      the Q2 recap strip but NOT the second line — the hand-tuned recap is
-  //      byte-identical to before O2.
-  const gS = new G.Game(recCanvas); gS.start(); gS._quitToTitle();
-  gS.save = L.freshSave(); gS.options.wander = false; gS._beginExpedition();
-  assert(gS.wanderActive === false, 'O2 (setup): the hand-tuned run is NOT a Wander expedition');
-  gS.runT = 330; gS._zoneI = 3; gS.runWaypoints = [];
-  const sW = (gS.world && gS.world.w) || 1;
-  for (let i = 0; i < 12; i++) gS.runWaypoints.push({ x: sW * (0.1 + (i / 11) * 0.6), y: 750 });
-  gS.endKind = 'victory'; gS.endT = 5; gS.endGains = { red: 3, blue: 2, green: 4 }; gS.state = 'end';
-  drawn.length = 0;
-  gS._drawRecap(gS.ctx);
-  const drawnS = drawn.join('\u0001');
-  assert(drawnS.includes('the last expedition'), 'O2: the hand-tuned victory end screen renders the "the last expedition" recap strip (unchanged)');
-  assert(!drawnS.includes('Wandering expedition'), 'O2: a hand-tuned (Wander-OFF) run\'s recap does NOT render the "Wandering expedition" line (absent for hand-tuned — byte-identical to pre-O2)');
-
-  // ---- (4) nothing is persisted: the save blob is BYTE-IDENTICAL before/after
-  //      the end screen (the recap is a run-local read — in-memory only).
-  const saveBlobAfter = JSON.stringify(gW.save);
-  assert(saveBlobBefore === saveBlobAfter, 'O2: the save is BYTE-IDENTICAL before and after the end screen (no new persistence — the wander recap is in-memory only; SAVE_VERSION unchanged)');
-  assert(!('wanderSeedRun' in gW.save) && !('wanderTaste' in gW.save), 'O2: the run-local wander recap fields are NOT on the save object (in-memory only)');
-
-  console.log('ok — O2: the end-screen run recap (the Q2 "the last expedition" strip) gains a SECOND line for a WANDER run ONLY — the taste\'s name + its one-line flavor + the "Wandering expedition · seed N" tag — so the end screen tells the story of a UNIQUE run (e.g. "Feast Season — a swarm of mosquitos rides the warm current · Wandering expedition · seed 987654321"). It is a run-local read (wanderActive / wanderSeedRun / wanderTaste from _beginExpedition, IN-MEMORY ONLY); a hand-tuned (Wander-OFF) run\'s recap is UNCHANGED (the second line is absent); the save is BYTE-IDENTICAL before/after the end screen (no new persistence; SAVE_VERSION stays 11). It shows on BOTH a Wander victory AND a defeat (a unique run\'s story is told either way).');
-}
-
-// ====================================================================
-// stage 101: O1 (v1.7) — the pre-expedition WANDER seed card. Before a
-//     Wander expedition begins (from the title's "Begin Expedition"), a small
-//     paper card shows the generated seed + taste name + one-line flavor. The
-//     player "sets out" with THAT exact seed (deterministic: the seed shown is
-//     the seed played). Absent for hand-tuned (Wander-OFF) runs; in-memory only
-//     (nothing persisted; SAVE_VERSION unchanged).
-// ====================================================================
-console.log('== stage 101: O1 (v1.7) — the pre-expedition WANDER seed card (seed + taste + flavor shown before a Wander run; absent for hand-tuned; nothing persisted) ==');
-{
-  const L1 = await import('../src/logic.js');
-  const G1 = await import('../src/game.js');
-  const recCanvas1 = makeCanvas();
-  const drawn1 = [];
-  const baseCtx1 = makeCtx(recCanvas1);
-  const recCtx1 = new Proxy(baseCtx1, {
-    get(t, prop) { if (prop === 'fillText') return (str, ...rest) => { drawn1.push(String(str)); return t.fillText ? t.fillText(str, ...rest) : undefined; }; return t[prop]; },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-  recCanvas1.getContext = () => recCtx1;
-
-  // ---- (1) ABSENT for a hand-tuned (Wander-OFF) run: the card never opens; the
-  //          start path is unchanged (the save is byte-identical before/after).
-  const gS = new G1.Game(recCanvas1); gS.start(); gS._quitToTitle();
-  gS.save = L1.freshSave(); gS.options.wander = false;
-  gS._startExpeditionOrCard();           // Wander OFF -> begins directly (no card)
-  assert(gS._seedCard === null, 'O1: a hand-tuned (Wander-OFF) run shows NO seed card (_startExpeditionOrCard begins directly)');
-  assert(gS.state === 'expedition', 'O1: a hand-tuned run goes STRAIGHT to the expedition (no card sub-state)');
-  assert(!('wanderSeedRun' in gS) || gS.wanderActive === false, 'O1: a hand-tuned run is not a Wander expedition (no run seed / taste)');
-
-  // ---- (2) PRESENT for a Wander-ON run: the card opens with a valid seed; it
-  //          RENDERS the seed + taste name + flavor; and "set out" uses THAT seed.
-  const gW = new G1.Game(recCanvas1); gW.start(); gW._quitToTitle();
-  gW.save = L1.freshSave(); gW.options.wander = true; gW.state = 'title';
-  const wSaveBefore = JSON.stringify(gW.save);
-  gW._startExpeditionOrCard();
-  assert(gW._seedCard && typeof gW._seedCard.seed === 'number' && gW._seedCard.seed > 0, 'O1: a Wander-ON "Begin Expedition" OPENS the seed card (a positive seed is chosen)');
-  const shownSeed = gW._seedCard.seed;
-  const taste = L1.wanderTaste(shownSeed);
-  assert(gW.state === 'title', 'O1: opening the card stays on the title (it is a pre-expedition sub-state)');
-  // render the card through the recording canvas: it shows seed + taste name + flavor.
-  drawn1.length = 0; gW._drawSeedCard(gW.ctx);
-  const joined = drawn1.join('\u0001');
-  assert(joined.includes('tonight\u2019s seed'), 'O1: the card renders its Wander seed-card header');
-  assert(joined.includes(String(shownSeed)), `O1: the card renders the generated seed (${shownSeed})`);
-  assert(joined.includes(taste.name), `O1: the card renders the taste name (${taste.name})`);
-  assert(joined.includes(taste.note), `O1: the card renders the taste one-line flavor ("${taste.note}")`);
-  assert(joined.includes('Set Out'), 'O1: the card renders the "Set Out" button');
-  assert(joined.includes('back to the pond'), 'O1: the card renders the "Esc — back to the pond" hint');
-  assert(JSON.stringify(gW.save) === wSaveBefore, 'O1: opening the card persists NOTHING (in-memory only; the run has not started)');
-  // "set out" begins the expedition with the EXACT seed shown (deterministic):
-  gW.input.kb.add('enter');              // the card's Enter handler reads input.pressed('enter')
-  gW._updateSeedCard();
-  assert(gW._seedCard === null, 'O1: pressing Enter on the card closes it and begins the expedition');
-  assert(gW.state === 'expedition', 'O1: "set out" from the card starts the expedition');
-  assert(gW.wanderActive === true && gW.wanderSeedRun === shownSeed, 'O1: the run uses the EXACT seed shown on the card (deterministic: the seed the player saw is the seed played)');
-  assert(gW.save.wanderSeed === shownSeed, 'O1: the seed latches to the save only when the run BEGINS (the card itself persisted nothing)');
-  assert(gW.wanderTaste && gW.wanderTaste.name === taste.name, 'O1: the run\'s taste matches the card\'s taste (same seed -> same taste)');
-
-  console.log('ok — O1: the pre-expedition WANDER seed card. Before a Wander expedition begins (from the title\'s "Begin Expedition"), a small paper card shows the generated seed + the taste\'s name + its one-line flavor, so the player knows what they are walking into (and can note / share the seed). "Set out" begins the run with THAT exact seed (deterministic: the seed shown is the seed played); "Back" returns to the title. It is ABSENT for a hand-tuned (Wander-OFF) run (whose start path is unchanged and whose save is byte-identical) and it is IN-MEMORY ONLY (nothing is persisted; SAVE_VERSION stays 11).');
-}
-
-// ====================================================================
-// Stage 102: G1 (v1.8) — the BLACK REEDS NG+ variant (REEDS_DARK layout).
-// The load-bearing invariant: every EXISTING run stays byte-identical. The
-// Black Reeds variant is gated behind ngCycle >= 1 AND a Reeds victory (the
-// pure blackReedsUnlocked gate), so: a cycle-0 Reeds run, a Wander x Reeds
-// run, and a hand-tuned (Wander-OFF) cycle-0 Reeds run must deep-equal their
-// v1.7 tuning/content. This stage proves: (a) the gate logic, (b) the
-// reedsVictory flag normalizes through migrateSave (a legacy save -> false),
-// (c) a cycle-0 Reeds WORLD is byte-identical (w=6000, 3 pockets, default
-// lantern/bestiary), (d) the Black Reeds WORLD uses the DARK layout
-// (w=7200, 4 pockets, denser bestiary, darker lantern), and (e) the
-// _beginExpedition gate activates Black Reeds ONLY for a hand-tuned NG+ Reeds
-// run with a Reeds victory (and never for cycle-0 / no-victory / Wander runs).
-// ====================================================================
-console.log('== stage 102: G1 (v1.8) — the BLACK REEDS NG+ variant (REEDS_DARK layout, gated ngCycle >= 1 AND a Reeds victory) ==');
+console.log('== stage 102: final-floor Black Reeds world and lantern rules ==');
 {
   const LG = await import('../src/logic.js');
   const WG = await import('../src/world.js');
@@ -8096,25 +5366,14 @@ console.log('== stage 102: G1 (v1.8) — the BLACK REEDS NG+ variant (REEDS_DARK
   const { mulberry32 } = await import('../src/math.js');
   const { World } = WG;
 
-  // ---- (a) the pure GATE: blackReedsUnlocked(save) ----
-  const fresh = LG.freshSave();
-  assert(LG.blackReedsUnlocked(fresh) === false, 'G1: a fresh (cycle-0, no Reeds victory) save does NOT unlock the Black Reeds');
-  const c0v = LG.freshSave(); c0v.stats.victories = 1; c0v.flags.heronDefeated = true; c0v.flags.reedsVictory = true;
-  assert(LG.blackReedsUnlocked(c0v) === false, 'G1: a cycle-0 save WITH a Reeds victory does NOT unlock the Black Reeds (the ngCycle >= 1 half is required)');
-  const ng1no = LG.freshSave(); ng1no.ngCycle = 1; ng1no.stats.victories = 1; ng1no.flags.heronDefeated = true; // no reedsVictory
-  assert(LG.blackReedsUnlocked(ng1no) === false, 'G1: an NG+ save (ngCycle 1) WITHOUT a Reeds victory does NOT unlock the Black Reeds (the Reeds-victory half is required)');
-  const ng1yes = LG.freshSave(); ng1yes.ngCycle = 1; ng1yes.stats.victories = 1; ng1yes.flags.heronDefeated = true; ng1yes.flags.reedsVictory = true;
-  assert(LG.blackReedsUnlocked(ng1yes) === true, 'G1: an NG+ save (ngCycle 1) WITH a Reeds victory DOES unlock the Black Reeds (both halves met)');
-  const ng2yes = LG.freshSave(); ng2yes.ngCycle = 2; ng2yes.stats.victories = 2; ng2yes.flags.reedsVictory = true;
-  assert(LG.blackReedsUnlocked(ng2yes) === true, 'G1: a higher NG+ cycle (ngCycle 2) with a Reeds victory also unlocks the Black Reeds');
-
+  // Black Reeds is now floor four, independent of legacy victories/cycles.
   // ---- (b) the reedsVictory flag NORMALIZES through migrateSave (legacy save -> false) ----
   assert(LG.normalizeReedsVictory(undefined) === false, 'G1: a legacy save with no flags.reedsVictory normalizes to false (the gate never fires before a real Reeds win)');
   assert(LG.normalizeReedsVictory(true) === true, 'G1: a save with flags.reedsVictory true normalizes to true');
   // round-trip: a save carrying the flag survives a migrate (a real round-trip,
   // not a freshSave default) — the flag is in the flags object, so SAVE_VERSION
   // stays 11 (no bump for G1-G3).
-  const rt = LG.freshSave(); rt.ngCycle = 1; rt.flags.reedsVictory = true; rt.stats.victories = 1;
+  const rt = LG.freshSave(); rt.flags.reedsVictory = true; rt.stats.victories = 1;
   const mig = LG.migrateSave(JSON.parse(JSON.stringify(rt)));
   assert(mig.flags.reedsVictory === true, 'G1: the reedsVictory flag survives a save migrate/round-trip (it is a flags field; SAVE_VERSION stays 11)');
   assert(LG.SAVE_VERSION === 12, 'G1: the G1-G3 items kept SAVE_VERSION at 11; H1 (this session) bumped it 11 -> 12 for the galleryComplete latch + bossDefeats');
@@ -8149,45 +5408,10 @@ console.log('== stage 102: G1 (v1.8) — the BLACK REEDS NG+ variant (REEDS_DARK
   assert(Math.abs(tR1.fuel - tR1f.fuel) < 1e-12 && tR1.lit === tR1f.lit, 'G1: lanternTickFor(state, dt, lit, false, false, LANTERN) === lanternTick(state, dt, lit) (byte-identical)');
   assert(LG.lanternLightFactor(stF, 300, 100, 100, 100, LG.LANTERN) === LG.lightFactor(stF, 300, 100, 100, 100), 'G1: lanternLightFactor(state, x, y, cx, cy, LANTERN) === lightFactor(state, x, y, cx, cy) (byte-identical)');
 
-  // ---- (f) the _beginExpedition gate: Black Reeds activates ONLY for the right run ----
-  const gB = new GGame.Game(makeCanvas()); gB.start(); gB._quitToTitle();
-  gB.save = ng1yes; gB._beginExpedition(false, { reeds: true });   // hand-tuned (wander OFF by default) NG+ Reeds WITH victory
-  assert(gB.blackReeds === true && gB.world.blackReeds === true, 'G1: a HAND-TUNED NG+ Reeds run WITH a Reeds victory begins as the Black Reeds (world + gate flag)');
-  assert(gB._lanternTuning === LG.REEDS_DARK_LANTERN, 'G1: the Black Reeds run uses the DARK lantern tuning (REEDS_DARK_LANTERN)');
-  assert(gB._reedsBestiary !== null, 'G1: the Black Reeds run threads the denser bestiary thresholds');
-
-  // a hand-tuned NG+ Reeds run WITHOUT a Reeds victory stays the v1.6 layout:
-  const gN = new GGame.Game(makeCanvas()); gN.start(); gN._quitToTitle();
-  gN.save = ng1no; gN._beginExpedition(false, { reeds: true });
-  assert(gN.blackReeds === false && gN.world.blackReeds === false && gN.world.w === 6000, 'G1: a hand-tuned NG+ Reeds run WITHOUT a Reeds victory stays the v1.6 cycle-0 layout (w=6000, not Black Reeds)');
-  assert(gN._lanternTuning === LG.LANTERN, 'G1: a no-victory NG+ Reeds run keeps the stock LANTERN tuning (byte-identical)');
-
-  // a CYCLE-0 hand-tuned Reeds run (the v1.6 run) stays byte-identical:
-  const gC = new GGame.Game(makeCanvas()); gC.start(); gC._quitToTitle();
-  gC.save = c0v; gC._beginExpedition(false, { reeds: true });
-  assert(gC.blackReeds === false && gC.world.blackReeds === false && gC.world.w === 6000, 'G1: a CYCLE-0 hand-tuned Reeds run stays the v1.6 layout (the load-bearing invariant)');
-
-  // a WANDER x Reeds NG+ run (the Warden apex) does NOT go Black Reeds (the gate requires hand-tuned):
-  const gW = new GGame.Game(makeCanvas()); gW.start(); gW._quitToTitle();
-  gW.save = ng1yes; gW.options.wander = true; gW._beginExpedition(false, { reeds: true });
-  assert(gW.blackReeds === false, 'G1: a WANDER x Reeds NG+ run does NOT go Black Reeds (the gate requires a hand-tuned run; the Warden is the Wander apex)');
-
-  // a hand-tuned NG+ BASE-SWAMP run (non-Reeds) never goes Black Reeds:
-  const gBase = new GGame.Game(makeCanvas()); gBase.start(); gBase._quitToTitle();
-  gBase.save = ng1yes; gBase._beginExpedition(false, {});
-  assert(gBase.blackReeds === false, 'G1: a hand-tuned NG+ BASE-SWAMP run never goes Black Reeds (it is not a Reeds expedition)');
-
-  // ---- (g) the Reeds-victory LATCH: a Reeds victory sets flags.reedsVictory; a base-swap one does not ----
-  const gLv = new GGame.Game(makeCanvas()); gLv.start(); gLv._quitToTitle();
-  gLv.save = LG.freshSave(); gLv._beginExpedition(false, { reeds: true });
-  gLv.lanternReeds = true; gLv._endRun('victory');
-  assert(gLv.save.flags.reedsVictory === true, 'G1: a REEDS victory latches flags.reedsVictory (the gate half for the next NG+ run)');
-  const gLb = new GGame.Game(makeCanvas()); gLb.start(); gLb._quitToTitle();
-  gLb.save = LG.freshSave(); gLb._beginExpedition(false, {});   // a base-swamp run (lanternReeds false)
-  gLb._endRun('victory');
-  assert(gLb.save.flags.reedsVictory !== true, 'G1: a BASE-SWAMP victory does NOT latch flags.reedsVictory (only a Reeds victory does)');
-
-  console.log('ok — G1: the BLACK REEDS NG+ variant. A NEW REEDS_DARK layout (a deeper 7200px descent, a denser Wisp/Serpent/Leech bestiary, an extra gravity pocket, a deeper/slower flood band, its own darker lantern-economy tuning) gated behind ngCycle >= 1 AND a Reeds victory (the pure blackReedsUnlocked + a flags.reedsVictory latch set on a Reeds-biome victory). Every EXISTING run is byte-identical: a cycle-0 Reeds world stays the v1.6 6000px/3-pocket/LANTERN/default-bestiary content; the pure *For lantern wrappers equal R1 under LANTERN; and the gate fires ONLY for a hand-tuned NG+ Reeds run with a Reeds victory (never cycle-0, never no-victory, never Wander, never base-swamp). SAVE_VERSION stays 11 (the flag is a flags field).');
+  const gB = new GGame.Game(makeCanvas()); gB.save = LG.freshSave();
+  gB._beginExpedition(false, { campaignFloor: 3 });
+  assert(gB.blackReeds && gB.world.blackReeds && gB.heron.umbra, 'final campaign floor selects Black Reeds and Umbral Wyrm');
+  assert(gB._lanternTuning === LG.REEDS_DARK_LANTERN, 'final floor uses dark lantern tuning');
 }
 
 // ====================================================================
@@ -8199,52 +5423,17 @@ console.log('== stage 102: G1 (v1.8) — the BLACK REEDS NG+ variant (REEDS_DARK
 // only-in-Black-Reeds, (4) the dual-phase + siphon + maw mechanics, and
 // (5) the gate logic.
 // ====================================================================
-console.log('== stage 103: G3 (v1.8) — the end-of-Reeds boss SELECTION (Umbral Wyrm [NG+ Reeds] vs Silt Wyrm [cycle-0 Reeds] vs Warden [Wander × Reeds]) + the Umbral Wyrm mechanics ==');
+console.log('== stage 103: ordered campaign boss selection and Umbral mechanics ==');
 {
   const LG3 = await import('../src/logic.js');
   const GGame = await import('../src/game.js');
 
-  // a save factory: a victory-carrying save with the given ngCycle + reedsVictory.
-  const mkSave = (ng, win) => {
-    const s = LG3.freshSave();
-    s.stats.victories = 1;
-    s.ngCycle = ng;
-    s.flags = { ...s.flags, intro: true, heronDefeated: true, reedsUnlocked: true, reedsVictory: !!win };
-    return s;
-  };
-
-  // ---- (1) the THREE-WAY end-of-Reeds selection matrix ----
-  // (a) cycle-0 Reeds (ngCycle 0) → the SILT WYRM (the v1.6 Reeds boss, untouched).
-  const sC0 = mkSave(0, false);
-  const gC0 = new GGame.Game(makeCanvas()); gC0.start(); gC0._quitToTitle();
-  gC0.save = sC0; gC0._beginExpedition(false, { reeds: true });
-  assert(gC0.heron.wyrm === true && gC0.heron.umbra !== true && gC0.heron.kind === 'wyrm', 'G3: a CYCLE-0 Reeds run fights the SILT WYRM (the v1.6 boss, not the Umbral)');
-  assert(gC0.heron.maxHp === LG3.SILT_WYRM.hp, `G3: the cycle-0 Reeds boss carries the Silt Wyrm's HP (${LG3.SILT_WYRM.hp})`);
-
-  // (b) NG+ Reeds WITHOUT a Reeds victory (ngCycle 1, no reedsVictory) → the
-  // SILT WYRM (the gate needs BOTH ngCycle >= 1 AND a Reeds victory).
-  const sNoWin = mkSave(1, false);
-  const gNoWin = new GGame.Game(makeCanvas()); gNoWin.start(); gNoWin._quitToTitle();
-  gNoWin.save = sNoWin; gNoWin._beginExpedition(false, { reeds: true });
-  assert(gNoWin.heron.wyrm === true && gNoWin.heron.umbra !== true, 'G3: an NG+ Reeds run WITHOUT a Reeds victory fights the SILT WYRM (the gate needs a Reeds victory)');
-  assert(gNoWin.world.blackReeds === false && gNoWin.world.w === 6000, 'G3: a no-Reeds-victory NG+ run stays the cycle-0 layout (w=6000)');
-
-  // (c) NG+ Reeds WITH a Reeds victory (hand-tuned, Wander OFF) → the UMBRAL WYRM.
-  const sBR = mkSave(1, true);
-  const gBR = new GGame.Game(makeCanvas()); gBR.start(); gBR._quitToTitle();
-  gBR.save = sBR; gBR._beginExpedition(false, { reeds: true });
-  assert(gBR.heron.umbra === true && gBR.heron.wyrm !== true && gBR.heron.kind === 'umbra', 'G3: a hand-tuned NG+ Reeds run WITH a Reeds victory fights the UMBRAL WYRM (the 6th boss)');
-  assert(gBR.heron.maxHp === LG3.UMBRA_WYRM.hp, `G3: the Black Reeds boss carries the Umbral Wyrm's HP (${LG3.UMBRA_WYRM.hp})`);
-  assert(gBR.world.blackReeds === true && gBR.world.w === 7200, 'G3: the Black Reeds run builds the REEDS_DARK 7200px world');
-
-  // (d) NG+ Reeds WITH a Reeds victory BUT WANDER ON → the WARDEN (the Wander apex;
-  // the Warden takes precedence over the Black Reeds — a Wander × Reeds run is
-  // the v1.7 D3 variant). The Black Reeds gate requires a hand-tuned run.
-  const sW = mkSave(1, true);
-  const gW = new GGame.Game(makeCanvas()); gW.start(); gW._quitToTitle();
-  gW.save = sW; gW.options.wander = true; gW._beginExpedition(false, { reeds: true });
-  assert(gW.heron.warden === true && gW.heron.umbra !== true && gW.heron.wyrm !== true, 'G3: a WANDER × Reeds NG+ run fights the WARDEN (the Wander apex; the Black Reeds is hand-tuned-only)');
-  assert(gW.world.blackReeds === false, 'G3: a WANDER × Reeds run does NOT build the Black Reeds world (the gate requires hand-tuned)');
+  for (const [floor, kind] of [[1,'wyrm'],[2,'warden'],[3,'umbra']]) {
+    const g = new GGame.Game(makeCanvas()); g.save = LG3.freshSave();
+    g._beginExpedition(false, { campaignFloor: floor });
+    assert(g.heron.kind === kind, 'campaign floor ' + floor + ' selects ' + kind);
+    assert(!!g.heron.umbra === (floor === 3), 'Umbral Wyrm only occupies the final floor');
+  }
 
   // ---- (2) the CYCLE-0 Reeds boss is BYTE-IDENTICAL to the v1.6 Silt Wyrm ----
   // The cycle-0 Reeds world + boss are the EXACT v1.6 content (w=6000, 3 pockets,
@@ -8257,10 +5446,6 @@ console.log('== stage 103: G3 (v1.8) — the end-of-Reeds boss SELECTION (Umbral
   assert(wC0a.reedsBestiary === null, 'G3: a cycle-0 Reeds world uses the DEFAULT v1.6 bestiary ladder');
   const sameOb = wC0a.obstacles.length === wC0b.obstacles.length && wC0a.obstacles.every((o, i) => Math.abs(o.x - wC0b.obstacles[i].x) < 0.5 && Math.abs(o.y - wC0b.obstacles[i].y) < 0.5);
   assert(sameOb, 'G3: a cycle-0 Reeds world is DETERMINISTIC per seed (byte-identical, same as v1.6)');
-
-  // ---- (3) the Umbral Wyrm is ONLY-IN-Black-Reeds (never cycle-0, never no-victory, never Wander) ----
-  assert(!(gC0.heron.umbra) && !(gNoWin.heron.umbra) && !(gW.heron.umbra), 'G3: the Umbral Wyrm is ONLY in a hand-tuned NG+ Reeds run with a Reeds victory (never cycle-0, never no-victory, never Wander)');
-  assert(!!gBR.heron.umbra, 'G3: the Umbral Wyrm IS in the Black Reeds run');
 
   // ---- (4) the Umbral Wyrm MECHANICS (dual-phase + siphon + maw) ----
   const U = LG3.UMBRA_WYRM;
@@ -8300,214 +5485,12 @@ console.log('== stage 103: G3 (v1.8) — the end-of-Reeds boss SELECTION (Umbral
   assert(LG3.umbraPaintable({ hp: U.hp * 0.3, maxHp: U.hp, phase: 'surfaced', flying: 0, sinking: 0 }, false) === false, 'G3: the Umbral is NOT paintable in the "deep dark" when the lantern is UNLIT (the lantern is MANDATORY)');
   assert(LG3.umbraPaintable({ hp: U.hp, maxHp: U.hp, phase: 'transit', flying: 0, sinking: 0 }, true) === false, 'G3: the Umbral is NOT paintable while underground (transit / invulnerable)');
 
-  // ---- (5) the GATE logic (the pure blackReedsUnlocked) ----
-  assert(LG3.blackReedsUnlocked({ ngCycle: 0, flags: { reedsVictory: true } }) === false, 'G3: the gate is CLOSED at cycle 0 (even with a Reeds victory)');
-  assert(LG3.blackReedsUnlocked({ ngCycle: 1, flags: {} }) === false, 'G3: the gate is CLOSED at NG+ WITHOUT a Reeds victory');
-  assert(LG3.blackReedsUnlocked({ ngCycle: 1, flags: { reedsVictory: true } }) === true, 'G3: the gate is OPEN at NG+ WITH a Reeds victory');
-  assert(LG3.blackReedsUnlocked({ ngCycle: 3, flags: { reedsVictory: true } }) === true, 'G3: the gate stays OPEN on higher NG+ cycles');
-  assert(LG3.blackReedsUnlocked(null) === false && LG3.blackReedsUnlocked(LG3.freshSave()) === false, 'G3: the gate is CLOSED for a fresh (no-NG+, no-victory) save');
-
-  console.log('ok — G3: the SELECTION WIRING + the Umbral Wyrm mechanics. The end-of-Reeds-descent boss is the UMBRAL WYRM (a hand-tuned NG+ Reeds run with a Reeds victory) vs the SILT WYRM (cycle-0 Reeds / NG+ without a Reeds victory) vs the WARDEN (Wander × Reeds — the Wander apex). cycle-0 Reeds is byte-identical (the v1.6 6000px/3-pocket/Silt-Wyrm content, deterministic per seed). The mechanics verified: ~60k HP, the 3-hue awaken (the same latch), the DUAL-maw telegraph (both points marked), the "deep dark" final phase (cadence escalation + a HARDER fuel-siphon), and the lantern-MANDATORY paint rule (umbraPaintable). The pure blackReedsUnlocked gate fires only at NG+ + a Reeds victory. SAVE_VERSION stays 11.');
+  console.log('ok — final-floor Umbral dual maw, deep dark, fuel siphon and lantern counterplay');
 }
 
-// ====================================================================
-// Stage 104: H1 (v1.8) — the "Full Collection" ledger (the pure check +
-// the capstone + the one-time cinematic latch + the SAVE_VERSION 11->12
-// migration). Proves: (1) the check is pure + deterministic, (2) a fresh
-// save is incomplete, (3) a synthetic all-complete save qualifies EXACTLY
-// once (idempotent — the latch flips once, the capstone mints once), (4) a
-// legacy v11 save migrates to v12 with the new fields DEFAULTED OFF (no
-// behavior change — makeTuning byte-identical when galleryComplete is false).
-// ====================================================================
-console.log('== stage 104: H1 (v1.8) — the "Full Collection" ledger (the pure galleryCompletion check + the capstone + the one-time latch + the v11->v12 migration) ==');
-{
-  const LH = await import('../src/logic.js');
+// Superseded by the finite campaign: repeatable collection prestige/capstone.
+// Historical assertions remain in Git at 856eab7:tests/smoke.mjs.
 
-  // (0) schema: SAVE_VERSION bumped 11 -> 12 for the new fields.
-  assert(LH.SAVE_VERSION === 12, 'H1: SAVE_VERSION is 12 (the Full Collection ledger, 11 -> 12)');
-
-  // (1) the check is PURE + deterministic: a save missing ANY ingredient is incomplete.
-  const allPaintings = LH.PAINTINGS.map(p => p.id);                 // all 10
-  const mkComplete = () => {
-    const s = LH.freshSave();
-    s.owned = allPaintings.slice();
-    s.flags.bossDefeats = LH.BOSS_IDS.slice();                        // all 6
-    s.flags.heronDefeated = true;                                     // a first-time victory
-    s.flags.reedsVictory = true;                                      // a Reeds victory
-    s.stats.victories = 2;
-    return s;
-  };
-  assert(LH.galleryCompletion(mkComplete()) === true, 'H1: an all-complete save (10 paintings + 6 bosses + first + Reeds victory) qualifies');
-  // missing one boss
-  let sMissingBoss = mkComplete(); sMissingBoss.flags.bossDefeats = LH.BOSS_IDS.slice(0, 5);
-  assert(LH.galleryCompletion(sMissingBoss) === false, 'H1: missing ONE boss defeat keeps the collection incomplete');
-  // missing a painting
-  let sMissingPaint = mkComplete(); sMissingPaint.owned = allPaintings.slice(0, 9);
-  assert(LH.galleryCompletion(sMissingPaint) === false, 'H1: missing ONE painting keeps the collection incomplete');
-  // missing the Reeds victory
-  let sNoReeds = mkComplete(); sNoReeds.flags.reedsVictory = false;
-  assert(LH.galleryCompletion(sNoReeds) === false, 'H1: missing a Reeds victory keeps the collection incomplete');
-  // missing the first-time victory flag
-  let sNoFirst = mkComplete(); sNoFirst.flags.heronDefeated = false;
-  assert(LH.galleryCompletion(sNoFirst) === false, 'H1: missing a first-time victory (heronDefeated) keeps the collection incomplete');
-
-  // (2) a fresh save is incomplete (and the progress readout reads 0/10 + 0/6).
-  const fresh = LH.freshSave();
-  assert(LH.galleryCompletion(fresh) === false, 'H1: a fresh save is NOT complete');
-  const pf = LH.galleryCompletionProgress(fresh);
-  assert(pf.paintingsOwned === 0 && pf.paintingsTotal === 10 && pf.bossesDefeated === 0 && pf.bossesTotal === 6 && pf.complete === false,
-    'H1: the fresh-save progress readout reads 0/10 paintings + 0/6 bosses + complete:false');
-  assert(LH.capstoneLevel(fresh) === 0 && LH.galleryBonusTotal(fresh) === 0, 'H1: a fresh save carries no capstone level');
-
-  // (3) the capstone is a PERMANENT saved galleryBonus level ("the museum keeps
-  //     you better") — a completed save's makeTuning is STRICTLY better than an
-  //     otherwise-identical non-completed save, via the existing Rehung Frame
-  //     path (the capstone rides on galleryBonus, so makeTuning is untouched).
-  const sCap = mkComplete(); sCap.galleryComplete = true; sCap.galleryBonus = 0;
-  const sNoCap = mkComplete(); sNoCap.galleryComplete = false; sNoCap.galleryBonus = 0;
-  // galleryBonusTotal folds in the capstone (1 level) for the completed save.
-  assert(LH.galleryBonusTotal(sCap) === 1 && LH.galleryBonusTotal(sNoCap) === 0, 'H1: the completed save reads +1 effective gallery-bonus level; the non-completed save reads 0');
-  const tCap = LH.makeTuning({}, [], 'normal', LH.galleryBonusTotal(sCap), sCap.owned, false);
-  const tNoCap = LH.makeTuning({}, [], 'normal', LH.galleryBonusTotal(sNoCap), sNoCap.owned, false);
-  assert(tCap.galleryInkBonus > tNoCap.galleryInkBonus && tCap.pickupValue > tNoCap.pickupValue,
-    'H1: the capstone makes the completed save\'s run tuning STRICTLY better (more start ink + higher orb value)');
-
-  // (3b) THE INARIANT: when galleryComplete is false, makeTuning output is
-  //      byte-identical to the pre-H1 save (the capstone adds nothing).
-  const sLegacy = mkComplete(); sLegacy.galleryComplete = false; sLegacy.galleryBonus = 0;
-  const tA = LH.makeTuning(sLegacy.upgrades, sLegacy.loadout, 'normal', 0, sLegacy.owned, false); // old-style call (raw galleryBonus 0)
-  const tB = LH.makeTuning(sLegacy.upgrades, sLegacy.loadout, 'normal', LH.galleryBonusTotal(sLegacy), sLegacy.owned, false); // new-style (capstone 0)
-  assert(JSON.stringify(tA) === JSON.stringify(tB), 'H1: makeTuning output is byte-identical when galleryComplete is false (the invariant)');
-
-  // (4) THE LATCH is idempotent — it flips exactly once, the capstone mints once.
-  //     Drive a real Game._endRun('victory') with a synthetic complete save and
-  //     confirm the save latches + the capstone is minted; a second run does
-  //     NOT re-mint (the latch already flipped).
-  const gH1a = new Game(makeCanvas()); gH1a.start(); gH1a._quitToTitle();
-  const seedA = mkComplete(); seedA.galleryComplete = false; seedA.galleryBonus = 0;
-  gH1a.save = seedA; gH1a.tuning = LH.makeTuning(seedA.upgrades, seedA.loadout, gH1a.options.difficulty, LH.galleryBonusTotal(seedA), seedA.owned, false);
-  gH1a._endRun('victory');
-  assert(gH1a.save.galleryComplete === true, 'H1: a complete victory latches save.galleryComplete');
-  assert(gH1a.save.galleryBonus === 1, 'H1: the capstone mints exactly ONE permanent galleryBonus level at completion');
-  assert(gH1a._cine && gH1a._cine.collection === true, 'H1: the one-time completion cinematic beat opened (reusing the M1 machinery, tagged .collection)');
-  // a second run (a fresh Game, same now-complete save) does NOT re-mint: the
-  // latch is already true, so galleryCompletion is gated off by the latch check
-  // (the game only mints when !save.galleryComplete && galleryCompletion).
-  const gH1b = new Game(makeCanvas()); gH1b.start(); gH1b._quitToTitle();
-  const seedB = { ...gH1a.save, galleryBonus: gH1a.save.galleryBonus, flags: { ...gH1a.save.flags }, owned: gH1a.save.owned.slice() };
-  gH1b.save = seedB; gH1b.tuning = LH.makeTuning(seedB.upgrades, seedB.loadout, gH1b.options.difficulty, LH.galleryBonusTotal(seedB), seedB.owned, false);
-  const bonusBefore = gH1b.save.galleryBonus;
-  gH1b._endRun('victory');
-  assert(gH1b.save.galleryBonus === bonusBefore, 'H1: the capstone is IDEMPOTENT — a second victory after completion does NOT re-mint (the latch only flips once)');
-
-  // (5) A LEGACY v11 SAVE migrates to v12 with the new fields DEFAULTED OFF.
-  //     Build a v11-shaped save (no galleryComplete / no flags.bossDefeats),
-  //     migrate it, and confirm the defaults + byte-identical behavior.
-  const v11 = JSON.parse(JSON.stringify(LH.freshSave()));
-  v11.saveVersion = 11;
-  delete v11.galleryComplete;                       // no field yet (v11)
-  delete v11.flags.bossDefeats;                     // no field yet (v11)
-  v11.owned = allPaintings.slice(0, 3);
-  v11.stats.victories = 1; v11.flags.heronDefeated = true;
-  const mig = LH.migrateSave(JSON.parse(JSON.stringify(v11)));
-  assert(mig.saveVersion === 12, 'H1: a v11 save migrates to v12');
-  assert(mig.galleryComplete === false, 'H1: a migrated v11 save has galleryComplete DEFAULTED false');
-  assert(Array.isArray(mig.flags.bossDefeats) && mig.flags.bossDefeats.length === 0, 'H1: a migrated v11 save has flags.bossDefeats DEFAULTED []');
-  assert(LH.galleryCompletion(mig) === false, 'H1: a migrated v11 save is NOT complete (nobody backfills defeats)');
-  // byte-identical behavior: a migrated legacy save's makeTuning (capstone 0)
-  // equals the same save driven the old way.
-  const tMigA = LH.makeTuning(mig.upgrades, mig.loadout, 'normal', 0, mig.owned, false);
-  const tMigB = LH.makeTuning(mig.upgrades, mig.loadout, 'normal', LH.galleryBonusTotal(mig), mig.owned, false);
-  assert(JSON.stringify(tMigA) === JSON.stringify(tMigB), 'H1: a migrated v11 save plays byte-identically (makeTuning unchanged when galleryComplete is false)');
-
-  // (6) the round-trip preserves the latch + the boss-defeat list (a v12 save).
-  const v12 = mkComplete(); v12.galleryComplete = true;
-  const v12b = LH.migrateSave(JSON.parse(JSON.stringify(v12)));
-  assert(v12b.galleryComplete === true && v12b.flags.bossDefeats.length === 6, 'H1: a v12 complete save round-trips with the latch + all 6 defeats intact');
-
-  console.log('ok — H1: the "Full Collection" ledger. A NEW logic.js GALLERY_COMPLETE tuning + the pure galleryCompletion(save) check (all 10 paintings owned + all 6 bosses defeated [gray/green/gilded/Silt Wyrm/Warden/Umbral Wyrm] + a first-time victory + a Reeds victory) + a one-time completion cinematic (reusing the M1 first-victory beat machinery, tagged .collection) + a permanent saved capstone galleryBonus level ("the museum keeps you better"). A NEW save.galleryComplete boolean latch + save.flags.bossDefeats list (SAVE_VERSION 11 -> 12); a legacy v11 save migrates to v12 with the new fields DEFAULTED OFF and plays byte-identically (makeTuning unchanged when galleryComplete is false). The latch is idempotent (flips once).');
-}
-
-// ====================================================================
-// Stage 105: H2 (v1.8) — the Gallery Wall screen + the completion beat.
-// Pure presentation over H1: the existing Gallery tab (tab 2) gains a
-// progress readout (X / 10 paintings, Y / 6 bosses) + a full-collection
-// glow (gated on galleryCompletion), and the title screen gains a
-// "collection complete" badge (gated on save.galleryComplete). Proves the
-// wall data + the glow/badge gating draw cleanly for both a non-complete
-// and a complete save (no JS errors), with no timed-run time added.
-// ====================================================================
-console.log('== stage 105: H2 (v1.8) — the Gallery Wall progress readout + the full-collection glow + the title "collection complete" badge ==');
-{
-  const LH = await import('../src/logic.js');
-  const allPaintings = LH.PAINTINGS.map(p => p.id);
-
-  // ---- (a) a NON-COMPLETE save: the readout shows partial counts, NO glow. ----
-  const gW = new Game(makeCanvas()); gW.start(); gW._quitToTitle();
-  const wSave = LH.freshSave();                 // a truly empty save (the shared stub may carry earlier-stage state)
-  gW.save = wSave; gW.tuning = LH.makeTuning(wSave.upgrades, wSave.loadout, gW.options.difficulty, LH.galleryBonusTotal(wSave), wSave.owned, false);
-  gW._beginAtelier(); gW._atelierIntro = false; gW.atelierTab = 2; frames(30);
-  assert(gW.state === 'atelier', 'H2: the Gallery tab drew cleanly (30 frames, no JS errors) for a save with no collection');
-  const progW = LH.galleryCompletionProgress(gW.save);
-  assert(progW.complete === false, 'H2: a non-complete save\'s wall progress reads complete:false (no glow)');
-  assert(progW.paintingsOwned === 0 && progW.bossesDefeated === 0, 'H2: the fresh-save wall readout reads 0/10 + 0/6');
-
-  // a PARTIALLY-complete save (some paintings + some bosses) — the readout
-  // tracks what is owned/defeated, still no glow.
-  gW.save.owned = allPaintings.slice(0, 5);
-  gW.save.flags.bossDefeats = ['gray', 'green'];
-  frames(30);
-  const progPart = LH.galleryCompletionProgress(gW.save);
-  assert(progPart.paintingsOwned === 5 && progPart.bossesDefeated === 2 && progPart.complete === false,
-    'H2: the wall readout tracks partial progress (5/10 paintings, 2/6 bosses) + stays incomplete');
-  assert(gW.state === 'atelier', 'H2: the Gallery tab drew cleanly with partial progress (no JS errors)');
-  // the title shows NO badge when the collection is incomplete.
-  gW._quitToTitle(); frames(2);
-  assert(gW.state === 'title', 'H2: returned to the title (the "collection complete" badge is gated off when incomplete)');
-
-  // ---- (b) a COMPLETE save: the glow + the title badge light up. ----
-  const gC = new Game(makeCanvas()); gC.start(); gC._quitToTitle();
-  const cSave = LH.freshSave();
-  cSave.owned = allPaintings.slice();
-  cSave.flags.bossDefeats = LH.BOSS_IDS.slice();
-  cSave.flags.heronDefeated = true; cSave.flags.reedsVictory = true;
-  cSave.stats.victories = 2;
-  cSave.galleryComplete = true; cSave.galleryBonus = 1;               // the capstone minted
-  gC.save = cSave; gC.tuning = LH.makeTuning(cSave.upgrades, cSave.loadout, gC.options.difficulty, LH.galleryBonusTotal(cSave), cSave.owned, false);
-  assert(LH.galleryCompletion(cSave) === true, 'H2: the synthetic complete save qualifies');
-  // the title badge draws + is gated on the latch.
-  gC._drawTitle(gC.ctx || makeCanvas().getContext('2d')); frames(2);
-  assert(gC.state === 'title', 'H2: the title drew cleanly WITH the full-collection badge (no JS errors)');
-  const progC = LH.galleryCompletionProgress(cSave);
-  assert(progC.complete === true && progC.paintingsOwned === 10 && progC.bossesDefeated === 6,
-    'H2: the complete save\'s wall progress reads 10/10 paintings + 6/6 bosses + complete:true (the glow gates on)');
-  // the Gallery tab glows + reads full counts.
-  gC._beginAtelier(); gC._atelierIntro = false; gC.atelierTab = 2; frames(30);
-  assert(gC.state === 'atelier', 'H2: the Gallery tab drew cleanly WITH the full-collection glow (30 frames, no JS errors)');
-  assert(LH.galleryCompletionProgress(gC.save).complete === true, 'H2: the Gallery wall\'s glow gating reads complete:true on the complete save');
-
-  // ---- (c) the completion BEAT is pure presentation over H1 (no run time). ----
-  // The cinematic beat reuses the M1 _cine machinery with a .collection tag;
-  // it is opened by the H1 latch (verified in stage 104). Here we confirm the
-  // beat draws cleanly (the distinct caption path) + does not mutate the save.
-  gC._cine = { t: 0, dur: 4, arpeggiated: false, collection: true, firstBeat: true };
-  const saveBefore = JSON.stringify(gC.save);
-  gC.state = 'end'; frames(2);
-  gC._drawCineBeat(gC.ctx || makeCanvas().getContext('2d'));
-  assert(JSON.stringify(gC.save) === saveBefore, 'H2: the completion beat is pure presentation — it does not mutate the save (no timed-run time added)');
-
-  console.log('ok — H2: the Gallery Wall screen + the completion beat. The existing Atelier Gallery tab gains a progress readout (X / 10 paintings · Y / 6 bosses) so a player can SEE what they are missing, + a full-collection gold glow behind the 10-frame wall (procedural art only, gated on galleryCompletion), + a title-screen "collection complete" badge (gated on save.galleryComplete). Pure presentation over the H1 galleryCompletion state — no timed-run time, no new assets, both a non-complete and a complete save draw cleanly (no JS errors).');
-}
-
-// ====================================================================
-// stage 106: R1 (v1.8) — the 1.0.0 RELEASE VERSION string. The single
-// source of truth is `GAME_VERSION` in logic.js (display-only: it is
-// never part of the save schema and never feeds a run). This stage
-// asserts the VALUE is '1.0.0' (pure) and that it is REFERENCED by the
-// two render sites: the title-screen corner stamp and the Options
-// header line (a fillText spy over a real `_drawTitle` /
-// `_drawOptions` draw proves the string reaches the canvas).
-// ====================================================================
 console.log('== stage 106: R1 (v1.8) — the 1.0.0 release version string (single source of truth in logic.js, referenced by the title + Options renders) ==');
 {
   const LV = await import('../src/logic.js');
@@ -9399,8 +6382,8 @@ console.log('== stage 118: Q9 — authored Reeds moth encounter, live stroke and
   assert(!off.status,'offscreen moth status expires');
   g._beginExpedition(); assert(!g.world.mothFlower,'no swamp prop leak');
   g.options.wander=true; g._beginExpedition(false,{reeds:true}); assert(!g.world.mothFlower,'no Wander leak');
-  g.options.wander=false; g.save.ngCycle=1; g.save.flags.reedsVictory=true;
-  g._beginExpedition(false,{reeds:true}); assert(!g.world.mothFlower,'no Black Reeds leak');
+  g.options.wander=false;
+  g._beginExpedition(false,{campaignFloor:3}); assert(!g.world.mothFlower,'no Black Reeds leak');
 }
 console.log('== stage 119: living-study feedback and coat progress ==');
 await import('./studio-feedback.mjs');
@@ -9427,6 +6410,8 @@ const { testControlFeelGame } = await import('./control-feel.mjs');
 testControlFeelGame(Game, makeCanvas);
 console.log('== stage 124: simple brush aiming and freely repaintable scenery ==');
 await import('./aim-ui.mjs');
+await import('./dungeon-ui.mjs');
+await import('./campaign-rules.mjs');
 const { testRepaintGame } = await import('./repaint.mjs');
 testRepaintGame(Game, makeCanvas);
 console.log('== stage 125: bosses wait for their final arena ==');
@@ -9453,5 +6438,8 @@ await import('./encounter.mjs');
   g.encounter.phase = 'fight';
   assert(!g.studio.sheltered(), 'clearing battle cannot borrow pond invulnerability');
 }
+console.log('== stage 127: finite dungeon campaign and retired NG+ migration ==');
+const { testCampaignGame } = await import('./campaign.mjs');
+testCampaignGame(Game, makeCanvas);
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

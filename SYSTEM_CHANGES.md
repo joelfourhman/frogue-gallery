@@ -1,5 +1,14 @@
 # Environment and tool changes
 
+## Single dungeon — 2026-11-11
+
+No new dependencies, services or machine settings. Existing Node, Chromium and
+Git run the campaign checks. Loopback/browser processes use isolated harnesses
+and close at exit; the existing source preview remains at 127.0.0.1:8767.
+Ignored dist/ is rebuilt by package validation. Evidence is in .cache/checks/,
+tests/.out/astra/36–39 and tests/frames/astra/. Old balance telemetry is retained
+at .cache/checks/balance-before-campaign.log for comparison.
+
 ## Lily Clearing — 2026-11-11
 
 No packages or machine settings changed. Reused existing Node, Git and Chromium.

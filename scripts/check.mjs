@@ -1,11 +1,11 @@
-// One fail-fast command for the required smoke, balance and nine pacing gates.
+// One fail-fast command for the finite campaign, retained combat pacing and UI.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './dev.mjs';
 
 const dir = path.join(ROOT, '.cache', 'checks'); fs.mkdirSync(dir, { recursive: true });
-const tests = ['smoke', 'pace', 'humance', 'bosspace', 'reedspace', 'wardpace', 'blackpace', 'umbrapace', 'ngpace', 'wandpace', 'balance', 'ui', 'sfx', 'music', 'package'];
+const tests = ['smoke', 'campaign', 'campaignpace', 'pace', 'humance', 'bosspace', 'reedspace', 'wardpace', 'blackpace', 'umbrapace', 'balance', 'ui', 'sfx', 'music', 'package'];
 const browserArgs = {
   'browser-source': ['tests/vertical-slice.mjs'],
   'browser-dist': ['tests/vertical-slice.mjs', '--dist'],
@@ -32,8 +32,7 @@ for (const name of tests) {
     const samples = [...output.matchAll(/human \(dpsFrac 0.42\) ([\d.]+) min/g)].map(m => +m[1]);
     failed ||= samples.length < 1 || samples.some(n => n < 2 || n > 4);
   }
-  if (name === 'ngpace') failed ||= !inBand(/NG\+ cycle-1 full-run estimate: .*? = ([\d.]+) min/, 15, 20);
-  if (name === 'wandpace') failed ||= !output.includes('first-time: all in 15–20 min? YES') || !output.includes('Wander × Reeds: all in 20–25 min? YES');
+  if (name === 'campaignpace') failed ||= !output.includes('FULL CAMPAIGN COMBAT JOURNEY PASSED');
   if (name === 'balance') failed ||= !output.includes('(none flagged');
   report.push({ name, passed: !failed, seconds: (Date.now() - start) / 1000 });
   console.log(`${failed ? 'FAIL' : 'PASS'} ${name} (${report.at(-1).seconds.toFixed(1)}s)`);

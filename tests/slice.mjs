@@ -236,5 +236,6 @@ export function testSlice({ Game, makeCanvas, assert }) {
   assert(options.volume === 0 && options.musicVol === 0 && options.sfxVol === 0, 'zero volume persists and malformed audio values remain finite');
   g.save.stats.victories = 1; g.save.flags.heronDefeated = true; g.state = 'title';
   const title = g._titleLayout();
-  assert(title.chall.x + title.chall.w <= title.abx, 'unlocked Challenge and Atelier buttons do not overlap');
+  assert(title.by + title.bh <= title.ty && title.ty + title.th <= title.diff[0].y, 'dungeon start, optional practice and difficulty controls do not overlap');
+  assert(!title.chall && !title.reeds && title.abx + title.abw <= title.ox, 'one dungeon entry has separate sketchbook and options buttons');
 }

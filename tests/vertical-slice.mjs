@@ -199,9 +199,12 @@ try {
   assert.equal(completion, 3);
   await page.screenshot({ path: path.join(out, '04-borrowed-sky.png') });
 
-  // Victory at low restoration previously crashed only in a real rendered beat.
-  await page.evaluate(() => { const g = window.__game; g._endRun('victory'); g._cine = { t: 1.8, dur: 4, firstBeat: true }; g.world.worldColorSat = () => 0.25; g._drawAll(); });
-  await page.screenshot({ path: path.join(out, '05-victory.png') });
+  // The first guardian now opens a rest, even at low world restoration.
+  await page.evaluate(() => { const g = window.__game; g._endRun('victory'); g.world.worldColorSat = () => 0.25; g._drawAll(); });
+  assert.equal(await page.evaluate(() => window.__game.state), 'camp');
+  assert.equal(await page.evaluate(() => window.__game.campaign.pendingReward), true);
+  assert.equal(await page.evaluate(() => window.__game.save.stats.victories), 0, 'one guardian is not a dungeon victory');
+  await page.screenshot({ path: path.join(out, '05-first-guardian-rest.png') });
   await page.reload(); await page.waitForFunction(() => window.__game, null, { polling: 50 }); await tick(100);
   assert.equal(await page.evaluate(() => window.__game.save.studio.completed.length), 3);
   assert.equal(await page.evaluate(() => window.__game.save.sketchbook.length), 1);
@@ -239,8 +242,7 @@ try {
   const garden = await page.evaluate(async () => {
     const g = window.__game, { studyNode } = await import('./src/logic.js');
     g._closeSketchbook();
-    g.save.flags.reedsUnlocked = true;
-    g._beginExpedition(false, { reeds: true });
+    g._beginExpedition(false, { campaignFloor: 1 });
     const reedsStudies = g.studio.studies.filter(st => st.biome === 'reeds');
     if (reedsStudies.length !== 2) throw new Error('both reeds studies must exist in a normal Reeds expedition: ' + reedsStudies.map(s => s.id).join(','));
     for (const s of reedsStudies) {
@@ -447,7 +449,7 @@ try {
   assert.equal(await page.evaluate(() => window.__game.paused), true);
   await page.keyboard.press('p'); await tick(1);
 
-  // Full-health real boss fight and end transition. Arena placement and god
+  // Full-health real first-guardian fight and camp transition. Arena placement and god
   // mode isolate the boss state machine; this does NOT measure player skill.
   await page.evaluate(() => { const g = window.__game; g._beginExpedition(); g.heron._intro = 0; g._browserBossFrames = 0; });
   let boss;
@@ -465,10 +467,11 @@ try {
     if (boss.flying || boss.hp <= 0) break;
   }
   assert(boss.hp <= 0 || boss.flying); await page.evaluate(() => window.__game.input.reset()); await tick(600);
-  assert.equal(await page.evaluate(() => window.__game.state), 'end');
-  assert.equal(await page.evaluate(() => window.__game.endKind), 'victory');
-  report.push({ realBossVictoryWithGodMode: boss });
-  await page.screenshot({ path: path.join(out, '08-earned-victory.png') });
+  assert.equal(await page.evaluate(() => window.__game.state), 'camp');
+  assert.equal(await page.evaluate(() => window.__game.campaign.pendingReward), true);
+  assert.deepEqual(await page.evaluate(() => window.__game.campaign.cleared), ['gray']);
+  report.push({ realFirstGuardianVictoryWithGodMode: boss });
+  await page.screenshot({ path: path.join(out, '08-earned-rest.png') });
   await page.evaluate(() => { const g = window.__game; g._beginExpedition(); g.player.iframes = 0; g.player.hurt(99999, g.tuning); }); await tick(180);
   assert.equal(await page.evaluate(() => window.__game.endKind), 'defeat');
   await page.screenshot({ path: path.join(out, '09-defeat.png') });
@@ -484,6 +487,8 @@ try {
   await controlFeelBrowser({page,tick,out,report});
   const {clearingBrowser} = await import('./clearing-browser.mjs');
   await clearingBrowser({page,tick,out,report});
+  const { campaignBrowser } = await import('./campaign-browser.mjs');
+  await campaignBrowser({page,tick,out,report});
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(out, 'report.json'), JSON.stringify({ report, errors }, null, 2));
   console.log(JSON.stringify(report, null, 2));

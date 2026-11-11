@@ -287,13 +287,8 @@ export class World {
     // stream — a base (non-Reeds) world leaves these arrays empty and a
     // first-time run stays byte-identical.
     if (this.reedsVariant) {
-      // G1 (v1.8): the BLACK REEDS variant is DENSER. It uses its OWN
-      // deterministic RNG stream (seed + 2977, distinct from the cycle-0
-      // Reeds' +977) so the two layouts are INDEPENDENT per seed but each is
-      // reproducible. CRITICAL: a cycle-0 Reeds world (this.blackReeds falsy)
-      // keeps the EXACT v1.6 stream (+977), 46 fireflies, 8 rest stones, and
-      // the REEDS_POCKETS / REEDS_FLOOD_FLOOR constants — so a cycle-0 Reeds
-      // run stays byte-identical (the new variant activates only at NG+).
+      // The final Black Reeds floor is denser. Its independent seeded stream
+      // preserves the ordinary Reeds layout while adding more lantern fuel.
       const dark = this.blackReeds;
       const lrng = mulberry32((this.seed + (dark ? 2977 : 977)) | 0);
       const flyCount = dark ? 56 : 46;
@@ -1016,15 +1011,13 @@ export class World {
     const cx1 = view.x + view.w / view.scale + m, cy1 = view.y + view.h / view.scale + m;
     const inView = (x, y) => x >= cx0 && x <= cx1 && y >= cy0 && y <= cy1;
 
-    // deep patches (N4: High Tide widens water via this.waterWidthMult —
-    // render-only, defaults to 1 so the first-time render is byte-identical)
-    const wm = this.waterWidthMult || 1;
+    // Deep-water patches have fixed visual dimensions.
     for (const rp of this.ripples) {
       if (!inView(rp.x, rp.y)) continue;
       ctx.strokeStyle = `rgba(30,60,55,${0.14 * colorSat + 0.04})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.ellipse(rp.x, rp.y, rp.r * wm, rp.r * 0.5 * wm, 0, 0, TAU);
+      ctx.ellipse(rp.x, rp.y, rp.r, rp.r * 0.5, 0, 0, TAU);
       ctx.stroke();
     }
     // grass tufts
@@ -1054,12 +1047,12 @@ export class World {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.paintCanvas, 0, 0, this.w, this.h);
     ctx.globalAlpha = 1;
-    // slicks (blue wet shine) — N4: High Tide widens these too
+    // Slicks retain the size of the actual painted wet patch.
     for (const s of this.slick) {
       if (!inView(s.x, s.y)) continue;
       ctx.fillStyle = `rgba(120,170,240,${0.14 * Math.min(1, s.t)})`;
       ctx.beginPath();
-      ctx.ellipse(s.x, s.y, s.r * wm, s.r * 0.6 * wm, 0, 0, TAU);
+      ctx.ellipse(s.x, s.y, s.r, s.r * 0.6, 0, 0, TAU);
       ctx.fill();
     }
     // L2 (a) — wet rim: freshly painted pigment cells carry a darker edge that

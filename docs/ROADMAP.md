@@ -1,141 +1,82 @@
-# Frogue Gallery — Paint, dodge, explore
+# Frogue Gallery — one long painted descent
 
-## Current milestone — Lily Clearing and free painting — IMPLEMENTED
+## Current direction — a finite dungeon campaign
 
-The owner's next request supersedes the wait-for-feedback priority below:
-build the short encounter, simplify confusing aiming/UI, add repaintable
-swamp objects, and delay the boss. Three agents handled encounter/enemy rules,
-free scenery and brush presentation; the coordinating agent integrated the
-HUD, boss gates, browser checks and validation.
+The owner's 2026-11-11 request supersedes the previous plan to pause content
+expansion: remove New Game+ and its progression systems, and connect the game
+into one long dungeon run with bosses and a final boss. The earlier movement,
+readable combat, simple brush marker and free painting improvements remain.
 
-- A bell starts three rounds (3/4/5 bugs), with at most two active attackers.
-  Warning lanes lock before dashes; recovery is safe. Blue interrupts and
-  blue-to-red increases that red hit by 50% on clearing targets. No color locks.
-- Free repainting: 64 lilies, mushrooms, flowers and stones; any color works,
-  persists for the run and animates locally. No currencies or puzzle recipes.
-- One brush marker at real reach; plain color/action names and contextual
-  instructions. Remove competing crosshair/range/target/foot rings.
-- Final bosses wait for their end arena (last 900px). No opening announcement,
-  fight music or remote summon. The optional mid-run heron remains mid-run.
+The route is Watercolor Marsh → Sunken Reeds → Hollow Sanctuary → Black Reeds.
+The Great Gray Heron, Silt Wyrm and Hollow Warden guard the first three floors;
+the Umbral Wyrm ends the entire dungeon. The two Reeds floors reuse the authored
+Reeds environment with different guardians. This is a connected campaign,
+not four newly created biomes.
 
-The two-minute experience is a design target, not a stopwatch requirement.
-The precise scripted movement/dodge probe takes ~45 seconds; human duration
-and enjoyment remain unmeasured. Next: replay from a fresh expedition and
-judge whether instructions, dodge timing and repainting are now self-evident.
-See VALIDATION-lily-clearing.md. Do not expand content before that feedback.
+## Milestone 1 — Connect the descent
 
-## Previous roadmap — The Living Sketchbook
+- Start every new run on floor one with base stats for the selected difficulty.
+- Carry health, elapsed time, score and collected pigment between floors.
+- After each of the first three bosses, pause at a rest that heals 35% of maximum
+  health, rounded up and capped at maximum health.
+- Choose one gift: Brighter paint (+20% brush, splash and burn damage), Lily
+  heart (+2 maximum health), or Flowing brush (12% faster dodge/splash recharge).
+  Gifts stack within the run; there are exactly three selections in a full run.
+- Require a selected gift and an explicit Descend action. Show the four-floor
+  route and current depth so the next objective is clear.
+- End in victory only after the Umbral Wyrm. Defeat or a fresh start returns to
+  floor one; no harder cycle, prestige retirement or permanent stat farming.
 
-Rewritten 2026-11-11 against source and Git history. The game already has three
-biomes, six bosses, five living studies, a painted crossing, pinned/named
-postcards, a title-screen exhibition and the optional lantern moth. Q1–Q9 are
-implemented; they are not future work. Earlier implementation records remain
-in PROJECT_STATE.md and the Qwen backlog.
+These systems are implemented in the campaign rules, game integration and
+rest-screen UI. Current verification results belong in PROJECT_STATE.md.
 
-The direction: make every short expedition feel like a visit to a place worth
-painting. Help players find the authored discoveries, make each brushstroke
-legible, and give the spaces between encounters a little life. Preserve the
-finite campaign, watercolor identity and a souvenir even from a failed run.
+## Milestone 2 — Remove the conflicting progression
 
-## Milestone A — Find your next little wonder — COMPLETE
+Remove New Game+ cycles/scaling, run modifiers, Green/Gilded Heron variants,
+gold-tier purchases, gilded frames and prestige bonuses. Remove standalone
+Wander, challenge and shop entry points. The Hollow Warden and Umbral Wyrm
+become ordinary guardians within the single campaign.
 
-Implementation scope for this pass:
+Keep saved sketchbook pages, pins, names, the selected title exhibition and
+ordinary collected artwork. Legacy purchased upgrades and equipped paintings
+do not alter a new run's stats. Save schema 12 and game version 1.0.0 remain;
+migration strips obsolete New Game+ fields without discarding the sketchbook.
+Learned brush-hop and authored study memories remain part of painting progress.
 
-- A paused **Field Atlas**, opened with V or from the pause menu, with the
-  frog's position, checkpoints, available studies and optional authored detours.
-- A clear distinction between a study finished this expedition and a memory
-  already held in the sketchbook; an invitation toward the next unfinished
-  study instead of another currency or mandatory quest chain.
-- Keyboard, mouse and controller-menu access; closing the atlas restores the
-  prior pause state and clears held paint/movement.
+## Milestone 3 — Verify the complete journey
 
-Acceptance: correct map dimensions and landmark positions for each biome;
-mode-specific content never leaks into Wander/Challenge/Black Reeds; opening
-freezes combat, timers and paint. Actual browser input verifies open, close and
-resume in source and packaged builds. No fast travel or save change.
+Run `node scripts/check.mjs --browser` and the campaign browser journey. Cover
+all four real boss fights, three rests, reward stacking, invalid transitions,
+death/restart, final victory, old-save migration, keyboard/mouse/controller
+menu routing and the packaged runtime. Retain ordinary combat, painting,
+study, save and performance checks. Retired mode tests must not keep removed
+features alive merely to satisfy their previous assumptions.
 
-## Milestone B — Make painting feel understood — COMPLETE
+Record observed test results and limits in PROJECT_STATE.md before committing.
+Scripted combat and pacing estimates establish regressions and bounds; they do
+not establish human enjoyment or a measured human duration for the new dungeon.
 
-Implementation scope for this pass:
+## Next — tune the connected experience from play
 
-- Nearby study cards explain the current stage, pigment name/number, action
-  and coats completed. Correct strokes get restrained local acknowledgement.
-- An aimed wrong-color stroke offers brief, relevant guidance. Distant paint
-  and unrelated combat do not create nag messages.
-- Completed studies make the saved page and next opportunity clear while
-  preserving the existing illustrations and rewards.
+1. Replay the entire descent and check whether the next floor, guardian and
+   gift choice are understandable without explanation.
+2. Measure actual human damage, healing and gift choices across floors. Adjust
+   repeated frustration or dominant choices before expanding the reward pool.
+3. Check that the two Reeds floors feel meaningfully different through their
+   guardian and encounter pacing; add authored variety where observations
+   show repetition.
+4. Continue making ordinary scenery rewarding to paint, with bounded local
+   reactions and clear combat visibility.
+5. Use the existing five-player playtest kit when participants are available;
+   record observations separately from opinions and bot estimates.
 
-Acceptance: all five studies keep their exact progression, healing and reward
-rules; feedback is bounded and expires; target circles remain unobscured;
-Reeds instructions remain readable. Regression tests cover correct, wrong,
-out-of-range and repeated strokes. Browser screenshots cover partial/complete
-studies and the atlas at normal and small viewports. The browser journey also
-exposed and now covers a fixed first-click pointer lag through a moving camera.
+Public hosting remains a separate task. No account, backend, online economy,
+new currency or repeat-cycle progression is needed for this direction.
 
-## Milestone C — Let the swamp notice you — COMPLETE
+## Previous work
 
-Implementation scope for this pass:
-
-- A small deterministic population of decorative pond wildlife, with distinct
-  swamp/Reeds character, quiet movement and brief responses to nearby pigment.
-- Local ripples or color curiosity make the brush feel connected to the world.
-  Wildlife never deals damage, blocks movement, supplies loot or changes saves.
-
-Acceptance: fixed population/effect caps, finite coordinates, offscreen culling,
-no gameplay RNG consumption, no persistent paint growth or particle cascade.
-The ordinary rendering/performance gates and every pacing band must still pass.
-
-## Milestone D — Learn from five players — KIT PREPARED; SESSIONS PENDING
-
-**2026-11-11 owner-feedback priority:** movement/combat were reported awkward.
-The responsive-control pass now ships faster stops/reversal, immediate hops,
-uninterrupted ordinary attacks, Q/E/wheel selection, accurate local range/charge
-cues and cleaner hit text. See VALIDATION-control-feel.md for the measured
-before/after and tests. Next is an owner replay of this core loop before more
-content. The five-session milestone below remains pending.
-
-Prepare the local build and facilitator sheet in docs/PLAYTEST.md now. The
-next evidence must come from actual people: can they find a study, understand
-paint response, use the atlas and want to keep their postcard?
-
-After owner-arranged sessions, reproduce reported crashes/softlocks first,
-then fix repeated navigation or paint confusion. Keep observation separate
-from opinion. Do not invent participant results or equate bot pacing with
-human enjoyment. This pass does not contact participants.
-
-Exit: five recorded sessions, prioritized findings, regression coverage for
-reproduced defects, and participant rechecks of the most common confusion.
-Q10 preparation supports this milestone; Q11 depends on actual observations.
-
-## Milestone E — Share the tested game
-
-Use the deterministic runtime ZIP, an actual screenshot, concise controls and
-an honest local-save/accessibility description. Q12 still requires a selected
-host/account/visibility and explicit authorization to publish. Verify save,
-audio and postcard export on the actual hosted origin and keep the previous
-artifact for rollback. No backend, account system or telemetry is needed.
-
-## Priorities after feedback
-
-1. Fix reproduced loss of progress, crashes or traps before new content.
-2. Improve the first ten minutes where observations show confusion.
-3. Verify physical controllers and additional browsers; then address findings.
-4. Consider one additional authored paint interaction only if players can
-   already discover and enjoy the existing five studies and side encounters.
-
-Animated postcard export, new biomes, new currencies and large progression
-trees remain deferred. Adding volume is not an acceptance criterion.
-
-## Integration contract
-
-Three implementation agents own disjoint runtime areas: atlas/Game/pure map
-rules; study presentation; world/wildlife presentation. The coordinating agent
-owns integration, browser journeys, documentation, artifact verification and
-the final coherent commit. No new runtime dependencies or remote services.
-
-For this milestone run `node scripts/check.mjs --browser`: full smoke, all nine
-pacing bands, balance without flags, UI/audio, deterministic package, source
-and dist browser journeys, 36 rendered scenes and bounded effects performance.
-Save version 12 and game version 1.0.0 remain unchanged. Update PROJECT_STATE.md
-with verified outcomes and limitations before committing. Future human and
-hosting work remains pending until it can actually be performed.
+Lily Clearing, 64 freely repaintable props, responsive controls, five living
+studies, the Field Atlas, decorative wildlife and the curated sketchbook are
+implemented foundations. Historical implementation records remain in the
+changelog, PROJECT_STATE.md and docs/history. Older mode/progression plans are
+historical, not instructions to restore removed features.

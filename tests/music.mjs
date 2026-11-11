@@ -6,11 +6,11 @@
 // in node — so the S2 evidence is the PURE, DETERMINISTIC selector the music
 // layer is BUILT FROM:
 //
-//   themeSelector({ zone, biome, bossEngaged, lowHp, collection }) ->
+//   themeSelector({ zone, biome, bossEngaged, lowHp }) ->
 //        { themeId, patternDensity, extraVoices } — a pure function of the run
 //        state that picks the right theme + intensity. The test asserts the
 //        correct theme + density for swamp / Reeds / Black Reeds / boss /
-//        lowHp / collection, and that density rises with intensity (a denser
+//        lowHp, and that density rises with intensity (a denser
 //        pattern == higher intensity).
 //
 // Plus a ROUTING check: the real AudioSys, booted against a stubbed
@@ -31,7 +31,6 @@ import {
   ZONE_THEMES,
   BOSS_THEMES,
   LOWHP_THEME,
-  COLLECTION_THEME,
   nextAmbientEvent,
   AMBIENT_KINDS,
   AMBIENT_P,
@@ -124,15 +123,6 @@ function countActive(pattern) { let n = 0; for (let i = 0; i < pattern.length; i
     'boss+lowHp stacks BOTH danger voices');
 }
 
-// ---- collection (the Full Collection moment) ----
-{
-  const r = themeSelector({ zone: 0, biome: 'swamp', collection: true });
-  assert(r.themeId === 'collection', 'collection -> collection theme (overrides everything)', 'got ' + r.themeId);
-  assert(r.extraVoices.includes('collection-swell'), 'collection adds the chord-swell voice');
-  assert(r.patternDensity > 1, 'collection has a real pattern (the short phrase)');
-  assert(countActive(COLLECTION_THEME.pattern) > 0, 'collection phrase is non-empty');
-}
-
 // ---- the pure data is well-formed (every theme has a root/scale/pattern) ----
 {
   for (const biome of ['swamp', 'reeds', 'blackReeds']) {
@@ -145,10 +135,9 @@ function countActive(pattern) { let n = 0; for (let i = 0; i < pattern.length; i
       assert(typeof z.stepDur === 'number' && z.stepDur > 0, biome + ' zone stepDur > 0');
     }
   }
-  assert(BOSS_THEMES.gray && BOSS_THEMES.green, 'BOSS_THEMES has gray + green');
-  assert(BOSS_THEMES.gray.pulse && BOSS_THEMES.green.pulse, 'both boss themes opt into the pulse layer');
+  assert(BOSS_THEMES.gray && BOSS_THEMES.dark, 'BOSS_THEMES has gray + dark');
+  assert(BOSS_THEMES.gray.pulse && BOSS_THEMES.dark.pulse, 'both boss themes opt into the pulse layer');
   assert(typeof LOWHP_THEME.root === 'number' && Array.isArray(LOWHP_THEME.pattern), 'LOWHP_THEME is well-formed');
-  assert(typeof COLLECTION_THEME.root === 'number' && Array.isArray(COLLECTION_THEME.pattern), 'COLLECTION_THEME is well-formed');
 }
 
 // ==========================================================================
@@ -192,6 +181,10 @@ const ctx = makeAudioContext();
 globalThis.window = { AudioContext: function () { return ctx; } };
 const au = new AudioSys();
 assert(au.ensure() === true, 'AudioSys.ensure() boots against the stub');
+assert(typeof au.setEncoreArpeggio === 'undefined' && typeof au.collectionSwell === 'undefined',
+  'retired progression screens cannot schedule music layers');
+assert(themeSelector({ zone: 0, biome: 'swamp', collection: true }).themeId === 'swamp-0',
+  'obsolete collection state cannot override dungeon music');
 assert(!!au._melodyMaster, 'the melody layer (melodyMaster) exists');
 assert(!!au.musicBus, 'the musicBus exists');
 assert(au._melodyMaster._connections.includes(au.musicBus), 'melodyMaster connects INTO musicBus');
@@ -210,11 +203,6 @@ if (au._danger && au._danger.lowThemes[0]) {
 let tickThrew = false;
 try { au.tickMusic(); } catch (e) { tickThrew = true; }
 assert(!tickThrew, 'setLowHp + tickMusic ran without throwing');
-
-// collectionSwell() schedules a chord on the melody layer (no throw).
-let swellThrew = false;
-try { au.collectionSwell(); } catch (e) { swellThrew = true; }
-assert(!swellThrew, 'collectionSwell() runs without throwing against the stub');
 
 // zoneSwell() + bossPhaseUp() run without throwing (the S2 trigger entry points).
 let zoneThrew = false, phaseThrew = false;

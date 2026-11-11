@@ -273,6 +273,63 @@ export const MOVEMENT = Object.freeze({ accelerate: 26, brake: 38, reverse: 36, 
 export function bossArenaReached(playerX, worldWidth) {
   return Number.isFinite(playerX) && Number.isFinite(worldWidth) && playerX > worldWidth - 900;
 }
+
+// One finite descent. The run, its boss progress and its rewards are transient:
+// returning to the title or dying starts another floor-one run, never a cycle.
+export const CAMPAIGN = Object.freeze([
+  Object.freeze({ id: 'swamp', name: 'Watercolor Marsh', biome: 'swamp', boss: 'gray', final: false }),
+  Object.freeze({ id: 'reeds', name: 'Sunken Reeds', biome: 'reeds', boss: 'wyrm', final: false }),
+  Object.freeze({ id: 'hollow', name: 'Hollow Sanctuary', biome: 'reeds', boss: 'warden', final: false }),
+  Object.freeze({ id: 'black-reeds', name: 'Black Reeds', biome: 'reeds', boss: 'umbra', final: true }),
+]);
+export const CAMPAIGN_REWARDS = Object.freeze([
+  Object.freeze({ id: 'power', name: 'Brighter paint', description: '+20% brush, splash and burn damage for this run.' }),
+  Object.freeze({ id: 'heart', name: 'Lily heart', description: '+2 maximum health for this run.' }),
+  Object.freeze({ id: 'flow', name: 'Flowing brush', description: 'Dodge and splash recharge 12% faster for this run.' }),
+]);
+export function createCampaignRun(seed = 0) {
+  return { seed: Number.isFinite(Number(seed)) ? Math.floor(Number(seed)) >>> 0 : 0,
+    floor: 0, cleared: [], rewards: [], pendingReward: false, complete: false };
+}
+export function campaignFloor(run) {
+  return run && Number.isInteger(run.floor) ? CAMPAIGN[run.floor] || null : null;
+}
+export function finishCampaignFloor(run, bossKind) {
+  const floor = campaignFloor(run);
+  if (!floor || run.complete || run.pendingReward || bossKind !== floor.boss ||
+      !Array.isArray(run.cleared) || !Array.isArray(run.rewards) ||
+      run.cleared.length !== run.floor || run.rewards.length !== run.floor ||
+      !run.cleared.every((boss, index) => boss === CAMPAIGN[index].boss) ||
+      !run.rewards.every(id => CAMPAIGN_REWARDS.some(reward => reward.id === id))) return false;
+  run.cleared.push(floor.boss);
+  run.pendingReward = !floor.final;
+  run.complete = floor.final;
+  return true;
+}
+export function chooseCampaignReward(run, id) {
+  const floor = campaignFloor(run);
+  if (!floor || floor.final || run.complete || !run.pendingReward ||
+      !Array.isArray(run.cleared) || !Array.isArray(run.rewards) ||
+      run.cleared.length !== run.floor + 1 || run.cleared[run.floor] !== floor.boss ||
+      !run.cleared.every((boss, index) => boss === CAMPAIGN[index].boss) ||
+      run.rewards.length !== run.floor || !CAMPAIGN_REWARDS.some(reward => reward.id === id) ||
+      !run.rewards.every(value => CAMPAIGN_REWARDS.some(reward => reward.id === value))) return false;
+  run.rewards.push(id);
+  run.floor++;
+  run.pendingReward = false;
+  return true;
+}
+// Apply once to a freshly constructed tuning object when entering a floor.
+// Three gates means at most three rewards, even if an invalid caller adds more.
+export function applyCampaignRewards(tuning, run) {
+  const rewards = Array.isArray(run?.rewards) ? run.rewards.slice(0, CAMPAIGN.length - 1) : [];
+  for (const id of rewards) {
+    if (id === 'power') { tuning.power *= 1.2; tuning.burnDps *= 1.2; }
+    if (id === 'heart') tuning.maxHp += 2;
+    if (id === 'flow') { tuning.hopCooldown *= 0.88; tuning.splashCooldown *= 0.88; }
+  }
+  return tuning;
+}
 export function movementVelocity(vx, vy, targetX, targetY, dt, launch = false) {
   if (launch) return [targetX, targetY];
   const idle = targetX === 0 && targetY === 0;
@@ -460,12 +517,6 @@ export const ENEMIES = {
     dizzyPaintChance: 0.25,  // chance a paint hit stuns the toad (sits, +50% dmg)
     dizzyDuration: 2.4,
   },
-  // K1 (v1.5 M1): MUD TURTLE — the Living Swamp's armored plodder. High HP,
-  // slow, heavy contact hit. Its SHELL deflects paint from the FRONT arc
-  // (paint damage is cut to `deflectKeep` of normal within `deflectArc` of its
-  // facing) — full damage from the side/back. RED BURN is the counter: burn
-  // damage is applied per status-tick (stepStatus), never through a paint hit,
-  // so it ignores the deflection entirely. Scales into zones 3+ and NG+.
   turtle: {
     id: 'turtle', name: 'Mud Turtle', hp: 95, speed: 24, dmg: 12, radius: 24,
     armor: 0.45, fly: false, score: 45, paintTintDecay: 0.18,
@@ -473,13 +524,6 @@ export const ENEMIES = {
     deflectArc: 1.5,          // radians (~±86°) either side of its facing
     deflectKeep: 0.15,        // front paint deals this FRACTION of normal dmg
   },
-  // K2 (v1.5 M2): BLIND CRAG FROG — hunts by SOUND. It cannot see; it wakes to
-  // noise (a paint swipe/splash, a hop landing, a charge) inside `noiseRadius`
-  // and homes in at full speed. When the player is still the alert timer decays
-  // and it SLEEPS again — and while asleep it is vulnerable (+50% paint damage).
-  // While awake it is fast with high contact damage. Scales into zones 3+ and
-  // NG+; bounded spawn. Sleep/wake is modelled in enemies.js (per-enemy state);
-  // the asleep damage bonus is the pure `cragSleepBonus` applied in paint.js.
   cragfrog: {
     id: 'cragfrog', name: 'Blind Crag Frog', hp: 34, speed: 150, dmg: 9,
     radius: 17, armor: 0.05, fly: false, score: 40, paintTintDecay: 0.3,
@@ -719,7 +763,7 @@ export function activeSynergy(loadout = []) {
   if (ids.length < 2) return null;
   return SYNERGIES[_pairKey(ids[0], ids[1])] || null;
 }
-export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', gallery = 0, owned = [], gilded = false) {
+export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal') {
   const t = {
     // player
     maxHp: 10 + (upgrades.vitality || 0),
@@ -774,13 +818,6 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', g
     bossPaintHit: 6,         // hue per paint hit
     // damage taken
     contactCooldown: 0.7,
-    // A4 (v1.2 M9): 'Rehung Frame' gallery bonus — a permanent, saved tuning
-    // bump minted by retiring a completed collection (prestige-lite, no wipe).
-    // Off (level 0) by default; applyGalleryBonus() fills these from the save
-    // level. ink = +2 pigment of each color at the start of every run;
-    // orb = a small permanent multiplier on orb/pickup value.
-    galleryInkBonus: 0,
-    galleryOrbMult: 1,
   };
   const has = (id) => loadout.includes(id);
   if (has('moonlit-pond')) { t.freezeDuration *= 1.4; t.slowFactor *= 0.75; t.bossAwakenNeed.blue *= 0.7; }
@@ -797,234 +834,10 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal', g
   if (synergy) { t.synergy = synergy.name; synergy.apply(t); }
   // M8 P7: scale the run by the chosen difficulty (after loadout modifiers).
   applyDifficulty(t, difficulty);
-  // A4 (v1.2 M9): the permanent 'Rehung Frame' gallery bonus is a saved
-  // tuning bump applied via the standard makeTuning path so it stacks after
-  // loadout + difficulty. Pure + testable (no DOM).
-  applyGalleryBonus(t, gallery);
-  // G2 (v1.3 M15): the two GOLD-tier paintings apply when OWNED (a permanent
-  // meta bonus, not a loadout slot). A first-time save owns neither, so these
-  // are no-ops and a cycle-0 tuning is byte-identical. `gilded-meridian` lifts
-  // the consumed orb/pickup value +10%; `verdant-crown` adds +1 to the green
-  // heal-per-touch. Both feed the EXISTING tuning fields.
-  const owns = (id) => Array.isArray(owned) && owned.includes(id);
-  if (owns('gilded-meridian')) { t.pickupValue *= 1.1; }
-  if (owns('verdant-crown')) { t.greenHeal += 1; }
-  // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier — a permanent
-  // tuning bump applied LAST, ON TOP OF the Rehung Frame gallery bonus
-  // (+3 start ink of each color, +15% orb value), so it stacks distinctively
-  // with it. NG+/gold-gated: a first-time (cycle-0, non-gilded) save never
-  // passes gilded=true, so the gilded keys are added ONLY when on and a
-  // cycle-0 tuning is byte-identical (no new keys, same values).
-  if (gilded) {
-    t.gildedInkBonus = GILDED_FRAME.ink;
-    t.gildedOrbMult = GILDED_FRAME.orbMult;
-    t.galleryInkBonus += GILDED_FRAME.ink;   // stacks on the Rehung Frame ink
-    t.pickupValue = Math.round(t.pickupValue * GILDED_FRAME.orbMult * 100) / 100;
-  }
   return t;
 }
 
-// ----------------------------------------------------------------
-// N2 (v1.3 M14): New Game+ per-cycle scaling — PURE.
-//
-// ngPlusScaling(cycle) returns the multipliers for an NG+ cycle:
-//   cycle 0 (the base, first-time game)  →  everything 1.0 (NO change to the
-//                first-time run's 15–20 min pace band — the invariant).
-//   cycle >= 1                          →  modest escalation:
-//                · enemyHp   cycle 1 ≈ +30%  (beetles/mosquitoes/toads hit harder)
-//                · enemyDmg  cycle 1 ≈ +15%  (contact hits sting a little more)
-//                · spawnRate cycle 1 ≈ +10%  (waves arrive a touch sooner)
-//     Growth is CAPPED from cycle 3 onward (a hard ceiling at cycle 3) so the
-//     escalation is a deliberate "one more step up" rather than an unbounded
-//     difficulty spiral. The cap keeps later cycles readable and the pacing
-//     probes meaningful.
-//
-// Only applied in run setup when ngCycle >= 1. Because cycle 0 returns
-// all-ones, a first-time player's tuning is byte-identical to pre-NG+ (the
-// smoke suite asserts this), so the first-time 15–20 min run is unchanged.
-// K6 (v1.5 M2): the "Master" tier — cycle 4+ applies a capped Master step on
-// top of the cycle-3 escalation: enemy HP +50% and enemy damage +25% OVER the
-// cycle-3 values (spawn held at cycle 3 — the Master tier is about enemy
-// toughness, not spawn rate). All cycles >= 4 use the SAME Master row (bounded,
-// no unbounded spiral).
-export const NG_CAP_CYCLE = 4; // escalation is capped at cycle 4 (and every cycle after)
-// per-cycle multipliers; index 0 = base game (no NG+). Grows +30/+15/+10 HP/dmg/spawn
-// per step up to cycle 3, then the Master step (cycle 4+) adds HP +50% / dmg +25%
-// over cycle 3 and holds.
-export const NG_STEPS = [
-  { hp: 1.00, dmg: 1.00, spawn: 1.00 }, // cycle 0 (base)
-  { hp: 1.30, dmg: 1.15, spawn: 1.10 }, // cycle 1  (~ +30% / +15% / +10%)
-  { hp: 1.60, dmg: 1.30, spawn: 1.20 }, // cycle 2
-  { hp: 1.90, dmg: 1.45, spawn: 1.30 }, // cycle 3
-  // K6 Master tier (cycle 4+): HP +50% / dmg +25% over cycle 3 (1.90×1.50=2.85,
-  // 1.45×1.25=1.8125→1.81); spawn held at cycle 3 (1.30). Bounded — held for
-  // all later cycles (cycle 4 == cycle 5 == cycle 99).
-  { hp: 2.85, dmg: 1.81, spawn: 1.30 }, // cycle 4+ (MASTER — the capped peak)
-];
-export function ngPlusScaling(cycle) {
-  let c = Math.floor(Number(cycle));
-  if (!Number.isFinite(c) || c < 0) c = 0;
-  // clamp into the table; anything >= NG_CAP_CYCLE uses the capped (cycle 3) row.
-  const idx = Math.min(c, NG_STEPS.length - 1);
-  return NG_STEPS[idx];
-}
 
-// N2: apply the NG+ cycle multipliers to a tuning object (mutates it). No-op
-// for cycle 0 (all-ones) so first-time tuning is byte-identical. Pure.
-export function applyNGPlus(t, cycle) {
-  const s = ngPlusScaling(cycle);
-  if (s.hp !== 1) t.enemyHp = Math.round((t.enemyHp || 1) * s.hp * 100) / 100;
-  if (s.dmg !== 1) t.enemyDmg = Math.round((t.enemyDmg || 1) * s.dmg * 100) / 100;
-  if (s.spawn !== 1) t.spawnRate = Math.round(s.spawn * 100) / 100;
-  return t;
-}
-
-// ----------------------------------------------------------------
-// N4 (v1.3 M14): Player-chosen expedition modifiers — PURE.
-//
-// At the "Next Expedition" (New Game+) prompt the player picks ONE modifier
-// for the cycle. Modifiers are DATA (a MODIFIERS table of id -> {name, desc,
-// apply(t)}) that mutate an already-built tuning object through the EXISTING
-// tuning paths — no new systems. Each `apply(t)` sets only the few fields it
-// touches and leaves every other field (and, for an unknown/null id, the WHOLE
-// tuning) untouched, so a cycle-0 (first-time) run — which never runs a
-// modifier — stays byte-identical to pre-N4.
-//
-// The tuning fields these feed:
-//   waterWidthMult  — the world's water (ripples/slicks) draw radius multiplier
-//                     (High Tide: wider water). Render + test surface only.
-//   enemySpeedMult  — multiplied onto every enemy's base speed at spawn (High
-//                     Tide: +10% enemy speed).
-//   contactDmgMult  — multiplied onto enemy contact damage at spawn (Grey
-//                     Morning: +20% contact dmg) — combat-only, no HP/spawn.
-//   satFloor        — a render-only saturation floor so the world reads as a
-//                     flat gray morning (Grey Morning). Render-only, zero
-//                     gameplay effect.
-//   splashCharge    — the right-click splash charge TIME; longer = slower
-//                     charge (Dry Brush Season: +35% slower).
-//   pickupValue     — the per-orb/pickup value, already gallery-bonus-scaled;
-//                     the modifier multiplies it (Dry Brush Season: +25%).
-//
-// MODIFIERS is exported so tests + the atelier can read it without a browser.
-export const MODIFIERS = {
-  'high-tide': {
-    id: 'high-tide',
-    name: 'High Tide',
-    desc: 'the water runs wide and the swamp moves faster — water zones wider, enemies 10% faster',
-    apply(t) { t.waterWidthMult = 1.25; t.enemySpeedMult = 1.1; },
-  },
-  'grey-morning': {
-    id: 'grey-morning',
-    name: 'Grey Morning',
-    desc: 'a flat grey light over the water — the world desaturates, enemy contact does +20% damage',
-    apply(t) { t.contactDmgMult = 1.2; t.satFloor = 0.35; },
-  },
-  'dry-brush-season': {
-    id: 'dry-brush-season',
-    name: 'Dry Brush Season',
-    desc: 'the paint is thin this season — splashes charge +35% slower, but every orb is worth +25%',
-    apply(t) {
-      // the splash charge is a TIME (base 0.55): +35% slower = 35% longer.
-      t.splashCharge = Math.round(t.splashCharge * 1.35 * 100) / 100;
-      // +25% orb value — stacked onto the already-final pickupValue (which
-      // includes the gallery bonus), so it composes multiplicatively.
-      t.pickupValue = Math.round(t.pickupValue * 1.25 * 100) / 100;
-    },
-  },
-  // K5 (v1.5 M2): three new expedition modifiers — data entries that feed the
-  // EXISTING tuning/spawn/render paths (no new systems). NG+-gated like N4:
-  // a first-time (cycle-0) run never carries these fields, so it stays
-  // byte-identical.
-  'night-expedition': {
-    id: 'night-expedition',
-    name: 'Night Expedition',
-    desc: 'the swamp sleeps under a dark sky — the world dims, mosquitoes fly 20% faster, every orb is worth +10%',
-    // nightDarkness: a RENDER-ONLY flag read by game.js _drawAll (draws a
-    // semi-transparent dark overlay over the world). It does NOT affect
-    // logic/tuning — purely the "darker lighting" the K5 spec asks for.
-    // mosquitoSpeedMult: feeds the existing enemy-speed path (enemies.js
-    // Enemy constructor multiplies it in for mosquitoes only).
-    // pickupValue: the existing orb/pickup value field (stacks multiplicatively).
-    apply(t) {
-      t.nightDarkness = 1;
-      t.mosquitoSpeedMult = 1.2;
-      t.pickupValue = Math.round(t.pickupValue * 1.10 * 100) / 100;
-    },
-  },
-  'still-waters': {
-    id: 'still-waters',
-    name: 'Still Waters',
-    desc: 'the water lies flat — no weather phases this cycle, but enemies are 15% tougher',
-    // stillWaters: a flag read by game.js _updateExpedition to SKIP the
-    // weatherFor call (no rain/drought phases). It does NOT affect tuning —
-    // purely the "no weather phases" the K5 spec asks for.
-    // enemyHp: the existing enemy-HP multiplier (stacks onto the NG+ cycle
-    // multiplier already applied).
-    apply(t) {
-      t.stillWaters = 1;
-      t.enemyHp = Math.round((t.enemyHp || 1) * 1.15 * 100) / 100;
-    },
-  },
-  "masters-palette": {
-    id: "masters-palette",
-    name: "Master's Palette",
-    desc: 'the atelier hands you a ready-made duo — the Flooded Night synergy is pre-locked in your loadout, and enemy contact does +10% damage',
-    // preLock: the 2-slot loadout that game.js _beginExpedition uses INSTEAD
-    // of the player\'s saved loadout when this modifier is active. It is read
-    // BEFORE makeTuning (not from t) because it changes which paintings the
-    // loadout contains, which makeTuning consumes. The `this` inside apply(t)
-    // is the modifier object, so `this.preLock` is the array.
-    preLock: ['moonlit-pond', 'storm-cloud'],
-    apply(t) {
-      t.contactDmgMult = (t.contactDmgMult || 1) * 1.10;
-      t.preLockLoadout = this.preLock; // marker for tests + the smoke stage
-    },
-  },
-};
-export const MODIFIER_ORDER = ['high-tide', 'grey-morning', 'dry-brush-season', 'night-expedition', 'still-waters', 'masters-palette'];
-// The active modifier for a save: a valid MODIFIERS id, or null (no modifier).
-// Unknown/empty/garbled values normalize to null so old saves (pre-N4) and
-// a "no modifier" choice both read as no-op. Pure (no DOM).
-export function saveModifier(save) {
-  const id = save && typeof save.ngModifier === 'string' ? save.ngModifier : '';
-  return MODIFIERS[id] ? id : null;
-}
-// Apply a save's chosen modifier to a tuning object (in place, returns it).
-// No-op for a null/unknown id, so a first-time (cycle 0) run that passes no
-// modifier is byte-identical. Pure. Called by _beginExpedition ONLY on NG+
-// cycles (ngCycle >= 1) — the base game never runs a modifier.
-export function applyModifier(t, id) {
-  const m = MODIFIERS[id];
-  if (!m) return t;
-  m.apply.call(m, t);
-  return t;
-}
-
-// ----------------------------------------------------------------
-// K7 (v1.5 M2): The CURATOR CHALLENGE — a SEEDED, SCORED expedition.
-//
-// A title-screen "Challenge" button, GATED behind a completed victory (the same
-// ngUnlocked gate as NG+), so a first-time player never sees it. A challenge run
-// is ONE shared world per day: the seed is the current UTC day (Date.now() /
-// 86400000), so everyone who presses it that day draws the SAME loadout, the
-// SAME modifier, and runs the SAME seeded world. The loadout is a RANDOM 2-
-// painting draw from the player's OWNED paintings (not chosen by the player);
-// the modifier is a RANDOM one from the MODIFIERS table. On a completed run the
-// frog banks a SCORE (restored swamp + enemies + orbs + boss-time bonus) into a
-// SAVED best-score file (top 5, each {seed, date, score}) shown in a new atelier
-// panel.
-//
-// The whole RULE is pure + headless-testable (this block): the day seed, the
-// seeded loadout/modifier draws, the score formula, and the top-5 file. game.js
-// stays thin — it wires the button, drives the seeded expedition, and calls
-// these functions. All draws use mulberry32 (src/math.js) so the same seed is
-// deterministic forever.
-//
-// A challenge run is its OWN mode: it is NOT counted in the first-time Normal
-// 15-20 min pace band (it is seeded from a player's post-victory save, and the
-// first-time pace.mjs / humance.mjs probes never enter it).
-//
-// CHALLENGE_TOP_N — the size of the saved best-score file.
 export const CHALLENGE_TOP_N = 5;
 
 // K7: the shared "day seed" for a given instant. The whole world shares one
@@ -1065,17 +878,6 @@ export function challengeDrawLoadout(seed, owned) {
   return [a[a.length - 1], a[a.length - 2]];
 }
 
-// K7: the SEEDED modifier draw — one random id from the MODIFIERS table. Uses
-// mulberry32(seed) with a distinct stream offset from the loadout draw (so the
-// same seed yields a STABLE (loadout, modifier) pair, not two independent
-// draws). Returns a valid MODIFIERS id, or null if the table is empty. Pure.
-export function challengeDrawModifier(seed) {
-  const ids = MODIFIER_ORDER.filter(id => MODIFIERS[id]);
-  if (ids.length === 0) return null;
-  const rnd = mulberry32((Math.floor(Number(seed)) | 0) ^ 0x51ed270b);
-  const k = Math.floor(rnd() * ids.length) % ids.length;
-  return ids[k];
-}
 
 // K7: the challenge SCORE constants. Chosen so a competent run lands in a
 // satisfying, bounded range (roughly a few hundred to a couple thousand):
@@ -1136,28 +938,12 @@ export function challengeFileScore(save, seed, score) {
   return out;
 }
 
-// K7: a save has unlocked the Curator Challenge once at least one VICTORY is
-// recorded (the same gate as NG+ — ngUnlocked). A first-time save (no victory)
-// sees NO challenge button. Pure.
 export function challengeUnlocked(save) {
   return !!(save && save.stats && Number(save.stats.victories) > 0);
 }
 
-// ----------------------------------------------------------------
-// R5 (v1.6 Module R): BENEATH THE REEDS — the new VICTORY-GATED biome.
-//
-// The Reeds entry is VICTORY-GATED: a first-time (cycle-0 swamp) player NEVER
-// sees it, so the first-time 15–20 min run stays byte-identical. R1 ships the
-// entry + biome + lantern behind this "same ngUnlocked-style gate" — a save has
-// at least one victory recorded. R5 (a later item) promotes this to a
-// PERSISTENT `save.reedsUnlocked` latch (set on the first swamp victory, with a
-// SAVE_VERSION 9→10 migration + normalizer so every pre-v1.6 save loads false —
-// nobody backfills access) and makes the title/atelier entry read that field.
-// For R1 the gate is the pure victory predicate below.
-// R5: the gate is the PERSISTENT save.flags.reedsUnlocked latch (set on the
-// FIRST swamp victory — the same place ngUnlocked is set). The victory
-// fallback keeps a legacy save (already has victories, flag never set
-// because it predates v1.6) able to enter; a fresh no-victory save is locked.
+// Legacy accomplishment predicate, retained for old save/history readers.
+// Campaign entry itself is controlled by finishCampaignFloor/chooseCampaignReward.
 export function reedsUnlocked(save) {
   if (save && save.flags && !!save.flags.reedsUnlocked) return true;
   return !!(save && save.stats && Number(save.stats.victories) > 0);
@@ -1175,39 +961,10 @@ export function normalizeCrossingPainted(raw) {
   return !!raw;
 }
 
-// G1 (v1.8): THE BLACK REEDS — the NG+ (New Game+) REEDS VARIANT. The v1.6
-// Reeds biome is the CYCLE-0 (first-victory) place; this is its DEEPER,
-// DARKER, HARDER RE-ENTRY for a player who has ALREADY cleared it. It is
-// GATED behind BOTH (a) an NG+ cycle (ngCycle >= 1) AND (b) a REEDS VICTORY
-// (the player has actually BEATEN the Reeds biome, recorded in
-// save.flags.reedsVictory by the Reeds run that earned it). A first-time
-// player (no Reeds victory, ngCycle 0) NEVER sees it — the v1.6 Reeds
-// layout is untouched and its 20–25 min run-length is byte-identical.
-//
-// "A Reeds victory" is a REAL save fact (a victory recorded while IN the
-// Reeds biome), NOT a derived one — so it lives in its OWN latch flag
-// (`save.flags.reedsVictory`) and is set in the same victory path as
-// reedsUnlocked, but only when the run that won was a Reeds-biome run. The
-// flag is a new FIELD on the EXISTING save.flags object (already serialized
-// wholesale by the save round-trip), so it needs NO SAVE_VERSION bump — the
-// SAME way reedsUnlocked (R5) was added. A pre-v1.8 save (no field) loads
-// FALSE via normalizeReedsVictory, so nobody backfills access.
 export function normalizeReedsVictory(raw) {
   return !!raw;
 }
 
-// G1 (v1.8): the pure BLACK REEDS gate. TRUE only when BOTH an NG+ cycle is
-// active (ngCycle >= 1) AND the player has a Reeds victory on record. The
-// pure predicate lives here (logic.js) so tests can import it without a
-// browser, and the title/atelier + the run-setup read the SAME gate. A
-// cycle-0 save (ngCycle 0) or a no-Reeds-victory save returns FALSE — the
-// Black Reeds entry is hidden and the Reeds entry stays the v1.6 layout.
-export function blackReedsUnlocked(save) {
-  const cycle = (save && Math.floor(Number(save.ngCycle)) || 0);
-  const ngOk = cycle >= 1;
-  const reedsWin = !!(save && save.flags && !!save.flags.reedsVictory);
-  return ngOk && reedsWin;
-}
 
 // D1 (v1.7): normalize THE WANDER's last-seed latch to a non-negative integer.
 // A pre-v1.7 save (no field, or a non-finite/garbled value) loads 0 — the
@@ -1458,30 +1215,6 @@ export function hopLift(hopT, x, y, pockets = REEDS_POCKETS) {
   return inGravityPocket(x, y, pockets) ? -lift : lift;
 }
 
-// ----------------------------------------------------------------
-// G1 (v1.8): THE BLACK REEDS — the NG+ REEDS VARIANT's DETERMINISTIC layout
-// data. The v1.6 Reeds biome is the cycle-0 (first-victory) place; this is
-// its DEEPER, DARKER, HARDER re-entry for a player who has ALREADY beaten it.
-// It is GATED behind ngCycle >= 1 AND a Reeds victory (blackReedsUnlocked) and
-// NEVER touches the v1.6 Reeds layout (REEDS_WIDTH / REEDS_POCKETS /
-// REEDS_FLOOD_FLOOR stay untouched) — a cycle-0 Reeds run is byte-identical.
-//
-// The layout is PURE data (AABBs + a line + a multiplier), like REEDS_POCKETS:
-// reproducible, smoke-testable, zero per-frame allocation.
-//
-//   · DEEPER — a longer descent than the Reeds' 6000px (the "deep reeds, one
-//     tier above the Reeds").
-//   · DENSER BESTIARY — a higher Wisp/Serpent/Leech pick ratio (the world is
-//     darker → the light-bestiary matters more); the tuning lives in
-//     REEDS_DARK_BESTIARY (below), keyed off the SAME REEDS_BESTIARY numbers.
-//   · AN EXTRA FLOOD / GRAVITY POCKET — one more inverted-gravity pocket
-//     (REEDS_DARK_POCKETS = the 3 Reeds pockets + a 4th) and a DEEPER +
-//     FASTER flood band (REEDS_DARK_FLOOD_*), so the open water is bigger and
-//     the wade slower.
-//   · ITS OWN LANTERN-ECONOMY TUNING — a faster fuel drain + a shorter light
-//     radius (REEDS_DARK_LANTERN), so the candle loop is a real layer and the
-//     "deep dark" is darker. Kept a pure multiplier table so a balance pass is
-//     one file edit.
 export const REEDS_DARK_WIDTH = 7200;     // the Black Reeds descent (deeper than REEDS_WIDTH 6000)
 
 // G1 (v1.8): the FOUR inverted-gravity pockets of the Black Reeds — the three
@@ -1536,37 +1269,7 @@ export const REEDS_DARK_LANTERN = {
 export const REEDS_BESTIARY_DENSITY = { wisp: 0.965, serpent: 0.935, leech: 0.905 };
 export const REEDS_DARK_BESTIARY_DENSITY = { wisp: 0.94, serpent: 0.905, leech: 0.87 };
 
-// ----------------------------------------------------------------
-// K8 (v1.5 M2): the CHALLENGE REWARD — the Masterpiece "The Heron, Waking".
-//
-// First-EVER Curator Challenge completion mints a UNIQUE MASTERPIECE painting:
-// "The Heron, Waking" — a special framed work shown in the Gallery Wall + the
-// Curator's Ledger. It is a PURE COLLECTION piece: unbuyable, not a loadout
-// painting, not a purchase (it is minted by completing the daily challenge,
-// not bought in the shop). SUBSEQUENT completions give a small repeatable gold
-// bonus by rank (a top-1 finish pays more than a low rank). Reuses the
-// existing gold/latch machinery: the FIRST-completion mint is idempotent (the
-// masterpiece flag latches so it is awarded EXACTLY once, ever); the
-// repeatable rank bonus is a fresh gold-earn event keyed by (seed, rank) so a
-// given (day, rank) pays once but each new day/retry pays again.
-//
-// The masterpiece is gated by the save.goldEarned.masterpiece latch (set when
-// the first completion's gold fires), NOT a PAINTINGS id — so it never appears
-// in the shop, loadout, the retirement threshold (canRetireCollection),
-// makeTuning, or the PAINTINGS catalog (which stays at 10). It is pure
-// collection + display. No new save field is introduced, so SAVE_VERSION
-// stays at 9.
-export const MASTERPIECE = {
-  id: 'the-heron-waking',          // a display id (NOT in PAINTINGS / owned)
-  name: 'The Heron, Waking',
-  desc: 'The Gilded Heron lifts from the gray shore at first light — a masterpiece the Curator hung in gold.',
-  // a distinct gilded art palette (read by the gallery/ledger frame + motif):
-  art: { bg: '#f3e6c4' },
-  // first-ever challenge completion: mint the masterpiece + pay this much gold
-  firstGold: 15,
-  // subsequent completions: a small REPEATABLE bonus by rank (1 = best).
-  rankGold: { 1: 5, 2: 3, 3: 3, 4: 2, 5: 2 },  // lower ranks fall back to the 5-rank value
-};
+
 // The rank a filed challenge score sits at in the top-5 list (1 = the top
 // entry). Deterministic from the list (descending by score).
 export function challengeRank(score, list) {
@@ -1576,259 +1279,7 @@ export function challengeRank(score, list) {
   for (const e of arr) if (Number(e && e.score) > sc) n += 1;
   return n + 1;
 }
-// The repeatable rank bonus for a rank (the rankGold table, clamped to 1..5).
-export function challengeRankBonus(rank) {
-  const r = Math.max(1, Math.min(5, Math.floor(Number(rank) || 5)));
-  return MASTERPIECE.rankGold[r] || MASTERPIECE.rankGold[5];
-}
-// The repeatable gold-earn EVENT for a (seed, rank) — a fresh, per-day key so
-// each new day / retry can pay again (the latch is per-key, not global). The
-// amount is the rank bonus. Pure (builds the event; goldEarn applies it).
-export function challengeRankEvent(seed, rank) {
-  const r = Math.max(1, Math.min(5, Math.floor(Number(rank) || 5)));
-  return { key: `chal-rank-${Math.floor(Number(seed))}-${r}`, amount: challengeRankBonus(r) };
-}
-// K8: has a save minted the Masterpiece yet? The mint is latched by the
-// EXISTING gold-earn map (save.goldEarned.masterpiece) set when the first
-// completion's +15 gold fires — the same idempotency mechanism the rest of the
-// gold economy uses, so NO new save field (and no SAVE_VERSION bump) is needed.
-// A legacy save (no goldEarned map, or no such key) reads false (not yet
-// minted). Pure.
-export function isMasterpieceMinted(save) {
-  return !!(save && save.goldEarned && save.goldEarned.masterpiece);
-}
-// K8: the pure completion reward. Called by game.js on a challenge VICTORY,
-// AFTER the score has been filed (challengeFileScore) so the rank is known.
-// First-EVER completion: mint the Masterpiece (latch goldEarned.masterpiece) +
-// pay MASTERPIECE.firstGold (15) — EXACTLY once, ever. Subsequent completions:
-// a small REPEATABLE bonus by rank (top-1 pays more), keyed by (seed, rank) so
-// each new day / retry can pay again. Returns { minted, gold, rank } (gold is
-// the amount actually banked this call — 0 if the latch already held). Mutates
-// save in place (the caller persists it). Pure with respect to world state.
-export function challengeComplete(save, seed, score) {
-  const res = { minted: false, gold: 0, rank: 1 };
-  if (!save) return res;
-  const list = normalizeChallengeScores(save && save.challengeScores);
-  res.rank = challengeRank(score, list);
-  if (!isMasterpieceMinted(save)) {
-    // first-ever: mint the masterpiece + first gold (latched via goldEarn).
-    res.minted = goldEarn(save, { key: 'masterpiece', amount: MASTERPIECE.firstGold }) > 0;
-    res.gold += res.minted ? MASTERPIECE.firstGold : 0;
-  } else {
-    // subsequent: the repeatable rank bonus (fresh per (seed, rank) key).
-    res.gold += goldEarn(save, challengeRankEvent(seed, res.rank));
-  }
-  return res;
-}
 
-// ----------------------------------------------------------------
-// G1 (v1.3 M15): Gold — a NEW META-ONLY currency.
-//
-// Gold is earned ONLY from first-time meta achievements (the "milestones" of a
-// longer career): the first kill of each boss type, the first completion of
-// each painting-synergy duo, and an orb milestone (first 100 orbs in a run).
-// It is deliberately META-ONLY:
-//   · it is NOT a 4th paint color (the 3-hue red/blue/green pillar is untouched),
-//   · it does NOT feed makeTuning / combat tuning (no balance impact), and
-//   · it is banked once (idempotent per event) and spent later (G2 onward).
-//
-// The earn RULE is pure + headless-testable: `goldEarn(save, event)` inspects
-// `save.goldEarned` (a {key:true} map) and, for an event not yet fired, adds the
-// amount to `save.gold` and latches the key so it never fires twice. Legacy
-// saves (no gold fields) migrate forward as gold 0 / empty goldEarned.
-//
-// Amounts (documented in PROJECT_STATE.md; tuned so a career that reaches NG+
-// — first-time gray-heron kill + NG+ green-heron kill + the synergy duos + the
-// orb milestone — banks enough to clear BOTH G2 gold paintings (25 + 40 = 65)):
-//   first kill of the Great Gray Heron ......... 15
-//   first kill of the Great Green Heron (NG+) .. 20
-//   first completion of each synergy duo ........ 8  (3 duos -> 24)
-//   first 100 orbs in a single run .............. 8
-//   ----------------------------------------------
-//   max gold a career can bank .................. 67
-export const GOLD = {
-  // boss: the GILDED Heron (K4, NG+ cycle 3+) pays no new gold of its own — it
-  // is a later-cycle escalation of the NG+ boss (the player already banked the
-  // green heron's 20 gold in cycle 1). goldTotal() counts it as 0.
-  boss: { gray: 15, green: 20, gilded: 0 },
-  synergyDuo: 8,
-  orbMilestone: { at: 100, amount: 8 },
-};
-
-// Build the gold event for the FIRST kill of a heron boss type (`kind` =
-// 'gray' | 'green' | 'gilded'). Returns null for an unknown kind (no event, no
-// gold). The GILDED Heron (K4, NG+ cycle 3+) awards NO meta gold of its own
-// (boss.gilded === 0): it is a later-cycle escalation of the NG+ boss, and the
-// player has already banked the green heron's gold in cycle 1. Keeping the
-// amount at 0 also leaves goldTotal() (and the G1/C2 smoke assertions)
-// untouched.
-export function goldEventBoss(kind) {
-  const amount = GOLD.boss && GOLD.boss[kind];
-  if (!amount) return null;
-  return { key: `boss:${kind}`, amount };
-}
-
-// Build the gold event for the FIRST completion of a painting-synergy DUO.
-// `synergy` is the object from activeSynergy/loadout (carries `pair: [a,b]`).
-// The stable key is the sorted pair key (a|b) so each distinct duo latches once.
-export function goldEventSynergy(synergy) {
-  if (!synergy || !Array.isArray(synergy.pair) || synergy.pair.length < 2) return null;
-  return { key: `synergy:${_pairKey(synergy.pair[0], synergy.pair[1])}`, amount: GOLD.synergyDuo };
-}
-
-// Build the gold event for the ORB MILESTONE (first time a run's orb count
-// reaches GOLD.orbMilestone.at). runOrbs is the run's cumulative orb count.
-export function goldEventOrbs(runOrbs) {
-  const at = GOLD.orbMilestone.at;
-  if (!(runOrbs >= at)) return null;
-  return { key: `orbs:${at}`, amount: GOLD.orbMilestone.amount };
-}
-
-// The CORE gold earn rule (pure). `event` = { key, amount }. Returns the amount
-// just banked (0 if the key already fired, the amount is invalid, or there is no
-// save). Idempotent per event key via save.goldEarned; the save is mutated in
-// place (the caller persists it).
-export function goldEarn(save, event) {
-  if (!save || !event) return 0;
-  const key = typeof event.key === 'string' && event.key ? event.key : null;
-  const amount = Math.floor(Number(event.amount));
-  if (!key || !Number.isFinite(amount) || amount <= 0) return 0;
-  if (!isPlainObj(save.goldEarned)) save.goldEarned = {};
-  if (save.goldEarned[key]) return 0; // already banked — fires exactly once
-  if (!Number.isFinite(Number(save.gold))) save.gold = 0;
-  save.gold = Math.floor(Number(save.gold)) + amount;
-  save.goldEarned[key] = true;
-  return amount;
-}
-
-// The total gold a career could ever bank (sum of every event amount, once).
-// Pure + handy for tests/docs (should be >= the G2 gold-painting prices).
-export function goldTotal() {
-  let total = 0;
-  for (const kind of Object.keys(GOLD.boss)) total += GOLD.boss[kind];
-  total += Object.keys(SYNERGIES).length * GOLD.synergyDuo;
-  total += GOLD.orbMilestone.amount;
-  return total;
-}
-
-// ----------------------------------------------------------------
-// N3 (v1.3 M14): The Great Green Heron — the New Game+ final boss.
-//
-// A *second* final boss that appears on NG+ cycles (ngCycle >= 1) INSTEAD of the
-// Great Gray Heron (the gray heron stays the first-time boss). It reuses the
-// existing heron AI / phase machine (bossStep) and the 3-hue awakening (paint)
-// end-to-end — the only differences are:
-//   · a distinct GREEN palette (rendered in _drawHeron via h.green), and
-//   · ONE swapped mechanic: painting it with MOSS (green) pins it in place
-//     briefly (the E1/MidHeron "reed pinning" idea, reused at boss scale).
-//
-// It has slightly MORE HP than the gray heron (30k -> 36k, +20%). Because the
-// heron is fixed-HP in tuning (deliberately NOT N2-scaled — see N2), the fight
-// stays in the same ~2-3 min human band; the pin is a small extra damage window
-// the player earns with green play, which offsets the HP bump and keeps the
-// fight time close to the gray heron's (bosspace-style band; see the N3 note in
-// PROJECT_STATE.md for the expected fight time).
-export const GREEN_HERON = {
-  kind: 'green',                 // the NG+ boss (vs the gray heron's 'gray')
-  hp: 36000,                     // +20% over the gray heron's 30000 — same time band
-  awakenNeed: { red: 45, blue: 45, green: 45 }, // 3-hue rhythm UNCHANGED (core pillar)
-  greenHue: '#5a9e3d',           // moss green — the distinct palette
-  greenHueLight: '#9ed483',
-  pinNeed: 30,                   // Moss units to trigger a pin (~5 swipes @ 6/hit)
-  pinDuration: 3.0,              // the Moss reed pin holds it in place ~3s (E1 reed-pin, boss scale)
-};
-
-// N3: the swapped boss mechanic — the Great Green Heron's reed pin, as a PURE
-// timer so it is testable without a browser. Painting the green heron with MOSS
-// (when it is not already pinned) accumulates h.pinCharge; once it reaches
-// GREEN_HERON.pinNeed, game.js sets h.pinned = GREEN_HERON.pinDuration. While
-// h.pinned > 0 the heron is HELD IN PLACE: _updateBoss skips its bossStep
-// attacks (no retaliation / no movement), and it takes 2x paint damage (the
-// vulnerable window — rewarding green play). greenHeronPinTick decays the hold;
-// it returns 'pinned' while held, 'pin-off' on the frame it releases, or 0 when
-// not pinned. The gray heron never carries `pinned`, so this is a no-op for it
-// (first-time run byte-identical).
-export function greenHeronPinTick(h, dt) {
-  if (!h || !(h.pinned > 0)) return 0;
-  h.pinned -= dt;
-  if (h.pinned <= 0) { h.pinned = 0; return 'pin-off'; }
-  return 'pinned';
-}
-
-// ----------------------------------------------------------------
-// K4 (v1.5 M2): The GILDED HERON — the NG+ cycle-3+ final boss.
-//
-// A THIRD final boss that REPLACES the Great Green Heron as the cycle-3+ boss
-// (cycle 0 stays the gray heron, cycles 1-2 stay the green heron). It reuses
-// the existing heron AI / phase machine (bossStep) and the 3-hue awakening
-// (paint) end-to-end, exactly like the green heron — the differences are:
-//   · a distinct GOLD-tinted palette (rendered in _drawHeron via h.gilded),
-//   · MORE fixed HP (36k -> 42k, +16% over the green heron — the boss is
-//     deliberately NOT N2-scaled, so the escalation is a fixed bump), and
-//   · ONE new mechanic: its GILDED PLUMAGE ABSORBS the player's heal sources.
-//
-// The plume mechanic: the heron runs a ~30s phase cycle (the GILDED_HERON.plume
-// timing below). While it is in the ACTIVE "plume" phase, its gilded plumage
-// glows and it ABSORBS healing — the player's green-paint heal sources (painting
-// enemies green AND standing in green) heal 0. In the COOLDOWN gap between
-// plumes the player's green heal works normally. This forces the player to
-// heal in the gaps, adding a damage-avoidance rhythm on top of the 3-hue
-// awaken.
-//
-// The plume is a PURE state machine (gildedPlumeTick) driven by h.plumeT so it
-// is testable without a browser — the same pattern as the green heron's reed
-// pin (greenHeronPinTick). game.js calls gildedPlumeTick each frame, reads
-// gildedPlumeActive(h) to decide whether to suppress the player's green heal,
-// and paints the glowing plumage while active. The gray and green herons never
-// carry `plumeT`, so a first-time (cycle-0) and cycle-1/2 (green) run is
-// byte-identical to pre-K4.
-export const GILDED_HERON = {
-  kind: 'gilded',                // the NG+ cycle-3+ boss (vs 'gray' / 'green')
-  minCycle: 3,                   // the NG+ cycle from which it replaces the green heron
-  hp: 42000,                     // +16% over the green heron's 36k (fixed-HP bump)
-  awakenNeed: { red: 45, blue: 45, green: 45 }, // 3-hue rhythm UNCHANGED (core pillar)
-  gildedHue: '#d9a52e',          // gold — the distinct palette
-  gildedHueLight: '#ffe9a8',
-  // The plume phase cycle: the plumage is ACTIVE (absorbing heal) for
-  // plumeActive seconds, then rests (the heal gap) for plumeCooldown seconds,
-  // then re-activates. A ~30s cycle as specced (10s active + 20s gap).
-  plumeActive: 10.0,
-  plumeCooldown: 20.0,
-};
-
-// K4: is the GILDED heron currently in its ACTIVE plume phase (absorbing heal)?
-// Reads the plumeT state machine (see gildedPlumeTick): while plumeT > 0 the
-// plumage is glowing and the player's green heal is suppressed. Pure.
-export function gildedPlumeActive(h) {
-  return !!(h && h.gilded && (h.plumeT || 0) > 0);
-}
-
-// K4: the plume phase state machine, as a PURE timer (testable headless).
-// h.plumeT is the remaining ACTIVE-plume time (>0 = absorbing); h.plumeCd is
-// the cooldown before the next plume fires. Returns 'plume-on' on the frame the
-// plumage activates (glow + heal suppression begins), 'plume-off' on the frame
-// it releases (the heal gap opens), or 0 when steady (no transition this frame).
-//
-// A gilded heron carries { plumeT, plumeCd, gilded: true }; the gray and green
-// herons never carry `gilded`, so this is a no-op for them (byte-identical).
-// The cycle: when the plumage is active (plumeT>0) it counts down to the gap;
-// in the gap (plumeCd>0) it counts down to the next activation.
-export function gildedPlumeTick(h, dt) {
-  if (!h || !h.gilded) return 0;
-  if ((h.plumeT || 0) > 0) {
-    // ACTIVE plume: count down to the gap.
-    h.plumeT -= dt;
-    if (h.plumeT <= 0) { h.plumeT = 0; h.plumeCd = GILDED_HERON.plumeCooldown; return 'plume-off'; }
-    return 0;
-  }
-  if ((h.plumeCd || 0) > 0) {
-    // COOLDOWN gap: count down to the next activation.
-    h.plumeCd -= dt;
-    if (h.plumeCd <= 0) { h.plumeCd = 0; h.plumeT = GILDED_HERON.plumeActive; return 'plume-on'; }
-    return 0;
-  }
-  return 0;
-}
 
 // ----------------------------------------------------------------
 // R4 (v1.6): THE SILT WYRM — the 4th boss ARCHETYPE (the deferred item). The
@@ -1840,10 +1291,10 @@ export function gildedPlumeTick(h, dt) {
 // so `paintBossHit`→`paintBoss` fires the identical awaken event + the 2x
 // awakened paint window) — this state machine is the NEW MOVEMENT pattern
 // (underground transit between surface points instead of flight/lunge). HP in
-// the 48k class (above the gilded 42k — the biome's apex). Reeds-mode only.
+// The Silt Wyrm guards the second floor of the finite descent.
 export const SILT_WYRM = {
-  kind: 'wyrm',                 // the 4th boss archetype (vs gray/green/gilded)
-  hp: 48000,                    // 48k — above the gilded 42k (the biome's apex)
+  kind: 'wyrm',
+  hp: 48000,
   awakenNeed: { red: 45, blue: 45, green: 45 }, // the SAME 3-hue rhythm as the herons
   strikeDmg: 12,                // the surfaced strike's damage (a big hit, dodgeable)
   strikeReach: 220,             // a frog within this of the surface point is hit
@@ -1929,25 +1380,8 @@ export function wyrmSurfacePoint(h, surfIdx, worldW) {
   return [x, SILT_WYRM.surfaceY];
 }
 
-// F1 (v1.7): THE HOLLOW WARDEN — the 5th boss archetype, the Wander-apex. It
-// appears ONLY as the finale of a Wander expedition (Wander ON); the hand-tuned
-// first-time / NG+ / Reeds apexes keep their herons / Silt Wyrm, so a Wander-OFF
-// run NEVER meets it. It is a PALE, lantern-eating creature: while the player's
-// lantern is LIT it SIPHONS candle fuel (the pure wardenFuelSiphon tick — a new
-// pure layer, the documented rate is siphonRate fuel/sec, taste-scaled); when
-// the lantern is UNLIT or EMPTY it siphons nothing. It is VULNERABLE only while
-// its maw is open — a telegraphed WARDEN.mawOpen window (~1.8 s) that REUSES the
-// Silt-Wyrm ripple-ring telegraph language (the maw glows during the tell, then
-// snaps open); between openings it is invulnerable. Its aggression is SEEDED
-// by the Wander taste (D2): a "Feast Season" Warden is more aggressive / faster
-// siphon (wardenTasteFactor > 1); a "Quiet Reeds" Warden is more evasive (< 1)
-// — the same boss feels different per run, tying F to D. The 3-hue awaken still
-// applies through the EXISTING paintBoss / bossStep path (a new kind:'warden'
-// variant; the SAME paintBoss latch fires 'awaken' + the 2x damage window
-// exactly as the herons / wyrm do). HP 52k — above the Silt Wyrm's 48k (the
-// Wander apex). Wander-mode only (Wander OFF never selects it).
 export const WARDEN = {
-  kind: 'warden',               // the 5th boss archetype (vs gray/green/gilded/wyrm)
+  kind: 'warden',
   hp: 48000,                    // Keeps 2–4m pacing with uninterrupted brush movement.
   awakenNeed: { red: 45, blue: 45, green: 45 }, // the SAME 3-hue rhythm as the herons / wyrm
   strikeDmg: 12,                // the maw-strike's damage (a big hit, dodgeable — same as the wyrm)
@@ -2076,31 +1510,6 @@ export function wardenFuelSiphon(warden, lantern, dt) {
   return { fuel, lit: fuel > 0 ? base.lit : false };   // auto-extinguish at 0 (the lantern's own rule)
 }
 
-// ----------------------------------------------------------------
-// G2 (v1.8): THE UMBRAL WYRM — the 6th boss archetype, the Black Reeds' apex
-// predator. It is the Silt Wyrm's TWIN (a darker, faster, DUAL-PHASE subterranean
-// wyrm) and the only boss that uses BOTH of the Reeds bosses' signature
-// mechanics: the Warden's FUEL SIPHON (it feeds on the lantern's light) and the
-// Silt Wyrm's FLOOD-POCKET transit (it slithers the flooded lower banks).
-//
-// It reuses the EXISTING paintBoss / bossStep 3-hue awaken latch + the heron
-// defeat/victory (sink) path end-to-end (occupying the same `this.heron` slot
-// in game.js), but with a NEW underground-transit movement state machine
-// (umbrStep) that is DUAL-PHASE:
-//   · PHASE 1 (hp > deepDarkPhase): the Silt Wyrm's rhythm — transit → a
-//     TELEGRAPHED DUAL MAW (two surface points marked at once) → a surfaced
-//     strike window (the paint window) → re-submerge. Faster than the Silt Wyrm.
-//   · PHASE 2 (the "DEEP DARK" final phase, hp <= deepDarkPhase): the wyrm
-//     speeds up (a shorter transit) and the lantern becomes MANDATORY — it is
-//     INVULNERABLE while the player's lantern is UNLIT (the deep dark only
-//     yields to light) AND it SIPHONS candle fuel (the Warden-inherited
-//     lantern-eater). The flood-pocket transit (the wyrm-inherited mechanic) is
-//     what the player dodges.
-//
-// It is DEFAULT-OFF — it only appears in the Black Reeds variant (gated behind
-// ngCycle >= 1 AND a Reeds victory, see G1's blackReedsUnlocked), so every
-// EXISTING run is byte-identical. All numbers live here (logic.js) so a
-// balance pass is one file edit.
 export const UMBRA_WYRM = {
   kind: 'umbra',
   hp: 60000,                    // ~60k HP — one tier above the Silt Wyrm's 48k
@@ -2262,87 +1671,12 @@ export function umbraPaintable(h, lanternLit) {
   return true;
 }
 
-// ----------------------------------------------------------------
-// A4 (v1.2 M9): 'Rehung Frame' — a prestige-lite, NOT save-wipe. Retiring a
-// fully-completed collection (all 8 paintings owned + at least one ★-hung)
-// mints a permanent, saved `galleryBonus` level. Each level is a small
-// permanent bump applied through makeTuning via applyGalleryBonus:
-//   +2 pigment of every color at the start of each run (start ink)
-//   +10% orb / pickup value (orb value)
-// It is repeatable — the level is a counter, not a one-time flag. Pure.
-export const GALLERY_BONUS = {
-  inkPerLevel: 2,       // flat +N of each pigment color at run start / level
-  orbPerLevel: 0.10,    // +10% orb value / level (multiplicative on base)
-};
-// H1 (v1.8): the "Full Collection" CAPSTONE — a permanent, saved tuning bump
-// minted ONCE, at the moment the player's Full Collection latches (all 10
-// paintings + all 6 bosses + a first-time victory + a Reeds victory). It
-// stacks ON TOP OF the repeatable 'Rehung Frame' gallery bonus (the capstone
-// is a distinct, non-repeatable level: "the museum keeps you better"). The
-// level mints exactly once (the save.galleryComplete latch), so it is a saved
-// LEVEL on top of save.galleryBonus, not a re-mintable counter. Off
-// (level 0) by default; a save with galleryComplete false gets no capstone
-// keys, so its tuning is byte-identical (the invariant).
-export const GALLERY_COMPLETE = {
-  capstoneLevel: 1,     // the single permanent capstone level minted at completion
-  inkPerLevel: 4,       // +4 of each pigment color at run start (stacks on Rehung Frame)
-  orbPerLevel: 0.20,    // +20% orb value (stacks on the Rehung Frame orb multiplier)
-};
-export function galleryBonusLevel(save) {
-  return Math.max(0, Math.floor(Number(save && save.galleryBonus) || 0));
-}
-// Fill t.galleryInkBonus / t.galleryOrbMult for a given (non-negative) level.
-// Called by makeTuning; safe to call on any already-built tuning object.
-export function applyGalleryBonus(t, gallery) {
-  const lvl = Math.max(0, Math.floor(Number(gallery) || 0));
-  t.galleryInkBonus = lvl * GALLERY_BONUS.inkPerLevel;
-  t.galleryOrbMult = 1 + lvl * GALLERY_BONUS.orbPerLevel;
-  t.pickupValue *= t.galleryOrbMult;
-  return t;
-}
-// Retire-eligibility check: the FULL PIGMENT collection owned (the 8 base
-// PAINTINGS — the two gold-tier G2 works are a separate NG+ meta tier and do
-// NOT raise this bar) AND at least one hung in the loadout. Uses
-// PAINTINGS.filter(!goldTier).every, so the bar tracks the pigment catalog
-// (stable at 8). Pure.
-export function canRetireCollection(save) {
-  const owned = (save && Array.isArray(save.owned)) ? save.owned : [];
-  const allOwned = PAINTINGS.filter(p => !p.goldTier).every(p => owned.includes(p.id));
-  const hung = (save && Array.isArray(save.loadout)) ? save.loadout.length > 0 : false;
-  return allOwned && hung;
-}
-// Mint one level of the gallery bonus (repeatable; does NOT wipe the save).
-// Returns the new level. Caller persists the save.
-export function retireCollection(save) {
-  if (!canRetireCollection(save)) return galleryBonusLevel(save);
-  save.galleryBonus = galleryBonusLevel(save) + 1;
-  return save.galleryBonus;
-}
 
-// ---------------------------------------------------------------- H1 (v1.8):
-// the "Full Collection" ledger — the release capstone. PURE (no DOM).
-//
-// The Full Collection is the end-state the game has implied since it was named
-// "Frogue Gallery": OWN every painting (the 8 base + the 2 gold-tier works) AND
-// have defeated EVERY boss at least once (gray / green / gilded herons, the
-// Silt Wyrm, the Warden, the Umbral Wyrm) AND have achieved a first-time
-// victory (a base victory) + a Reeds victory. It is the FINAL meta bar —
-// the game's completion state.
-//
-// Boss defeats are tracked as `save.flags.bossDefeats` — an array of the
-// defeated boss kinds (see BOSS_IDS). It is a NEW field on the EXISTING
-// save.flags object (already serialized wholesale) plus a NEW top-level
-// `save.galleryComplete` boolean latch. Both are introduced with the
-// SAVE_VERSION 11 -> 12 migration, which DEFAULTS them OFF / EMPTY for every
-// legacy save (a v11 save migrates to v12 and plays byte-identically — the
-// capstone is off until the player actually completes the collection).
-export const BOSS_IDS = ['gray', 'green', 'gilded', 'wyrm', 'warden', 'umbra'];
+export const BOSS_IDS = ['gray', 'wyrm', 'warden', 'umbra'];
 // The display name for each boss kind (read by the Gallery Wall ledger so a
 // player can SEE which boss they are still missing).
 export const BOSS_NAMES = {
   gray: 'The Great Gray Heron',
-  green: 'The Great Green Heron',
-  gilded: 'The Gilded Heron',
   wyrm: 'The Silt Wyrm',
   warden: 'The Warden of the Reeds',
   umbra: 'The Umbral Wyrm',
@@ -2353,7 +1687,7 @@ export function bossDefeated(save, kind) {
   return !!(save && save.flags && Array.isArray(save.flags.bossDefeats)
     && save.flags.bossDefeats.includes(kind));
 }
-// True if the save's Full Collection is complete: all 10 PAINTINGS owned +
+// Cosmetic collection completion: every ordinary painting owned +
 // every boss in BOSS_IDS defeated at least once + a first-time victory
 // (save.flags.heronDefeated) + a Reeds victory (save.flags.reedsVictory).
 // Pure + deterministic; a fresh save is false.
@@ -2371,7 +1705,7 @@ export function galleryCompletion(save) {
 }
 // H2 (v1.8): the Gallery Wall progress readout — the counts the player can SEE
 // (paintings owned / total, bosses defeated / total) + the complete flag. Pure
-// + deterministic; a fresh save reads 0/10 + 0/6 + complete:false. This is the
+// + deterministic; a fresh save has no paintings or boss defeats. This is the
 // single source of truth for the Gallery Wall strip + the title badge + the
 // full-collection glow, so the presentation never re-derives the bar itself.
 export function galleryCompletionProgress(save) {
@@ -2387,21 +1721,7 @@ export function galleryCompletionProgress(save) {
     complete: galleryCompletion(save),
   };
 }
-// The permanent CAPSTONE level a save carries: GALLERY_COMPLETE.capstoneLevel
-// once the Full Collection has latched (save.galleryComplete true), else 0.
-// Pure. This is "the museum keeps you better" payoff — a one-time, saved,
-// permanent level minted on top of the repeatable Rehung Frame bonus.
-export function capstoneLevel(save) {
-  return (save && !!save.galleryComplete) ? GALLERY_COMPLETE.capstoneLevel : 0;
-}
-// The EFFECTIVE gallery-bonus level makeTuning should read: the saved
-// 'Rehung Frame' level PLUS the one-time Full Collection CAPSTONE level
-// (0 while the collection is incomplete — so a non-completed save's
-// makeTuning output is byte-identical, the invariant). game.js passes
-// galleryBonusTotal(save) where it used to pass save.galleryBonus. Pure.
-export function galleryBonusTotal(save) {
-  return galleryBonusLevel(save) + capstoneLevel(save);
-}
+
 
 // ---------------------------------------------------------------- upgrades
 export const UPGRADES = {
@@ -2460,80 +1780,9 @@ export const PAINTINGS = [
   { id: 'croaksworth', name: 'Sir Croaksworth (Portrait)', cost: { red: 5, blue: 5, green: 5 },
     desc: 'He finally admits art is useful. +18% brush damage.',
     art: { bg: '#33303f', shape: 'knight', accent: '#c8b8ff' }, locked: true },
-  // G2 (v1.3 M15): two GOLD-tier paintings — priced in the meta gold currency
-  // (not pigment), unlocked only on NG+ cycles, and applied when OWNED (a
-  // permanent meta bonus, not a loadout slot). `goldTier: true` + `goldCost`
-  // mark them; the existing pigment `cost` is absent. The motif renderer
-  // reuses existing art shapes (no new art pipeline).
-  { id: 'gilded-meridian', name: 'Gilded Meridian', goldTier: true, goldCost: 25,
-    desc: 'The line is gilded. Every orb is worth +10%, forever.',
-    art: { bg: '#4a3d6b', shape: 'king', accent: '#ffd75e' } },
-  { id: 'verdant-crown', name: 'Verdant Crown', goldTier: true, goldCost: 40,
-    desc: 'A crown of living moss. Moss mends +1 extra health per touch.',
-    art: { bg: '#2f5e2a', shape: 'garden', accent: '#9ed483' } },
+
 ];
 
-// G2 (v1.3 M15): the gold-tier subset of the catalog (the NG+-gated, gold-
-// priced paintings). Pure.
-export function goldPaintings() {
-  return PAINTINGS.filter(p => p.goldTier);
-}
-// G2 (v1.3 M15): can a save buy this gold-tier painting? It must be a gold
-// painting and the save must hold at least `pt.goldCost` gold. A non-gold
-// painting is never bought with gold (returns false). Pure.
-export function canAffordGold(save, pt) {
-  if (!pt || !pt.goldTier) return false;
-  const gold = save ? Number(save.gold) || 0 : 0;
-  return gold >= pt.goldCost;
-}
-
-// G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier — a permanent,
-// saved, gold-priced tuning bump applied LAST in makeTuning, ON TOP OF the
-// existing 'Rehung Frame' gallery bonus. A single 50g purchase for:
-//   +3 pigment of each color at the start of every run (start ink)
-//   +15% orb / pickup value (orb value)
-// It STACKS distinctively with the Rehung Frame: the gilded ink is added on
-// top of the Rehung Frame ink (so a save with both gets galleryInkBonus =
-// 2*level + 3), and the gilded orb multiplier is applied after the Rehung
-// Frame orb multiplier (so pickupValue is multiplied by both). Both feed the
-// SAME existing tuning fields (galleryInkBonus / pickupValue), so no new
-// combat surface. Pure + testable.
-//
-// NG+/gold-gated: a first-time (cycle-0) save never qualifies (ngCycle < 1),
-// so makeTuning is never called with gilded=true on a cycle-0 save — the
-// gilded keys are added ONLY when gilded is truthy, keeping a cycle-0 tuning
-// byte-identical (see the smoke test's deep-equal fingerprint).
-export const GILDED_FRAME = {
-  cost: 50,        // gold, ONE-TIME
-  ink: 3,          // +3 of each pigment color at run start
-  orbMult: 1.15,   // +15% orb / pickup value
-};
-// G3 (v1.3 M15): has this save already bought the Gilded Frame? Truthy check
-// on save.gildedFrame (a boolean, set once and never removed). A missing /
-// falsy field (a fresh or old-format save) means NOT bought. Pure.
-export function isGilded(save) {
-  return !!(save && save.gildedFrame);
-}
-// G3 (v1.3 M15): can a save buy the Gilded Frame? It must be an NG+ save
-// (ngCycle >= 1), NOT already gilded (one-time), and hold at least
-// GILDED_FRAME.cost gold. Pure.
-export function canBuyGildedFrame(save) {
-  if (!save) return false;
-  if (isGilded(save)) return false;                       // one-time
-  if ((Math.floor(Number(save.ngCycle) || 0)) < 1) return false;  // NG+ gate
-  return (Number(save.gold) || 0) >= GILDED_FRAME.cost;
-}
-// G3 (v1.3 M15): attempt the one-time Gilded Frame purchase. On success:
-// deduct the gold, set save.gildedFrame = true, and return true. Refuses
-// (returns false, no change) when NG+-gated, insufficient gold, or already
-// bought. Pure — no DOM.
-export function buyGildedFrame(save) {
-  if (!save) return false;
-  if (!canBuyGildedFrame(save)) return false;
-  save.gold = (Number(save.gold) || 0) - GILDED_FRAME.cost;
-  save.gildedFrame = true;
-  return true;
-}
 
 export function canAfford(bank, cost) {
   return cost.every(c => (bank[c.color] || 0) >= c.amount);
@@ -2964,29 +2213,6 @@ export function paintBoss(h, pigmentId, amount, tuning) {
 export const SAVE_KEY = 'frogue_gallery_save';
 export const OPTIONS_KEY = 'frogue_gallery_options';
 
-// B6: save schema versioning. `saveVersion` is the authoritative current schema
-// version, written into every save and read back on load. Legacy saves stored
-// it under the field `v`; migrateSave() accepts both and re-stamps to the
-// (v1.4 M1: 7 → 8 adds the `firstVictoryCinematic` flag —
-// a one-shot first-victory cinematic beat; old saves get the beat ONCE since
-// they've never seen it, so the flag migrates forward as false.
-// v1.5 K7: 8 → 9 adds the `challengeScores` list — the CURATOR CHALLENGE's
-// saved best-score file (top 5, each {seed,date,score}); old saves (no such
-// field) migrate forward with an empty list.)
-// R5 (v1.6 Module R): bumped 9 -> 10 for the BENEATH-THE-REEDS gate flag (save.flags.reedsUnlocked) + the four Reeds Field Guide entries. A pre-v1.6 save loads reedsUnlocked FALSE (nobody backfills access) via the v9->v10 migration + normalizeReedsUnlocked.
-// D1 (v1.7): bumped 10 -> 11 for THE WANDER's `save.wanderSeed` (integer; the
-// last-seen seed of the bounded Wander procgen, so successive Wander runs differ
-// while each is reproducible from it). A pre-v1.7 (v10) save migrates forward
-// with wanderSeed 0 (no seed yet) via the v10->v11 migration + normalizeWanderSeed.
-// Wander is OFF by default (options.wander, see migrateOptions) so a default-OFF
-// save NEVER runs the generated-layout path and stays byte-identical to v1.6.
-// H1 (v1.8): bumped 11 -> 12 for the "Full Collection" ledger: a NEW top-level
-// `save.galleryComplete` boolean latch (the one-time completion beat) + a NEW
-// `save.flags.bossDefeats` array (the list of boss kinds defeated at least
-// once). Both DEFAULT OFF / EMPTY for every legacy save via the v11->v12
-// migration + normalizeGalleryComplete / normalizeBossDefeats, so a v11 save
-// migrates to v12 and plays byte-identically (the capstone is off until the
-// player actually completes the collection).
 export const SAVE_VERSION = 12;
 
 // R1 (v1.8): the game's RELEASE version string — the single source of truth.
@@ -2995,160 +2221,8 @@ export const SAVE_VERSION = 12;
 // shift save migration or pacing. `tests/smoke.mjs` asserts its value.
 export const GAME_VERSION = '1.0.0';
 
-// Ordered schema-migration chain. Each entry upgrades a save from `from` to
-// `to` by remapping an already-normalized save. The loader walks entries in
-// `from` order, so a save written at any older version migrates forward step
-// by step up to SAVE_VERSION. v1 is the initial version.
-// A4 (v1.2 M9): v2 adds the `galleryBonus` counter (the 'Rehung Frame'
-// prestige-lite level). Old v1 saves (no such field) migrate forward with the
-// bonus defaulted to 0, so they keep loading unchanged.
-// T1 (v1.2 M13): v3 adds the tutorial layer — `save.flags.tutorialSkipped`
-// (dismissed the guided first expedition) and `save.tutorialDrills`
-// ({burn,freeze,root}), the per-pigment drill completion map. A v2 save
-// (no tutorialDrills) migrates forward with the drills defaulted to all-false,
-// so returning players keep loading unchanged.
-// N1 (v1.3 M14): v4 adds `save.ngCycle` (the New Game+ cycle index; 0 = a
-// first-time player who has never cleared a victory, no NG+ UI visible). Old
-// v3 saves (no such field) migrate forward with ngCycle defaulted to 0, so a
-// first-time save keeps loading unchanged and shows zero new UI.
-// N4 (v1.3 M14): v5 adds `save.ngModifier` — the player-chosen expedition
-// modifier for the current NG+ cycle (one of MODIFIERS' ids, or null/empty for
-// "no modifier"). A v4 save (no such field) migrates forward with the modifier
-// defaulted to null (no modifier), so old NG+ saves keep loading unchanged and
-// run their cycle with no modifier.
-// G1 (v1.3 M15): v6 adds `save.gold` (counter, META-ONLY — never touches
-// combat tuning) and `save.goldEarned` ({[key]: true} map, idempotency latch
-// so each first-time gold event fires exactly once). A v5 save (no such
-// fields) migrates forward with gold defaulted to 0 and goldEarned to {}, so
-// old saves keep loading unchanged and start with no gold / no latches.
-// G3 (v1.3 M15): v7 adds `save.gildedFrame` (boolean) — the ONE-TIME,
-// permanent 'Gilded Frame' prestige tier, bought with 50 gold on an NG+
-// cycle. A v6 save (no such field) migrates forward with gildedFrame
-// defaulted to false, so old saves keep loading unchanged and are simply
-// NOT-yet-gilded.
-const SAVE_MIGRATIONS = [
-  {
-    from: 1, to: 2,
-    fn: (out) => { out.galleryBonus = Math.max(0, Math.floor(Number(out.galleryBonus) || 0)); },
-  },
-  {
-    from: 2, to: 3,
-    fn: (out) => { out.tutorialDrills = normalizeDrills(out.tutorialDrills); },
-  },
-  {
-    from: 3, to: 4,
-    fn: (out) => { out.ngCycle = normalizeNGCycle(out.ngCycle); },
-  },
-  {
-    from: 4, to: 5,
-    fn: (out) => { out.ngModifier = normalizeNGModifier(out.ngModifier); },
-  },
-  {
-    from: 5, to: 6,
-    fn: (out) => {
-      // G1 (v1.3 M15): gold counter + idempotency map. A legacy v5 save
-      // (no such fields) migrates forward with gold 0 / empty map.
-      out.gold = Math.max(0, Math.floor(Number(out.gold) || 0));
-      out.goldEarned = normalizeGoldEarned(out.goldEarned);
-    },
-  },
-  {
-    from: 6, to: 7,
-    fn: (out) => {
-      // G3 (v1.3 M15): the one-time Gilded Frame tier. A legacy v6 save
-      // (no such field) migrates forward with gildedFrame defaulted to
-      // false (not-yet-gilded), so old saves keep loading unchanged.
-      out.gildedFrame = normalizeGildedFrame(out.gildedFrame);
-    },
-  },
-  {
-    from: 7, to: 8,
-    fn: (out) => {
-      // M1 (v1.4): the first-victory cinematic flag. Every save that migrates
-      // forward (v7 or older) has NEVER seen the beat, so it reads back as
-      // false — the player gets the beat exactly once on their next first
-      // victory. A v8 save that already played it stays true.
-      out.firstVictoryCinematic = normalizeFirstVictoryCinematic(out.firstVictoryCinematic);
-    },
-  },
-  {
-    from: 8, to: 9,
-    fn: (out) => {
-      // K7 (v1.5 M2): the Curator Challenge best-score file. A legacy v8 save
-      // (no such field) migrates forward with an empty list — an old player
-      // who has never run the challenge simply has no scores yet. A v9 save
-      // with existing scores is normalized (shape-cleaned) in place.
-      out.challengeScores = normalizeChallengeScores(out.challengeScores);
-    },
-  },
-  {
-    from: 9, to: 10,
-    fn: (out) => {
-      // R5 (v1.6 Module R): the BENEATH-THE-REEDS gate flag. Every
-      // pre-v1.6 save (no field) migrates forward with reedsUnlocked
-      // DEFAULTED TO FALSE — nobody backfills access to the new biome.
-      out.flags.reedsUnlocked = normalizeReedsUnlocked(out.flags.reedsUnlocked);
-    },
-  },
-  {
-    from: 10, to: 11,
-    fn: (out) => {
-      // D1 (v1.7): THE WANDER's last-seed latch. Every pre-v1.7 save (no
-      // field) migrates forward with wanderSeed DEFAULTED TO 0 — the player
-      // has no Wander run yet, so nothing is backfilled. Wander is OFF by
-      // default (options.wander), so a migrating save keeps loading unchanged
-      // and the generated-layout path never runs.
-      out.wanderSeed = normalizeWanderSeed(out.wanderSeed);
-    },
-  },
-  {
-    from: 11, to: 12,
-    fn: (out) => {
-      // H1 (v1.8): the "Full Collection" ledger. Every pre-v1.8 save (no such
-      // fields) migrates forward with the completion latch DEFAULTED TO false
-      // and the boss-defeat list DEFAULTED TO [] — nobody backfills completion
-      // or defeats, so a v11 save migrates to v12 and plays byte-identically
-      // (galleryCompletion stays false until the player actually earns it).
-      out.galleryComplete = normalizeGalleryComplete(out.galleryComplete);
-      out.flags.bossDefeats = normalizeBossDefeats(out.flags && out.flags.bossDefeats);
-    },
-  },
-];
+// Saves from every previous version are normalized directly by migrateSave.
 
-// N1 (v1.3 M14): normalize the New Game+ cycle index — a non-negative integer
-// (0 = first-time player). Non-finite / non-integer / negative values fall back
-// to 0 so a corrupt field never breaks a load (the loader never throws).
-function normalizeNGCycle(v) {
-  const n = Math.floor(Number(v));
-  return Number.isFinite(n) && n >= 0 ? n : 0;
-}
-
-// N4 (v1.3 M14): normalize the player-chosen expedition modifier. A valid
-// MODIFIERS id is kept as-is; anything else (missing, non-string, unknown)
-// normalizes to null (no modifier) so a corrupt/legacy field never breaks a
-// load. Pure.
-function normalizeNGModifier(v) {
-  return typeof v === 'string' && MODIFIERS[v] ? v : null;
-}
-
-// G1 (v1.3 M15): normalize the gold idempotency map to a clean
-// `{[key]: true}` object. A non-object (legacy/garbled) field normalizes to
-// `{}`; any string key that is truthy is carried as `true`. Pure — testable
-// headless. (Keys are internal to the gold system, so no fixed whitelist is
-// required; this just guarantees the shape survives a round-trip.)
-function normalizeGoldEarned(raw) {
-  const out = {};
-  if (!isPlainObj(raw)) return out;
-  for (const k of Object.keys(raw)) if (typeof k === 'string' && raw[k]) out[k] = true;
-  return out;
-}
-
-// G3 (v1.3 M15): normalize the one-time Gilded Frame flag — a boolean. A
-// missing / falsy value (a fresh or legacy save) reads back as false
-// (not-yet-gilded). Pure — testable headless.
-function normalizeGildedFrame(raw) {
-  return !!raw;
-}
 
 // M1 (v1.4): normalize the first-victory cinematic flag — a boolean. A
 // missing / falsy value (a fresh save, or ANY save migrating up from v7 or
@@ -3179,10 +2253,6 @@ function normalizeChallengeScores(raw) {
   return keep.slice(0, CHALLENGE_TOP_N);
 }
 
-// H1 (v1.8): normalize the "Full Collection" completion latch to a boolean.
-// A missing / non-boolean field (every pre-v1.8 save) reads back as false —
-// the capstone is OFF until the player actually completes the collection.
-// Pure.
 function normalizeGalleryComplete(raw) {
   return !!raw;
 }
@@ -3202,13 +2272,6 @@ function normalizeBossDefeats(raw) {
   return out;
 }
 
-// N1 (v1.3 M14): a save has earned the New Game+ unlock when at least one
-// victory is recorded. Gating NG+ behind a completed victory keeps it out of the
-// first-time run's pace band; a first-time player (ngCycle 0, no victory) sees
-// no NG+ UI. A pure predicate so tests can import it without a browser.
-export function ngUnlocked(save) {
-  return !!(save && save.stats && Number(save.stats.victories) > 0);
-}
 
 export function freshSave() {
   return {
@@ -3224,17 +2287,11 @@ export function freshSave() {
     flags: { intro: false, firstOrb: false, firstHurt: false, firstAtelier: false, firstDefeat: false, croaksworthAsked: false, croaksworthGiven: false, heronDefeated: false, welcomeGranted: false, tutorialSkipped: false, reedsUnlocked: false, reedsVictory: false, crossingPainted: false, bossDefeats: [] },
     stats: { expeditions: 0, victories: 0, deaths: 0, heronsPainted: 0, treasures: 0 },
     bestRun: null,        // {pigments, time, cleared}
-    galleryBonus: 0,      // A4 (v1.2 M9): 'Rehung Frame' prestige-lite level
     tutorialDrills: { burn: false, freeze: false, root: false, awaken: false }, // T1/T3 (v1.2 M13)
-    ngCycle: 0,           // N1 (v1.3 M14): New Game+ cycle index (0 = first-time player, no NG+ UI)
-    ngModifier: null,     // N4 (v1.3 M14): chosen expedition modifier for the NG+ cycle (MODIFIERS id or null)
-    gold: 0,              // G1 (v1.3 M15): meta gold currency (META-ONLY — never touches combat tuning)
-    goldEarned: {},       // G1 (v1.3 M15): {[key]: true} — the gold events already paid out (idempotency latch)
-    gildedFrame: false,   // G3 (v1.3 M15): the ONE-TIME 'Gilded Frame' prestige tier (bought once, permanent)
     firstVictoryCinematic: false, // M1 (v1.4): the first-victory cinematic beat has been SEEN (a fresh + every migrating-old save = false → they get it once)
     challengeScores: [],  // K7 (v1.5 M2): the CURATOR CHALLENGE best-score file — top 5, each {seed,date,score}, ordered desc by score
     wanderSeed: 0,        // D1 (v1.7): THE WANDER's last-seen seed (integer; 0 = no Wander run yet). Off by default (options.wander), so a default-OFF save never runs the generated-layout path.
-    galleryComplete: false, // H1 (v1.8): the "Full Collection" completion latch (all 10 paintings + all 6 bosses + a first-time + a Reeds victory). false until the player actually completes the collection — the capstone galleryBonus level mints once it flips.
+    galleryComplete: false,
   };
 }
 
@@ -3340,7 +2397,7 @@ export function routeTrail(waypoints, worldW, cap = ROUTE_WAYPOINT_CAP) {
 //                (string/number/array/null); fresh save, nothing preserved
 // (The unparseable-JSON and missing-key cases are handled one level up in
 // SaveSys.load(), which returns null so the caller starts a fresh game.)
-const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'galleryBonus', 'tutorialDrills', 'ngCycle', 'ngModifier', 'gold', 'goldEarned', 'gildedFrame', 'firstVictoryCinematic', 'challengeScores', 'wanderSeed', 'galleryComplete'];
+const SAVE_FIELDS = ['bank', 'owned', 'loadout', 'upgrades', 'flags', 'stats', 'bestRun', 'tutorialDrills', 'firstVictoryCinematic', 'challengeScores', 'wanderSeed', 'galleryComplete', 'studio', 'sketchbook', 'sketchPins'];
 
 function isPlainObj(x) { return x !== null && typeof x === 'object' && !Array.isArray(x); }
 
@@ -3383,47 +2440,9 @@ export function migrateSave(raw) {
     for (const k of Object.keys(f.stats)) out.stats[k] = Math.max(0, Number(raw.stats[k]) || 0);
   }
   out.bestRun = isPlainObj(raw.bestRun) ? raw.bestRun : f.bestRun;
-  // A4 (v1.2 M9): galleryBonus is a top-level scalar counter; normalize so an
-  // old-format save (no field) defaults to 0 instead of leaking undefined.
-  out.galleryBonus = Math.max(0, Math.floor(Number(raw.galleryBonus) || 0));
-  // T1 (v1.2 M13): carry the per-pigment drill map forward (default all-false
-  // for a legacy v2 save, real values for a v3 save). The v2->v3 migration
-  // step re-normalizes defensively.
   out.tutorialDrills = normalizeDrills(raw.tutorialDrills);
-  // N1 (v1.3 M14): carry the NG+ cycle forward (default 0 for a legacy v3 save
-  // with no field, the real value for a v4 save). The v3->v4 migration step
-  // re-normalizes defensively on the way up.
-  out.ngCycle = normalizeNGCycle(raw.ngCycle);
-  // N4 (v1.3 M14): carry the chosen expedition modifier forward (default null
-  // for a legacy v4 save with no field, the real id for a v5 save). The
-  // v4->v5 migration step re-normalizes defensively on the way up.
-  out.ngModifier = normalizeNGModifier(raw.ngModifier);
-  // G1 (v1.3 M15): carry the meta gold counter + idempotency map forward (0 / {}
-  // for a legacy v5 save with no fields; a real value for a v6 save). The
-  // v5->v6 migration step re-normalizes defensively on the way up.
-  out.gold = Math.max(0, Math.floor(Number(raw.gold) || 0));
-  out.goldEarned = normalizeGoldEarned(raw.goldEarned);
-  // G3 (v1.3 M15): carry the one-time Gilded Frame flag forward (false for a
-  // legacy v6 save with no field, the real boolean for a v7 save). The
-  // v6->v7 migration step re-normalizes defensively on the way up.
-  out.gildedFrame = normalizeGildedFrame(raw.gildedFrame);
-  // M1 (v1.4): carry the first-victory cinematic flag forward (false for a
-  // legacy v7 save with no field, the real boolean for a v8 save). The
-  // v7->v8 migration step re-normalizes defensively on the way up.
   out.firstVictoryCinematic = normalizeFirstVictoryCinematic(raw.firstVictoryCinematic);
-  // K7 (v1.5 M2): carry the Curator Challenge best-score list forward. A
-  // legacy v8 save (no field) normalizes to []; a v9 save reloads its OWN
-  // list (defensively normalized so a corrupt blob can't leak through). This
-  // must be a per-field carry (like gold/galleryBonus) — the version-migration
-  // chain below is a no-op on a same-version reload, so without this a v9 save
-  // with filed scores would lose them on the next load.
   out.challengeScores = normalizeChallengeScores(raw.challengeScores);
-  // H1 (v1.8): carry the "Full Collection" completion latch forward (false for
-  // a legacy v11 save with no field, the real boolean for a v12 save). The
-  // v11->v12 migration step re-normalizes defensively on the way up. Must be a
-  // per-field carry (like galleryBonus/gildedFrame) — the version-migration
-  // chain is a no-op on a same-version reload, so without this a completed save
-  // would lose its latch on the next load.
   out.galleryComplete = normalizeGalleryComplete(raw.galleryComplete);
   // R5 (v1.6 Module R): carry the reedsUnlocked gate flag forward
   // (false for a legacy v9 save with no field, the real boolean for a
@@ -3446,28 +2465,11 @@ export function migrateSave(raw) {
   // migration step re-normalizes defensively on the way up.
   out.wanderSeed = normalizeWanderSeed(raw.wanderSeed);
   out.studio = normalizeStudio(raw.studio);
-  // Q6: carry the PINNED sketchbook pages ([] for a legacy save with no field,
-  // the real ids for a save with pins). Must be a per-field carry (like
-  // galleryBonus/gildedFrame) — the version-migration chain is a no-op on a
-  // same-version reload, so without this a pinned page would lose its pin on
-  // the next load. The book is normalized WITH the pins (a pinned page keeps
-  // its slot against the rolling window), then the pin list is pruned to ids
-  // that actually survived in the book (a stale/corrupt pin is dropped, never
-  // a crash). No SAVE_VERSION bump — optional validated field.
   const rawPins = normalizeSketchPins(raw.sketchPins);
   out.sketchbook = normalizeSketchbook(raw.sketchbook, rawPins);
   out.sketchPins = rawPins.filter(id => out.sketchbook.some(p => p.id === id));
   out.sketchExhibit = typeof raw.sketchExhibit === 'string' && out.sketchPins.includes(raw.sketchExhibit) ? raw.sketchExhibit : null;
-  // B6: apply the version migration chain, then stamp the current version.
-  // Legacy saves stored the version under `v`; read either key. The chain
-  // rewrites `out` in place (mutating the normalized fields) as it walks
-  // forward; it is a no-op today (SAVE_MIGRATIONS empty) and runs on a future
-  // schema bump.
-  const fromVer = Number(raw.saveVersion ?? raw.v ?? 1) || 1;
-  let version = Math.max(1, fromVer);
-  for (const m of SAVE_MIGRATIONS) {
-    if (version === m.from) { m.fn(out); version = m.to; }
-  }
+  // All supported versions now share this sanitizer; removed systems stay absent.
   out.saveVersion = SAVE_VERSION;
   return withCase(out, 'migrated');
 }
@@ -3478,7 +2480,7 @@ export function migrateSave(raw) {
 // a pasted blob and must decide — hard REFUSE on anything that does not parse or
 // normalize to a valid current-schema save, or accept. This is the PURE gate the
 // import path runs every blob through. It reuses the EXISTING migration chain
-// (migrateSave: per-field normalization + the SAVE_MIGRATIONS 1->10 walk), so a
+// (migrateSave: per-field normalization of every supported version), so a
 // valid-but-old (e.g. v1-era) blob migrates forward to the current schema
 // exactly as a local load would.
 //
@@ -3652,31 +2654,6 @@ export function gamepadActive(save, pad, nowMs, lastActiveMs, inactivityMs = GAM
   return (nowMs - lastActiveMs) <= inactivityMs; // connected + recently active
 }
 
-// ----------------------------------------------------------------
-// D1 (v1.7): THE WANDER — a bounded procedural expedition variant.
-// ----------------------------------------------------------------
-// A new expedition *mode*, OPT-IN (default OFF). When the `options.wander`
-// flag is on, `_beginExpedition` builds the per-zone ENCOUNTER CONTENT (enemy
-// archetype mix + the elite signature) from a SEEDED RNG stream sampled within
-// a hand-tuned pacing envelope. The TERRAIN / layout pass is UNCHANGED (the
-// same 4 zones at the same x-anchors / names / accents — the same painting),
-// so 60fps + P10 culling hold and the world reads identically. When the flag
-// is OFF (the default) the existing hand-tuned ZONES path runs and
-// `wanderContent` is NEVER called → first-time / NG+ / Reeds runs stay
-// byte-identical to v1.6.
-//
-// INVARIANTS (v1.7):
-//   * PURE + DETERMINISTIC: `wanderContent`/`pickWanderSeed` take NO
-//     Math.random. The only impure source (the frame clock) is passed in by
-//     game.js (`Date.now()`), the v1.6 R2 "seed + SALT" pattern. The generated
-//     stream is `mulberry32(seed + WANDER_SALT)` — a SEPARATE stream from the
-//     terrain pass (which seeds `World` off `runSeed`), so it can never
-//     perturb the terrain RNG.
-//   * BOUNDED: every generated layout sits inside WANDER_BUDGET (per-zone +
-//     run-wide enemy min/max, elite min/max, guaranteed rest orbs, no empty
-//     zone, boss-eligible). The envelope is tight enough that a generated
-//     run lands 15–20 min (first-time) without ever BEATING the hand-tuned
-//     best.
 
 // The salt that puts the Wander content stream on its OWN RNG lane, separate
 // from the terrain pass (World is seeded off runSeed). A non-zero constant so
@@ -3932,7 +2909,7 @@ export const CLEARING = Object.freeze({
   ]),
 });
 export function clearingAllowed(g) {
-  return g?.runBiome === 'swamp' && !g.options?.wander && !g.challenge && !(g.ngCycle > 0);
+  return g?.runBiome === 'swamp' && !g.options?.wander && !g.challenge && (!g.campaign || g.campaign.floor === 0);
 }
 export function clearingCombo(pigment, enemy) {
   return pigment === 'red' && enemy?._clearing && ['slow', 'freeze'].includes(enemy.status?.type) ? 1.5 : 1;

@@ -9,7 +9,7 @@ export async function livingSketchbookBrowser({ page, tick, out, report }) {
       const g = window.__game, { freshSave } = await import('./src/logic.js');
       g.save = freshSave(); g.save.flags.heronDefeated = reeds;
       g.options.wander = false; g.options.shake = false;
-      g._beginExpedition(false, { reeds }); g.spawnT = 999;
+      g._beginExpedition(false, { campaignFloor: reeds ? 1 : 0 }); g.spawnT = 999;
       g.banners = []; g._drawAll();
     }, reeds);
   };

@@ -1,8 +1,9 @@
 # Project status
 
-**The Living Sketchbook follows the completed Astra and Q1–Q9 milestones.**
-The active roadmap was rewritten on 2026-11-11 around discovery, responsive
-painting and decorative ecology. See PROJECT_STATE.md for verified closure.
+**The active game is one four-floor dungeon with a final boss.**
+The owner-requested removal of New Game+ supersedes previous progression and
+mode plans. Responsive combat, free painting and the Living Sketchbook remain.
+See PROJECT_STATE.md for current verification and the connected-run roadmap.
 
 - Live next action: [PROJECT_STATE.md](../PROJECT_STATE.md).
 - What exists: [CURRENT_STATE.md](CURRENT_STATE.md).

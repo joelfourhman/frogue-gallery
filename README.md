@@ -4,7 +4,7 @@ A tiny frog paints a gray swamp back to life. Burn pursuers with crimson,
 freeze a diving fly with cobalt, grow a little pond into a living painting,
 and bring home a postcard made from your own brush strokes.
 
-**Lily Clearing — clearer combat and free painting, 2026-11-11.**
+**One continuous dungeon — four floors, one final boss, 2026-11-11.**
 The compatibility identifiers remain game 1.0.0 / save schema 12.
 
 ## Play locally
@@ -33,7 +33,15 @@ Red lanes warn of an attack: dodge sideways with Space, then paint during
 recovery. Blue interrupts; following blue with red makes that red hit 50%
 stronger in the clearing. Paint the bell between rounds; walk away to cancel.
 First completion restores health; replay freely without currency rewards.
-The final boss waits until you reach the far end of the swamp.
+The first guardian waits at the far end of the swamp. Defeating it opens the
+next floor of the same run.
+
+Descend through **Watercolor Marsh → Sunken Reeds → Hollow Sanctuary → Black
+Reeds**, facing the Great Gray Heron, Silt Wyrm, Hollow Warden and finally the
+Umbral Wyrm. Between floors, rest to heal 35% of maximum health and select one
+gift: stronger paint, two more health points, or faster dodge/splash recharge.
+Confirm Descend when ready. Gifts stack for this run; a new attempt starts on
+floor one with a fresh build. Only defeating the Umbral Wyrm wins the dungeon.
 
 You can also visit **First Light**, the small gray pond near the start.
 Select the numbered colors and hold paint on each circle. Water, lilies and
@@ -65,8 +73,7 @@ can leave a keepsake, even a defeat.
 | Guide / mute | H or ? / M | Guide available from pause |
 | Menu navigation | Mouse / displayed shortcuts | D-pad, A confirm, B back |
 
-Paint is unlimited. Colored orbs are banked currency for Atelier paintings
-and upgrades; they are not brush ammunition. Red burns, blue slows/freezes,
+Paint is unlimited; colored orbs are not brush ammunition. Red burns, blue slows/freezes,
 green roots and heals, and dry clears status and restores color.
 The small brush tip beside the frog shows actual close-range reach; move closer
 to distant objects. Holding splash shows its radius and charge beside the frog.
@@ -75,26 +82,28 @@ mouse pointer; the game no longer shows a distant crosshair.
 
 ## What's included
 
-- Three living field studies, an earned brush-hop and a cosmetic signature.
+- Five living field studies across swamp/Reeds, an earned brush-hop and cosmetic postcard rewards.
 - 64 freely repaintable plants/stones and a replayable three-round clearing.
 - An eight-page sketchbook containing sampled real strokes; save a 1600×960
   PNG postcard from any page.
-- Three biomes, six boss archetypes, named encounter zones, checkpoints,
-  enemies with pigment counters, lantern play, NG+, and optional Wander runs.
-- Atelier paintings and two-slot builds, upgrades, collections and local
-  Curator Challenges.
+- One four-floor dungeon, four main guardians, named encounter zones,
+  checkpoints, pigment counters and lantern play. Hollow Sanctuary reuses
+  the Reeds environment with its own guardian.
+- Three run-only gift choices; no New Game+, prestige, shop or separate modes.
 - Paper panels, procedural watercolor scenery, synthesized music and sound.
 - Gentle / Normal / Bold difficulty; music/SFX and presentation settings;
   browser-local saves and JSON export/import.
 
 Designed for a desktop browser with mouse/keyboard or a standard controller.
 No touch controls. Saves belong to the browser and site origin; export them
-before moving to a different URL.
+before moving to a different URL. There is no mid-run resume. Existing
+sketchbooks, pins, names, title exhibitions and ordinary artwork collections
+are retained; legacy purchased stats do not affect a new dungeon run.
 
 ## Develop, verify, distribute
 
 ```sh
-node scripts/check.mjs             # smoke, nine pacing gates, balance, UI/audio, package
+node scripts/check.mjs             # smoke, campaign, combat pacing, balance, UI/audio, package
 node scripts/build.mjs             # dist/frogue-gallery/ + dist/frogue-gallery.zip
 node scripts/dev.mjs --dist        # play the exact distribution
 node scripts/check.mjs --browser   # adds browser journeys, 36 frames and effects stress
@@ -112,11 +121,10 @@ performed.** See [deployment choices and upload steps](docs/DEPLOYMENT.md).
 
 ## Continue development
 
-Read [PROJECT_STATE.md](PROJECT_STATE.md), then
-[the Astra handoff](docs/ASTRA_HANDOFF.md).
+Read [PROJECT_STATE.md](PROJECT_STATE.md), then the [current roadmap](docs/ROADMAP.md).
 
 - [Current implementation and architecture](docs/CURRENT_STATE.md)
 - [Current game design](docs/GAME_DESIGN.md)
-- [Milestones](docs/ROADMAP.md) and [executable Qwen backlog](docs/QWEN_BACKLOG.md)
+- [Milestones and next playtest priorities](docs/ROADMAP.md)
 - [Validation and its limits](docs/VALIDATION.md)
 - [Durable agent rules](AGENTS.md)

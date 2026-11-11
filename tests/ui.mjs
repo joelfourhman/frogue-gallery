@@ -127,12 +127,9 @@ section('UI-heavy draw functions reference the shared constants');
 // the shared system (not a dead or hand-rolled panel).
 const SHARED_RE = /uiFont\(|UI\.sizes|UI\.palette|\bINK\b|\bPAPER\b|\bPAPER_DARK\b|paperPanel\(|uiButton\(|centerText\(|outlineText\(/;
 const UI_HEAVY = [
-  // the six screens named in the L4 spec, mapped to their real draw functions:
+  // The current screens, mapped to their real draw functions:
   ['game.js', '_drawTitle',      'title'],
   ['game.js', '_drawOptions',    'options'],
-  ['game.js', '_drawAtelier',    'atelier-loadout + gallery-wall-full'],
-  ['game.js', '_drawSeedCard',   'wander-seed-card'],
-  ['game.js', '_drawRecap',      'end-recap strip'],
   ['game.js', '_drawEnd',        'end screen / recap'],
   // plus the other panel/HUD draws L4 must not leave ad-hoc:
   ['game.js', '_drawPause',      'pause panel'],

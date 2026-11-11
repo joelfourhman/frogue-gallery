@@ -57,19 +57,11 @@ const ZONE_THEMES = {
 };
 
 // The BOSS battle patterns (the "faster than any zone" step rate = intensity).
-// `gray` / `green` mirror the pre-S2 _bossThemeData values (byte-identical);
+// `gray` / `dark` mirror the pre-S2 _bossThemeData values (byte-identical);
 // a `pulse` flag marks the low off-beat thump layer the tick schedules.
 const BOSS_THEMES = {
   gray:  { root: 110.0,  scale: [0, 3, 6, 7, 10], pattern: [0, -1, 3, 0,  6, -1, 7, 6,  3, -1, 0, 7,  12, 10, 7, 6], stepDur: 0.18, detune: -6,  pulse: true, mode: 'minor' },
-  green: { root: 98.0,   scale: [0, 1, 3, 6, 10], pattern: [0, 1, -1, 3,  6, -1, 10, 7,  3, 1, 0, -1,  11, 10, 6, -1], stepDur: 0.17, detune: -10, pulse: true, mode: 'minor' },
-};
-
-// The FULL COLLECTION moment's own short phrase — a bright, DENSE triumphant
-// climb (I-V-I color) on the melody layer. Its patternDensity (14) is the
-// highest of any theme: the "the museum keeps you better" climax.
-const COLLECTION_THEME = {
-  themeId: 'collection', root: 261.63, scale: [0, 4, 7, 12],
-  pattern: [0, -1, 1, 2,  3, 2, 1, 2,  0, -1, 1, 2,  3, 2, 1, 0], stepDur: 0.16, detune: 6,
+  dark: { root: 98.0,   scale: [0, 1, 3, 6, 10], pattern: [0, 1, -1, 3,  6, -1, 10, 7,  3, 1, 0, -1,  11, 10, 6, -1], stepDur: 0.17, detune: -10, pulse: true, mode: 'minor' },
 };
 
 // The LOW-HP uneasy ostinato — a sparse, HIGH, slightly dissonant pattern
@@ -89,12 +81,12 @@ function _countActive(pattern) {
 }
 
 // S2 (v1.9) PURE ACCEPTANCE: the music-dynamics selector. Given the current
-// game state (which zone + biome, is the boss engaged, is the frog low-HP, is
-// the full collection complete) it returns the theme to play, its
+// game state (which zone + biome, is the boss engaged, is the frog low-HP),
+// it returns the theme to play, its
 // patternDensity (a higher = more intense moment), and the EXTRA danger voices
 // that should swell in on top. Pure (no browser, no Math.random, no time) so
 // a node test asserts the right theme + density + voices for each of
-// swamp / Reeds / Black Reeds / boss / lowHp / collection. The music slider
+// swamp / Reeds / Black Reeds / boss / lowHp. The music slider
 // still controls all of it (everything rides melodyMaster -> musicBus).
 
 // ==========================================================================
@@ -137,18 +129,11 @@ export function themeSelector(state) {
   const biome = (state && state.biome) || 'swamp';
   const bossEngaged = !!(state && state.bossEngaged);
   const lowHp = !!(state && state.lowHp);
-  const collection = !!(state && state.collection);
 
   const extraVoices = [];
   let themeId;
   let pattern;
-  if (collection) {
-    // The full-collection moment owns its own phrase (a triumphant swell on the
-    // melody layer, under the sfxBus collection-fanfare).
-    themeId = COLLECTION_THEME.themeId;
-    pattern = COLLECTION_THEME.pattern;
-    extraVoices.push('collection-swell');
-  } else if (bossEngaged) {
+  if (bossEngaged) {
     // The boss loop is the live melody; the low off-beat PULSE swells in under
     // it (and the boss drops to a faster pattern on a new phase — the wiring).
     themeId = 'boss';
@@ -163,7 +148,7 @@ export function themeSelector(state) {
     themeId = effBiome + '-' + i;
     pattern = arr[i].pattern;
   }
-  if (lowHp && !collection) extraVoices.push('lowhp-ostinato');
+  if (lowHp) extraVoices.push('lowhp-ostinato');
   return { themeId, patternDensity: _countActive(pattern), extraVoices };
 }
 
@@ -261,8 +246,8 @@ export class AudioSys {
     // ---- S2 (v1.4): the boss battle loop + the end-screen stingers ----
     // A distinct INTENSE-but-beautiful loop that crossfades in when the final
     // heron engages. It reuses the S1 step-sequencer (melodyMaster -> musicBus)
-    // so it inherits the music slider + mute for free; the Great Green Heron
-    // gets its own darker variant. `setBossTheme` starts it; `clearZoneTheme`
+    // so it inherits the music slider + mute for free; the deeper guardians
+    // use the darker variant. `setBossTheme` starts it; `clearZoneTheme`
     // (the "stop the melody layer" entry point, called at run end / quit) fades
     // it too. The end-screen stingers (stingerVictory/stingerDefeat) are
     // one-shot phrases scheduled on the same melody layer.
@@ -272,7 +257,7 @@ export class AudioSys {
     // A sparse tension layer on the SAME melody layer (melodyMaster -> musicBus)
     // that SWELLS IN under the zone/boss themes: (a) a low off-beat PULSE under
     // the boss fight, (b) a sparse high uneasy ostinato at low frog HP, (c) a
-    // brief swell on zone entry, (d) a triumphant collection-swell phrase. The
+    // brief swell on zone entry. The
     // PURE selector for theme + density + extra-voices is themeSelector
     // (exported, node-testable — the S2 evidence).
     //
@@ -593,8 +578,8 @@ export class AudioSys {
   // A distinct, INTENSE-but-beautiful loop that crossfades in when the final
   // heron engages. It reuses the S1 step-sequencer (tickMusic/_tickThemes) so
   // it rides melodyMaster -> musicBus (music slider + mute for free) and needs
-  // no setInterval / audio files / new deps. The Great Green Heron (NG+) gets
-  // its own darker, slightly faster variant. `green` picks the variant.
+  // no setInterval / audio files / new deps. Deeper dungeon bosses use the
+  // darker, slightly faster theme.
   // S2 (v1.9): delegate to the PURE boss data (BOSS_THEMES) + the pre-built
   // phase-2 (denser / faster) variants the boss drops to on a phase change
   // (pre-built here at theme-setup time so `bossPhaseUp()` only SWAPS A
@@ -602,20 +587,20 @@ export class AudioSys {
   _bossThemeData() {
     return {
       gray:  BOSS_THEMES.gray,
-      green: BOSS_THEMES.green,
+      dark: BOSS_THEMES.dark,
       // The DENSER phase-2 patterns (the boss "drops to a new phase"): the same
       // scale + faster stepDur (stepDur * 0.8) + a denser 16-step pattern (more
       // active steps) = a higher patternDensity = higher intensity. Pre-built.
       gray2:  { ...BOSS_THEMES.gray,  pattern: [0, 3, -1, 3,  6, 7, -1, 6,  3, 0, 7, 6,  12, 10, 7, 6], stepDur: BOSS_THEMES.gray.stepDur * 0.8 },
-      green2: { ...BOSS_THEMES.green, pattern: [0, 1, 3, -1,  6, 7, 10, -1,  3, 1, 0, 3,  11, 10, 6, 10], stepDur: BOSS_THEMES.green.stepDur * 0.8 },
+      dark2: { ...BOSS_THEMES.dark, pattern: [0, 1, 3, -1,  6, 7, 10, -1,  3, 1, 0, 3,  11, 10, 6, 10], stepDur: BOSS_THEMES.dark.stepDur * 0.8 },
     };
   }
 
   // Engage the boss: crossfade the zone theme out and start the boss loop.
   // game.js calls this the moment the final heron's intro ends (boss-growl).
-  // `green` selects the Great Green Heron variant (NG+). Idempotent while the
-  // boss is already engaged (re-engaging the same heron is a no-op).
-  setBossTheme(green) {
+  // `dark` selects the darker theme used for the deeper dungeon bosses.
+  // Idempotent while a boss is already engaged.
+  setBossTheme(dark) {
     if (!this.ctx || !this._melodyMaster) return;
     if (!this._bossThemes) this._bossThemes = [];
     if (this._bossMusic) return; // already engaged — don't double-start
@@ -652,18 +637,18 @@ export class AudioSys {
       } catch (e) { /* headless */ }
     }
     const data = this._bossThemeData();
-    const theme = data[green ? 'green' : 'gray'];
+    const theme = data[dark ? 'dark' : 'gray'];
     const zg = this.ctx.createGain();
     zg.gain.setValueAtTime(0.0001, this.ctx.currentTime);
     zg.gain.setTargetAtTime(1, this.ctx.currentTime + 0.05, this._crossFade / 4);
     zg.connect(this._melodyMaster);
-    this._bossThemes.push({ zone: -1, green: !!green, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.35, muted: false, fading: false, _phase: 0 });
+    this._bossThemes.push({ zone: -1, dark: !!dark, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.35, muted: false, fading: false, _phase: 0 });
   }
 
   // S2 (v1.9): the boss DROPS TO A NEW PHASE — swap the live boss loop to its
   // pre-built DENSER phase-2 pattern (faster stepDur + more active steps = a
   // higher patternDensity = higher intensity). The denser patterns are pre-
-  // built in _bossThemeData (gray2/green2), so this only SWAPS A REFERENCE on
+  // built in _bossThemeData (gray2/dark2), so this only SWAPS A REFERENCE on
   // the live theme object — no pattern allocation at the phase moment (the
   // P10 invariant: the tick path allocates nothing new). Idempotent per phase.
   bossPhaseUp() {
@@ -671,7 +656,7 @@ export class AudioSys {
     const th = this._bossThemes && this._bossThemes[this._bossThemes.length - 1];
     if (!th || th._phase > 0) return; // already in the denser phase
     const data = this._bossThemeData();
-    const denser = th.green ? data.green2 : data.gray2;
+    const denser = th.dark ? data.dark2 : data.gray2;
     if (denser) th.theme = denser; // swap to the pre-built denser pattern
     th._phase = 1;
   }
@@ -685,7 +670,6 @@ export class AudioSys {
   //   (b) a sparse HIGH uneasy ostinato at low frog HP — a slow step-sequencer
   //       loop (LOWHP_THEME) driven through the SAME _tickThemes machinery;
   //   (c) a brief SWELL on zone entry — a short chord scheduled once;
-  //   (d) a triumphant COLLECTION-SWELL phrase (the full-collection moment).
   // All of it rides melodyMaster -> musicBus (the music slider + mute inherit
   // for free). P10: the tick only reads + schedules one bounded note per
   // danger loop per scheduled step — no per-frame allocation of voice graphs.
@@ -736,25 +720,6 @@ export class AudioSys {
       try { this._tone(t, 'sine', 98.0, 98.0, 2.0, 0.1, 0, g); } catch (e) { /* headless */ }
     } catch (e) { /* headless */ }
   }
-  // (d) the FULL COLLECTION moment — a short triumphant chord swell on the
-  // melody layer (under the sfxBus collection-fanfare + the cinematicArp).
-  collectionSwell() {
-    if (!this.ctx || !this._melodyMaster) return;
-    this._duckMusic(_MIX.duckDur);   // C3: dip the music so the collection swell cuts through
-    try {
-      const t = this.ctx.currentTime;
-      const g = this.ctx.createGain();
-      g.gain.value = 0.55;
-      g.connect(this._melodyMaster);
-      const f = [261.63, 329.63, 392.0, 523.25]; // a rising major triad + octave
-      for (let i = 0; i < f.length; i++) {
-        try { this._tone(t + i * 0.14, 'triangle', f[i], f[i], 2.2, 0.2, 0, g); } catch (e) { /* headless */ }
-        try { this._tone(t + i * 0.14, 'sine', f[i] * 2, f[i] * 2, 1.6, 0.06, 0, g); } catch (e) { /* headless */ }
-      }
-      try { this._tone(t + 0.5, 'sine', 130.81, 130.81, 2.6, 0.12, 0, g); } catch (e) { /* headless */ }
-    } catch (e) { /* headless */ }
-  }
-
   // ==================== S3 (v1.9): AMBIENT LIFE voices + rAF stepper ====================
   // The sparse ambient-life voices. Each routes to the _ambLifeMaster bus
   // (-> musicBus) so the music slider + mute inherit; each is QUIET (a
@@ -1001,7 +966,6 @@ export class AudioSys {
     if (!this.ctx || !this._melodyMaster) return;
     this._tickThemes(this._zoneThemes || []);
     this._tickThemes(this._bossThemes || []);
-    this._tickThemes(this._encoreThemes || []); // M2: the encore arpeggio
     // S2 (v1.9): the LOW-HP uneasy ostinato — the same bounded step machinery.
     // `setLowHp(true)` pushed a slow loop here; the tick only reads + schedules
     // its (bounded) notes. No per-frame allocation (P10).
@@ -1043,41 +1007,15 @@ export class AudioSys {
     }
   }
 
-  // M2 (v1.4): the "Encore" viewing screen's soft arpeggio. Reuses the S1
-  // melody step-sequencer (melodyMaster -> musicBus) so it inherits the music
-  // slider + mute, but at a low level (its own gain of 0.5 under the melody
-  // master) with a slow, gentle pattern — a "leisurely walk around the gallery"
-  // arpeggio, not a zone theme. No setInterval / audio files / new deps.
-  setEncoreArpeggio() {
-    if (!this.ctx || !this._melodyMaster) return;
-    if (!this._encoreThemes) this._encoreThemes = [];
-    if (this._encoreThemes.length > 0) return; // idempotent
-    const theme = {
-      root: 261.63,                              // C4 — bright, gallery-warm
-      scale: [0, 4, 7, 12],                      // major-ish pentatonic arpeggio
-      pattern: [0, -1, 1, -1, 2, -1, 3, -1, 2, -1, 1, -1, 0, -1, 1, 2],
-      stepDur: 0.42,                             // slow, leisurely
-      detune: 6,
-    };
-    const zg = this.ctx.createGain();
-    zg.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-    zg.gain.setTargetAtTime(0.5, this.ctx.currentTime + 0.05, 0.6); // LOW level
-    zg.connect(this._melodyMaster);
-    this._encoreThemes.push({ zone: -1, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.3, muted: false, fading: false });
-  }
-
   // Fade the melody out and stop the loop (run end / quit to title). Ramps each
   // live zone gain down (a brief musical fade, not a cut), schedules a
   // disconnect for GC, and clears the active list so a new run starts fresh.
   // S2: the boss loop is stopped here too (it lives on the same melody layer),
-  // so the "stop the melody layer" entry point covers both. M2: the encore
-  // arpeggio is stopped here as well (it lives on the same melody layer), so
-  // leaving the encore (to the atelier/title) fades it out cleanly.
+  // so the "stop the melody layer" entry point covers both.
   clearZoneTheme() {
     if (!this.ctx) return;
     this._fadeMelodyLayer(this._zoneThemes || []);
     this._fadeMelodyLayer(this._bossThemes || []);
-    this._fadeMelodyLayer(this._encoreThemes || []);
     // S2 (v1.9): fade the low-HP uneasy ostinato too (the run's place ended).
     if (this._danger && this._danger.lowThemes) {
       this._fadeMelodyLayer(this._danger.lowThemes);
@@ -1088,7 +1026,6 @@ export class AudioSys {
     this._zoneThemeI = -1;
     this._bossThemes = [];
     this._bossMusic = false;
-    this._encoreThemes = [];
     // C3: restore the ambient-life bed to its normal level now that the boss
     // fight is over (setBossTheme had ducked it to _MIX.bossAmbient).
     if (this._ambLifeMaster) {
@@ -1574,20 +1511,6 @@ export class AudioSys {
         this._noise(t + 0.06, 0.08, 'lowpass', 1000, 1, 0.16);
         break;
       }
-      // ---- S1 (v1.9): the FULL COLLECTION fanfare (the H2 completion beat).
-      // A triumphant major arpeggio + a gilded shimmer — the "museum keeps you
-      // better" moment. SFX-bus (distinct from the music-layer cinematicArp it
-      // accompanies), presentation-only.
-      case 'collection-fanfare': {
-        const maj = [523.25, 659.25, 783.99, 1046.5, 1318.5]; // C5 E5 G5 C6 E6
-        maj.forEach((f, i) => {
-          this._tone(t + i * 0.12, 'triangle', f, f, 0.4, 0.22);
-          this._tone(t + i * 0.12, 'sine', f * 2, f * 2, 0.28, 0.08); // sparkle octave
-        });
-        this._tone(t + 0.6, 'sine', 261.63, 261.63, 1.0, 0.14);       // warm C4 swell
-        this._noise(t + 0.5, 0.9, 'bandpass', 5000, 2.5, 0.1);       // gilded shimmer
-        break;
-      }
       // ---- S1 (v1.9): the CHARGED SPLASH (the big RMB burst). The core paint
       // verb's "charged big" — a heavier impact than the base splash with a low
       // body + a wide wet throw. Surface-aware (water/veg/soil) like the swipe.
@@ -1631,7 +1554,7 @@ export class AudioSys {
         break;
       }
       // ---- S1 (v1.9): the BOSS PHASE-SHIFT sting. One shared sting for all four
-      // bosses (the gray/green/gilded herons + the Silt Wyrm + Hollow Warden +
+      // bosses (the Gray Heron + the Silt Wyrm + Hollow Warden +
       // Umbral Wyrm all route through the same this.heron awaken latch). It is the
       // "the fight just escalated" hit — distinct from the awaken BLOOM (the
       // visual+arpeggio beat in _triggerBloom) and from the per-pigment awaken tone.
@@ -1680,6 +1603,6 @@ export class AudioSys {
 // S2 (v1.9): the PURE theme/density/extra-voices selector + the per-biome +
 // boss + low-HP theme data are exported so a node test (tests/music.mjs) can
 // assert the right theme + density for swamp / Reeds / Black Reeds / boss /
-// lowHp / collection WITHOUT a browser or an AudioContext. Presentation-only
+// lowHp WITHOUT a browser or an AudioContext. Presentation-only
 // (logic.js untouched; makeTuning byte-identical).
-export { ZONE_THEMES, BOSS_THEMES, LOWHP_THEME, COLLECTION_THEME, nextAmbientEvent, AMBIENT_KINDS, AMBIENT_P };
+export { ZONE_THEMES, BOSS_THEMES, LOWHP_THEME, nextAmbientEvent, AMBIENT_KINDS, AMBIENT_P };

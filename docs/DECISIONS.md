@@ -1,10 +1,14 @@
 # Current design and engineering decisions
 
-As of the Astra milestone, 2026-09-26. Older decisions and their original
+Updated for the single dungeon, 2026-11-11. Older decisions and their original
 context are in history/DECISIONS-pre-astra.md. Source/tests take precedence.
 
 | Decision | Reason / constraint |
 |---|---|
+| One finite four-floor campaign; Umbral Wyrm is the final boss | Owner explicitly removed New Game+ and requested one long roguelike dungeon. |
+| Three rests, 35% maximum-HP healing and one run-only brush gift each | Gives the connected run recovery and meaningful growth without permanent stat farming. |
+| Preserve artwork; discard obsolete NG/prestige save fields | Keep personal creative progress while removing cycles, modifiers, gold rewards and legacy stat advantages. |
+| Replace NG/Wander mode gates with campaign progression and actual combat checks | Removed features must not be reintroduced to satisfy their obsolete tests; seven unaffected pacing bands remain enforced. |
 | Keep Canvas2D/Web Audio and zero runtime dependencies | Existing architecture supports a static URL and the procedural painter identity. |
 | Keep pure rules and save normalization in logic.js | Fast headless regression coverage without browser APIs. |
 | Put the new studio in its own module | Avoid further spreading art/progression/book logic across game.js. |
@@ -12,7 +16,6 @@ context are in history/DECISIONS-pre-astra.md. Source/tests take precedence.
 | Teach brush-hop through the first painting | Connects artistic progress with useful defensive movement. |
 | Telegraph fly direction, limit strike contact and allow blue interrupt | Corrects the 40× movement defect and gives meaningful counterplay. |
 | Record bounded actual strokes and illustrate completed memories | A personal keepsake without storing screenshots or unbounded replay data. |
-| Keep challenges independent of earned brush-hop | Fixed-loadout competition should not depend on global study completion. |
 | Keep SAVE_VERSION 12 and GAME_VERSION 1.0.0 | Optional validated fields need no destructive migration or compatibility bump. |
 | Seed pacing and fail on out-of-band output | Previously informational probes could silently report failed/capped fights. |
 | Retune Warden52,000→50,000HP without widening its band | All six sampled estimates now fit2–4 minutes. |

@@ -1,12 +1,14 @@
-// blackpace.mjs — measure the FULL BLACK REEDS run (the v1.8 G1/G2 NG+ Reeds
+// Campaign regression: this probe isolates one biome/boss at base power.
+// It is not the total duration of the connected four-floor dungeon.
+// blackpace.mjs — measure the FULL BLACK REEDS run (the final-floor Black Reeds
 // variant: a deeper 7200px descent + a denser light-bestiary + the Umbral Wyrm
 // 6th-boss apex). Prints the god-mode lower bound + the human estimate so the
 // variant's pacing is verified against the target 22–26 min band (one tier
-// above the cycle-0 Reeds' ~20–25 min, per the v1.8 G3 plan-of-record).
+// above the second-floor Reeds' ~20–25 min, per the v1.8 G3 plan-of-record).
 //
 // The probe runs a BLACK REEDS expedition (ngCycle >= 1 + reedsVictory → the
 // REEDS_DARK world, 7200px; the end boss is the Umbral Wyrm). It measures
-// THREE pieces, the SAME methodology as reedspace.mjs (the cycle-0 Reeds
+// THREE pieces, the SAME methodology as reedspace.mjs (the second-floor Reeds
 // probe) so the two are directly comparable:
 //   A) the god-mode descent (straight-line traversal at base move speed — a
 //      pure LOWER BOUND: no bestiary fighting, lantern management, or flood
@@ -75,7 +77,7 @@ const { UMBRA_WYRM, REEDS_DARK_WIDTH, REEDS_DARK_FLOOD_FACTOR, REEDS_FLOOD_FACTO
 
 // The Game's REAL fresh save (so bank/upgrades/loadout/owned exist) with the
 // Black Reeds GATE set: ngCycle >= 1 AND a Reeds victory (reedsVictory latch).
-// This is the exact state a player has after beating the Reeds and picking NG+
+// This is the exact state a player has when reaching the final dungeon floor
 // — so _beginExpedition's gate fires blackReeds=true (the REEDS_DARK world) and
 // the end boss is the Umbral Wyrm.
 const game = new Game(makeCanvas());
@@ -84,13 +86,12 @@ frames(3);
 game._quitToTitle();
 game.save.stats = { victories: 1, deaths: 0, expeditions: 0 };
 game.save.flags = { intro: true, heronDefeated: true, reedsUnlocked: true, reedsVictory: true };
-game.save.ngCycle = 1;
-// START THE BLACK REEDS EXPEDITION (the NG+ Reeds apex).
-game._beginExpedition(false, { reeds: true });
+// START THE BLACK REEDS EXPEDITION (the final-floor apex).
+game._beginExpedition(false, { campaignFloor: 3 });
 frames(2);
 const blackReeds = game.world.blackReeds;
 const umbra = game.heron;
-console.log(`Black Reeds layout: ${game.world.w}px (vs 5400 swamp, 6000 cycle-0 Reeds), blackReeds=${blackReeds}`);
+console.log(`Black Reeds layout: ${game.world.w}px (vs 5400 swamp, 6000 second-floor Reeds), blackReeds=${blackReeds}`);
 console.log(`End boss: ${umbra.umbra ? 'THE UMBRAL WYRM (6th archetype, ' + (umbra.maxHp / 1000) + 'k HP)' : 'NOT-UMBRA (kind ' + umbra.kind + ')'}`);
 if (!blackReeds || !umbra.umbra) { console.log('FATAL: the Black Reeds run did not build the REEDS_DARK world + Umbral Wyrm'); process.exit(1); }
 
@@ -157,7 +158,7 @@ const umbraHuman = umbraGod / dpsFraction; // the Umbral fight, human
 const avgMoveFrac = 0.55;
 // the Black Reeds descent is DEEPER + DARKER + FLOODED-MORE: a ~15% slowdown
 // vs the open-sweep god lower bound (the deeper flood 0.62 + the darker lantern
-// as a real layer — the SAME 1.15 penalty the cycle-0 Reeds probe uses, since
+// as a real layer — the SAME 1.15 penalty the second-floor Reeds probe uses, since
 // the god descent already carries the real flooded-low-band slowdown).
 const floodPenalty = 1.15;
 const travelHuman = travelGod * floodPenalty;
@@ -166,7 +167,7 @@ const travelHuman = travelGod * floodPenalty;
 // Reeds length ratio (7200/5400 = 1.33) — the biome is longer (the denser
 // Wisp/Serpent/Leech pick ratio is a rare pick WITHIN the same spawn budget, so
 // it draws attention but does not add a separate wave count — same 5s/enemy
-// figure the swamp + cycle-0 Reeds probes use).
+// figure the swamp + second-floor Reeds probes use).
 const WAVES_SWAMP = (755 + 160 + 30);           // pace.mjs analytic (background + zone + guardians)
 const background = WAVES_SWAMP * (REEDS_DARK_WIDTH / 5400);
 const humanTotal = travelHuman + umbraHuman + background;
@@ -176,5 +177,5 @@ console.log(`BLACK REEDS RUN — HUMAN ESTIMATE (competent player): ~${(humanTot
 console.log(`  descent (55% avg speed + deeper/darker flood + lantern layer ×1.15): ${travelHuman.toFixed(0)}s`);
 console.log(`  wave-fighting (ANALYTIC, pace.mjs swamp waves × ${REEDS_DARK_WIDTH / 5400} length): ${background.toFixed(0)}s = ${(background / 60).toFixed(1)} min`);
 console.log(`  the Umbral Wyrm (${(UMBRA_WYRM.hp / 1000)}k hp, human DPS): ~${umbraHuman.toFixed(0)}s = ${(umbraHuman / 60).toFixed(1)} min`);
-console.log(`Target is ~22–26 min (one tier above the cycle-0 Reeds' ~20–25 — a hand-tuned NG+ apex, allowed to run past both bands).`);
-console.log(`Note: the first-time swamp (15–20) + the cycle-0 Reeds (20–25) are victory-gated and structurally untouched; this probe measures ONLY the Black Reeds run.`);
+console.log(`Target is ~22–26 min (one tier above the second-floor Reeds' ~20–25 — the final dungeon floor, allowed to run past both bands).`);
+console.log(`Note: this measures ONLY the final floor at base power; run-only choices can improve campaign time.`);

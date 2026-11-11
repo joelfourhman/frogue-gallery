@@ -1,3 +1,5 @@
+// Campaign regression: this probe isolates one biome/boss at base power.
+// It is not the total duration of the connected four-floor dungeon.
 'use strict';
 import './seed.mjs';
 // wardpace.mjs — HOLLOW WARDEN PACING probe, enforced by scripts/check.mjs.
@@ -5,7 +7,7 @@ import './seed.mjs';
 // Modeled on reedspace.mjs (the Silt Wyrm probe) + wandpace.mjs (the Wander probe).
 // The Warden is the 5th boss archetype: it spawns ONLY at the end of a WANDER
 // expedition (Wander ON) — NEVER in a hand-tuned (Wander-OFF) run (byte-identical
-// to v1.6). It is the Wander apex (48k HP after the control-feel retune).
+// to v1.6). It is the third-floor boss (48k HP after the control-feel retune).
 //
 // This probe measures the Warden fight via the REAL paint path (like reedspace's
 // wyrm measurement): god-mode (iframes, point-blank, lDown always) — the LOWER
@@ -83,7 +85,6 @@ const HUMAN_DPS_FRAC = 0.42;
 function wardenFight(seed) {
   const cv = makeCanvas();
   const g = new Game(cv); g.start(); frames(3); g._quitToTitle();
-  g.save.ngCycle = 0;
   g.save.flags.heronDefeated = true;
   g.save.flags.reedsUnlocked = true;
   g.options.wander = true;
@@ -123,7 +124,7 @@ function wardenFight(seed) {
 }
 
 console.log('HOLLOW WARDEN PACE — F1 (v1.7)');
-console.log('  (the 5th boss archetype; the Wander-apex; spawns ONLY at the end of a WANDER expedition; 48k HP; the Silt Wyrm is the Wander-OFF Reeds boss)');
+console.log('  (third-floor Hollow Warden; 48k HP; seeded taste variants retained as internal regression fixtures)');
 console.log(`  WARDEN.hp=${WARDEN.hp}  mawOpen=${WARDEN.mawOpen}s  mawClosed=${WARDEN.mawClosed}s  telegraph=${WARDEN.telegraph}s  siphonRate=${WARDEN.siphonRate}/s`);
 console.log('');
 console.log('GOD-MODE WARDEN FIGHTS (the real paint path; lDown always, 3-hue cycling bot; the LOWER BOUND):');
@@ -142,6 +143,6 @@ console.log('');
 console.log(`  RANGE god ${minF.toFixed(0)}-${maxF.toFixed(0)}s (mean ${meanF.toFixed(0)}s) → HUMAN ${minH.toFixed(1)}-${maxH.toFixed(1)} min`);
 console.log('');
 console.log('REFERENCE: the Silt Wyrm (48k, the Wander-OFF Reeds apex) measures 97.7s god / ~3.9 min human (reedspace.mjs).');
-console.log(`  The Warden (48k, the Wander apex) sits at ${minH.toFixed(1)}-${maxH.toFixed(1)} min human — comparable to the Wyrm, in the 2–4 min band (the 2–4 minute band is enforced by scripts/check.mjs).`);
+console.log(`  The Warden (48k, the third-floor boss) sits at ${minH.toFixed(1)}-${maxH.toFixed(1)} min human — comparable to the Wyrm, in the 2–4 min band (the 2–4 minute band is enforced by scripts/check.mjs).`);
 console.log('');
-console.log('NOTE: the Warden is the WANDER end-of-run boss. It never appears in a hand-tuned (Wander-OFF) run (byte-identical to v1.6). The WARDEN_SEEDS env var can pin specific seeds for regression.');
+console.log('NOTE: the Warden closes the third dungeon floor. WARDEN_SEEDS pins internal seeded fixtures for regression.');

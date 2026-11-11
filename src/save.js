@@ -124,7 +124,9 @@ export const SaveSys = {
   save(data) {
     // JSON.stringify of our own save is pure data prep (never throws on a
     // well-formed save); the storage write is the only fallback-sensitive op.
-    const blob = JSON.stringify(data);
+    // Persist only the current schema; obsolete cycle/prestige fields and
+    // transient dungeon rewards must not return through a legacy caller.
+    const blob = JSON.stringify(migrateSave(data));
     return tryOp((s) => s.setItem(SAVE_KEY, blob));
   },
   erase() {

@@ -23,8 +23,8 @@ export async function mothBrowser({page,tick,out,report}) {
   assert.equal(new Set(signatures).size,4,'moth approach/tell/dash/settled silhouettes differ at fixed time');
   report.push({mothPosePixels:signatures});
   await page.evaluate(() => {
-    const g=window.__game; g.save.ngCycle=0;g.save.flags.heronDefeated=true;g.save.flags.reedsVictory=false;
-    g.options.wander=false;g.options.shake=false;g._beginExpedition(false,{reeds:true});g.spawnT=999;g._zoneI=2;g.weatherZoneI=2;
+    const g=window.__game; g.save.flags.heronDefeated=true;g.save.flags.reedsVictory=false;
+    g.options.wander=false;g.options.shake=false;g._beginExpedition(false,{campaignFloor:1});g.spawnT=999;g._zoneI=2;g.weatherZoneI=2;
     g.player.x=2650;g.player.y=550;g.cam.x=2650;g.cam.y=550;
     window.mothSounds=[]; const sound=g.sfx.bind(g);g.sfx=(name,opt)=>{window.mothSounds.push(name);sound(name,opt);};
   });
@@ -62,7 +62,7 @@ export async function mothBrowser({page,tick,out,report}) {
   };
   await page.evaluate(()=>{const g=window.__game;g.player.x=2450;g.player.y=750;g.cam.x=2450;g.cam.y=750;});
   await walk(2850,750);assert.equal((await state()).started,false,'ordinary corridor traversal never activates the optional encounter');
-  await page.evaluate(()=>{const g=window.__game;g._beginExpedition(false,{reeds:true});g.spawnT=999;g._zoneI=2;g.weatherZoneI=2;g.player.x=2650;g.player.y=550;g.cam.x=2650;g.cam.y=550;});
+  await page.evaluate(()=>{const g=window.__game;g._beginExpedition(false,{campaignFloor:1});g.spawnT=999;g._zoneI=2;g.weatherZoneI=2;g.player.x=2650;g.player.y=550;g.cam.x=2650;g.cam.y=550;});
   await tick(260); // late-game staging: opening banner has already faded on arrival
   await tick(1);await page.screenshot({path:path.join(out,'16-moth-nook.png')});
   assert.equal((await state()).started,false);
@@ -91,7 +91,7 @@ export async function mothBrowser({page,tick,out,report}) {
   report.push({mothActualGuideLockedTellPauseDodgeLeave:{approach,guided,tell,dash,warningFrames}});
   // Fresh authored scene for the counter. No direct mutation of enemy phase,
   // pigment, flower or reward; green/blue are selected with real keyboard input.
-  await page.evaluate(()=>{const g=window.__game;g._beginExpedition(false,{reeds:true});g.spawnT=999;g._zoneI=2;g.weatherZoneI=2;g.player.x=2650;g.player.y=550;g.cam.x=2650;g.cam.y=550;});
+  await page.evaluate(()=>{const g=window.__game;g._beginExpedition(false,{campaignFloor:1});g.spawnT=999;g._zoneI=2;g.weatherZoneI=2;g.player.x=2650;g.player.y=550;g.cam.x=2650;g.cam.y=550;});
   await tick(260);
   await walk(2680,335);
   await aim(2650,300);await page.keyboard.press('3');await tick(1);await page.mouse.down();await tick(1);await page.mouse.up();
@@ -120,7 +120,7 @@ export async function mothBrowser({page,tick,out,report}) {
   assert.equal(await page.evaluate(()=>window.mothSounds.includes('moth-tell') && window.mothSounds.includes('moth-settle')),true,'live encounter emits warning and settlement SFX');
   const effects=await page.evaluate(()=>{const g=window.__game;return {particles:g.particles.pool.length,droplets:g.paint.droplets.length,wet:g.paint.wet.length,ink:g.paint.ink.length,wakes:g.studio.wakes?.length||0};});
   assert(effects.particles<=240 && effects.droplets<=48 && effects.wet<=120 && effects.ink<=40 && effects.wakes<=24);
-  const resetNear=()=>page.evaluate(()=>{const g=window.__game;g._beginExpedition(false,{reeds:true});g.spawnT=999;g._zoneI=2;g.weatherZoneI=2;g.player.x=2650;g.player.y=350;g.cam.x=2650;g.cam.y=350;});
+  const resetNear=()=>page.evaluate(()=>{const g=window.__game;g._beginExpedition(false,{campaignFloor:1});g.spawnT=999;g._zoneI=2;g.weatherZoneI=2;g.player.x=2650;g.player.y=350;g.cam.x=2650;g.cam.y=350;});
   await resetNear();await tick(1);assert.equal((await state()).phase,'tell');
   await page.keyboard.press('l');await tick(1);assert.equal((await state()).phase,'approach');
   await tick(90);assert.equal((await state()).phase,'approach','dark moth never arms an attack');

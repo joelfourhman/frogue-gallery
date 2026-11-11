@@ -21,12 +21,15 @@ it with `Stop-Process -Id 44136`; process IDs can be reused after exit.
 These are ignored by Git and may be regenerated:
 - dist/: runtime folder, upload ZIP and manifest; `node scripts/build.mjs`.
 - .cache/checks/: text logs and JSON check report.
+- .cache/campaign-*, .cache/game-before-campaign.js, .cache/dungeon-*: local
+  migration helpers and visual evidence; no runtime dependency.
 - .cache/feel-*: control audit script, baseline archive/extraction, measurements,
   screenshots and preview PID/logs. Stop the preview before clearing its logs.
 - .cache/atlas-review.png and .cache/studio-*.png: local visual review evidence.
 - .cache/astra-logs/: this development pass's earlier diagnostic logs.
 - tests/.out/astra/: browser screenshots, postcard and report.
 - tests/.out/astra/32–35 PNGs: free repainting, warning lane, combo and 640px UI.
+- tests/.out/astra/36–39 PNGs: dungeon rest choices and final victory.
 - tests/frames/astra/: staged render screenshots and manifest.
 - node_modules/: optional browser test tooling; no game runtime dependency.
 
