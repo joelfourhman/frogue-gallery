@@ -19,6 +19,9 @@ export class Input {
     // `endFrame()`. Guarded: empty when the game never sets `_fieldFocus`, so the
     // keyboard/mouse paths are byte-identical to the pre-Q3 baseline.
     this._fieldFocus = false;
+    this.captureEnabled = false;
+    this.pointerLocked = false;
+    this._capturePending = false;
     this._bind(canvas);
   }
 
@@ -42,20 +45,28 @@ export class Input {
     this._ku = (e) => { const k = e.key.toLowerCase(); this.keys.delete(k); this._phys.delete(k); };
     window.addEventListener('keydown', this._kd);
     window.addEventListener('keyup', this._ku);
-    this._blur = () => this.reset();
+    this._blur = () => { this.reset(); if (this.pointerLocked) this.onCaptureLost?.(); };
     window.addEventListener('blur', this._blur);
 
     this._mm = (e) => {
       const r = cv.getBoundingClientRect();
-      this.mouse.x = (e.clientX - r.left) * cv.width / (r.width || cv.width);
-      this.mouse.y = (e.clientY - r.top) * cv.height / (r.height || cv.height);
+      if (this.pointerLocked) {
+        this.mouse.x += (e.movementX || 0) * cv.width / (r.width || cv.width);
+        this.mouse.y += (e.movementY || 0) * cv.height / (r.height || cv.height);
+        this.mouse.x = Math.max(0, Math.min(cv.width, this.mouse.x));
+        this.mouse.y = Math.max(0, Math.min(cv.height, this.mouse.y));
+      } else {
+        this.mouse.x = (e.clientX - r.left) * cv.width / (r.width || cv.width);
+        this.mouse.y = (e.clientY - r.top) * cv.height / (r.height || cv.height);
+      }
       // Movement samples aim before the next simulation-side input refresh.
       // Resolve a new move/click now so its first stroke uses this pointer,
       // rather than the previous frame's direction through a moving camera.
       this.update();
     };
     this._md = (e) => {
-      this._mm(e);
+      if (!this.pointerLocked) this._mm(e);
+      if ((e.button === 0 || e.button === 2) && this.captureEnabled) this.capturePointer();
       if (e.button === 0) { this.mouse.lDown = true; this.mouse.lPressed = true; this.mouse._physL = true; }
       if (e.button === 2) { this.mouse.rDown = true; this.mouse.rPressed = true; this.mouse._physR = true; } // W1: physical RMB (the pad feed checks this)
     };
@@ -66,11 +77,43 @@ export class Input {
     this._cm = (e) => e.preventDefault();
     this._wh = (e) => { this.mouse.wheel += Math.sign(e.deltaY); };
 
-    cv.addEventListener('mousemove', this._mm);
+    cv.addEventListener('mousemove', e => { if (!this.pointerLocked) this._mm(e); });
+    this._lockedMove = e => { if (this.pointerLocked) this._mm(e); };
+    document.addEventListener?.('mousemove', this._lockedMove);
+    this._lockChange = () => {
+      const wasLocked = this.pointerLocked;
+      this.pointerLocked = document.pointerLockElement === cv;
+      this._capturePending = false;
+      if (this.pointerLocked && !this.captureEnabled) { document.exitPointerLock?.(); return; }
+      if (wasLocked && !this.pointerLocked) {
+        this.reset();
+        if (this.captureEnabled) this.onCaptureLost?.();
+      }
+    };
+    document.addEventListener?.('pointerlockchange', this._lockChange);
+    document.addEventListener?.('pointerlockerror', () => { this._capturePending = false; });
     cv.addEventListener('mousedown', this._md);
     window.addEventListener('mouseup', this._mu);
     cv.addEventListener('contextmenu', this._cm);
     cv.addEventListener('wheel', this._wh, { passive: true });
+  }
+
+  // Called only from a canvas mouse gesture: Chrome requires user activation.
+  // Keep absolute-position input as a fallback when capture is unavailable.
+  capturePointer() {
+    if (!this.captureEnabled || this.pointerLocked || this._capturePending || !this.canvas.requestPointerLock) return;
+    this._capturePending = true;
+    try {
+      const request = this.canvas.requestPointerLock();
+      request?.catch?.(() => { this._capturePending = false; });
+    } catch { this._capturePending = false; }
+  }
+  setCaptureMode(enabled) {
+    this.captureEnabled = !!enabled;
+    if (!enabled && document.pointerLockElement === this.canvas) {
+      this.reset();
+      document.exitPointerLock?.();
+    }
   }
 
   // Camera transform: screen <-> world.

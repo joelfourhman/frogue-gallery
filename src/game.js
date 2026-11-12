@@ -160,6 +160,12 @@ export class Game {
 
     // ---------- systems ----------
     this.input = new Input(canvas);
+    this.input.onCaptureLost = () => {
+      if (this.state === 'expedition' && !this.dying && !this._bookOpen && !this._atlasOpen && !this.help) {
+        this.paused = true;
+        this._pauseOpenT = 0;
+      }
+    };
     // W1 (v1.6 Module W): the GAMEPAD feed state. The poll runs every frame in
     // _frame and writes INTO this.input (kb/pressed/mouse) — it never invents
     // a new input path, so a controller drives the exact same move keys,
@@ -4182,6 +4188,7 @@ export class Game {
     const skip = this._tutorialActive() ? this._tutorialLayout().skip : null;
     const overSkip = skip && this._mouseIn(skip.x, skip.y, skip.w, skip.h);
     this.canvas.style.cursor = painting && !overSkip ? 'none' : 'default';
+    this.input.setCaptureMode(painting && !overSkip);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.cw, this.ch);
     const v = this._view();
@@ -5483,7 +5490,7 @@ export class Game {
     }
 
     // footer
-    centerText(c, this._gp.connected ? 'Left stick move · Right stick aim · RT paint · RB hop · B splash · Start pause / atlas · Back sketchbook' : 'WASD / arrows move · Space hop · V atlas · J sketchbook · P pause · M mute', g.cx, g.py + g.ph - 22, uiFont(UI.sizes.label, { italic: true }), INK, 0.6);
+    centerText(c, this._gp.connected ? 'Left stick move · Right stick aim · RT paint · RB hop · B splash · Start pause / atlas · Back sketchbook' : 'WASD move · Click to capture mouse · Esc release / pause · Space hop · V map · J sketchbook', g.cx, g.py + g.ph - 22, uiFont(UI.sizes.label, { italic: true }), INK, 0.6);
     // T4 (v1.2 M13): the "Watch me" retraining band — replay a single pigment
     // drill or the sketch-heron phase on demand (opt-in; never auto-enters, and
     // the replay is a frozen aside that never counts toward the timed run).

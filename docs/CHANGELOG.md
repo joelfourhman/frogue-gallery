@@ -1,3 +1,11 @@
+# Mouse capture and LAN play — 2026-11-12
+
+- Clicking during play captures the mouse; relative aiming stays inside the game.
+  Escape releases and pauses. Menus and sketchbook automatically free the cursor.
+- Launch Game.cmd listens on all IPv4 interfaces and prints LAN addresses.
+  Local saves and the runtime-only server file allowlist remain intact.
+- Added native-browser capture, input regression and LAN HTTP checks.
+
 # A home worth painting — soundtrack remake, 2026-11-12
 
 - Replaced the entire background score with 13 original compositions inspired

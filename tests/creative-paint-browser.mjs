@@ -61,7 +61,8 @@ export async function creativePaintBrowser({ page, tick, out, report }) {
     g._creativeProp = g.studio.garden.props.find(p => p.kind === 'lanterns');
   });
   await paintPart(0, 'red'); await paintPart(1, 'green'); await paintPart(2, 'blue');
-  assert.deepEqual(await page.evaluate(() => window.__game._creativeProp.parts.map(p => p.pigment)), ['red', 'green', 'blue']);
+  const lanternState=await page.evaluate(()=>{const g=window.__game;return {parts:g._creativeProp.parts.map(p=>p.pigment),paused:g.paused,locked:g.input.pointerLocked,mouse:g.input.mouse,player:{x:g.player.x,y:g.player.y,a:g.player.aimA,pigment:g.player.pigment},prop:{x:g._creativeProp.x,y:g._creativeProp.y},strokes:g.studio.strokes.slice(-3)};});
+  assert.deepEqual(lanternState.parts, ['red', 'green', 'blue'],JSON.stringify(lanternState));
   await admire('50-stained-lantern.png');
   assert(await page.evaluate(() => window.__game.studio.garden.props.every(p => p.marks.length <= 8)));
   report.push('Actual DOM painting preserves red/green/blue mushroom caps and lantern panels, directional stripes, splash speckles, touched-part erasure and bounded marks.');

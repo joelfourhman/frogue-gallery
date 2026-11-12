@@ -12,10 +12,16 @@ The compatibility identifiers remain game 1.0.0 / save schema 12.
 ## Play locally
 
 On Windows, double-click **Launch Game.cmd** in this folder. It starts the
-local server and opens Google Chrome at http://127.0.0.1:8767, reusing the
-existing preview if available. Keep the launcher window open when it starts
-a new server; Ctrl+C stops that server. It finds installed Node or Codex's
-bundled Node automatically. Chrome must be installed.
+LAN server on all IPv4 interfaces (`0.0.0.0:8767`) and opens Google Chrome at
+http://127.0.0.1:8767. The launcher prints **LAN players** URLs: other computers
+on your network open one of those addresses in their browsers. If Windows
+Firewall prompts, allow Node on your private network. Each browser keeps its
+own saves; this shares the game, not a multiplayer session.
+
+Keep the launcher window open when it starts a new server; Ctrl+C stops it.
+It reuses a matching LAN server. If an older local-only preview already owns
+port 8767, stop that preview's server terminal first, then relaunch. It finds
+installed Node or Codex's bundled Node automatically. Chrome must be installed.
 
 With Node.js 22 or newer installed, run from this directory:
 
@@ -25,7 +31,8 @@ node scripts/dev.mjs
 
 Open [Frogue Gallery](http://127.0.0.1:8765). Ctrl+C stops the server.
 If that port is occupied, use `node scripts/dev.mjs --port 8766`.
-The server binds only to your computer and disables stale development caches.
+This development command binds only to your computer and disables stale caches.
+For a manual LAN server, use `node scripts/dev.mjs --host 0.0.0.0 --port 8767`.
 There is no install step or runtime dependency. Use HTTP, not a double-click
 on `index.html`: the game loads JavaScript modules.
 
@@ -33,6 +40,11 @@ Alternative: `python -m http.server 8765 --bind 127.0.0.1`.
 The Node server additionally restricts served files to the game itself.
 
 ## First expedition
+
+Click the game while playing to capture the mouse. Relative aiming keeps working
+when your hand moves past the window edge. **Escape releases the mouse and pauses**;
+menus, map and sketchbook release it automatically. Resume, then click to capture
+again. Browsers that deny capture retain ordinary mouse aiming.
 
 Press Enter. Repaint pale lilies, flowers, mushrooms and stones your own way.
 Aim at individual petals, flower heads, caps or stones to give each its own

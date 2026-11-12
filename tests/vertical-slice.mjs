@@ -18,6 +18,9 @@ try {
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
   await page.addInitScript(() => {
+    // Existing precise-paint fixtures cover browsers without pointer lock.
+    // pointerCaptureBrowser below uses a separate page with the real API.
+    HTMLCanvasElement.prototype.requestPointerLock = undefined;
     // Pixel evidence uses deterministic CPU rasterization. GPU/readback mode
     // transitions can differ by one channel value even on the same surface.
     const getContext = HTMLCanvasElement.prototype.getContext;
@@ -501,6 +504,8 @@ try {
   await creativePaintBrowser({page,tick,out,report});
   const { musicBrowser } = await import('./music-browser.mjs');
   await musicBrowser({page,out,report});
+  const { pointerCaptureBrowser } = await import('./pointer-capture-browser.mjs');
+  await pointerCaptureBrowser({page,report});
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(out, 'report.json'), JSON.stringify({ report, errors }, null, 2));
   console.log(JSON.stringify(report, null, 2));

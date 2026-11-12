@@ -2,6 +2,12 @@
 
 ## Stop development servers
 
+The owner-authorized LAN launcher currently runs hidden on 0.0.0.0:8767,
+PID 22404 (.cache/lan-preview.pid). Before stopping it, verify the current PID
+still runs this project's scripts/play.mjs; then Stop-Process -Id 22404 stops
+only that server. The old loopback launcher PID 20972 was replaced. Older PID
+notes below are historical. Double-clicking the launcher reuses this LAN server.
+
 `Launch Game.cmd` keeps a newly started server in its console: Ctrl+C stops it.
 If it reports that it reused an existing server, that server remains owned by
 its original terminal/process; the launcher does not stop unrelated processes.
@@ -25,6 +31,9 @@ it with `Stop-Process -Id 44136`; process IDs can be reused after exit.
 These are ignored by Git and may be regenerated:
 - dist/: runtime folder, upload ZIP and manifest; `node scripts/build.mjs`.
 - .cache/checks/: text logs and JSON check report.
+- .cache/lan-preview.*: active LAN server PID/logs; stop that server before
+  clearing these records. .cache/lan-capture-check.mjs and pointer-check.mjs
+  are one-off browser validation helpers, not game runtime dependencies.
 - .cache/campaign-*, .cache/game-before-campaign.js, .cache/dungeon-*: local
   migration helpers and visual evidence; no runtime dependency.
 - .cache/paint-delights-review/ and .cache/journey-review/: isolated visual

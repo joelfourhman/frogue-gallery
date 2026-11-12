@@ -6258,5 +6258,8 @@ await import('./garden-sound.mjs');
 console.log('== stage 134: creative part painting and brush patterns ==');
 const { testCreativePaintGame } = await import('./creative-paint.mjs');
 testCreativePaintGame(Game, makeCanvas);
+console.log('== stage 135: confined mouse aiming and safe release ==');
+const { testPointerCapture } = await import('./pointer-capture.mjs');
+console.log(await testPointerCapture());
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

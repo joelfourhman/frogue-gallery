@@ -1,4 +1,39 @@
-# Project state — A home worth painting: soundtrack remake (2026-11-12)
+# Project state — Captured mouse aiming and LAN launcher (2026-11-12)
+
+Owner reported the mouse leaving the game and explicitly requested all-interface
+LAN hosting, superseding the old launcher loopback-only boundary.
+
+Gameplay mouse clicks request native pointer lock. Captured movement uses relative
+CSS-scaled deltas and a bounded virtual aim position; reversing at an edge works
+immediately. Clicks cannot teleport captured aim. Escape/lost capture clears held
+actions and pauses; menus, sketchbook, map, defeat and rest release the cursor.
+Capture requires a gesture and gracefully falls back if unsupported/denied.
+Late browser responses cannot recapture a menu. Help explains capture and Escape.
+
+Launch Game.cmd now starts 0.0.0.0:8767, opens Chrome at the same local save origin,
+and prints LAN IPv4 URLs. Matching LAN servers can be reused; local-only previews
+and unrelated servers are refused. A localhost preflight handles Windows allowing
+simultaneous wildcard/loopback binds. Runtime files only; no repo/docs/log exposure.
+Dev CLI stays loopback by default, with explicit --host 0.0.0.0 support. LAN clients
+have independent browser saves; this does not add multiplayer.
+
+Verification: smoke stage 135 covers input capture, bounds, release and rejection
+paths. A separate real-Chromium page verifies capture beyond window bounds,
+relative aim, immediate reversal, Escape pause, recapture and sketchbook release.
+Existing precise painting fixtures exercise the no-capture fallback. Launcher
+tests bind wildcard and fetch through actual detected LAN interfaces.
+Final `node scripts/check.mjs --browser`: all 19 gates passed, including source
+(28.7s), dist (27.9s), frames, performance and unchanged pacing/balance gates.
+The lantern fixture intermittently missed strokes during earlier runs; retained
+diagnostic state in its assertion. Both final browser journeys passed unchanged
+painting assertions, alongside native pointer capture and fallback checks.
+
+Replaced the verified old scripts/play.mjs listener PID 20972 with LAN launcher
+PID 22404 on 0.0.0.0:8767; no firewall changes. HTTP and Chrome pointer capture
+verified at http://192.168.50.115:8767 from this host. Actual Launch Game.cmd
+--no-browser successfully reused it. No second-device firewall test performed.
+
+# Previous checkpoint — A home worth painting: soundtrack remake (2026-11-12)
 
 Owner requested a complete music remake inspired by classic MapleStory.
 Replaced all background themes with 13 original compositions: title, four

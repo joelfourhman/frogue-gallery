@@ -1,5 +1,16 @@
 # Environment and tool changes
 
+## Captured aim and LAN launcher — 2026-11-12
+
+Owner explicitly authorized all-interface hosting. No packages or firewall
+settings changed. Verified the previous listener PID 20972 was this project's
+scripts/play.mjs, stopped it, and restarted that launcher with --no-browser,
+hidden, bound to 0.0.0.0:8767. Current PID 22404 is recorded in
+.cache/lan-preview.pid; logs are .cache/lan-preview.log and .err.log.
+Verified HTTP and native Chrome pointer capture at http://192.168.50.115:8767.
+The launcher also lists the host's virtual-network address 172.20.192.1.
+These are host-side checks; no second physical computer was used.
+
 ## Original soundtrack — 2026-11-12
 
 No packages, remote services, machine settings or persistent processes added.

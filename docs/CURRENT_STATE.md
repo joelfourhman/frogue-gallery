@@ -49,7 +49,7 @@ human enjoyment and long-run balance still require playtesting.
 | System | Current behavior |
 |---|---|
 | Movement | Responsive stops/reversal, full-speed ordinary painting, short Space dodge, stationary aim direction, 120ms early-input buffer |
-| Brush | Unlimited swipe and release-fired charged splash; one brush marker at actual reach; local charge/dodge cues |
+| Brush | Unlimited swipe and release-fired charged splash; one brush marker at actual reach; mouse clicks capture relative aiming, Escape releases/pauses and menus release automatically |
 | Colors | Red damage/burn, blue slow/freeze/interrupt, green root/healing, dry status clear/restoration |
 | Threats | Swamp/Reeds visual telegraphs and pigment counters; repeated attack/opening/blue-stop/boss coaching captions removed |
 | Campaign | Four region guardians in fixed order; run-only gifts; final victory returns the color stolen by Umbral |
