@@ -27,6 +27,8 @@ for (const [cw, ch] of [[1280, 800], [640, 500]]) {
   const before = JSON.stringify(g); lines.length = 0;
   drawJourneyHud(g, ctx);
   assert(lines.some(line => line.includes('Watercolor Marsh')));
+  assert(lines.some(line => line.includes('Umbral Wyrm stole the color')), 'the first arrival names the color thief');
+  assert(!lines.some(line => /dungeon|depth|descend/i.test(line)));
   assert.equal(JSON.stringify(g), before, 'intro is presentation only');
   for (const flag of ['paused', 'help', '_bookOpen', '_atlasOpen', 'dying']) {
     g[flag] = true; calls.length = 0; lines.length = 0; drawJourneyHud(g, ctx); g[flag] = false;
@@ -35,7 +37,7 @@ for (const [cw, ch] of [[1280, 800], [640, 500]]) {
   g.banners = [{ t: 2 }]; lines.length = 0; drawJourneyHud(g, ctx);
   assert.equal(lines.length, 0, 'existing teaching banners win');
   g.banners = []; g.runT = 25; lines.length = 0; drawJourneyHud(g, ctx);
-  assert(lines.some(line => line.includes('Follow the path right')));
+  assert(lines.some(line => line.includes('Bring color back to our swamp')));
   g.encounter.nearby = true; assert.equal(journeyObjective(g), ''); g.encounter.nearby = false;
   g.enemies = [{ x: 300, y: 750, hp: 20 }]; assert.equal(journeyObjective(g), ''); g.enemies = [];
   g.studio.studies = [{ x: 260, y: 750 }]; assert.equal(journeyObjective(g), ''); g.studio.studies = [];
@@ -43,7 +45,9 @@ for (const [cw, ch] of [[1280, 800], [640, 500]]) {
   assert.equal(landmarks.guardian.x, 4500); assert.equal(landmarks.clearing.name, 'Lily Clearing');
   assert.equal(atlasForGame(g).journey.guardian.name, 'Great Gray Heron');
   g.player.x = 4400; assert(journeyObjective(g).includes('Great Gray Heron'));
-  g.heron._intro = 0; assert(journeyObjective(g).includes('Dodge'));
+  g.heron._intro = 0; assert.equal(journeyObjective(g), '', 'active boss fights get no instructional overlay');
+  lines.length = 0; drawJourneyHud(g, ctx); assert.equal(lines.length, 0);
+  g.runT = 2; lines.length = 0; drawJourneyHud(g, ctx); assert.equal(lines.length, 0, 'arrival card also yields during a fight');
   const worldBefore = JSON.stringify(g); lines.length = 0;
   drawJourneyWorld(g, ctx, { x: 4300, y: 400, w: cw, h: ch, scale: 1 });
   assert(lines.some(line => line.includes('GUARDIAN AHEAD')));
@@ -58,11 +62,11 @@ for (let floor = 0; floor < 4; floor++) {
   assert.equal(!!l.clearing, floor === 0); assert.equal(l.guardian.final, floor === 3);
   lines.length = 0; drawJourneyHud(g, ctx);
   assert(lines.some(line => line.includes(CAMPAIGN[floor].name)), 'every floor gets its own introduction with a carried clock');
-  g.heron._intro = 0; assert(journeyObjective(g).length > 20);
+  g.heron._intro = 0; assert.equal(journeyObjective(g), '');
   lines.length = 0; drawFieldAtlas(g, ctx);
   assert(lines.includes(l.guardian.name));
   assert.equal(lines.some(line => line === 'Lily Clearing'), floor === 0);
-  if (floor === 3) assert(lines.includes('Final guardian'));
+  if (floor === 3) assert(lines.includes('The color thief'));
   g.options.wander = true; assert.equal(journeyLandmarks(g), null);
 }
 const g = game(); g.campaign.rewards = ['power', 'power', 'heart'];

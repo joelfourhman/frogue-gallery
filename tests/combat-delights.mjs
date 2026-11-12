@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { drawCombatReadout, enemyCombatCue, bossCombatCue } from '../src/combat-ui.js';
+import { drawCombatReadout } from '../src/combat-ui.js';
 import { OpeningEncounter } from '../src/encounter.js';
 import { Enemy } from '../src/enemies.js';
 import { Paint } from '../src/paint.js';
@@ -12,27 +12,17 @@ export function testCombatDelights() {
   const enemy = new Enemy('mosquito', 145, 120, tuning);
   mosquitoStep(enemy, 0.01, player);
   assert.equal(enemy.flight, 'tell');
-  assert.match(enemyCombatCue(enemy).text, /Dodge/);
   const paint = new Paint(player, world, tuning, () => {}, { splatter() {} });
   paint._applyHits([enemy], 'blue', 'swipe');
   mosquitoStep(enemy, 0.01, player);
   assert.equal(enemy.flight, 'recover');
-  assert.match(enemyCombatCue(enemy).text, /Blue stopped/);
   enemy.status = null;
-  assert.match(enemyCombatCue(enemy).text, /opening/);
-  assert.equal(enemyCombatCue({ kind: 'serpent', hp: 10, phase: 'recover' }), null, 'invisible serpent is not advertised as paintable');
-  assert.equal(enemyCombatCue({ kind: 'beetle', hp: 10, status: { type: 'slow' } }), null, 'ordinary slowed bug is not falsely called stopped');
-  assert.equal(enemyCombatCue({ ...enemy, dead: true }), null);
 
   const warden = { kind: 'warden', hp: 100, maxHp: 100, phase: 'telegraph', phaseT: 0.01, _intro: 0 };
-  assert.match(bossCombatCue(warden), /Leave the ripple/);
   wardenStep(warden, 0.02, {}, tuning, 0);
   assert.equal(warden.phase, 'mawOpen');
-  assert.match(bossCombatCue(warden), /Maw open/);
   wardenStep(warden, WARDEN.mawOpen + 1, {}, tuning, 0);
-  assert.match(bossCombatCue(warden), /Reposition/);
-  assert.match(bossCombatCue({ kind: 'umbra', hp: 30, maxHp: 100, phase: 'surfaced' }, { lit: false }), /Light your lantern/);
-  assert.equal(bossCombatCue({ ...warden, _intro: 3 }), '', 'no combat instructions for a dormant boss');
+  assert.equal(warden.phase, 'mawClosed');
 
   const calls = [], ctx = new Proxy({}, { get: (_, name) => (...args) => {
     assert(args.every(v => typeof v !== 'number' || Number.isFinite(v)), `${name} geometry is finite`);
@@ -41,7 +31,13 @@ export function testCombatDelights() {
   const g = { player, tuning, enemies: [enemy], paint, input: { mouse: { rDown: false } } };
   const snapshot = JSON.stringify(g);
   drawCombatReadout(g, ctx, { x: 0, y: 0, w: 800, h: 600, scale: 1 });
-  assert(calls.some(([name, text]) => name === 'fillText' && /opening/.test(text)));
+  assert(!calls.some(([name]) => name === 'fillText'), 'recovery has no coaching caption');
+  for (const phase of ['tell', 'recover']) {
+    enemy.flight = phase; g.heron = { ...warden, phase: 'mawOpen' };
+    calls.length = 0; drawCombatReadout(g, ctx, { x: 0, y: 0, w: 800, h: 600, scale: 1 });
+    assert(!calls.some(([name]) => name === 'fillText'), 'attacks and bosses use visual tells, not instruction popups');
+  }
+  delete g.heron; enemy.flight = 'recover';
   assert.equal(JSON.stringify(g), snapshot, 'combat feedback does not change damage, actors, aim or timers');
   calls.length = 0; g.paused = true;
   drawCombatReadout(g, ctx, { x: 0, y: 0, w: 800, h: 600, scale: 1 });
@@ -54,6 +50,8 @@ export function testCombatDelights() {
   const encounter = new OpeningEncounter(g);
   const bell = { x: CLEARING.x - 50, y: CLEARING.y, a: 0, range: 74, kind: 'swipe', pigment: 'red' };
   assert(encounter.onStroke(bell));
+  g.cw = 1280; g.ch = 800; calls.length = 0; encounter.drawHint(ctx);
+  assert.equal(calls.filter(([name]) => name === 'fillText').length, 1, 'active clearing shows only compact round progress');
   // Three real authored rounds, with direct stroke observations and hop edges.
   for (let guard = 0; guard < 40 && encounter.phase !== 'complete'; guard++) {
     for (const member of encounter.members) if (!member.dead) {
@@ -76,7 +74,7 @@ export function testCombatDelights() {
   assert(encounter.onStroke(bell)); assert.equal(encounter.result, null); assert.equal(encounter.dodges, 0);
   assert.equal(encounter.colorsUsed.size, 0, 'replaying resets only the new attempt stats');
   encounter.cancel(); assert.equal(blooms, 1, 'cancelling/replaying never adds a completion reward');
-  console.log('Combat delights: live tells, real blue interrupt, recovery/maw cues, pure bounded draw and clearing results PASS');
+  console.log('Quiet combat: no attack/recovery/boss coaching, real blue interrupt, compact progress and clearing results PASS');
 }
 
 testCombatDelights();

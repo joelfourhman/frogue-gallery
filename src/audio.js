@@ -1440,6 +1440,17 @@ export class AudioSys {
         this._tone(t + 0.09, 'triangle', 550, 1100, 0.2, 0.05);
         break;
       }
+      case 'garden-note': {
+        // Each painted mushroom cap is a small instrument. Stable pentatonic
+        // pitches reward experimenting with cap/color combinations without
+        // consuming the game's random stream or scheduling a melody loop.
+        const note = Number.isFinite(opt?.note) ? Math.min(5, Math.max(0, Math.floor(opt.note))) : 0;
+        const root = opt?.pig === 'blue' ? 523.25 : opt?.pig === 'green' ? 130.81 : 261.63;
+        const frequency = root * Math.pow(2, [0, 2, 4, 7, 9, 12][note] / 12);
+        this._tone(t, opt?.pig === 'red' ? 'triangle' : 'sine', frequency, frequency, 0.18, 0.07);
+        this._tone(t + 0.012, 'sine', frequency * 2, frequency * 2, 0.10, 0.025);
+        break;
+      }
       // ---- S1 (v1.9): per-enemy HIT voices. A distinct signature sting per
       // creature so a paint hit reads as THAT enemy being struck (beetle clang /
       // mosquito buzz-sting / toad thud / wisp hiss / serpent slither-hiss /

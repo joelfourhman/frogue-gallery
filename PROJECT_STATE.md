@@ -1,4 +1,41 @@
-# Project state — Double-click Chrome launcher (2026-11-11)
+# Project state — Our swamp, our colors (2026-11-11)
+
+Owner correction: combat instruction captions were spam; the identity is our
+swamp, whose color was stolen by the FINAL BOSS. This overrides the previous
+generic dungeon framing and the twenty-delights attack-caption decisions.
+The same anchor is now recorded in AGENTS.md and active design docs.
+
+Removed attack/recovery/blue-stop/boss coaching captions. Clearing combat now
+shows only compact round progress; first-hit and long boss instruction banners
+are gone. Timed opening tips skip fights, and journey/objective cards yield
+to nearby enemies, active clearing or bosses. Existing attack lanes, animations,
+damage/status feedback and combat rules remain. Manual practice/guide stays.
+
+Title: "Reclaim our swamp" and the Umbral Wyrm stealing our color. Routes/rests
+use regions and Continue. The final color thief's defeat visibly restores full
+world color and removes the darkness mask; the end screen celebrates bringing
+the stolen color home. Presentation does not rewrite saved paintings.
+
+Creative scenery: individual mushroom caps, petals, flower heads, reed tips,
+stones and lantern panels keep different colors simultaneously. Swipes leave
+directional stripes; splashes leave speckles; dry erases only touched parts.
+Part-specific motion, ripples and fireflies react to the brush. Mushroom caps
+play color/pitch-specific pentatonic notes through the existing bounded SFX bus.
+Each region still has 64 props and at most 8 marks per prop (512 total); no new
+currency, combat bonus, save field or dependency. Garden blooms are visual,
+without completion captions. Props still reset on a fresh region/run.
+
+Smoke stages 132–134 cover story/finale, bounded audio and creative painting.
+Browser checks cover quiet combat plus actual multicolor painting, directional
+marks, local erasure and charged splash. Final verification and limitations
+are recorded in docs/VALIDATION-swamp-colors.md. Base combat tuning is unchanged.
+Final `node scripts/check.mjs --browser`: all 19 required gates passed,
+including source/dist browser journeys, frames and performance.
+
+The requested double-click Chrome launcher was completed and committed as
+92815e4 before this correction; use root Launch Game.cmd.
+
+# Previous checkpoint — Double-click Chrome launcher (2026-11-11)
 
 Added root `Launch Game.cmd`, backed by scripts/launch.ps1 and play.mjs.
 Finds installed or Codex-bundled Node and Chrome; starts the loopback server

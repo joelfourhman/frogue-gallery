@@ -1890,7 +1890,9 @@ export class Game {
     // ----- staged first-run tutorial (one step at a time) -----
     if (!tut && this._tut && this._tutI < this._tut.length && this.runT >= this._tut[this._tutI].at) {
       const step = this._tut[this._tutI++];
-      this.addBanner(step.text, step.dur, this.ch * 0.42);
+      const busy = this.encounter?.active || this.heron?._intro <= 0 ||
+        this.enemies.some(e => !e.dead && Math.hypot(e.x - this.player.x, e.y - this.player.y) < 260);
+      if (!busy) this.addBanner(step.text, step.dur, this.ch * 0.42);
     }
 
     // ----- pause toggle (open only; menu input lives in the frame router) -----
@@ -2248,7 +2250,6 @@ export class Game {
         if (this.audio.setBossTheme) this.audio.setBossTheme(true);   // the darker boss loop
         const tNote = this.wanderTaste ? this.wanderTaste.name : '';
         this.addBanner('THE HOLLOW WARDEN', 3.2, 150);
-        this.addBanner('Its maw opens in a TELL — paint it ONLY while open. Its lantern-hunger SIPHONS your fuel!', 4.8, 195);
         if (tNote) this.addBanner('The ' + tNote + ' taste rides this Warden.', 3.2, 185);
         this.zoomTarget = 0.92;
       }
@@ -2263,7 +2264,7 @@ export class Game {
         this.sfx('wyrm-rumble');
         if (this.audio.setBossTheme) this.audio.setBossTheme(true);   // the darker boss loop
         this.addBanner('THE UMBRAL WYRM', 3.2, 150);
-        this.addBanner('It strikes in DUAL MAWS — strike it at BOTH marked points. In the DEEP DARK, your LANTERN is the only light it fears!', 4.8, 195);
+        this.addBanner('The keeper of our stolen color.', 3.2, 195);
         this.zoomTarget = 0.92;
       }
     } else if (this.heron.wyrm) {
@@ -2276,7 +2277,6 @@ export class Game {
         this.sfx('wyrm-rumble');
         if (this.audio.setBossTheme) this.audio.setBossTheme(true);   // the darker boss loop
         this.addBanner('THE SILT WYRM', 3.2, 150);
-        this.addBanner('It moves through the mud — strike it at its SURFACE POINTS. Paint red / blue / green to wake it!', 4.6, 195);
         this.zoomTarget = 0.92;
       }
     } else if (this.heron._intro > 0 && bossArenaReached(p.x, this.world.w)) {
@@ -2285,7 +2285,6 @@ export class Game {
         this.sfx('boss-growl');
         if (this.audio.setBossTheme) this.audio.setBossTheme(false);
         this.addBanner('THE GREAT GRAY HERON', 3.2, 150);
-        this.addBanner('Paint red, blue, and green to wake it — then paint fast while it shimmers!', 4.4, 195);
         this.zoomTarget = 0.92;
         this._challengeAdd('bossEngage');
       }
@@ -2339,7 +2338,6 @@ export class Game {
       if (!this.save.flags.firstHurt) {
         this.save.flags.firstHurt = true;
         SaveSys.save(this.save);
-        this.addBanner('Ouch! Touch hurts — paint enemies first, or space-hop through them', 4.8, this.ch * 0.58);
       }
       // E4: any damage taken breaks the clean-orb streak.
       if (this.orbStreak > 0) this.orbStreak = 0;
@@ -3024,7 +3022,7 @@ export class Game {
     if (!this.save.flags.firstDefeat) {
       this.save.flags.firstDefeat = true;
       SaveSys.save(this.save);
-      this.addBanner('Your paintings are safe. A new descent starts with a fresh brush.', 4, this.ch * 0.5);
+      this.addBanner('Our swamp still needs its color. Your paintings are safe.', 4, this.ch * 0.5);
     }
     // the heron takes flight and the world starts to heal — even in defeat
     if (this.heron && !this.heron.flying) { this.heron.flying = 0.001; }
@@ -3458,7 +3456,7 @@ export class Game {
         if (h.wyrm) {
           this.addBanner('The Silt Wyrm is painted — it sinks back beneath the reeds!', 4, 200);
         } else if (h.umbra) {
-          this.addBanner('The Umbral Wyrm is painted — it slithers back into the deep dark, and the light holds!', 4.4, 200);   // G2: the 6th boss's own defeat beat
+          this.addBanner('The color thief lets go. Our swamp blooms again!', 4.4, 200);
         } else if (h.warden) {
           this.addBanner('The Hollow Warden is painted — it drains the last of the light and sinks beneath the reeds!', 4.4, 200);
         } else {
@@ -4207,6 +4205,8 @@ export class Game {
     let drawSatFinal = (this.state === 'title')
       ? clamp(titleColorSat(this.titleT), 0, 1)
       : drawSat;
+    const colorHome = this.state === 'end' && this.endKind === 'victory' && this.campaign?.complete;
+    if (colorHome) drawSatFinal += (1 - drawSatFinal) * clamp(this.endT / 2.2, 0, 1);
     // M1 (v1.4): the first-victory cinematic beat BLOOMS the world to full
     // color — a render-only saturation ramp up to 1.0 across ~2.2 s (the beat
     // is 4 s, so the last ~1.8 s hold at full color under the skip hint).
@@ -4301,13 +4301,13 @@ export class Game {
       ctx.restore();
     }
     if ((this.state === 'expedition' || this.state === 'end') && this.lanternReeds && this.player) {
-      this._drawReedsLight(ctx, v);
+      if (!colorHome) this._drawReedsLight(ctx, v);
     }
     if (this.state === 'expedition' && this.world.mothFlower && this.player) {
       ctx.save(); ctx.translate(-v.x * v.scale, -v.y * v.scale); ctx.scale(v.scale, v.scale);
       this.world.drawMothHint(ctx, this.player.x, this.player.y); ctx.restore();
     }
-    if (this.state === 'expedition' || this.state === 'end') {
+    if (this.state === 'expedition') {
       this._drawOffscreenHeronArrow(ctx, v);
       this._drawOffscreenEnemyArrows(ctx, v);
       if (this.state === 'expedition') drawCombatReadout(this, ctx, v);
@@ -5385,12 +5385,12 @@ export class Game {
     ctx.fillStyle='rgba(26,43,37,0.3)';ctx.fillRect(0,0,this.cw,this.ch);
     this._drawIdleFrog(ctx);
     outlineText(ctx,'Frogue Gallery',cx,132,uiFont(64,{weight:700}),'#f4ead8',INK,8);
-    centerText(ctx,'One descent. Four guardians. A swamp worth painting.',cx,184,uiFont(23),PAPER);
+    centerText(ctx,'The Umbral Wyrm stole our color. Let’s paint our swamp back.',cx,184,uiFont(21),PAPER);
     drawDungeonRoute(this,ctx,cx-470,205,940);
     const c=paperPanel(ctx,g.px,g.py,g.pw,g.ph,{seed:11});
-    const lines=['WASD to move · Mouse + left click to paint nearby','Space to dodge · Q / E or wheel to change color','Red burns · Blue stops · Green heals','Hold right mouse, then release for a splash','Beat each guardian. Choose a brush gift. Descend.'];
+    const lines=['WASD to move · Mouse + left click to paint nearby','Space to dodge · Q / E or wheel to change color','Red burns · Blue stops · Green heals','Hold right mouse, then release for a splash','Make it yours. Follow the stolen colors to the Wyrm.'];
     lines.forEach((line,i)=>centerText(c,line,cx,g.py+36+i*36,uiFont(17,{weight:i===4?700:400}),INK));paperEnd(ctx);
-    uiButton(ctx,g.bx,g.by,g.bw,g.bh,'Enter the dungeon',this._mouseIn(g.bx,g.by,g.bw,g.bh),false,{size:21});
+    uiButton(ctx,g.bx,g.by,g.bw,g.bh,'Reclaim our swamp',this._mouseIn(g.bx,g.by,g.bw,g.bh),false,{size:21});
     uiButton(ctx,g.tx,g.ty,g.tw,g.th,'Practice the controls',this._mouseIn(g.tx,g.ty,g.tw,g.th),false,{size:16});
     for(const d of g.diff)uiButton(ctx,d.x,d.y,d.w,d.h,d.label,this._mouseIn(d.x,d.y,d.w,d.h),this.options.difficulty===d.id,{size:14});
     uiButton(ctx,g.abx,g.aby,g.abw,g.abh,'Your sketchbook',this._mouseIn(g.abx,g.aby,g.abw,g.abh),false,{size:17});
@@ -5584,18 +5584,18 @@ export class Game {
 
   _drawEnd(ctx) {
     const cx=this.cw/2,win=this.endKind==='victory',b=this._endButtons();
-    ctx.fillStyle='rgba(22,35,30,0.66)';ctx.fillRect(0,0,this.cw,this.ch);
+    ctx.fillStyle=win?'rgba(22,35,30,0.24)':'rgba(22,35,30,0.66)';ctx.fillRect(0,0,this.cw,this.ch);
     const c=paperPanel(ctx,cx-370,130,740,590,{seed:9});
-    centerText(c,win?'The dungeon is painted.':'A new canvas awaits.',cx,195,uiFont(38,{weight:700}),INK);
-    centerText(c,win?'The Umbral Wyrm falls. Every guardian is behind you.':'Your run ends here. Your paintings stay in the sketchbook.',cx,238,uiFont(18),INK);
+    centerText(c,win?'Our swamp has its color back.':'Our swamp still needs us.',cx,195,uiFont(34,{weight:700}),INK);
+    centerText(c,win?'The Umbral Wyrm releases the stolen color. You brought it home.':'Rest your brush. Your paintings stay in the sketchbook.',cx,238,uiFont(17),INK);
     drawDungeonRoute(this,c,cx-320,278,640);
     centerText(c,(this.campaign?.cleared.length||0)+' / 4 guardians · '+this._fmtClock(this.runT||0)+' · '+(this.runEnemies||0)+' bugs painted',cx,333,uiFont(20),INK);
     const page=this.save.sketchbook?.[this.save.sketchbook.length-1];
     if(page)drawPostcard(c,page,cx-310,370,240,144,studyRewardEarned(this.save.studio?.completed||[],'swamp'),studyRewardEarned(this.save.studio?.completed||[],'reeds'),!!this.save.flags.crossingPainted);
     drawRunBuild(this,c,page?cx-40:cx-280,380,page?340:560);
-    centerText(c,'Brush gifts reset when you start a fresh descent.',cx,565,uiFont(15),INK);
+    centerText(c,'Start again with a fresh brush. Your saved artwork stays.',cx,565,uiFont(15),INK);
     paperEnd(ctx);
-    uiButton(ctx,b.primary.x,b.primary.y,b.primary.w,b.primary.h,'Start a fresh descent',this._mouseIn(b.primary.x,b.primary.y,b.primary.w,b.primary.h),false,{size:20});
+    uiButton(ctx,b.primary.x,b.primary.y,b.primary.w,b.primary.h,'Paint the swamp again',this._mouseIn(b.primary.x,b.primary.y,b.primary.w,b.primary.h),false,{size:20});
     uiButton(ctx,b.ret.x,b.ret.y,b.ret.w,b.ret.h,'Return to the pond',this._mouseIn(b.ret.x,b.ret.y,b.ret.w,b.ret.h),false,{size:17});
   }
 }

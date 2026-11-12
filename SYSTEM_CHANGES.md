@@ -1,5 +1,12 @@
 # Environment and tool changes
 
+## Our swamp, our colors — 2026-11-11
+
+No new packages, machine settings or persistent processes. Reused existing
+Node/Chromium and loopback harnesses. Creative-paint/story evidence is in
+tests/.out/astra/48–50 PNGs; new baseline log is
+.cache/checks/balance-before-swamp.log. Existing preview/launcher stays on port 8767.
+
 ## Double-click launcher — 2026-11-11
 
 Added project-local CMD, PowerShell and Node launcher scripts; no installation

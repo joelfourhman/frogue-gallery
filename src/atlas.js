@@ -27,7 +27,7 @@ export function drawFieldAtlas(g, ctx) {
   };
   text('FIELD ATLAS', b.x + 40, b.y + 48, 30, '#304b45', true);
   text(a.title + '  ·  ' + a.mode, b.x + 42, b.y + 80, 18);
-  text('The expedition is paused. Take the scenic way.', b.x + 42, b.y + 108, 16, '#59665b');
+  text('Our swamp. Our colors to bring home. The journey is paused.', b.x + 42, b.y + 108, 16, '#59665b');
   const r = b.close;
   uiButton(c, r.x, r.y, r.w, r.h, 'Return  [V / Esc]', g._mouseIn(r.x, r.y, r.w, r.h), false, { seed: 719, size: 18 });
 
@@ -50,7 +50,7 @@ export function drawFieldAtlas(g, ctx) {
     c.beginPath(); c.moveTo(x, y - 12); c.lineTo(x + 12, y); c.lineTo(x, y + 12); c.lineTo(x - 12, y); c.closePath(); c.fill();
     centerText(c, guardian.defeated ? '✓' : guardian.final ? '4' : '!', x, y + 1, uiFont(14, { weight: 700 }), '#fff7e5');
     centerText(c, guardian.name, x, m.y + 28, uiFont(12, { weight: 700 }), '#564565');
-    centerText(c, guardian.final ? 'Final guardian' : 'Guardian arena', x, m.y + 46, uiFont(11), '#564565');
+    centerText(c, guardian.final ? 'The color thief' : 'Guardian of the path', x, m.y + 46, uiFont(11), '#564565');
     const clearing = a.journey.clearing;
     if (clearing) {
       const q = pos(clearing); c.fillStyle = clearing.complete ? '#497e61' : '#477c96';

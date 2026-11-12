@@ -1,4 +1,4 @@
-// The single dungeon's rest screen and route cues. Rendering never advances
+// Rest beside the water and the route through our swamp. Rendering never advances
 // a floor or grants a reward; Game owns input, pure logic owns those rules.
 import { CAMPAIGN, CAMPAIGN_REWARDS, campaignFloor, campaignRewardOffers, campaignRewardPreview } from './logic.js';
 import { centerText, uiFont, paperPanel, paperEnd, uiButton, INK } from './ui.js';
@@ -67,8 +67,8 @@ export function drawDungeonCamp(g, ctx) {
   const pad = g._gp?.connected && g.options?.gamepad !== 'off';
   ctx.save(); ctx.fillStyle = 'rgba(25,39,33,0.76)'; ctx.fillRect(0, 0, g.cw, g.ch); ctx.restore();
   const c = paperPanel(ctx, p.x, p.y, p.w, p.h, { seed: 107 });
-  centerText(c, 'A moment to rest', g.cw / 2, p.y + 37, uiFont(l.tight ? 26 : 34, { weight: 700 }), '#355a48');
-  centerText(c, `${BOSS_NAMES[floor.boss] || floor.boss} defeated · Depth ${g.campaign.floor + 1} of ${CAMPAIGN.length} cleared`,
+  centerText(c, 'Rest by the water', g.cw / 2, p.y + 37, uiFont(l.tight ? 26 : 34, { weight: 700 }), '#355a48');
+  centerText(c, `${BOSS_NAMES[floor.boss] || floor.boss} defeated · Region ${g.campaign.floor + 1} of ${CAMPAIGN.length} opened`,
     g.cw / 2, p.y + (l.tight ? 66 : 78), uiFont(p.w < 700 ? 14 : 18), INK);
   route(c, g.campaign, p.x + 28, p.y + (l.tight ? 90 : 120), p.w - 56);
   const health = value => Number.isFinite(value) ? String(Math.round(Math.max(0, value) * 10) / 10) : '—';
@@ -107,17 +107,23 @@ export function drawDungeonCamp(g, ctx) {
   centerText(ctx, `Next: ${next.name} · ${BOSS_NAMES[next.boss] || next.boss}`, g.cw / 2, b.y - 17,
     uiFont(p.w < 700 ? 13 : 17, { weight: 700 }), INK);
   ctx.save(); ctx.globalAlpha = selected ? 1 : 0.48;
-  uiButton(ctx, b.x, b.y, b.w, b.h, selected ? `Descend · ${pad ? 'A' : 'Enter'}` : 'Choose an upgrade above', !!selected && hover(g, b), false,
+  uiButton(ctx, b.x, b.y, b.w, b.h, selected ? `Continue · ${pad ? 'A' : 'Enter'}` : 'Choose an upgrade above', !!selected && hover(g, b), false,
     { seed: 112, size: 20 });
   ctx.restore();
-  centerText(ctx, pad ? 'D-pad ↑↓ choose · A confirms · B clears choice' : '1–3 choose · Enter descends · Health and upgrades carry onward', g.cw / 2, p.y + p.h - 32,
+  centerText(ctx, pad ? 'D-pad ↑↓ choose · A confirms · B clears choice' : '1–3 choose · Enter continues · Health and upgrades carry onward', g.cw / 2, p.y + p.h - 32,
     uiFont(p.w < 700 ? 11 : 14), '#4c5c4d');
 }
 
 export function drawDungeonProgress(g, ctx) {
   if (!g.campaign || g.state !== 'expedition' || g.help || g.paused || g._bookOpen || g._atlasOpen || g.encounter?.nearby || g.encounter?.active) return;
+  const studio = g.studio, player = g.player;
+  if (player && studio && (
+    studio.studies?.some(s => Math.hypot(s.x - player.x, s.y - player.y) < 280) ||
+    studio.garden?.props?.some(p => Math.hypot(p.x - player.x, p.y - player.y) < 150) ||
+    (!studio.unlocked && studio.studies?.[0]?.step < 3 && player.x <= 1000)
+  )) return; // Let the painting card own the bottom of the screen.
   const floor = campaignFloor(g.campaign), final = floor.final;
-  const text = `Depth ${g.campaign.floor + 1} / ${CAMPAIGN.length} · ${floor.name}${final ? ' · Final boss' : ''}`;
+  const text = `${floor.name} · ${g.campaign.floor + 1} / ${CAMPAIGN.length}${final ? ' · The color thief' : ''}`;
   const w = Math.min(450, g.cw - 420), x = (g.cw - w) / 2;
   if (w < 220) return;
   ctx.save(); ctx.fillStyle = 'rgba(244,234,216,0.92)'; ctx.fillRect(x, g.ch - 42, w, 29);

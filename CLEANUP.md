@@ -38,6 +38,8 @@ These are ignored by Git and may be regenerated:
 - tests/.out/astra/36–39 PNGs: dungeon rest choices and final victory.
 - tests/.out/astra/40–47 and combat-*.png: deeper painting, gifts, journey cues
   and combat result evidence from the twenty-delights pass.
+- tests/.out/astra/48–50 PNGs: stolen-color story, restored finale, individual
+  mushroom/lantern palettes and splash patterns from the swamp correction.
 - tests/frames/astra/: staged render screenshots and manifest.
 - node_modules/: optional browser test tooling; no game runtime dependency.
 

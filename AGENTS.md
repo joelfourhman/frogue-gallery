@@ -12,6 +12,13 @@ dependencies. Optional Node scripts package and test the static game.
 Browser localStorage is the only persistence (keys prefixed
 `frogue_gallery_`).
 
+**Design anchor (owner correction, 2026-11-11):** This is our swamp. The final
+boss, the Umbral Wyrm, stole its color; we paint our home back to life. Present
+the connected run as a journey through swamp regions, not a generic dungeon.
+Keep attack warnings visual: no unsolicited "dodge sideways"/attack coaching
+captions. Favor creative, expressive environmental painting over UI text,
+checklists or merely swapping one flat color for another.
+
 **The repository is the source of truth.** Docs and chat history can drift;
 the code, tests, and Git history outrank both.
 

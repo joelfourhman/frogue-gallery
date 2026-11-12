@@ -1,23 +1,25 @@
-# Current state — one continuous dungeon
+# Current state — reclaim our swamp's color
 
-**2026-11-11.** The playable game is one four-floor descent with a fresh run
-build, three inter-floor rests and a final boss. New Game+ and its progression
+**2026-11-11.** The Umbral Wyrm stole the color from our swamp. The playable
+game is one journey across four regions to paint our home back to life, with
+a fresh run build, three rests and the color thief as final boss. New Game+ and its progression
 systems are removed. Runtime version remains 1.0.0 and save schema remains 12.
-The current twenty-idea pass adds gardens throughout the dungeon, combat and
-route feedback, varied rest offers and numeric gift previews.
+The owner's correction supersedes the earlier generic room-clearing framing
+and combat coaching captions. Creative scenery, visually readable attacks,
+quiet story/route cues, varied gifts and numeric previews support the swamp.
 See ROADMAP.md for current priorities and PROJECT_STATE.md for verified checks.
 
 ## The playable loop
 
-Title → optional guided practice or new dungeon → Watercolor Marsh / Great Gray
+Title → optional guided practice or new journey → Watercolor Marsh / Great Gray
 Heron → rest → Sunken Reeds / Silt Wyrm → rest → Hollow Sanctuary / Hollow Warden
 → rest → Black Reeds / Umbral Wyrm → final victory. Death ends the run and a new
-attempt begins on floor one. Hollow Sanctuary reuses the authored Reeds terrain
-with its own guardian; these are four floors, not four new biomes.
+attempt begins in the marsh. Hollow Sanctuary reuses the authored Reeds terrain
+with its own guardian; these are four regions, not four new biomes.
 
-Health, run time, score and collected pigment carry across floors. Each rest
+Health, run time, score and collected pigment carry across regions. Each rest
 heals 35% of maximum health, rounded up and capped, and requires one gift
-selection followed by Descend. Brighter paint increases brush/splash/burn
+selection followed by Continue. Brighter paint increases brush/splash/burn
 damage 20%; Lily heart adds 2 maximum health and fills the added capacity;
 Flowing brush multiplies dodge/splash cooldowns by 0.88. Three specialties add
 Broad brush (swipe reach ×1.20, splash radius ×1.15), Quick strokes (swipe
@@ -28,7 +30,7 @@ stack when offered again.
 Exactly three cards appear at every rest. The first offers the original power,
 health and flow gifts; the second keeps Lily heart plus two specialties, and
 the third keeps Flowing brush plus two specialties. Specialty pairs are fixed
-by run seed and depth, separate from combat randomness. The rule layer rejects
+by run seed and region index, separate from combat randomness. The rule layer rejects
 unoffered choices. Cards preview rounded numeric before-and-after values from
 the current tuning, including already earned gifts.
 
@@ -38,7 +40,7 @@ post-victory cycle is offered. Green and Gilded Herons, gold-tier purchases,
 prestige bonuses and New Game+ scaling/modifiers are removed. Hollow Warden and
 Umbral Wyrm are normal campaign guardians.
 
-The earlier component pacing estimates do not measure a human's full dungeon
+The earlier component pacing estimates do not measure a human's full journey
 duration. Current campaign simulations test actual combat/progression, while
 human enjoyment and long-run balance still require playtesting.
 
@@ -49,20 +51,22 @@ human enjoyment and long-run balance still require playtesting.
 | Movement | Responsive stops/reversal, full-speed ordinary painting, short Space dodge, stationary aim direction, 120ms early-input buffer |
 | Brush | Unlimited swipe and release-fired charged splash; one brush marker at actual reach; local charge/dodge cues |
 | Colors | Red damage/burn, blue slow/freeze/interrupt, green root/healing, dry status clear/restoration |
-| Threats | Swamp/Reeds telegraphs and pigment counters; bounded attack, recovery and blue-interrupt captions; plain boss-state cues |
-| Campaign | Four floor guardians in fixed order; run-only gifts; final victory only after Umbral |
+| Threats | Swamp/Reeds visual telegraphs and pigment counters; repeated attack/opening/blue-stop/boss coaching captions removed |
+| Campaign | Four region guardians in fixed order; run-only gifts; final victory returns the color stolen by Umbral |
 | World | Zone encounters, checkpoints, optional side guardian, weather, Bold hazards, Reeds flooding/darkness/lantern |
-| Lily Clearing | Optional first-floor bell encounter; blue-to-red adds 50% direct damage; result card shows battle time, rounds, dodge uses and colors; no repeat reward farming |
-| Free painting | 64 objects per floor; deep lanterns/whisper reeds, musical mushrooms, 16 bounded cluster celebrations; colors last for the floor |
-| Route guidance | Distinct floor introductions, one contextual objective, open guardian landmarks and atlas destinations |
+| Lily Clearing | Optional marsh bell encounter; blue-to-red adds 50% direct damage; result card shows battle time, rounds, dodge uses and colors; no repeat reward farming |
+| Free painting | 64 objects per region with individually colored parts, directional stripe/speckle marks, musical caps and distinct reactions; 16 bounded cluster blooms without completion text |
+| Route guidance | Short stolen-color story arrivals, quiet exploration objective, open guardian landmarks and atlas destinations; all guidance yields during fights |
 | Presentation | Procedural watercolor, paper UI, visible boss bodies, cached darkness mask, bounded particles, Web Audio |
 | Persistence | Browser-local save, in-memory fallback, validated JSON import/export; no active-run resume |
 
-Floor guardians stay dormant until the final 900 pixels. Painting cannot wake
+Region guardians stay dormant until the final 900 pixels. Painting cannot wake
 a remote boss. The final boss is the fourth guardian, not the first swamp heron.
 Guardian landmarks mark that same arena threshold without adding collision or
 another unlock. Intro/objective rendering never changes simulation; guidance
-yields to menus, tutorials, teaching cards, event banners and nearby combat.
+yields to menus, tutorials, teaching cards, event banners and all nearby combat,
+including active bosses. The final arrival, landmark and atlas identify Umbral
+as the color thief rather than presenting a generic final room.
 
 ## Living studies and exploration
 
@@ -92,15 +96,21 @@ within its 205-pixel teaching area until completion.
 V opens the paused Field Atlas, also reachable from pause with mouse/controller.
 It shows the frog, live/remembered studies, checkpoints, lantern rests and
 available detours. Closing restores the prior pause state and clears held
-input. Guardian arenas are shaded and marked; the first floor includes its
+input. Guardian arenas are shaded and marked; the marsh includes its
 Lily Clearing bell. The atlas is a field sketch rather than a collision map.
 
 Free gardens use four objects per cluster. Coloring all four triggers one
-short bloom; a completion latch prevents erase/repaint farming. Recolored
-mushrooms use an existing short chime; sound cooldowns and fixed effect slots
-bound repeated input. Lantern glow and whisper-reed movement are decorative,
-not new light fuel, collision, combat or save systems. Garden counts reset
-with each floor; only that floor's 64 props and 16 clusters are live.
+short bloom without completion text; a latch prevents erase/repaint farming.
+Each mushroom cluster, lantern and stone group has three paintable parts;
+flowers have four heads, reeds five, and lilies six petals. Swipes target one
+part along the aim ray and leave directional stripes. Splashes add speckles
+to reached parts. Dry removes touched colors/details while keeping neighbors.
+There are at most eight retained marks per prop. Mushroom caps bounce and
+sound individual notes; flowers lean toward the brush, lilies turn/ripple,
+reeds bend and lanterns have colored fireflies. Sound cooldowns and fixed
+effect slots bound repeated input. These are not new light fuel, collision,
+combat or save systems. Garden counts reset with each region; only that
+region's 64 props and 16 clusters are live.
 
 Each world has 24 decorative dragonflies/pond skaters from a separate seeded
 random stream. Nearby paint prompts a 3.4-second response. They are culled
@@ -112,7 +122,7 @@ J opens a paused sketchbook from a run or menu. Eight recent unpinned pages and
 two pins retain up to 180 quantized strokes each, sampled from actual successful
 brush actions. Pages are souvenirs, not complete replays. Study completion,
 opening the book, leaving for the title and run endings file/update pages.
-Each floor has its own world/stroke journal; saved earlier pages remain.
+Each region has its own world/stroke journal; saved earlier pages remain.
 The run-end screen shows earned gift names and stack counts beside the latest
 postcard, including a useful empty-build message for an early defeat.
 
@@ -136,13 +146,13 @@ the active campaign, including its gifts; already filed pages remain saved.
 | File | Responsibility |
 |---|---|
 | index.html | Responsive logical canvas, boot error reporting, loopback-only debug handle |
-| src/game.js | Frame/state orchestration, floor transitions, combat integration, HUD/menus and controller routing |
+| src/game.js | Frame/state orchestration, region transitions, combat integration, HUD/menus and controller routing |
 | src/logic.js | Pure campaign transitions, seeded gift offers/previews, tuning, save normalization and painting/combat rules |
-| src/dungeon.js | Rest choices/numeric previews, Descend control and four-floor progress/route presentation |
-| src/journey-ui.js | Floor voices, contextual objectives, guardian landmarks and earned build summary |
+| src/dungeon.js | Rest choices/numeric previews, Continue control and four-region progress/route presentation; legacy internal filename |
+| src/journey-ui.js | Swamp story arrivals, quiet exploration objective, guardian landmarks and earned build summary |
 | src/encounter.js | Bounded replayable Lily Clearing and completion statistics |
-| src/combat-ui.js | Close-range brush, charge/dodge presentation and bounded enemy/boss captions |
-| src/repaint.js | Per-floor repaintable scenery, musical mushrooms and bounded garden celebrations |
+| src/combat-ui.js | Close-range brush and charge/dodge presentation without combat-coaching captions |
+| src/repaint.js | Per-region individual-part painting, stripe/speckle marks, local reactions and bounded garden blooms |
 | src/studio.js | Authored studies, brush wake, stroke journal, sketchbook and PNG export |
 | src/atlas.js / wildlife.js | Paused map and bounded cosmetic pond life |
 | src/player.js / paint.js / enemies.js | Movement, brush combat, creature/boss behavior and rendering |

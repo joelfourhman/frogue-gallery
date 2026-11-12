@@ -392,7 +392,7 @@ game.player.hurt(2, game.tuning);
 game.player.iframes = 99; // shield from wave-spawned enemies while the stage continues
 frames(2);
 assert(game.save.flags.firstHurt, 'first-hit tip flagged');
-assert(game.banners.some(b => b.text.includes('Ouch')), 'first-hit teaching banner shown');
+assert(!game.banners.some(b => b.text.includes('Ouch')), 'taking damage does not add a coaching popup');
 // first-orb teaching: drop an orb on the frog
 game.orbs.push({ x: game.player.x, y: game.player.y, color: 'red', t: 0 });
 game.player.iframes = 99; // survive the rest of this stage
@@ -407,7 +407,7 @@ game.player.iframes = 0;
 game.player.hurt(99, game.tuning);
 frames(2);
 assert(game.save.flags.firstDefeat, 'first-defeat tip flagged');
-assert(game.banners.some(b => b.text.includes('fresh brush')), 'defeat teaching banner explains the fresh start');
+assert(game.banners.some(b => b.text.includes('Our swamp still needs its color')), 'defeat preserves the swamp restoration story');
 frames(150); // let the dying sequence finish
 assert(game.state === 'end', 'run ended cleanly after the test kill');
 
@@ -6451,5 +6451,13 @@ const { testBrushGiftsGame } = await import('./brush-gifts.mjs');
 testBrushGiftsGame(Game, makeCanvas);
 console.log('== stage 131: journey cues and guardian atlas ==');
 await import('./journey-ui.mjs');
+console.log('== stage 132: our swamp and the stolen-color finale ==');
+const { testSwampStoryGame } = await import('./swamp-story.mjs');
+testSwampStoryGame(Game, makeCanvas);
+console.log('== stage 133: musical mushroom palette ==');
+await import('./garden-sound.mjs');
+console.log('== stage 134: creative part painting and brush patterns ==');
+const { testCreativePaintGame } = await import('./creative-paint.mjs');
+testCreativePaintGame(Game, makeCanvas);
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

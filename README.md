@@ -1,11 +1,12 @@
 # Frogue Gallery
 
-A tiny frog paints a gray swamp back to life. Burn pursuers with crimson,
-freeze a diving fly with cobalt, grow a little pond into a living painting,
-and bring home a postcard made from your own brush strokes.
+A tiny frog paints our stolen-color swamp back to life. The Umbral Wyrm took
+the color from our home; every brushstroke brings some of it back. Repaint
+the place in your own colors, face the guardians along the way, and reach
+the color thief at the far shore.
 
-**One continuous dungeon — four floors, one final boss, 2026-11-11.**
-The latest pass adds deeper gardens, clearer combat cues and varied brush gifts.
+**One journey through our swamp — four regions, one final boss, 2026-11-11.**
+The current direction is creative painting and quiet, visually readable combat.
 The compatibility identifiers remain game 1.0.0 / save schema 12.
 
 ## Play locally
@@ -33,10 +34,14 @@ The Node server additionally restricts served files to the game itself.
 
 ## First expedition
 
-Press Enter. Repaint pale lilies, flowers, mushrooms and stones any color.
-Your colors stay on these objects for the current floor. Paint all four objects
-in a garden cluster for a small bloom celebration; recolored mushrooms chime.
-Deeper floors add hanging lanterns and swaying whisper reeds. Walk right to the
+Press Enter. Repaint pale lilies, flowers, mushrooms and stones your own way.
+Aim at individual petals, flower heads, caps or stones to give each its own
+color. Brush strokes leave stripes in your painting direction; splashes add
+speckles. Dry brush erases the part you touch. Your design stays for this region.
+Mushroom caps bounce and answer with notes; flowers lean toward your brush,
+lilies turn and ripple, reeds bend and lanterns release colored fireflies.
+Color all four objects in a garden for a quiet bloom, without a completion popup.
+Deeper regions add hanging lanterns and swaying whisper reeds. Walk right to the
 **Lily Clearing** bell and paint it to start a short, optional three-round fight.
 Red lanes warn of an attack: dodge sideways with Space, then paint during
 recovery. Blue interrupts; following blue with red makes that red hit 50%
@@ -44,17 +49,17 @@ stronger in the clearing. Paint the bell between rounds; walk away to cancel.
 First completion restores health; replay freely without currency rewards.
 A result card remembers battle time, rounds, dodge uses and colors tried.
 The first guardian waits at the far end of the swamp. Defeating it opens the
-next floor of the same run.
+next region of the same journey.
 
-Descend through **Watercolor Marsh → Sunken Reeds → Hollow Sanctuary → Black
+Travel through **Watercolor Marsh → Sunken Reeds → Hollow Sanctuary → Black
 Reeds**, facing the Great Gray Heron, Silt Wyrm, Hollow Warden and finally the
-Umbral Wyrm. Between floors, rest to heal 35% of maximum health and select one
+Umbral Wyrm, the final boss who stole the color. Between regions, rest to heal 35% of maximum health and select one
 of three offered gifts. The first rest offers stronger paint, two more health
 points, or faster dodge/splash recharge. Later rests mix familiar choices with
 broader reach, quicker strokes and stronger green healing. Cards show the
 before-and-after values; offers stay fixed for that run.
-Confirm Descend when ready. Gifts stack for this run; a new attempt starts on
-floor one with a fresh build. Only defeating the Umbral Wyrm wins the dungeon.
+Choose Continue when ready. Gifts stack for this run; a new attempt starts in
+the marsh with a fresh brush. Defeating the Umbral Wyrm brings our stolen color home.
 
 You can also visit **First Light**, the small gray pond near the start.
 Select the numbered colors and hold paint on each circle. Water, lilies and
@@ -66,8 +71,9 @@ The optional guided practice on the title teaches each pigment and the
 three-color boss awakening. V opens the Field Atlas, H the Field Guide, and J
 your sketchbook. All pause the action. The atlas shows your next unfinished
 study, guardian arena, clearing and optional detours; nearby study cards
-explain each coat of paint. Floor introductions and quiet route hints keep the
-next destination clear. Open carved-reed landmarks announce guardian arenas.
+explain each coat of paint. Brief regional arrivals tell the story, and quiet
+route hints yield completely during fights. Open carved-reed landmarks mark
+guardians; the final marker names the color thief.
 Dragonflies and pond skaters quietly respond to your brush. Every expedition
 can leave a keepsake, even a defeat.
 
@@ -98,13 +104,14 @@ mouse pointer; the game no longer shows a distant crosshair.
 ## What's included
 
 - Five living field studies across swamp/Reeds, an earned brush-hop and cosmetic postcard rewards.
-- 64 freely repaintable objects per floor, musical mushrooms, colored lanterns,
-  whisper reeds and 16 one-time garden celebrations per floor.
-- A replayable three-round clearing with a useful completion card; attack,
-  recovery, blue-interrupt and boss-state captions make combat easier to read.
+- 64 freely repaintable objects per region with individually colored parts,
+  directional stripes, splash speckles, musical caps and distinct local reactions.
+  Each region has 16 bounded garden celebrations without completion text.
+- A replayable three-round clearing with a useful completion card. Attack
+  lanes, animation and paint effects carry combat feedback without coaching popups.
 - An eight-page sketchbook containing sampled real strokes; save a 1600×960
   PNG postcard from any page.
-- One four-floor dungeon, four main guardians, named encounter zones,
+- One journey across four swamp regions, four main guardians, named encounter zones,
   checkpoints, pigment counters and lantern play. Hollow Sanctuary reuses
   the Reeds environment with its own guardian.
 - Six possible run-only gifts, three offered at each of three rests, numeric
@@ -117,7 +124,7 @@ Designed for a desktop browser with mouse/keyboard or a standard controller.
 No touch controls. Saves belong to the browser and site origin; export them
 before moving to a different URL. There is no mid-run resume. Existing
 sketchbooks, pins, names, title exhibitions and ordinary artwork collections
-are retained; legacy purchased stats do not affect a new dungeon run.
+are retained; legacy purchased stats do not affect a new journey.
 
 ## Develop, verify, distribute
 

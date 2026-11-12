@@ -1,31 +1,32 @@
-# Frogue Gallery — one long painted descent
+# Frogue Gallery — bring our swamp's color home
 
-## Current direction — a finite dungeon campaign
+## Current direction — our stolen-color swamp
 
-The owner's 2026-11-11 request supersedes the previous plan to pause content
-expansion: remove New Game+ and its progression systems, and connect the game
-into one long dungeon run with bosses and a final boss. The earlier movement,
-readable combat, simple brush marker and free painting improvements remain.
+The owner's latest 2026-11-11 correction is the design anchor: this is **our
+swamp**, and **the final boss stole its color**. We paint it back to life and
+reclaim our home. A finite, connected journey replaces New Game+, but generic
+dungeon language and text coaching over attacks lost that purpose. Remove
+those distractions; keep responsive movement, visual danger and free painting.
 
 The route is Watercolor Marsh → Sunken Reeds → Hollow Sanctuary → Black Reeds.
-The Great Gray Heron, Silt Wyrm and Hollow Warden guard the first three floors;
-the Umbral Wyrm ends the entire dungeon. The two Reeds floors reuse the authored
+The Great Gray Heron, Silt Wyrm and Hollow Warden guard the first three regions;
+the Umbral Wyrm is the color thief and final boss. The two Reeds regions reuse the authored
 Reeds environment with different guardians. This is a connected campaign,
 not four newly created biomes.
 
-## Milestone 1 — Connect the descent
+## Milestone 1 — Connect the journey (complete)
 
-- Start every new run on floor one with base stats for the selected difficulty.
-- Carry health, elapsed time, score and collected pigment between floors.
+- Start every new run in the marsh with base stats for the selected difficulty.
+- Carry health, elapsed time, score and collected pigment between regions.
 - After each of the first three bosses, pause at a rest that heals 35% of maximum
   health, rounded up and capped at maximum health.
 - Choose one gift: Brighter paint (+20% brush, splash and burn damage), Lily
   heart (+2 maximum health), or Flowing brush (12% faster dodge/splash recharge).
   Gifts stack within the run; there are exactly three selections in a full run.
-- Require a selected gift and an explicit Descend action. Show the four-floor
-  route and current depth so the next objective is clear.
+- Require a selected gift and an explicit Continue action. Show the four-region
+  route so the next destination is clear.
 - End in victory only after the Umbral Wyrm. Defeat or a fresh start returns to
-  floor one; no harder cycle, prestige retirement or permanent stat farming.
+  the marsh; no harder cycle, prestige retirement or permanent stat farming.
 
 These systems are implemented in the campaign rules, game integration and
 rest-screen UI. Current verification results belong in PROJECT_STATE.md.
@@ -54,28 +55,30 @@ features alive merely to satisfy their previous assumptions.
 
 Record observed test results and limits in PROJECT_STATE.md before committing.
 Scripted combat and pacing estimates establish regressions and bounds; they do
-not establish human enjoyment or a measured human duration for the new dungeon.
+not establish human enjoyment or a measured human duration for the whole journey.
 
-## Milestone 4 — Twenty delights (implemented, 2026-11-11)
+## Milestone 4 — Twenty delights (2026-11-11; corrected by owner feedback)
 
 The owner requested 20 ideas and trusted implementation. This pass concentrates
 on painting, readable combat, navigation and meaningful brush choices. The
-four-floor campaign and absence of New Game+ remain unchanged.
+four-region campaign and absence of New Game+ remain unchanged. The owner then
+rejected the combat text spam and generic framing. Rows 6–9 and 12 below record
+that correction rather than treating the original captions as a success.
 
 | # | Improvement | Implemented behavior |
 |---|---|---|
-| 1 | Paint the deeper swamp | 64 repaintable props on every campaign floor |
+| 1 | Paint the deeper swamp | 64 repaintable props in every region |
 | 2 | Hanging lanterns | Recolorable lanterns with warm animated light |
 | 3 | Whisper reeds | Painted reeds sway, glow and react locally |
 | 4 | Musical mushrooms | Recoloring caps plays a short existing chime and animated notes |
 | 5 | Garden celebrations | Each four-prop garden blooms once when fully colored |
-| 6 | Clear attack warnings | Nearby captions explain the live warning lane |
-| 7 | Readable openings | Recovery windows explicitly invite painting |
-| 8 | Blue-stop feedback | A blue interrupt visibly confirms that the attack stopped |
-| 9 | Boss phase cues | Plain instructions for telegraphs, open maws and lantern darkness |
+| 6 | Clear attack warnings | Keep visible warning lanes; remove repeated coaching captions |
+| 7 | Readable openings | Enemy recovery poses carry the cue, without "paint now" text |
+| 8 | Blue-stop feedback | Paint/status effects confirm the interruption, without a text popup |
+| 9 | Boss phase cues | Keep visible attacks and vulnerabilities; remove repeated instructions |
 | 10 | Clearing result card | Battle time, dodges, color use and an encouraging next step |
-| 11 | Floor introductions | Four short, distinct arrival cards |
-| 12 | Current objective | One contextual route/combat instruction that yields to lessons |
+| 11 | Regional introductions | Four short arrivals connect our home to the stolen-color story |
+| 12 | Current objective | Quiet exploration direction; no instruction overlay during fights |
 | 13 | Guardian landmarks | Open reed arches mark the arena approach, without locking movement |
 | 14 | Atlas landmarks | Guardian arenas and optional Lily Clearing appear on the map |
 | 15 | Run-build recap | End screen shows the gifts that shaped this attempt |
@@ -93,13 +96,24 @@ the run's growth. Decorative gardens grant no currency or combat advantages.
 
 See PROJECT_STATE.md and VALIDATION-delights.md for tests and limitations.
 
-## Next — tune the connected experience from play
+## Current correction — creative ownership, quiet combat
 
-1. Replay the entire descent and check whether the next floor, guardian and
+- Keep the story explicit: Umbral stole the color; painting restores our home.
+- Use region names and Continue rather than Depth/Descend or dungeon labels.
+- Suppress story/objective overlays whenever enemies or an active boss need
+  attention. Preserve visual warning geometry and optional paused help.
+- Make ordinary scenery a creative surface: different colors on individual
+  parts, brush-shaped marks, splash speckles and local erasing. Reactions should
+  belong to the object, not another generic completion banner or currency.
+- Keep art playful and bounded, with no hidden recipe required to participate.
+
+## Next — tune the swamp journey from play
+
+1. Replay the whole journey and check whether the next region, guardian and
    gift choice are understandable without explanation.
 2. Measure actual human damage, healing and gift choices across floors. Adjust
    repeated frustration or dominant choices before expanding the reward pool.
-3. Check that the two Reeds floors feel meaningfully different through their
+3. Check that the two Reeds regions feel meaningfully different through their
    guardian and encounter pacing; add authored variety where observations
    show repetition.
 4. Continue making ordinary scenery rewarding to paint, with bounded local

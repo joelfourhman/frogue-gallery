@@ -121,6 +121,13 @@ export class OpeningEncounter {
   drawHint(ctx) {
     const g = this.game;
     if (!this.nearby || g._tutorialActive() || g.help || g.paused || g._bookOpen || g._atlasOpen || !g.player.alive) return;
+    if (this.phase === 'fight') {
+      const left = CLEARING.rounds[this.round].length - this.members.filter(e => e.dead || e.hp <= 0).length;
+      const width = Math.min(360, g.cw - 28), x = (g.cw - width) / 2, y = g.ch - 68;
+      const c = paperPanel(ctx, x, y, width, 36, { seed: 94 });
+      centerText(c, `Lily Clearing · ${this.round + 1}/3 · ${left} bugs left`, g.cw / 2, y + 23, uiFont(15), INK);
+      paperEnd(c); return;
+    }
     const w = Math.min(550, g.cw - 28), x = (g.cw - w) / 2, y = g.ch - 126;
     const c = paperPanel(ctx, x, y, w, 98, { seed: 94 });
     if (this.phase === 'complete' && this.result) {
@@ -131,11 +138,9 @@ export class OpeningEncounter {
         'Your color changes made room to paint. Follow the path or replay.', g.cw / 2, y + 76, uiFont(13), '#46604c');
       paperEnd(c); return;
     }
-    const left = this.phase === 'fight' ? CLEARING.rounds[this.round].length - this.members.filter(e => e.dead || e.hp <= 0).length : 0;
-    centerText(c, this.phase === 'fight' ? `Lily Clearing · Round ${this.round + 1}/3 · ${left} bugs left` : this.phase === 'complete' ? 'Clearing restored · Paint the bell to play again' : this.phase === 'between' ? 'Round clear · Paint the bell to continue' : 'Paint the bell to try a short fight', g.cw / 2, y + 26, uiFont(17, { weight: 700 }), INK);
-    const line = this.phase === 'fight' && g.player.hp < g.player.maxHp * 0.65 ? '3 GREEN: paint bugs or ground to heal.' : this.round === 0 ? 'Red lane? Move + SPACE to dodge. Paint after it passes.' : '2 BLUE stops attacks. Then 1 RED hits harder!';
-    centerText(c, this.phase === 'fight' ? line : 'Three rounds. Walk away anytime. No boss.', g.cw / 2, y + 52, uiFont(14), INK);
-    centerText(c, this.phase === 'fight' ? 'Hold left-click to paint · Q / E switches colors' : 'Aim at the bell and left-click when you are ready.', g.cw / 2, y + 77, uiFont(13), '#46604c');
+    centerText(c, this.phase === 'complete' ? 'Clearing restored · Paint the bell to play again' : this.phase === 'between' ? 'Round clear · Paint the bell to continue' : 'Paint the bell to try a short fight', g.cw / 2, y + 26, uiFont(17, { weight: 700 }), INK);
+    centerText(c, 'Three rounds. Walk away anytime. No boss.', g.cw / 2, y + 52, uiFont(14), INK);
+    centerText(c, 'Aim at the bell and left-click when you are ready.', g.cw / 2, y + 77, uiFont(13), '#46604c');
     paperEnd(c);
   }
 }

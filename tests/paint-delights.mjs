@@ -5,7 +5,7 @@ import { FIELD_STUDIES } from '../src/logic.js';
 const makeGame = (floor = 1) => ({ campaign: { floor }, runBiome: floor === 3 ? 'blackReeds' : 'reeds',
   options: { wander: false }, challenge: false, world: { w: 6200, h: 1500 },
   player: { x: 300, y: 630 }, enemies: [], cw: 1280, ch: 800, sfx() {} });
-const strokeAt = (prop, pigment) => ({ kind: 'splash', x: prop.x, y: prop.y, a: 0, range: 1, pigment });
+const strokeAt = (prop, pigment) => ({ kind: 'splash', x: prop.x, y: prop.y, a: 0, range: 60, pigment });
 
 export function testPaintDelights() {
   for (let floor = 1; floor < 4; floor++) {
@@ -23,7 +23,7 @@ export function testPaintDelights() {
     const sounds = []; g.sfx = name => sounds.push(name);
     const mushrooms = garden.props.find(p => p.kind === 'mushrooms');
     assert(garden.onStroke(strokeAt(mushrooms, 'blue')) > 0);
-    assert.equal(sounds[0], 'frog-chime', 'painting mushroom caps plays the existing three-note melody');
+    assert.equal(sounds[0], 'garden-note', 'painting mushroom caps plays a note from their own colors');
     assert.equal(garden.onStroke(strokeAt(mushrooms, 'blue')), 0, 'held paint cannot repeat the melody');
     assert.equal(sounds.length, 1);
     garden.update(1);
@@ -32,7 +32,7 @@ export function testPaintDelights() {
     for (const p of garden.props.slice(0, 4)) { garden.update(1); garden.onStroke(strokeAt(p, 'green')); }
     assert.equal(garden.completedClusters, 1);
     assert.equal(garden.paintedCount, 4);
-    assert.equal(garden.clusters[0].bloom, 1);
+    assert(garden.clusters[0].bloom > 0 && garden.clusters[0].bloom <= 1, 'overlapping real-radius splashes can finish a cluster before the final sample');
     assert(sounds.includes('awaken-bloom'), 'finishing a four-prop garden celebrates');
     const blooms = sounds.filter(s => s === 'awaken-bloom').length;
     garden.update(3);

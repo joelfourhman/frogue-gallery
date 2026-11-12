@@ -1,3 +1,18 @@
+# Our swamp, our colors — 2026-11-11
+
+- Restored the core premise: our swamp's color was stolen by the final boss,
+  the Umbral Wyrm. Reclaim it across four regions; the finale returns its color.
+- Removed attack/recovery/blue-stop/boss coaching captions, first-hurt advice
+  and long boss instruction banners. Clearing combat uses compact progress;
+  journey overlays yield during fights. Kept visual attack tells and mechanics.
+- Added multicolor individual petals, caps, reed heads, stones and lantern
+  panels; directional swipe stripes, splash speckles and local dry erasure.
+  Mushroom caps play distinct notes; different scenery reacts differently.
+- Prevented study/painting cards from overlapping the region footer. Updated
+  active docs and durable instructions to preserve the owner's design anchor.
+- Root Launch Game.cmd starts/reuses the local server and opens Chrome;
+  launcher milestone is committed separately as 92815e4.
+
 # Twenty delights — 2026-11-11
 
 - Added deeper-floor painting, hanging lanterns, whisper reeds, mushroom music

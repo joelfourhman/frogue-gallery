@@ -37,14 +37,14 @@ export async function combatDelightsBrowser({ page, tick, out, report }) {
     g.paint.swipeCd = 0; p.swipeT = 0;
     return { x: a.x, y: a.y };
   });
-  assert((await texts()).includes('Dodge sideways'), 'live telegraph has a readable instruction');
+  assert(!(await texts()).includes('Dodge sideways'), 'live telegraph has no coaching text');
   await page.keyboard.press('2'); await tick(1); await aim(target);
   await page.mouse.down(); await tick(2); await page.mouse.up();
   assert.deepEqual(await page.evaluate(() => {
     const e = window.__game.encounter.members[0]; return { phase: e.clearingPhase, blue: ['slow', 'freeze'].includes(e.status?.type) };
   }), { phase: 'recover', blue: true }, 'real blue stroke cancels the attack');
   const blueText = await texts();
-  assert.equal(blueText.filter(t => t === 'Blue stopped it!').length, 1, 'one stopped caption for the affected enemy, no repeated text burst');
+  assert.equal(blueText.filter(t => t === 'Blue stopped it!').length, 0, 'blue interrupt stays visual');
   assert(!blueText.includes('Dodge sideways'), 'cancelled attack no longer advertises a warning');
   await page.screenshot({ path: path.join(out, 'combat-blue-interrupt.png') });
   await page.evaluate(() => {
@@ -52,7 +52,7 @@ export async function combatDelightsBrowser({ page, tick, out, report }) {
   });
   const openText = await texts();
   assert(!openText.includes('Blue stopped it!'), 'blue caption disappears with the actual status');
-  assert(openText.includes('Your opening · paint!'));
+  assert(!openText.includes('Your opening · paint!'));
 
   // Stage the final remaining bug, then earn the finish with a real red stroke.
   await page.evaluate(async () => {
@@ -88,9 +88,10 @@ export async function combatDelightsBrowser({ page, tick, out, report }) {
     g.cam.x = g.player.x; g.cam.y = g.player.y; g.spawnT = 999; g.enemies = []; g.banners = []; g._tut = [];
     g.input.reset(); g.input.setView(g._view());
   });
-  assert((await texts()).includes('Breach coming · Leave the ripple'));
+  assert(!(await texts()).includes('Breach coming · Leave the ripple'));
   await tick(4);
-  assert((await texts()).includes('Maw open · Paint with all three colors'), 'real boss phase transition changes the cue');
+  assert.equal(await page.evaluate(() => window.__game.heron.phase), 'mawOpen');
+  assert(!(await texts()).includes('Maw open · Paint with all three colors'), 'boss transitions have no text coaching');
   await page.screenshot({ path: path.join(out, 'combat-boss-phase.png') });
   await page.evaluate(() => {
     const g = window.__game; g._beginExpedition(false, { campaignFloor: 3 });
@@ -99,7 +100,7 @@ export async function combatDelightsBrowser({ page, tick, out, report }) {
     g.cam.x = g.player.x; g.cam.y = g.player.y; g.enemies = []; g.banners = []; g._tut = [];
   });
   const finalPhaseText = await texts();
-  assert(finalPhaseText.includes('Deep dark · Light your lantern [L]'));
+  assert(!finalPhaseText.includes('Deep dark · Light your lantern [L]'));
   assert(!finalPhaseText.includes('Maw open · Paint with all three colors'), 'unlit final-phase boss is not falsely advertised as paintable');
-  report.push('Combat delight DOM checks: blue interrupts a live tell with one caption; recovery and true boss phase/lantern cues; real final paint hit earns bounded clearing result, including compact rendering.');
+  report.push('Quiet combat DOM checks: live blue interrupt and boss transitions retain their mechanics without coaching captions; actual finishing hit earns the out-of-combat clearing result.');
 }

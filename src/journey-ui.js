@@ -1,4 +1,4 @@
-// Quiet route guidance and authored floor identity. All functions only read the
+// Quiet route guidance and the story of our stolen-color swamp. Functions read the
 // run: drawing never wakes a guardian, grants a gift or changes progression.
 import { CAMPAIGN_REWARDS, campaignFloor, CLEARING } from './logic.js';
 import { centerText, uiFont, INK } from './ui.js';
@@ -6,13 +6,16 @@ import { TAU, clamp } from './math.js';
 
 export const GUARDIAN_NAMES = Object.freeze({ gray: 'Great Gray Heron', wyrm: 'Silt Wyrm', warden: 'Hollow Warden', umbra: 'Umbral Wyrm' });
 const FLOOR_VOICES = Object.freeze([
-  { color: '#48765b', line: 'A pale marsh waiting for your first brushstroke.' },
-  { color: '#456c82', line: 'Lantern light catches color beneath the reeds.' },
-  { color: '#8b703e', line: 'Old roots shelter a guardian of the hollow.' },
-  { color: '#74618c', line: 'Carry your colors into the last of the dark.' },
+  { color: '#48765b', line: 'The Umbral Wyrm stole the color from our home.' },
+  { color: '#456c82', line: 'Even the lanterns have forgotten their colors.' },
+  { color: '#8b703e', line: 'These old roots remember a brighter swamp.' },
+  { color: '#74618c', line: 'The color thief is here. Let us bring it all back.' },
 ]);
 const visible = g => g.state === 'expedition' && g.player?.alive && !g.dying &&
   !g.paused && !g.help && !g._bookOpen && !g._atlasOpen && !g._tutorialActive?.();
+const inCombat = g => !!g.encounter?.active ||
+  !!(g.heron?.hp > 0 && g.heron._intro <= 0 && !(g.heron.flying > 0) && !(g.heron.sinking > 0)) ||
+  !!g.enemies?.some(e => !e.dead && e.hp > 0 && Math.hypot(e.x - g.player.x, e.y - g.player.y) < 260);
 
 export function journeyLandmarks(g) {
   const floor = campaignFloor(g.campaign);
@@ -28,20 +31,13 @@ export function journeyLandmarks(g) {
 // teaching cards, so route guidance yields while those activities are in view.
 export function journeyObjective(g) {
   const floor = campaignFloor(g.campaign);
-  if (!floor || !g.player || !g.world) return '';
+  if (!floor || !g.player || !g.world || inCombat(g)) return '';
   const boss = g.heron;
-  if (boss?.hp <= 0) return floor.final ? 'The last guardian is painted.' : 'Guardian painted · A rest awaits.';
-  if (boss && boss._intro <= 0 && boss.flying <= 0) {
-    if (floor.boss === 'warden') return 'Paint the open maw · Dodge when it lunges.';
-    if (floor.boss === 'umbra') return 'Keep your lantern lit · Paint when the wyrm surfaces.';
-    if (floor.boss === 'wyrm') return 'Watch the marked water · Paint the surfaced wyrm.';
-    return 'Dodge the marked strike · Paint while the heron recovers.';
-  }
-  if (g.player.x >= g.world.w - 1200) return `${floor.final ? 'Final guardian' : 'Guardian'} ahead · ${GUARDIAN_NAMES[floor.boss]}`;
+  if (boss?.hp <= 0) return floor.final ? 'Our stolen color is coming home.' : 'The path through our swamp is open.';
+  if (g.player.x >= g.world.w - 1200) return `${floor.final ? 'The color thief' : 'Guardian ahead'} · ${GUARDIAN_NAMES[floor.boss]}`;
   if (g.encounter?.nearby || g.encounter?.active) return '';
-  if (g.enemies?.some(e => !e.dead && e.hp > 0 && Math.hypot(e.x - g.player.x, e.y - g.player.y) < 260)) return '';
   if (g.studio?.studies?.some(s => Math.hypot(s.x - g.player.x, s.y - g.player.y) < 230)) return '';
-  return 'Explore and paint · Follow the path right →';
+  return 'Bring color back to our swamp →';
 }
 
 export function journeyHudLayout(g) {
@@ -53,7 +49,7 @@ export function journeyHudLayout(g) {
 export function drawJourneyHud(g, ctx) {
   if (!visible(g)) return;
   const floor = campaignFloor(g.campaign);
-  if (!floor || g.challenge || g.options?.wander) return;
+  if (!floor || g.challenge || g.options?.wander || inCombat(g)) return;
   // Intro uses this floor's time, so deeper entries work with a carried clock.
   const elapsed = Math.max(0, (g.runT || 0) - (g._floorStartT || 0));
   const intro = elapsed >= 0.3 && elapsed < 9 && !g.encounter?.active;
@@ -65,9 +61,9 @@ export function drawJourneyHud(g, ctx) {
     ctx.save(); ctx.globalAlpha = clamp(Math.min(elapsed * 3, (9 - elapsed) * 2), 0, 1);
     ctx.fillStyle = '#f4ead8'; ctx.fillRect(p.x, p.y, p.w, p.h);
     ctx.fillStyle = voice.color; ctx.fillRect(p.x, p.y, 5, p.h);
-    centerText(ctx, `Depth ${g.campaign.floor + 1} · ${floor.name}`, g.cw / 2, p.y + 29, uiFont(g.cw < 800 ? 22 : 26, { weight: 700 }), voice.color);
+    centerText(ctx, floor.name, g.cw / 2, p.y + 29, uiFont(g.cw < 800 ? 22 : 26, { weight: 700 }), voice.color);
     centerText(ctx, voice.line, g.cw / 2, p.y + 57, uiFont(g.cw < 800 ? 13 : 16), INK);
-    centerText(ctx, floor.final ? 'The final guardian waits at the far shore.' : 'Paint, explore, then meet the guardian at the far shore.', g.cw / 2, p.y + 76, uiFont(12), '#526052');
+    centerText(ctx, floor.final ? 'Umbral Wyrm · The final guardian of the stolen color' : 'Every brushstroke makes this place ours again.', g.cw / 2, p.y + 76, uiFont(12), '#526052');
     ctx.restore();
   } else {
     const text = journeyObjective(g);
@@ -96,7 +92,7 @@ export function drawJourneyWorld(g, ctx, view) {
     ctx.strokeStyle = '#4d5b47'; ctx.lineWidth = 8;
   }
   ctx.fillStyle = '#e9dfc7'; ctx.fillRect(-114, -113, 228, 31);
-  centerText(ctx, mark.final ? 'THE LAST GUARDIAN →' : 'GUARDIAN AHEAD →', 0, -92, uiFont(14, { weight: 700 }), voice.color);
+  centerText(ctx, mark.final ? 'THE COLOR THIEF →' : 'GUARDIAN AHEAD →', 0, -92, uiFont(14, { weight: 700 }), voice.color);
   // Distinct emblems: feather, water rings, rooted eye, crescent.
   ctx.strokeStyle = voice.color; ctx.fillStyle = voice.color; ctx.lineWidth = 3;
   ctx.beginPath();
@@ -127,7 +123,7 @@ export function runBuildLines(g) {
 export function drawRunBuild(g, ctx, x, y, w) {
   const gifts = runBuildLines(g);
   ctx.save(); ctx.fillStyle = '#e9e0cb'; ctx.fillRect(x, y, w, 104);
-  centerText(ctx, 'Your brush this run', x + w / 2, y + 18, uiFont(14, { weight: 700 }), '#355848');
+  centerText(ctx, 'Your brush on this journey', x + w / 2, y + 18, uiFont(14, { weight: 700 }), '#355848');
   const rows = gifts.length ? gifts.slice(0, 3) : ['A fresh brush', 'No guardian gifts yet'];
   rows.forEach((line, i) => centerText(ctx, line, x + w / 2, y + 44 + i * 21, uiFont(w < 300 ? 12 : 15), INK));
   ctx.restore();

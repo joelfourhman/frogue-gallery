@@ -5,6 +5,9 @@ context are in history/DECISIONS-pre-astra.md. Source/tests take precedence.
 
 | Decision | Reason / constraint |
 |---|---|
+| Our swamp, with color stolen by the final boss | Latest owner correction supersedes generic dungeon framing. Umbral is the color thief; region/rest/finale language reinforces reclaiming our home. |
+| Visual combat tells without unsolicited instruction captions | Owner found the attack coaching spammy. Keep lanes, animation and status feedback; remove coaching and suppress route overlays during fights. |
+| Individual colored parts and gesture-dependent paint patterns | Painting should express choices: multicolor caps/petals/panels, swipe stripes, splash speckles, local erasure and musical reactions. |
 | One finite four-floor campaign; Umbral Wyrm is the final boss | Owner explicitly removed New Game+ and requested one long roguelike dungeon. |
 | Three rests, 35% maximum-HP healing and one run-only brush gift each | Gives the connected run recovery and meaningful growth without permanent stat farming. |
 | Preserve artwork; discard obsolete NG/prestige save fields | Keep personal creative progress while removing cycles, modifiers, gold rewards and legacy stat advantages. |

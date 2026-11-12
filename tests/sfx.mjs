@@ -92,7 +92,7 @@ const S1_BANK = [
   // boss stings (phase-shift + kill + the existing awaken bloom/growl/slam)
   'boss-phase', 'boss-kill', 'awaken', 'awaken-bloom', 'boss-growl', 'boss-slam',
   // pickup + UI
-  'pickup', 'pickup-streak', 'ui', 'ui-back', 'ui-hover', 'paint-create', 'frog-chime',
+  'pickup', 'pickup-streak', 'ui', 'ui-back', 'ui-hover', 'paint-create', 'frog-chime', 'garden-note',
   // pause open/close
   'pause-open', 'pause-close',
 ];
