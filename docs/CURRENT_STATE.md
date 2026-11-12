@@ -1,6 +1,6 @@
 # Current state — reclaim our swamp's color
 
-**2026-11-11.** The Umbral Wyrm stole the color from our swamp. The playable
+**2026-11-12.** The Umbral Wyrm stole the color from our swamp. The playable
 game is one journey across four regions to paint our home back to life, with
 a fresh run build, three rests and the color thief as final boss. New Game+ and its progression
 systems are removed. Runtime version remains 1.0.0 and save schema remains 12.
@@ -58,6 +58,7 @@ human enjoyment and long-run balance still require playtesting.
 | Free painting | 64 objects per region with individually colored parts, directional stripe/speckle marks, musical caps and distinct reactions; 16 bounded cluster blooms without completion text |
 | Route guidance | Short stolen-color story arrivals, quiet exploration objective, open guardian landmarks and atlas destinations; all guidance yields during fights |
 | Presentation | Procedural watercolor, paper UI, visible boss bodies, cached darkness mask, bounded particles, Web Audio |
+| Soundtrack | 13 original 16/32-bar pieces; distinct region/guardian/rest/end themes, chamber-style synth voices, stereo room, smooth transitions and quieter menu mix |
 | Persistence | Browser-local save, in-memory fallback, validated JSON import/export; no active-run resume |
 
 Region guardians stay dormant until the final 900 pixels. Painting cannot wake

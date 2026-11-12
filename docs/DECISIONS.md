@@ -1,10 +1,12 @@
 # Current design and engineering decisions
 
-Updated for the single dungeon, 2026-11-11. Older decisions and their original
+Updated for our swamp journey and soundtrack, 2026-11-12. Older decisions and their original
 context are in history/DECISIONS-pre-astra.md. Source/tests take precedence.
 
 | Decision | Reason / constraint |
 |---|---|
+| Original melodic soundtrack inspired by classic adventure-game warmth | Owner requested a complete music remake with classic MapleStory inspiration. Compose original melodies and longer arrangements, synthesize locally, and give every region/guardian its own identity. |
+| Audio-clock transport with bounded voices and shared acoustics | Prevent frame-rate timing drift, stale-note bursts and retained audio graphs; preserve independent music/SFX controls and no runtime assets/dependencies. |
 | Our swamp, with color stolen by the final boss | Latest owner correction supersedes generic dungeon framing. Umbral is the color thief; region/rest/finale language reinforces reclaiming our home. |
 | Visual combat tells without unsolicited instruction captions | Owner found the attack coaching spammy. Keep lanes, animation and status feedback; remove coaching and suppress route overlays during fights. |
 | Individual colored parts and gesture-dependent paint patterns | Painting should express choices: multicolor caps/petals/panels, swipe stripes, splash speckles, local erasure and musical reactions. |

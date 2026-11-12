@@ -34,6 +34,9 @@ These are ignored by Git and may be regenerated:
 - .cache/atlas-review.png and .cache/studio-*.png: local visual review evidence.
 - .cache/astra-logs/: this development pass's earlier diagnostic logs.
 - tests/.out/astra/: browser screenshots, postcard and report.
+- tests/.out/astra/music-*.wav and music-render.json: generated soundtrack
+  previews and PCM checks; regenerate with node tests/render-music.mjs.
+- .cache/rewrite-score.mjs: one-time source migration helper, not runtime code.
 - tests/.out/astra/32–35 PNGs: free repainting, warning lane, combo and 640px UI.
 - tests/.out/astra/36–39 PNGs: dungeon rest choices and final victory.
 - tests/.out/astra/40–47 and combat-*.png: deeper painting, gifts, journey cues

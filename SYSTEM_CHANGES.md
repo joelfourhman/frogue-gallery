@@ -1,5 +1,12 @@
 # Environment and tool changes
 
+## Original soundtrack — 2026-11-12
+
+No packages, remote services, machine settings or persistent processes added.
+Existing Node/Chromium tools render local Web Audio through tests/render-music.mjs
+and both browser journeys. WAV previews and PCM reports live under tests/.out/astra/.
+The test harness owns and closes its loopback server and isolated browser.
+
 ## Our swamp, our colors — 2026-11-11
 
 No new packages, machine settings or persistent processes. Reused existing

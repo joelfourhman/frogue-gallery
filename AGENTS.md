@@ -45,7 +45,9 @@ src/studio.js       living field studies, brush-hop wake, actual-stroke
                     sketchbook and local PNG export (rules in logic.js)
 src/particles.js    splash/ink particle system
 src/ui.js           paper-styled canvas UI primitives
-src/audio.js        Web Audio synth: SFX + per-biome ambient themes
+src/audio.js        Web Audio SFX, nature ambience and soundtrack integration
+src/music.js        bounded audio-clock transport, instruments and scene selection
+src/score.js        13 original composed tracks (pure immutable note data)
 src/math.js         vector/geometry/wobbly-shape helpers
 src/input.js        keyboard + mouse (+ gamepad mapping) capture
 tests/smoke.mjs     the ~111-stage headless regression suite — the project's

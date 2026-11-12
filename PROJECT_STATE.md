@@ -1,4 +1,41 @@
-# Project state — Our swamp, our colors (2026-11-11)
+# Project state — A home worth painting: soundtrack remake (2026-11-12)
+
+Owner requested a complete music remake inspired by classic MapleStory.
+Replaced all background themes with 13 original compositions: title, four
+swamp regions, Lily Clearing, four guardians, waterside rest, victory and
+defeat. Authored 16/32-bar pieces (53–101 seconds) develop melodies and chord
+progressions; the original home motif returns in victory after Umbral's
+minor-key transformation. No borrowed tunes, recordings or external assets.
+
+src/score.js holds 7,064 immutable note events across all tracks. src/music.js
+renders piano, harp, flute, clarinet, music box, strings, bass and soft drums
+with shaped envelopes, panning, vibrato and one shared stereo room. Short old
+patterns and fixed-pitch drones are removed. Nature ambience and gameplay SFX
+remain. Music follows Game._frame scenes; Hollow Sanctuary and each guardian
+now have distinct pieces. Zone boundaries do not restart a regional phrase.
+Pause/help/map/sketchbook lower the mix 6dB; low HP adds a beat-aligned pulse.
+
+Transport: 180ms audio-clock lookahead, 64-voice cap, three fading layers,
+96-event scheduling cap per tick. Suspended tabs skip missed notes. Voice,
+gain and vibrato connections are retired; full shutdown disposes the graph.
+Music/SFX sliders and mute remain independent. No balance, save/schema,
+version or dependency changes. See docs/SOUNDTRACK.md for track list.
+
+Validation: updated smoke stages 66/67 verify full-loop score playback,
+scene selection, phrase continuity, routing/mute, rapid transitions,
+long stalls and resource cleanup. Final `node scripts/check.mjs --browser`:
+ALL REQUIRED CHECKS PASSED (19 gates), including source/dist browser journeys
+(25.8/26.8 seconds), frames, performance, unchanged balance and pacing bands.
+Full-loop recording measured a peak of 19 voices against the 64-voice cap.
+Rendered previews peak at 0.079–0.120 with RMS 0.011–0.028 (default volume),
+with no invalid samples or clipping and at most 17 voices in those excerpts.
+Both source/dist browser journeys now exercise every game music scene and
+render 12 seconds of every piece through real Chromium OfflineAudioContext.
+Local title/marsh/Umbral/victory WAV previews and PCM metrics are generated
+under tests/.out/astra/. Render checks establish finite audible stereo sound
+and headroom; musical enjoyment still requires listening/playtesting.
+
+# Previous checkpoint — Our swamp, our colors (2026-11-11)
 
 Owner correction: combat instruction captions were spam; the identity is our
 swamp, whose color was stolen by the FINAL BOSS. This overrides the previous

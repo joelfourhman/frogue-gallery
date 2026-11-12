@@ -1,3 +1,15 @@
+# A home worth painting — soundtrack remake, 2026-11-12
+
+- Replaced the entire background score with 13 original compositions inspired
+  by the warm, melodic adventure mood requested by the owner.
+- Added 16/32-bar melodies, chord progressions, answering phrases, piano/harp,
+  flute/clarinet, music box, strings, bass and restrained percussion.
+- Distinct title, four-region, clearing, four-boss, rest, victory and defeat
+  pieces; the home motif returns after the color thief is defeated.
+- Added stereo acoustics, smooth transitions, quieter pause/book mix and
+  bounded audio-clock scheduling. Removed the old fixed-pitch drones.
+- Added real-browser PCM rendering and local WAV previews for validation.
+
 # Our swamp, our colors — 2026-11-11
 
 - Restored the core premise: our swamp's color was stolen by the final boss,

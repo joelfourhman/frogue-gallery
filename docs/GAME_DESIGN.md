@@ -163,6 +163,12 @@ discarded. No mid-run resume is provided.
 
 ## Boundaries
 
+The soundtrack makes our swamp feel like a home worth exploring. Original
+melodies, warm piano/harp, playful winds and soft bells carry the regions;
+each guardian has a distinct battle piece. The home melody returns after
+Umbral releases the stolen color. Music continues more quietly during pause,
+help, map and sketchbook, without restarting the phrase. See SOUNDTRACK.md.
+
 The game uses Canvas 2D, procedural art and Web Audio with no runtime network
 or package dependencies. Difficulty is Gentle, Normal or Bold. Saves stay in
 the current browser/origin. There is no account, cloud save, online leaderboard,

@@ -2969,224 +2969,23 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
 }
 
 // ============================================================================
-// STAGE 66: v1.4 S1 — melodic per-zone themes (headless AudioContext)
+// STAGE 66: Original soundtrack — complete compositions + scene routing
 // ============================================================================
 {
-  console.log('== stage 66: v1.4 S1 — melodic per-zone themes (headless AudioContext) ==');
-  // A minimal-but-sufficient headless AudioContext: enough for AudioSys.ensure()
-  // + the ambient bed + the S1 melody step-sequencer to build and SCHEDULE nodes
-  // without a real browser. currentTime advances manually so tickMusic schedules.
-  const param = (v) => ({ value: v, setValueAtTime(x) { this.value = x; }, linearRampToValueAtTime(x) { this.value = x; },
-    exponentialRampToValueAtTime(x) { this.value = x; }, setTargetAtTime(x) { this.value = x; } });
-  const makeNode = () => ({
-    type: 'sine', frequency: param(440), Q: param(1), detune: param(0), gain: param(1),
-    buffer: null, _connections: [],
-    connect(node) { this._connections.push(node); return node; },
-    disconnect() { this._connections.length = 0; },
-    start() {}, stop() {}, getChannelData() { return new Float32Array(0); },
-  });
-  class FakeAudioContext {
-    constructor() { this.currentTime = 0; this._sr = 22050; this._dest = makeNode(); }
-    get sampleRate() { return this._sr; }
-    get destination() { return this._dest; }
-    createGain() { return makeNode(); }
-    createOscillator() { return makeNode(); }
-    createBiquadFilter() { return makeNode(); }
-    createDynamicsCompressor() { return makeNode(); }
-    createBuffer(ch, len) { return { getChannelData: () => new Float32Array(len) }; }
-    createBufferSource() { return makeNode(); }
-  }
-  window.AudioContext = FakeAudioContext;
-
-  const cvA = makeCanvas();
-  const gA = new Game(cvA);
-  gA.start();
-  assert(gA.audio.ensure() === true, 'S1: a headless AudioContext lets AudioSys.ensure() build the graph');
-  assert(gA.audio.musicBus !== null && gA.audio._melodyMaster !== null, 'S1: the melody master gain exists');
-  assert(gA.audio._melodyMaster._connections.includes(gA.audio.musicBus), 'S1: the melody layer is connected UNDER musicBus (inherits the slider + mute)');
-  assert(gA.audio._melodyMaster.gain.value > 0 && gA.audio._melodyMaster.gain.value <= 1, `S1: the melody layer is at a modest level (${gA.audio._melodyMaster.gain.value})`);
-
-  // ---- a melody loop is created per zone, and tickMusic schedules notes ----
-  gA.audio.setZoneTheme(0);
-  gA.audio.ctx.currentTime += 1.0;   // advance the fake clock so the lookahead schedules
-  gA.audio.tickMusic();
-  assert(gA.audio._zoneThemes.length === 1, `S1: a zone 0 melody loop is created (1, got ${gA.audio._zoneThemes.length})`);
-  assert(gA.audio._zoneThemes[0].zone === 0, 'S1: the loop is for zone 0');
-  assert(gA.audio._zoneThemes[0].step > 0, `S1: tickMusic schedules melodic notes (step advanced to ${gA.audio._zoneThemes[0].step})`);
-  assert(gA.audio._zoneThemes[0].gain._connections.includes(gA.audio._melodyMaster), 'S1: the zone theme gain feeds the melody master');
-
-  // ---- zone switch crossfades: old ramps down (muted+fading), new is live ----
-  gA.audio.setZoneTheme(1);
-  const prev = gA.audio._zoneThemes.find((t) => t.zone === 0);
-  const next = gA.audio._zoneThemes.find((t) => t.zone === 1);
-  assert(next && !next.muted && !next.fading, 'S1: switching zones starts a LIVE zone 1 melody');
-  assert(prev && prev.muted && prev.fading, 'S1: switching zones crossfades the old zone 0 melody (muted + fading)');
-  assert(gA.audio._zoneThemes.length >= 2, `S1: the fading old + the new theme coexist during the crossfade (got ${gA.audio._zoneThemes.length})`);
-
-  // ---- the music slider still scales the melody (it rides musicBus) ----
-  gA.audio.setMusicVolume(0.2);
-  assert(gA.audio.musicBus.gain.value === 0.2, 'S1: the music slider scales the music bus');
-  assert(gA.audio._melodyMaster._connections.includes(gA.audio.musicBus) && gA.audio._melodyMaster.gain.value > 0, 'S1: the melody rides the music bus, so the slider + mute scale it');
-
-  // ---- each zone has a distinct melodic loop ----
-  const d0 = gA.audio._zoneThemeData()[0], d1 = gA.audio._zoneThemeData()[1], d3 = gA.audio._zoneThemeData()[3];
-  const sig = (d) => JSON.stringify([d.root, d.scale, d.pattern, d.stepDur, d.detune]);
-  assert(sig(d0) !== sig(d1), 'S1: zone 0 and zone 1 have distinct melodic loops');
-  assert(sig(d0) !== sig(d3), 'S1: the finale (zone 3) theme is distinct from the opening');
-  // the scale is a real pentatonic-ish set (5 notes, ascending from root)
-  assert(d0.scale.length === 5 && d0.scale[0] === 0 && d0.scale.every((s, i) => i === 0 || s > d0.scale[i - 1]), 'S1: each theme uses a 5-note ascending scale');
-
-  // ---- clearing the melody empties the live loops (run end / quit) ----
-  gA.audio.clearZoneTheme();
-  assert(gA.audio._zoneThemes.length === 0, `S1: clearing the zone melody empties the live loops (got ${gA.audio._zoneThemes.length})`);
-
-  delete window.AudioContext; // restore (no later stage depends on it either way)
+  console.log('== stage 66: original score and swamp journey music routing ==');
+  const { testMusicScore } = await import('./music.mjs');
+  const result = testMusicScore();
+  assert(result.tracks === 13 && result.notes > 1000, 'music: all 13 composed tracks and their score data pass');
 }
 
 // ============================================================================
-// STAGE 67: v1.4 S2 — boss battle loop + victory/defeat stingers (headless AudioContext)
+// STAGE 67: Live soundtrack — scheduling, crossfades, resource bounds, controls
 // ============================================================================
 {
-  console.log('== stage 67: v1.4 S2 — boss music + end-screen stingers (headless AudioContext) ==');
-  // A richer headless AudioContext: enough to build the graph AND to capture
-  // the exact note frequencies S2 schedules (boss loop + stingers) so we can
-  // assert their shape. currentTime advances manually so tickMusic looks ahead.
-  const P = (v) => ({ value: v, _v: v, setValueAtTime(x) { this._v = x; },
-    exponentialRampToValueAtTime(x) { this._v = x; }, linearRampToValueAtTime(x) { this._v = x; },
-    setTargetAtTime(x) { this._v = x; } });
-  let schedTones = [];   // { type, f0, f1, dur, target, conns }
-  const mkNode = () => ({
-    type: 'sine', frequency: P(440), Q: P(1), detune: P(0), gain: P(1),
-    buffer: null, _connections: [],
-    connect(n) { this._connections.push(n); return n; },
-    disconnect() { this._connections.length = 0; },
-    start() {}, stop() {}, getChannelData() { return new Float32Array(0); },
-  });
-  class FakeAC {
-    constructor() { this.currentTime = 0; this._dest = mkNode(); this._nodes = []; }
-    get sampleRate() { return 22050; }
-    get destination() { return this._dest; }
-    createGain() { const n = mkNode(); n.isGain = true; return n; }
-    createOscillator() {
-      const n = mkNode();
-      const rec = () => { schedTones.push({ type: n.type, f0: n.frequency._v, f1: n.frequency._v, dur: n._dur || 0, target: n._target || null, conns: n._connections }); };
-      n.start = () => { schedTones.push({ type: n.type, f0: n.frequency._v, f1: n.frequency._f1, dur: n._dur || 0, target: n._target || null, conns: n._connections.slice() }); };
-      n.stop = () => {};
-      return n;
-    }
-    createBiquadFilter() { const n = mkNode(); return n; }
-    createDynamicsCompressor() { const n = mkNode(); return n; }
-    createBuffer(ch, len) { return { getChannelData: () => new Float32Array(len) }; }
-    createBufferSource() {
-      const n = mkNode();
-      n.start = () => {};
-      n.stop = () => {};
-      return n;
-    }
-  }
-  // We capture the F0 via the oscillator's frequency param's last value at start.
-  // To read the sweep end (f1), we patch the param's exponentialRamp to record.
-  const origExp = FakeAC.prototype; // (no-op; we patch per-node below via subclass)
-  window.AudioContext = class extends FakeAC {
-    createOscillator() {
-      const n = super.createOscillator();
-      const f = n.frequency;
-      f.exponentialRampToValueAtTime = (x) => { f._f1 = x; f._v = x; };
-      n.start = () => { schedTones.push({ type: n.type, f0: n._f0 ?? f._v, f1: f._f1, dur: n._dur || 0, target: n._target || null, conns: n._connections.slice() }); };
-      // capture f0 at setValueAtTime (the start freq) and target at connect
-      const sv = f.setValueAtTime.bind(f);
-      f.setValueAtTime = (x) => { n._f0 = x; return sv(x); };
-      const origConnect = n.connect.bind(n);
-      n.connect = (t) => { n._target = t; return origConnect(t); };
-      n._durCap = n.start;
-      return n;
-    }
-  };
-
-  const cvB = makeCanvas();
-  const gB = new Game(cvB);
-  gB.start();
-  gB.audio.ensure();
-  const au = gB.audio;
-  assert(au.ctx !== null, 'S2: the headless AudioContext builds the audio graph');
-
-  // ---- a ZONE theme is live before the boss engages ----
-  au.setZoneTheme(1);
-  gB.audio.ctx.currentTime += 1.0;
-  au.tickMusic();
-  const zoneLive = au._zoneThemes.find((t) => t.zone === 1 && !t.muted);
-  assert(zoneLive, 'S2: a zone theme is live before the boss engages');
-
-  // ---- boss engage: setBossTheme crossfades the zone out + starts the boss loop ----
-  au.setBossTheme(false); // the Great GRAY heron (first-time run)
-  assert(au._bossMusic === true, 'S2: the boss loop is the live melody (bossMusic flag set)');
-  const bossGray = au._bossThemes.find((t) => !t.muted && t.zone === -1);
-  assert(bossGray, 'S2: a boss loop instance starts on engage');
-  assert(zoneLive.muted && zoneLive.fading, 'S2: engaging the boss crossfades the zone theme out (muted + fading)');
-
-  // ---- the boss loop actually schedules distinct, fast, pulsed notes ----
-  schedTones = [];
-  gB.audio.ctx.currentTime += 2.0;   // enough lookahead to schedule many steps
-  au.tickMusic();
-  assert(bossGray.step > 4, `S2: the boss loop schedules many steps (step=${bossGray.step}, faster than a zone loop)`);
-  assert(schedTones.length > 6, `S2: the boss loop scheduled melodic + pulse notes (${schedTones.length})`);
-  // the boss is distinct from every zone theme (root + scale + pattern + stepDur)
-  const bSig = (d) => JSON.stringify([d.root, d.scale, d.pattern, d.stepDur, d.detune]);
-  const zData = au._zoneThemeData();
-  for (const z of zData) assert(bSig(au._bossThemeData().gray) !== bSig(z), 'S2: the boss loop is distinct from a zone theme');
-  // faster step rate than any zone theme
-  assert(au._bossThemeData().gray.stepDur < Math.min(...zData.map((z) => z.stepDur)), 'S2: the boss loop step rate is faster than every zone theme');
-
-  // ---- the boss loop still rides the music bus (slider + mute) ----
-  const bossGain = au._bossThemes.find((t) => !t.muted);
-  assert(bossGain.gain._connections.includes(au._melodyMaster) && au._melodyMaster._connections.includes(au.musicBus), 'S2: the boss loop rides melodyMaster -> musicBus (slider + mute)');
-  au.setMusicVolume(0.2);
-  assert(au.musicBus.gain.value === 0.2, 'S2: the music slider scales the boss loop (it is on the music bus)');
-
-  // ---- clearZoneTheme (run end / quit) fades the boss loop too ----
-  au.clearZoneTheme();
-  assert(au._bossMusic === false, 'S2: clearing the melody at run end disengages the boss');
-  assert(au._bossThemes.every((t) => t.muted || t.fading), 'S2: the boss loop is muted/fading after clear (crossfaded out, not cut)');
-
-  // ---- VICTORY stinger: a RISING major arpeggio ----
-  const vBefore = schedTones.length;
-  au.stingerVictory();
-  const vTones = schedTones.slice(vBefore).filter((x) => x.type === 'triangle');
-  assert(vTones.length >= 6, `S2: the victory stinger schedules a rising multi-note phrase (${vTones.length} new triangle notes)`);
-  // the fundamental frequencies are monotonically non-decreasing (an upward arpeggio)
-  const vF = vTones.map((x) => x.f0);
-  const rising = vF.every((f, i) => i === 0 || f >= vF[i - 1]);
-  assert(rising, `S2: the victory stinger climbs upward (${vF.map((f) => Math.round(f)).join(' -> ')} Hz)`);
-  assert(vF[vF.length - 1] > vF[0], 'S2: the victory arpeggio ends higher than it begins');
-
-  // ---- DEFEAT stinger: a SLOW descending minor phrase ----
-  const dBefore = schedTones.length;
-  au.stingerDefeat();
-  const dTones = schedTones.slice(dBefore).filter((x) => x.type === 'triangle');
-  assert(dTones.length >= 4, `S2: the defeat stinger schedules a descending phrase (${dTones.length} new triangle notes)`);
-  const dF = dTones.map((x) => x.f0);
-  const descending = dF.every((f, i) => i === 0 || f <= dF[i - 1]);
-  assert(descending, `S2: the defeat stinger descends (${dF.map((f) => Math.round(f)).join(' -> ')} Hz)`);
-  assert(dF[dF.length - 1] < dF[0], 'S2: the defeat phrase ends lower than it begins');
-
-  // ---- stingers ride the music bus too (not the sfx bus) ----
-  // The stinger's own scheduled notes must route through the melody layer
-  // (melodyMaster -> musicBus), NOT the sfx bus. (Check the stinger's tones
-  // specifically, since the boss loop also schedules onto the melody layer.)
-  const stBefore = schedTones.length;
-  au.stingerVictory();
-  const stTones = schedTones.slice(stBefore);
-  // The connection chain is osc -> (per-note gain) -> (stinger gain) ->
-  // melodyMaster -> musicBus. Walk two levels and confirm the stinger gain
-  // feeds the melody layer (not the sfx bus), so the music slider + mute scale it.
-  const stTargets = stTones.map((x) => {
-    const perNote = x.conns[0];          // per-tone gain
-    const stingerGain = perNote && perNote._connections[0]; // stinger gain
-    return stingerGain;
-  });
-  assert(stTones.length > 0 && stTargets.every((tg) => tg && tg._connections.includes(au._melodyMaster)), 'S2: the stingers route through the melody layer (music slider + mute), not the sfx bus');
-
-  delete window.AudioContext; // restore
+  console.log('== stage 67: live score transport and music controls ==');
+  const { testMusicPlayback } = await import('./music.mjs');
+  const result = testMusicPlayback();
+  assert(result.started > 0 && result.maxVoices <= 64, 'music: real scheduling remains bounded across the full score');
 }
 
 // ============================================================================

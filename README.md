@@ -116,7 +116,9 @@ mouse pointer; the game no longer shows a distant crosshair.
   the Reeds environment with its own guardian.
 - Six possible run-only gifts, three offered at each of three rests, numeric
   previews and an end-of-run build summary; no New Game+, prestige or shop.
-- Paper panels, procedural watercolor scenery, synthesized music and sound.
+- Paper panels, procedural watercolor scenery, and 13 original melodic tracks:
+  warm flute/piano/harp exploration, distinct guardian battles, and a homecoming
+  finale. See [the soundtrack](docs/SOUNDTRACK.md) for the track list.
 - Gentle / Normal / Bold difficulty; music/SFX and presentation settings;
   browser-local saves and JSON export/import.
 

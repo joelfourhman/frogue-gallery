@@ -16,6 +16,13 @@ not four newly created biomes.
 
 ## Milestone 1 — Connect the journey (complete)
 
+Latest completed presentation pass (2026-11-12): the entire background score
+has been recomposed as 13 original melodic pieces. Title, all four regions,
+clearing, all guardians, rest and both endings now have their own arrangements.
+See SOUNDTRACK.md for musical direction and implementation, and PROJECT_STATE.md
+for verification. Next feedback should include how the music feels while painting
+and whether guardian themes leave enemy effects readable.
+
 - Start every new run in the marsh with base stats for the selected difficulty.
 - Carry health, elapsed time, score and collected pigment between regions.
 - After each of the first three bosses, pause at a rest that heals 35% of maximum

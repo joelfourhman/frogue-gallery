@@ -499,6 +499,8 @@ try {
   await swampStoryBrowser({page,tick,out,report});
   const { creativePaintBrowser } = await import('./creative-paint-browser.mjs');
   await creativePaintBrowser({page,tick,out,report});
+  const { musicBrowser } = await import('./music-browser.mjs');
+  await musicBrowser({page,out,report});
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(out, 'report.json'), JSON.stringify({ report, errors }, null, 2));
   console.log(JSON.stringify(report, null, 2));

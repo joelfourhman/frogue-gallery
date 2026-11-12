@@ -392,9 +392,6 @@ export class Game {
     const frame = (t) => {
       this._raf = requestAnimationFrame(frame);
       this._frame(t);
-      // S1 (v1.4): advance the per-zone melodic theme (a ctx.currentTime
-      // lookahead step-sequencer). No-op in headless / before the audio unlock.
-      this.audio.tickMusic();
     };
     this._raf = requestAnimationFrame(frame);
   }
@@ -825,6 +822,9 @@ export class Game {
   }
 
   _frame(t) {
+    // Audio clock runs independently of simulation pauses and frame hit-stop.
+    this.audio.setMusicScene(this);
+    this.audio.tickMusic();
     const dt = clamp((t - this.last) / 1000, 0, 0.05);
     this.last = t;
     this.now = t / 1000;
@@ -2247,7 +2247,7 @@ export class Game {
       if (this.heron._intro <= 0 && !this._wardenEngaged) {
         this._wardenEngaged = true;
         this.sfx('warden-rumble');
-        if (this.audio.setBossTheme) this.audio.setBossTheme(true);   // the darker boss loop
+        if (this.audio.setBossTheme) this.audio.setBossTheme(this.heron.kind);
         const tNote = this.wanderTaste ? this.wanderTaste.name : '';
         this.addBanner('THE HOLLOW WARDEN', 3.2, 150);
         if (tNote) this.addBanner('The ' + tNote + ' taste rides this Warden.', 3.2, 185);
@@ -2262,7 +2262,7 @@ export class Game {
       if (this.heron._intro <= 0 && !this._umbraEngaged) {
         this._umbraEngaged = true;
         this.sfx('wyrm-rumble');
-        if (this.audio.setBossTheme) this.audio.setBossTheme(true);   // the darker boss loop
+        if (this.audio.setBossTheme) this.audio.setBossTheme(this.heron.kind);
         this.addBanner('THE UMBRAL WYRM', 3.2, 150);
         this.addBanner('The keeper of our stolen color.', 3.2, 195);
         this.zoomTarget = 0.92;
@@ -2275,7 +2275,7 @@ export class Game {
       if (this.heron._intro <= 0 && !this._wyrmEngaged) {
         this._wyrmEngaged = true;
         this.sfx('wyrm-rumble');
-        if (this.audio.setBossTheme) this.audio.setBossTheme(true);   // the darker boss loop
+        if (this.audio.setBossTheme) this.audio.setBossTheme(this.heron.kind);
         this.addBanner('THE SILT WYRM', 3.2, 150);
         this.zoomTarget = 0.92;
       }
@@ -2604,13 +2604,9 @@ export class Game {
   _updateZoneAmbient() {
     if (!this.audio || !this.audio.ctx) return;
     this.audio.setZoneAmbient(this._zoneI);
-    // S1 (v1.4): also (cross)fade the melodic theme to the zone just entered.
-    // It lives on melodyMaster (a separate gain) above the ambient bed.
-    // S2 (v1.9): pass the run's BIOME so Reeds/Black Reeds runs get their own
-    // distinct zone themes (the base swamp run passes undefined -> swamp,
-    // byte-identical). Also fire the brief zone-entry SWELL (a short chord on
-    // the melody layer) so crossing into a zone reads as a change of place.
-    if (this.audio.setZoneTheme) this.audio.setZoneTheme(this._zoneI, this.runBiome);
+    // Regions have complete pieces; small zone boundaries preserve the phrase.
+    // The campaign index distinguishes Hollow Sanctuary from Sunken Reeds.
+    if (this.audio.setZoneTheme) this.audio.setZoneTheme(this._zoneI, this.runBiome, this.campaign?.floor);
     if (this.audio.zoneSwell) this.audio.zoneSwell();
   }
 
@@ -3048,8 +3044,8 @@ export class Game {
     const best=this.save.bestRun;
     if(!best||(candidate.cleared&&!best.cleared)||(candidate.cleared===best.cleared&&(candidate.cleared?candidate.pigments>best.pigments:candidate.time>best.time)))this.save.bestRun=candidate;
     this.endGains={red:0,blue:0,green:0};this._cine=null;this.input.reset();SaveSys.save(this.save);
-    if(kind==='victory')this.audio.stingerVictory?.();else this.audio.stingerDefeat?.();
     this.audio.clearZoneAmbient?.();this.audio.stopAmbientLife?.();this.audio.clearZoneTheme?.();
+    if(kind==='victory')this.audio.stingerVictory?.();else this.audio.stingerDefeat?.();
   }
 
   _updateCampaignCamp() {

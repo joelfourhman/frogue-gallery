@@ -1,156 +1,8 @@
-// audio.js — Web Audio SFX + procedural ambient bed. All synthesized, no assets.
-// P9: two buses under the master — musicBus (ambient) and sfxBus (effects) —
-// so the user can adjust them independently.
-// S3 (v1.9): the seeded RNG for deterministic ambient-life event timing (the
-// sampler itself is pure + node-tested; this is only used to BUILD the seeded
-// stream the rAF stepper feeds it). math.js is pure (no browser APIs).
+// Web Audio effects, swamp ambience and the original composed soundtrack.
 import { mulberry32 } from './math.js';
-'use strict';
+import { MusicPlayer, musicScene } from './music.js';
 
-// ==================== S2 (v1.9): PURE music-dynamics data + selector ====================
-// Module-level (NOT class-scoped) so the pure themeSelector() below can be
-// imported + asserted by a node test with ZERO browser dependency (the S2
-// evidence — the music layer can't be screenshotted, so the selector + its
-// density/extra-voice contract IS the acceptance). The AudioSys class methods
-// delegate to these same constants so the pure selector and the live music
-// layer can never drift apart.
-//
-// Presentation-only invariant (v1.9): these are AUDIO PRESETS. logic.js
-// (makeTuning) is untouched; the 9 pacing probes are unchanged (audio does not
-// feed runT); SAVE_VERSION stays 12. A denser pattern (more non-rest steps) =
-// a higher patternDensity = a more intense moment.
-
-// The per-BIOME zone themes. Each biome is a 5-element array (zone index
-// 0..4; index 4 is a safe out-of-range fallback = zone 0). `swamp` is the
-// EXACT pre-S2 hand-tuned set (byte-identical to v1.4 S1) so the base swamp
-// run sounds unchanged; `reeds` + `blackReeds` are new distinct biome themes
-// (low / watery / slow, then darker / lower / sparser) so entering those
-// places is sonically unmistakable (today they reused the swamp presets).
-const ZONE_THEMES = {
-  swamp: [
-    { root: 220.0, scale: [0, 3, 5, 7, 10],  pattern: [ 0, -1, 2, 4, -1, 3, -1, 2,  0, -1, 4, 2, -1, 3, 2, -1], stepDur: 0.34, detune: 6 },
-    { root: 207.65, scale: [0, 3, 5, 7, 10], pattern: [ 0, 2, -1, 0, 3, -1, 4, 3,  2, -1, 0, -1, 5, 4, 3, -1], stepDur: 0.30, detune: -8 },
-    { root: 233.08, scale: [0, 2, 5, 7, 9],  pattern: [ 0, 4, 2, -1, 3, 5, -1, 3,  4, 2, 5, -1, 7, 5, 4, 2 ], stepDur: 0.28, detune: 5 },
-    { root: 196.0, scale: [0, 1, 5, 7, 10], pattern: [ 0, -1, 1, 0, 7, -1, 5, 1,  0, -1, 1, 7, 5, -1, 4, -1], stepDur: 0.26, detune: -6 },
-    { root: 220.0, scale: [0, 3, 5, 7, 10],  pattern: [ 0, -1, 2, 4, -1, 3, -1, 2,  0, -1, 4, 2, -1, 3, 2, -1], stepDur: 0.34, detune: 6 },
-  ],
-  // REEDS — low, watery, SLOW: a wet minor/mixolydian drone (mixolydian scale
-  // [0,2,4,7,9] = 1 b3 4 5 b7), a low root, a long stepDur (slower than any
-  // swamp zone) + a wider detune for a "wet" shimmer. Sparser than swamp.
-  reeds: [
-    { root: 146.83, scale: [0, 2, 4, 7, 9],  pattern: [ 0, -1, -1, 2,  -1, -1, 4, -1,  7, -1, -1, 5,  -1, 2, -1, -1], stepDur: 0.42, detune: 8 },
-    { root: 130.81, scale: [0, 2, 4, 7, 9],  pattern: [ 0, -1, 4, -1,  2, -1, -1, 5,  -1, 3, -1, -1,  0, -1, -1, -1], stepDur: 0.40, detune: -6 },
-    { root: 146.83, scale: [0, 2, 5, 7, 9],  pattern: [ 2, -1, -1, 0,  -1, 4, -1, -1,  5, -1, 2, -1,   0, -1, -1, -1], stepDur: 0.38, detune: 6 },
-    { root: 123.47, scale: [0, 1, 4, 7, 9],  pattern: [ 0, -1, -1, 1,  -1, -1, 4, -1,  7, -1, -1, -1,  5, -1, -1, -1], stepDur: 0.36, detune: -8 },
-    { root: 146.83, scale: [0, 2, 4, 7, 9],  pattern: [ 0, -1, -1, 2,  -1, -1, 4, -1,  7, -1, -1, 5,  -1, 2, -1, -1], stepDur: 0.42, detune: 8 },
-  ],
-  // BLACK REEDS — darker, LOWER, SPARSER: a sub-A root, a chromatic minor
-  // color, the slowest stepDur of any theme, a wider negative detune (a "dark"
-  // pull), and only 3-4 active steps per 16 (a near-silent, dread-filled bed).
-  blackReeds: [
-    { root: 110.00, scale: [0, 1, 4, 7, 10], pattern: [ 0, -1, -1, -1,  3, -1, -1, -1,  -1, -1, 5, -1,  -1, -1, 1, -1], stepDur: 0.50, detune: -10 },
-    { root: 98.00,  scale: [0, 1, 4, 7, 10], pattern: [ 0, -1, -1, -1,  -1, -1, -1, 4,  -1, -1, 1, -1,  -1, 5, -1, -1], stepDur: 0.48, detune: -14 },
-    { root: 103.83, scale: [0, 1, 3, 7, 10], pattern: [ 0, -1, -1, -1,  -1, -1, 3, -1,  -1, 1, -1, -1,   5, -1, -1, -1], stepDur: 0.46, detune: -12 },
-    { root: 87.31,  scale: [0, 1, 4, 6, 10], pattern: [ 0, -1, -1, -1,  -1, -1, -1, -1,  6, -1, -1, -1,  1, -1, -1, -1], stepDur: 0.44, detune: -16 },
-    { root: 110.00, scale: [0, 1, 4, 7, 10], pattern: [ 0, -1, -1, -1,  3, -1, -1, -1,  -1, -1, 5, -1,  -1, -1, 1, -1], stepDur: 0.50, detune: -10 },
-  ],
-};
-
-// The BOSS battle patterns (the "faster than any zone" step rate = intensity).
-// `gray` / `dark` mirror the pre-S2 _bossThemeData values (byte-identical);
-// a `pulse` flag marks the low off-beat thump layer the tick schedules.
-const BOSS_THEMES = {
-  gray:  { root: 110.0,  scale: [0, 3, 6, 7, 10], pattern: [0, -1, 3, 0,  6, -1, 7, 6,  3, -1, 0, 7,  12, 10, 7, 6], stepDur: 0.18, detune: -6,  pulse: true, mode: 'minor' },
-  dark: { root: 98.0,   scale: [0, 1, 3, 6, 10], pattern: [0, 1, -1, 3,  6, -1, 10, 7,  3, 1, 0, -1,  11, 10, 6, -1], stepDur: 0.17, detune: -10, pulse: true, mode: 'minor' },
-};
-
-// The LOW-HP uneasy ostinato — a sparse, HIGH, slightly dissonant pattern
-// (an A4 root with a b9 / tritone neighbor), a slow stepDur (a sparse, uneasy
-// pulse), kept at a low gain so it is a quiet layer under the zone/boss theme.
-// Driven by setLowHp() + ticked through the same _tickThemes machinery (the
-// tick only reads + schedules a bounded note — no per-frame allocation).
-const LOWHP_THEME = {
-  themeId: 'lowhp', root: 440.0, scale: [0, 3, 6, 10],
-  pattern: [0, -1, -1, -1,  6, -1, -1, 3,  -1, -1, -1, -1, 0, -1, -1, -1], stepDur: 0.6, detune: 0,
-};
-
-function _countActive(pattern) {
-  let n = 0;
-  for (let i = 0; i < pattern.length; i++) if (pattern[i] >= 0) n++;
-  return n;
-}
-
-// S2 (v1.9) PURE ACCEPTANCE: the music-dynamics selector. Given the current
-// game state (which zone + biome, is the boss engaged, is the frog low-HP),
-// it returns the theme to play, its
-// patternDensity (a higher = more intense moment), and the EXTRA danger voices
-// that should swell in on top. Pure (no browser, no Math.random, no time) so
-// a node test asserts the right theme + density + voices for each of
-// swamp / Reeds / Black Reeds / boss / lowHp. The music slider
-// still controls all of it (everything rides melodyMaster -> musicBus).
-
-// ==========================================================================
-// C3 (v1.10): the MIX constants — the relative levels + duck amounts the mix
-// pass sets. Exported so tests/music.mjs can assert them (E1 spot-checks).
-//   _MIX.musicVolume  : the default music bus level (0..1).
-//   _MIX.sfxVolume    : the default sfx bus level (0..1). SFX punchy on top.
-//   _MIX.melodyLevel  : melody/boss/stinger layer loudness vs the ambient bed.
-//   _MIX.duck         : the music-bus dip factor applied under a stinger /
-//                       fanfare (0.78 ~= -2.2 dB; the brief's "3-4 dB" target,
-//                       kept modest so the zone theme never fully vanishes).
-//   _MIX.duckDur      : seconds the music stays dipped after the trigger.
-//   _MIX.bossAmbient  : the ambient-life fraction while a boss is engaged
-//                       (the bed ducks so the fight is sonically THE BOSS).
-//   _MIX.biomeThemeGain: per-biome melody-layer gain multiplier so a darker
-//                       theme isn't accidentally quieter (loudness parity).
-// ==========================================================================
-export const _MIX = {
-  musicVolume: 0.62,
-  sfxVolume: 0.95,
-  melodyLevel: 0.34,
-  duck: 0.78,
-  duckDur: 1.6,
-  bossAmbient: 0.5,
-  biomeThemeGain: { swamp: 1.0, reeds: 1.0, blackReeds: 1.0 },
-};
-// A darker theme (Black Reeds) is NOT quieter by accident: its melody-layer
-// notes are scheduled at this per-biome gain so every biome lands at equal
-// perceived loudness (the C3 parity requirement). 1.0 across the board today;
-// the knob exists so a future retune can lift a quiet-sounding theme without
-// touching the note patterns.
-export function _biomeThemeGain(biome) {
-  return (_MIX.biomeThemeGain && _MIX.biomeThemeGain[biome]) != null
-    ? _MIX.biomeThemeGain[biome]
-    : 1.0;
-}
-
-export function themeSelector(state) {
-  const zone = (state && (state.zone | 0)) || 0;
-  const biome = (state && state.biome) || 'swamp';
-  const bossEngaged = !!(state && state.bossEngaged);
-  const lowHp = !!(state && state.lowHp);
-
-  const extraVoices = [];
-  let themeId;
-  let pattern;
-  if (bossEngaged) {
-    // The boss loop is the live melody; the low off-beat PULSE swells in under
-    // it (and the boss drops to a faster pattern on a new phase — the wiring).
-    themeId = 'boss';
-    pattern = BOSS_THEMES.gray.pattern;
-    extraVoices.push('boss-pulse');
-  } else {
-    // Normalize the biome so an UNKNOWN biome (e.g. 'watery') falls back to the
-    // swamp set AND reports the swamp themeId (the S2 byte-identical safety).
-    const effBiome = ZONE_THEMES[biome] ? biome : 'swamp';
-    const arr = ZONE_THEMES[effBiome];
-    const i = ((zone % arr.length) + arr.length) % arr.length;
-    themeId = effBiome + '-' + i;
-    pattern = arr[i].pattern;
-  }
-  if (lowHp) extraVoices.push('lowhp-ostinato');
-  return { themeId, patternDensity: _countActive(pattern), extraVoices };
-}
+export const _MIX = { musicVolume:.62, sfxVolume:.95, melodyLevel:.8 };
 
 // ==================== S3 (v1.9): PURE ambient-life sampler ====================
 // S3 (v1.9) PURE ACCEPTANCE: the ambient-life sampler. Given the run's current
@@ -193,91 +45,14 @@ function nextAmbientEvent({ biome, rng, t }) {
 
 export class AudioSys {
   constructor() {
-    this.ctx = null;
-    this.master = null;
-    this.musicBus = null;
-    this.sfxBus = null;
-    this.volume = 0.7;
-    this.musicVolume = _MIX.musicVolume;   // C3: default music bus level (mix pass)
-    this.sfxVolume = _MIX.sfxVolume;       // C3: sfx punchy on top of the music
-    this.muted = false;
-    this._noiseBuf = null;
-    this._musicNodes = []; // [osc1, osc2, gain1, gain2, lfo, lfoGain]
-    // ---- V3 (v1.2 M11): per-zone ambient bed ----
-    // A soft, looping ambient layer that shifts by zone. It sits under the
-    // musicBus (so it inherits the music-volume slider + mute for free) and
-    // is kept at a modest fraction of the music level. All synthesized from
-    // the existing oscillator / noise-buffer nodes — no new assets.
-    this._ambMaster = null;   // persistent gain -> musicBus (the ambient fraction)
-    // S3 (v1.9): the AMBIENT LIFE bus — a persistent gain -> musicBus, so the
-    // music slider + mute inherit (same shape as _ambMaster). The sparse
-    // ambient-life events (insect chirps / water drips / wind / distant heron
-    // call) route here. Their SCHEDULING is the pure nextAmbientEvent sampler
-    // (module top, node-tested) driven by the rAF tick — no setInterval.
-    // Presentation-only (logic.js untouched; makeTuning byte-identical).
-    this._ambLifeMaster = null;
-    // S3 (v1.9): the ambient-life STEPPER state (driven by the rAF tick via
-    // stepAmbientLife, NOT setInterval). _ambLifeT is the run clock (seconds);
-    // _lastSlot tracks the last whole-second slot already sampled (so each slot
-    // is sampled exactly once); _ambLifeRng is the run's seeded mulberry32 (so
-    // event timing is deterministic for a given seed). All lazy — start/stop by
-    // startAmbientLife/stopAmbientLife (called from game.js on run start/end).
-    this._ambLifeOn = false;
-    this._ambLifeBiome = 'swamp';
-    this._ambLifeT = 0;
-    this._lastSlot = -1;
-    this._ambLifeRng = null;
-    this._crossFade = 1.6;    // seconds to crossfade between zones
-    this._amb = null;         // { zone, voices: [{ node, gain }] } — current zone bed
-    // C3: the music-bus DUCK — a short dip under stingers / fanfares so they
-    // cut through. _duckT is the ctx-time the dip should end; 0 = not dipping.
-    this._duckT = 0;
-    // ---- S1 (v1.4): melodic per-zone themes (a step-sequencer layer ABOVE the ambient bed) ----
-    // A short pentatonic loop per zone, scheduled by ctx.currentTime LOOKAHEAD in the
-    // rAF tick (tickMusic) — no setInterval, no audio files, no new deps. It sits on
-    // melodyMaster -> musicBus, so it inherits the music slider + mute for free.
-    // The ambient bed (V3) stays as the low drone; the melody is a quiet layer on top
-    // (~-10 dB relative). Zone switches crossfade the melody (old ramps to 0, new up).
-    this._melodyMaster = null; // persistent gain -> musicBus (the melody layer)
-    this._melodyLevel = _MIX.melodyLevel;  // C3: melody/boss/stinger loudness (vs the ambient bed)
-    this._zoneTheme = null;    // { zone, theme, gain, step, nextAt } — the live loop
-    this._zoneThemeI = -1;     // the zone index the live theme is for
-    this._zoneThemes = [];     // all live/fading loop instances (overlaps during crossfade)
-    // ---- S2 (v1.4): the boss battle loop + the end-screen stingers ----
-    // A distinct INTENSE-but-beautiful loop that crossfades in when the final
-    // heron engages. It reuses the S1 step-sequencer (melodyMaster -> musicBus)
-    // so it inherits the music slider + mute for free; the deeper guardians
-    // use the darker variant. `setBossTheme` starts it; `clearZoneTheme`
-    // (the "stop the melody layer" entry point, called at run end / quit) fades
-    // it too. The end-screen stingers (stingerVictory/stingerDefeat) are
-    // one-shot phrases scheduled on the same melody layer.
-    this._bossMusic = false;   // true while the boss loop is the live melody
-    this._bossThemes = [];     // live/fading boss loop instances (crossfade overlap)
-    // ---- S2 (v1.9): the INTENSITY / DANGER layer (music dynamics) ----
-    // A sparse tension layer on the SAME melody layer (melodyMaster -> musicBus)
-    // that SWELLS IN under the zone/boss themes: (a) a low off-beat PULSE under
-    // the boss fight, (b) a sparse high uneasy ostinato at low frog HP, (c) a
-    // brief swell on zone entry. The
-    // PURE selector for theme + density + extra-voices is themeSelector
-    // (exported, node-testable — the S2 evidence).
-    //
-    // P10 invariant: nothing allocates per-frame in the tick. The danger layer
-    // is LAZILY built ONCE (on the first setLowHp) as a small set of persistent
-    // gains; the tick only reads + schedules a bounded note through the shared
-    // _tone (which itself builds one osc+gain per scheduled note — the same
-    // bounded per-note allocation every other melody/boss note already makes,
-    // exempt from the sfx-bus cap).
-    this._danger = null;        // { master, lowOn, lowThemes[] } — lazy (setLowHp builds it)
-    // ---- S3 (v1.4): a hard cap on simultaneously-LIVE sfx-bus voices ----
-    // Painting is fast (several swipes/splashes + status blips per second, and a
-    // charge is a burst). Without a cap a flurry could spawn hundreds of short
-    // oscillators at once — a per-frame allocation burst that hurts 60fps. We
-    // track the stop-time of each live sfx-bus voice and drop new ones once N
-    // are alive. Cheap: a short number[] purged on each schedule. Only the sfx
-    // bus is capped; the melodic layers (S1/S2) schedule a bounded 16-step
-    // pattern and are exempt.
-    this._sfxLive = [];        // [stopTime, ...] of live sfx-bus voices
-    this._sfxMaxVoices = 24;   // concurrent-voice cap
+    this.ctx=null; this.master=null; this.musicBus=null; this.sfxBus=null;
+    this.volume=.7; this.musicVolume=_MIX.musicVolume; this.sfxVolume=_MIX.sfxVolume;
+    this.muted=false; this._noiseBuf=null; this._score=null;
+    this._ambMaster=null; this._ambLifeMaster=null; this._amb=null;
+    this._ambLifeOn=false; this._ambLifeBiome='swamp'; this._ambLifeT=0;
+    this._lastSlot=-1; this._ambLifeRng=null; this._crossFade=1.6;
+    this._melodyMaster=null; this._melodyLevel=_MIX.melodyLevel;
+    this._sfxLive=[]; this._sfxMaxVoices=24;
   }
 
   // S3 (v1.4): may a new sfx-bus voice of the given duration start right now?
@@ -351,44 +126,25 @@ export class AudioSys {
     if (this.master) this.master.gain.value = m ? 0 : this.volume;
   }
 
-  // ---- P9: procedural ambient bed (warm two-tone drone + slow LFO) ----
-  // Called by game.js on run start / end. Idempotent: safe to call startMusic
-  // multiple times; only the first call creates nodes.
+  _musicPlayer() {
+    if (!this.ctx || !this._melodyMaster) return null;
+    return this._score ||= new MusicPlayer(this.ctx,this._melodyMaster);
+  }
   startMusic() {
-    if (!this.ctx || this._musicNodes.length) return;
-    try {
-      const t = this.ctx.currentTime;
-      const mk = (freq, gain) => {
-        const o = this.ctx.createOscillator();
-        o.type = 'sine';
-        o.frequency.value = freq;
-        const g = this.ctx.createGain();
-        g.gain.value = gain;
-        o.connect(g);
-        g.connect(this.musicBus);
-        o.start(t);
-        return [o, g];
-      };
-      const [o1, g1] = mk(110, 0.12);  // A2
-      const [o2, g2] = mk(165, 0.09);  // E3 (perfect fifth)
-      // slow LFO on the second oscillator's gain for a gentle swell
-      const lfo = this.ctx.createOscillator();
-      lfo.type = 'sine';
-      lfo.frequency.value = 0.08;
-      const lfoG = this.ctx.createGain();
-      lfoG.gain.value = 0.04;
-      lfo.connect(lfoG);
-      lfoG.connect(g2.gain);
-      lfo.start(t);
-      this._musicNodes = [o1, g1, o2, g2, lfo, lfoG];
-    } catch (e) { /* headless / unsupported */ }
+    this.ctx?.resume?.();
+    const player=this._musicPlayer();
+    if(player && !player.current)player.setTrack('title');
   }
   stopMusic() {
-    for (const n of this._musicNodes) {
-      try { if (n.stop) n.stop(); n.disconnect(); } catch (e) {}
-    }
-    this._musicNodes = [];
-    this.clearZoneAmbient();
+    this._score?.dispose(); this._score=null; this.clearZoneAmbient();
+  }
+  setMusicScene(game) {
+    const player=this._musicPlayer(); if(!player)return;
+    const id=musicScene(game);
+    player.setTrack(id);
+    player.setMood({quiet:!!(game.paused||game.help||game._bookOpen||game._atlasOpen),
+      lowHp:game.state==='expedition' && game.player?.hp/game.player?.maxHp<.25,
+      phase:!!game.heron?.awakened});
   }
 
   // ---- V3 (v1.2 M11): per-zone ambient bed ----------------------------------
@@ -401,41 +157,10 @@ export class AudioSys {
   // Each zone is a small preset of voices; every voice has its own gain (vg)
   // -> the per-zone group gain (zg, 0..1, crossfaded) -> _ambMaster -> musicBus.
   _ZONE_PRESETS() {
-    return [
-      { // index 0 — the calm pre-first-zone opening (a quiet, distant water hush)
-        voices: [
-          { type: 'sine',  f: 82,  g: 0.09 },
-          { type: 'noise', filter: 'lowpass', f: 240, q: 0.5, g: 0.035 },
-        ],
-      },
-      { // Reed Flats — a low water-drone under a soft filtered shimmer
-        voices: [
-          { type: 'sine',   f: 70,  g: 0.13 },
-          { type: 'sine',   f: 95,  g: 0.06 },
-          { type: 'noise',  filter: 'lowpass',  f: 320, q: 0.6, g: 0.05 },
-        ],
-      },
-      { // Slick Hollow — a wind-ish pad: bandpassed air + a soft tone
-        voices: [
-          { type: 'noise',    filter: 'bandpass', f: 480, q: 0.5, g: 0.08 },
-          { type: 'triangle', f: 220, g: 0.045 },
-        ],
-      },
-      { // Bramble Thicket — a warm low drone
-        voices: [
-          { type: 'sine', f: 90,  g: 0.11 },
-          { type: 'sine', f: 135, g: 0.055 },
-        ],
-      },
-      { // The Gray Shore — sparse high chimes near the heron (LFO-gated so they
-        // pulse in and out rather than ring constantly)
-        voices: [
-          { type: 'sine', f: 660, g: 0.030, lfo: { f: 0.14, depth: 0.028 } },
-          { type: 'sine', f: 880, g: 0.020, lfo: { f: 0.09, depth: 0.019 } },
-          { type: 'noise', filter: 'highpass', f: 1300, q: 0.8, g: 0.018 },
-        ],
-      },
-    ];
+    // Unpitched water and wind leave room for the score's changing harmony.
+    return [240,320,480,680,1300].map((f,i)=>({voices:[
+      {type:'noise',filter:i===4?'highpass':'lowpass',f,q:.5,g:i===4?.009:.018}
+    ]}));
   }
 
   // Enter / crossfade to the ambient bed for the given zone index (0..4).
@@ -520,206 +245,22 @@ export class AudioSys {
     } catch (e) { /* headless */ }
   }
 
-  // ==================== S1 (v1.4): melodic per-zone themes ====================
-  // A short pentatonic loop per zone, played by a LOOKAHEAD step-sequencer
-  // (tickMusic, driven from game.js's rAF tick — no setInterval, no audio
-  // files, no new deps). Each zone theme = { root, scale (intervals in
-  // semitones from root), pattern (16 steps; -1 = rest), stepDur, detune }.
-  // Deterministic per zone; the melody rides melodyMaster -> musicBus so it
-  // inherits the music slider + mute for free, and sits ABOVE the V3 ambient
-  // bed (which stays as the low drone).
-  _zoneThemeData(biome) {
-    // S2 (v1.9): delegate to the PURE per-biome data (ZONE_THEMES). `swamp` is
-    // the exact pre-S2 hand-tuned set (byte-identical); `reeds` / `blackReeds`
-    // are the new distinct biome themes. An unknown biome falls back to swamp.
-    return ZONE_THEMES[biome] || ZONE_THEMES.swamp;
+  // Compatibility entry points for authored gameplay beats. The scene sync
+  // also covers title, rest, clearing, defeat and finale on every real frame.
+  setZoneTheme(zone,biome='swamp',region=0) {
+    const p=this._musicPlayer();if(!p)return;
+    if(['gray','silt','warden','umbral'].includes(p.current?.id))return;
+    p.setTrack(region===2?'sanctuary':(['swamp','reeds','blackReeds'].includes(biome)?biome:'swamp'));
   }
+  setBossTheme(kind) {
+    const p=this._musicPlayer();if(!p)return;
+    p.setTrack(({wyrm:'silt',umbra:'umbral',warden:'warden',gray:'gray'})[kind] || (kind===true?'silt':'gray'));
+  }
+  bossPhaseUp() { if(this._score)this._score.phase=true; }
+  setLowHp(on) { if(this._score)this._score.lowHp=!!on; }
+  zoneSwell() { /* The regional score carries its own entrance phrase. */ }
+  clearZoneTheme() { this._score?.stop(); }
 
-  // Crossfade the melody to the zone just entered (game.js calls this from
-  // _updateZoneAmbient alongside the ambient bed). The current theme keeps
-  // looping but its notes stop (muted) while its zone gain ramps to ~0 over the
-  // crossfade; the new theme starts at ~0 and ramps up. Both schedule through
-  // melodyMaster -> musicBus, so the music slider + mute scale them all. A list
-  // of active themes supports the ~1 s overlap during the fade.
-  setZoneTheme(zoneI, biome) {
-    if (!this.ctx || !this._melodyMaster) return;
-    if (this._bossMusic) return; // S2: the boss loop owns the melody while engaged
-    if (zoneI === this._zoneThemeI) return; // idempotent (same zone)
-    if (!this._zoneThemes) this._zoneThemes = [];
-    // S2 (v1.9): the per-BIOME zone theme (swamp | reeds | blackReeds). game.js
-    // passes this.runBiome (see _updateZoneAmbient); a missing biome falls back
-    // to swamp (byte-identical base-run behavior).
-    const data = this._zoneThemeData(biome || 'swamp');
-    const theme = data[((zoneI % data.length) + data.length) % data.length];
-    // C3: per-biome melody-layer gain so a darker theme isn't accidentally
-    // quieter (loudness parity). 1.0 across the board today; the knob lets a
-    // future retune lift a quiet-sounding theme without touching note patterns.
-    const biomeGain = _biomeThemeGain(biome || 'swamp');
-    // fade the previous theme(s) out: stop their notes, ramp the zone gain down.
-    for (const th of this._zoneThemes) {
-      th.muted = true;
-      th.fading = true;
-      th._fadeAt = this.ctx.currentTime;
-      try {
-        th.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, this._crossFade / 4);
-        const b = th;
-        setTimeout(() => { try { b.gain.disconnect(); } catch (e) {} }, this._crossFade * 1000 + 200);
-      } catch (e) { /* headless */ }
-    }
-    const zg = this.ctx.createGain();
-    zg.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-    zg.gain.setTargetAtTime(1, this.ctx.currentTime + 0.05, this._crossFade / 4);
-    zg.connect(this._melodyMaster);
-    this._zoneThemes.push({ zone: zoneI, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.35, muted: false, fading: false, biomeGain });
-    this._zoneThemeI = zoneI;
-  }
-
-  // ==================== S2 (v1.4): boss battle loop ====================
-  // A distinct, INTENSE-but-beautiful loop that crossfades in when the final
-  // heron engages. It reuses the S1 step-sequencer (tickMusic/_tickThemes) so
-  // it rides melodyMaster -> musicBus (music slider + mute for free) and needs
-  // no setInterval / audio files / new deps. Deeper dungeon bosses use the
-  // darker, slightly faster theme.
-  // S2 (v1.9): delegate to the PURE boss data (BOSS_THEMES) + the pre-built
-  // phase-2 (denser / faster) variants the boss drops to on a phase change
-  // (pre-built here at theme-setup time so `bossPhaseUp()` only SWAPS A
-  // REFERENCE — no pattern allocation at the phase moment, the P10 invariant).
-  _bossThemeData() {
-    return {
-      gray:  BOSS_THEMES.gray,
-      dark: BOSS_THEMES.dark,
-      // The DENSER phase-2 patterns (the boss "drops to a new phase"): the same
-      // scale + faster stepDur (stepDur * 0.8) + a denser 16-step pattern (more
-      // active steps) = a higher patternDensity = higher intensity. Pre-built.
-      gray2:  { ...BOSS_THEMES.gray,  pattern: [0, 3, -1, 3,  6, 7, -1, 6,  3, 0, 7, 6,  12, 10, 7, 6], stepDur: BOSS_THEMES.gray.stepDur * 0.8 },
-      dark2: { ...BOSS_THEMES.dark, pattern: [0, 1, 3, -1,  6, 7, 10, -1,  3, 1, 0, 3,  11, 10, 6, 10], stepDur: BOSS_THEMES.dark.stepDur * 0.8 },
-    };
-  }
-
-  // Engage the boss: crossfade the zone theme out and start the boss loop.
-  // game.js calls this the moment the final heron's intro ends (boss-growl).
-  // `dark` selects the darker theme used for the deeper dungeon bosses.
-  // Idempotent while a boss is already engaged.
-  setBossTheme(dark) {
-    if (!this.ctx || !this._melodyMaster) return;
-    if (!this._bossThemes) this._bossThemes = [];
-    if (this._bossMusic) return; // already engaged — don't double-start
-    this._bossMusic = true;
-    // C3: duck the ambient-life bed so the fight is sonically THE BOSS (the bed
-    // drops from its normal level to _MIX.bossAmbient for the duration of the
-    // fight; clearZoneTheme restores it). The zone drone (_ambMaster) is left
-    // alone — it's already a quiet low drone under the boss loop.
-    if (this._ambLifeMaster) {
-      try {
-        const t = this.ctx.currentTime;
-        this._ambLifeMaster.gain.cancelScheduledValues(t);
-        this._ambLifeMaster.gain.setValueAtTime(this._ambLifeMaster.gain.value, t);
-        this._ambLifeMaster.gain.linearRampToValueAtTime(_MIX.bossAmbient, t + this._crossFade / 2);
-      } catch (e) { /* headless */ }
-    }
-    // Fade the zone theme(s) out: stop their notes, ramp the gain down (the
-    // same crossfade machinery setZoneTheme uses).
-    for (const th of (this._zoneThemes || [])) {
-      th.muted = true; th.fading = true; th._fadeAt = this.ctx.currentTime;
-      try {
-        th.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, this._crossFade / 4);
-        const b = th;
-        setTimeout(() => { try { b.gain.disconnect(); } catch (e) {} }, this._crossFade * 1000 + 200);
-      } catch (e) { /* headless */ }
-    }
-    // fade any prior boss loops (a re-engage after a clear)
-    for (const th of this._bossThemes) {
-      th.muted = true; th.fading = true; th._fadeAt = this.ctx.currentTime;
-      try {
-        th.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, this._crossFade / 4);
-        const b = th;
-        setTimeout(() => { try { b.gain.disconnect(); } catch (e) {} }, this._crossFade * 1000 + 200);
-      } catch (e) { /* headless */ }
-    }
-    const data = this._bossThemeData();
-    const theme = data[dark ? 'dark' : 'gray'];
-    const zg = this.ctx.createGain();
-    zg.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-    zg.gain.setTargetAtTime(1, this.ctx.currentTime + 0.05, this._crossFade / 4);
-    zg.connect(this._melodyMaster);
-    this._bossThemes.push({ zone: -1, dark: !!dark, theme, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.35, muted: false, fading: false, _phase: 0 });
-  }
-
-  // S2 (v1.9): the boss DROPS TO A NEW PHASE — swap the live boss loop to its
-  // pre-built DENSER phase-2 pattern (faster stepDur + more active steps = a
-  // higher patternDensity = higher intensity). The denser patterns are pre-
-  // built in _bossThemeData (gray2/dark2), so this only SWAPS A REFERENCE on
-  // the live theme object — no pattern allocation at the phase moment (the
-  // P10 invariant: the tick path allocates nothing new). Idempotent per phase.
-  bossPhaseUp() {
-    if (!this.ctx || !this._bossMusic) return;
-    const th = this._bossThemes && this._bossThemes[this._bossThemes.length - 1];
-    if (!th || th._phase > 0) return; // already in the denser phase
-    const data = this._bossThemeData();
-    const denser = th.dark ? data.dark2 : data.gray2;
-    if (denser) th.theme = denser; // swap to the pre-built denser pattern
-    th._phase = 1;
-  }
-
-  // ==================== S2 (v1.9): the INTENSITY / DANGER layer =============
-  // A sparse tension layer on the SAME melody layer (melodyMaster -> musicBus)
-  // that SWELLS IN under the zone/boss themes:
-  //   (a) the low off-beat PULSE under the boss fight — the boss themes carry
-  //       `pulse: true`, so the existing _tickThemes pulse layer IS the boss
-  //       swell (no extra wiring needed);
-  //   (b) a sparse HIGH uneasy ostinato at low frog HP — a slow step-sequencer
-  //       loop (LOWHP_THEME) driven through the SAME _tickThemes machinery;
-  //   (c) a brief SWELL on zone entry — a short chord scheduled once;
-  // All of it rides melodyMaster -> musicBus (the music slider + mute inherit
-  // for free). P10: the tick only reads + schedules one bounded note per
-  // danger loop per scheduled step — no per-frame allocation of voice graphs.
-  _dangerBuild() {
-    if (this._danger) return this._danger;
-    if (!this.ctx || !this._melodyMaster) return null;
-    try {
-      const g = this.ctx.createGain();
-      g.gain.value = 1;
-      g.connect(this._melodyMaster);
-      this._danger = { master: g, lowOn: false, lowNext: 0, lowNote: 0, lowThemes: [] };
-      return this._danger;
-    } catch (e) { return null; /* headless */ }
-  }
-  // (b) low-HP unease: cross the sparse high ostinato in / out (a step loop,
-  // not a per-frame voice — the same bounded machinery as a zone theme).
-  setLowHp(on) {
-    if (!this.ctx || !this._melodyMaster) return;
-    const d = this._dangerBuild();
-    if (!d) return;
-    on = !!on;
-    if (on === d.lowOn) return;
-    d.lowOn = on;
-    if (on) {
-      try {
-        const zg = this.ctx.createGain();
-        zg.gain.value = 0.4; // a LOW level: an uneasy UNDERLAY, not a lead
-        zg.connect(this._melodyMaster);
-        d.lowThemes = [{ zone: -99, theme: { root: LOWHP_THEME.root, scale: LOWHP_THEME.scale, pattern: LOWHP_THEME.pattern, stepDur: LOWHP_THEME.stepDur, detune: LOWHP_THEME.detune }, gain: zg, step: 0, nextAt: this.ctx.currentTime + 0.4, muted: false, fading: false }];
-      } catch (e) { d.lowThemes = []; /* headless */ }
-    } else {
-      this._fadeMelodyLayer(d.lowThemes);
-      d.lowThemes = [];
-    }
-  }
-  // (c) a brief zone-entry SWELL — a short chord scheduled once (not a loop).
-  zoneSwell() {
-    if (!this.ctx || !this._melodyMaster) return;
-    try {
-      const t = this.ctx.currentTime;
-      const g = this.ctx.createGain();
-      g.gain.value = 0.4;
-      g.connect(this._melodyMaster);
-      const f = [196.0, 246.94, 293.66, 392.0]; // a rising open minor-ish swell
-      for (let i = 0; i < f.length; i++) {
-        try { this._tone(t + i * 0.05, 'sine', f[i], f[i], 1.6, 0.12, 0, g); } catch (e) { /* headless */ }
-      }
-      try { this._tone(t, 'sine', 98.0, 98.0, 2.0, 0.1, 0, g); } catch (e) { /* headless */ }
-    } catch (e) { /* headless */ }
-  }
   // ==================== S3 (v1.9): AMBIENT LIFE voices + rAF stepper ====================
   // The sparse ambient-life voices. Each routes to the _ambLifeMaster bus
   // (-> musicBus) so the music slider + mute inherit; each is QUIET (a
@@ -837,219 +378,12 @@ export class AudioSys {
   // S3 lifecycle: stop the ambient-life events (run end).
   stopAmbientLife() { this._ambLifeOn = false; }
 
-  // Stinger: a short one-shot melodic phrase, scheduled on the melody layer
-  // (melodyMaster -> musicBus) so it inherits the music slider + mute. Used
-  // for the victory / defeat end-screen beats (S2).
-  _stingerGain() {
-    if (!this.ctx || !this._melodyMaster) return null;
-    const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-    g.gain.setTargetAtTime(1, this.ctx.currentTime + 0.03, 0.08);
-    g.connect(this._melodyMaster);
-    return g;
-  }
-
-  // Victory stinger: a RISING MAJOR arpeggio that resolves — a bright,
-  // triumphant cadence (I -> V -> I, with the top note landing on the root's
-  // octave). Sits on the melody layer so the music slider + mute scale it.
-  // C3 (v1.10): dip the music bus briefly so a stinger / fanfare cuts through
-  // the zone + boss theme. The dip is on the WHOLE music bus (zone themes, the
-  // boss loop, the ambient bed all ride under it), so the stinger — which rides
-  // the melody layer at full _melodyLevel — punches above the ducked bed. The
-  // tick restores the bus to its set level once _duckT passes. No-op when the
-  // context isn't ready (headless).
-  _duckMusic(dur) {
-    if (!this.ctx || !this.musicBus) return;
-    const t = this.ctx.currentTime;
-    const base = this.muted ? 0 : this.musicVolume;
-    try {
-      this.musicBus.gain.cancelScheduledValues(t);
-      this.musicBus.gain.setValueAtTime(this.musicBus.gain.value, t);
-      this.musicBus.gain.linearRampToValueAtTime(base * _MIX.duck, t + 0.05);
-      this.musicBus.gain.setValueAtTime(base * _MIX.duck, t + dur);
-      this.musicBus.gain.linearRampToValueAtTime(base, t + dur + 0.4);
-    } catch (e) { /* headless */ }
-    this._duckT = t + dur;
-  }
-
-  stingerVictory() {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
-    const g = this._stingerGain();
-    if (!g) return;
-    this._duckMusic(_MIX.duckDur);   // C3: dip the music so the fanfare cuts through
-    // A major triad arpeggio up an octave, then a resolving top note.
-    // C major: C4 E4 G4 C5 E5 G5 C6 (rising), landing on the bright top C.
-    const notes = [261.63, 329.63, 392.0, 523.25, 659.25, 783.99, 1046.5];
-    notes.forEach((f, i) => {
-      this._tone(t + i * 0.11, 'triangle', f, f, 0.34, 0.5, 0, g);
-      this._tone(t + i * 0.11, 'sine', f * 2, f * 2, 0.22, 0.12, 0, g); // sparkle octave
-    });
-    // a warm bass swell under the arpeggio + a soft shimmer on the resolution
-    this._tone(t, 'sine', 130.81, 196.0, 1.1, 0.16, 0, g);
-    this._noise(t + 0.5, 0.7, 'bandpass', 5000, 2, 0.06);
-  }
-
-  // Defeat stinger: a SLOW DESCENDING MINOR phrase — mournful, spaced out.
-  // A minor: A4 G4 F4 E4 (descending), with a soft low pedal underneath.
-  stingerDefeat() {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
-    const g = this._stingerGain();
-    if (!g) return;
-    this._duckMusic(_MIX.duckDur);   // C3: dip the music so the defeat sting cuts through
-    const notes = [440.0, 392.0, 349.23, 329.63]; // A4 G4 F4 E4 (descending)
-    notes.forEach((f, i) => {
-      this._tone(t + i * 0.28, 'triangle', f, f * 0.995, 0.5, 0.4, 0, g); // slight pitch dip
-      this._tone(t + i * 0.28, 'sine', f / 2, f / 2, 0.6, 0.14, 0, g);     // low octave
-    });
-    // a slow, sinking bass note to settle the phrase
-    this._tone(t, 'sine', 110.0, 55.0, 1.4, 0.14, 0, g);
-  }
-
-  // K3 (v1.5 M3): the STORM SURGE stinger — a SHORT, RUMBLING BUILD that reads
-  // as "a storm is rolling in" (distinct from stingerVictory's bright cadence
-  // and stingerDefeat's slow descent): a low rumbling bass swell + a rising
-  // tremolo on a dark minor chord + a soft rain-shimmer noise bed. One-shot,
-  // on the melody layer (music slider + mute scale it). No-op when the context
-  // isn't ready (headless).
-  stormSurgeStinger() {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
-    const g = this._stingerGain();
-    if (!g) return;
-    this._duckMusic(_MIX.duckDur);   // C3: dip the music so the boss sting cuts through
-    // a low, ominous rumble that swells (A1 -> A2), the bed the storm builds on
-    this._tone(t, 'sawtooth', 55.0, 110.0, 1.6, 0.14, -4, g);
-    this._tone(t, 'sine', 110.0, 220.0, 1.6, 0.10, 0, g);
-    // a dark minor chord tremolo rising (A minor: A3 C4 E4) — the "roll-in"
-    for (const [f, dl] of [[220, 0], [261.63, 0.05], [329.63, 0.1]]) {
-      this._tone(t + 0.1 + dl, 'triangle', f, f * 1.02, 1.2, 0.12, 2, g);
-    }
-    // a soft rain shimmer to sit under the swell (the weather reads as rain)
-    this._noise(t + 0.15, 1.3, 'bandpass', 2600, 1.4, 0.05);
-  }
-
-  // M1 (v1.4): the FIRST-VICTORY cinematic beat's music — a SOFT, SLOW
-  // rising pentatonic arpeggio that swells as the world blooms to full color
-  // (the ~4 s beat, before the victory card reveals). Deliberately gentle and
-  // spaced (long decays, low peak, no shimmer) so it reads as a tender "the
-  // swamp blooms" swell, distinct from the bright triumphant stingerVictory()
-  // that fires when the card itself reveals. On the melody layer (music slider
-  // + mute scale it). No-op when the context isn't ready (headless).
-  cinematicArp() {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
-    const g = this._stingerGain();
-    if (!g) return;
-    // C-major pentatonic, slow climb: C4 D4 E4 G4 A4 C5 E5 G5 (rising, ~3.6s).
-    const notes = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 659.25, 783.99];
-    notes.forEach((f, i) => {
-      const at = t + i * 0.45;
-      this._tone(at, 'triangle', f, f, 1.35, 0.26, 0, g);          // soft voice
-      this._tone(at, 'sine', f * 2, f * 2, 1.1, 0.07, 0, g);       // faint sparkle
-    });
-    // a warm sustained pad (root + fifth) that swells the whole beat, settling
-    // on the top note — a gentle "world opening up" bed under the arpeggio.
-    this._tone(t, 'sine', 130.81, 130.81, 3.9, 0.14, 0, g);
-    this._tone(t, 'sine', 196.0, 196.0, 3.9, 0.10, 0, g);
-  }
-
-  // Lookahead scheduler — call from game.js every frame (the rAF tick).
-  // Schedules each ACTIVE (non-muted) theme's notes ~0.25 s ahead of
-  // ctx.currentTime so the audio clock, not the frame rate, keeps the rhythm
-  // (robust to rAF jitter). Muted (fading) themes are skipped, and any that
-  // have faded out are pruned. Drives the zone themes (S1) and the boss loop
-  // (S2) through one shared helper. No-op when the context isn't ready
-  // (headless).
-  tickMusic() {
-    if (!this.ctx || !this._melodyMaster) return;
-    this._tickThemes(this._zoneThemes || []);
-    this._tickThemes(this._bossThemes || []);
-    // S2 (v1.9): the LOW-HP uneasy ostinato — the same bounded step machinery.
-    // `setLowHp(true)` pushed a slow loop here; the tick only reads + schedules
-    // its (bounded) notes. No per-frame allocation (P10).
-    if (this._danger && this._danger.lowThemes) this._tickThemes(this._danger.lowThemes);
-  }
-
-  // Shared lookahead step-scheduler for a list of { theme, gain, step, nextAt,
-  // muted, fading } loops (zone themes + the boss loop). `theme.pulse` adds a
-  // low off-beat thump (the S2 boss "pulse layer") underneath the melody.
-  _tickThemes(list) {
-    if (list.length === 0) return;
-    const now = this.ctx.currentTime;
-    const ahead = now + 0.25;
-    for (let i = list.length - 1; i >= 0; i--) {
-      const th = list[i];
-      // prune themes whose fade has fully completed (~crossfade + 1.4 s grace)
-      if (th.fading && (now - (th._fadeAt || now) > this._crossFade + 1.4)) { list.splice(i, 1); continue; }
-      if (th.muted) continue; // fading: stop scheduling new notes
-      let guard = 0;
-      while (th.nextAt < ahead && guard++ < 16) {
-        const step = th.step % th.theme.pattern.length;
-        const note = th.theme.pattern[step];
-        // C3: per-biome melody-layer gain (loudness parity); a no-op at 1.0.
-        const bg = (th.biomeGain != null) ? th.biomeGain : 1.0;
-        if (note >= 0) {
-          const semi = th.theme.scale[((note % th.theme.scale.length) + th.theme.scale.length) % th.theme.scale.length]
-            + 12 * Math.floor(note / th.theme.scale.length);
-          const freq = th.theme.root * Math.pow(2, semi / 12);
-          try { this._tone(th.nextAt, 'triangle', freq, freq, th.theme.stepDur * 1.9, 0.5 * bg, th.theme.detune, th.gain); } catch (e) { /* headless */ }
-          // S2 pulse layer: a soft low thump on every OTHER step under the boss
-          // melody (drives the "intense" feel). Only when the theme opts in.
-          if (th.theme.pulse && (th.step % 2 === 0)) {
-            try { this._tone(th.nextAt, 'sine', th.theme.root / 2, th.theme.root / 4, th.theme.stepDur * 0.9, 0.4 * bg, 0, th.gain); } catch (e) { /* headless */ }
-          }
-        }
-        th.step++;
-        th.nextAt += th.theme.stepDur;
-      }
-    }
-  }
-
-  // Fade the melody out and stop the loop (run end / quit to title). Ramps each
-  // live zone gain down (a brief musical fade, not a cut), schedules a
-  // disconnect for GC, and clears the active list so a new run starts fresh.
-  // S2: the boss loop is stopped here too (it lives on the same melody layer),
-  // so the "stop the melody layer" entry point covers both.
-  clearZoneTheme() {
-    if (!this.ctx) return;
-    this._fadeMelodyLayer(this._zoneThemes || []);
-    this._fadeMelodyLayer(this._bossThemes || []);
-    // S2 (v1.9): fade the low-HP uneasy ostinato too (the run's place ended).
-    if (this._danger && this._danger.lowThemes) {
-      this._fadeMelodyLayer(this._danger.lowThemes);
-      this._danger.lowThemes = [];
-      this._danger.lowOn = false;
-    }
-    this._zoneThemes = []; // no active loops remain — a new run seeds its own
-    this._zoneThemeI = -1;
-    this._bossThemes = [];
-    this._bossMusic = false;
-    // C3: restore the ambient-life bed to its normal level now that the boss
-    // fight is over (setBossTheme had ducked it to _MIX.bossAmbient).
-    if (this._ambLifeMaster) {
-      try {
-        const t = this.ctx.currentTime;
-        this._ambLifeMaster.gain.cancelScheduledValues(t);
-        this._ambLifeMaster.gain.setValueAtTime(this._ambLifeMaster.gain.value, t);
-        this._ambLifeMaster.gain.linearRampToValueAtTime(0.9, t + this._crossFade / 2);
-      } catch (e) { /* headless */ }
-    }
-  }
-
-  // S2: ramp a list of melody loops to silence + schedule their disconnect.
-  _fadeMelodyLayer(list) {
-    if (!this.ctx) return;
-    for (const th of list) {
-      th.muted = true; th.fading = true; th._fadeAt = this.ctx.currentTime;
-      try {
-        th.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.35);
-        const b = th;
-        setTimeout(() => { try { b.gain.disconnect(); } catch (e) {} }, 1200);
-      } catch (e) { /* headless */ }
-    }
-  }
+  // Endings are complete pieces now, rather than an arpeggio over silence.
+  stingerVictory() { this._musicPlayer()?.setTrack('victory'); }
+  stingerDefeat() { this._musicPlayer()?.setTrack('defeat'); }
+  stormSurgeStinger() { this.bossPhaseUp(); }
+  cinematicArp() { this._musicPlayer()?.setTrack('victory'); }
+  tickMusic() { this._score?.tick(); }
 
   _env(gainNode, t0, peak, attack, decay) {
     const g = gainNode.gain;
@@ -1611,9 +945,4 @@ export class AudioSys {
   }
 }
 
-// S2 (v1.9): the PURE theme/density/extra-voices selector + the per-biome +
-// boss + low-HP theme data are exported so a node test (tests/music.mjs) can
-// assert the right theme + density for swamp / Reeds / Black Reeds / boss /
-// lowHp WITHOUT a browser or an AudioContext. Presentation-only
-// (logic.js untouched; makeTuning byte-identical).
-export { ZONE_THEMES, BOSS_THEMES, LOWHP_THEME, nextAmbientEvent, AMBIENT_KINDS, AMBIENT_P };
+export { nextAmbientEvent, AMBIENT_KINDS, AMBIENT_P };
