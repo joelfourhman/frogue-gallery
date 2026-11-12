@@ -1,3 +1,10 @@
+# Foreground launcher correction — 2026-11-12
+
+- Launch Game.cmd now always owns its foreground server; closing the command
+  window or Ctrl+C ends hosting. Existing servers are never reused.
+- Removed the previous background server and verified actual CMD window closure
+  releases the server port. LAN address remains 192.168.50.115:8767 on this host.
+
 # Mouse capture and LAN play — 2026-11-12
 
 - Clicking during play captures the mouse; relative aiming stays inside the game.

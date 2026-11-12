@@ -164,6 +164,8 @@ audit (the 1.0.0 release). Active scope now lives in `docs/ROADMAP.md`
 
 - The owner authorized LAN hosting on 2026-11-12: Launch Game.cmd binds all
   IPv4 interfaces on port 8767; the dev CLI and test harnesses default to loopback.
+  The launcher must own its foreground server: closing its console ends hosting.
+  Do not reuse or start a detached background server for the launcher.
   Serve only runtime files, keep data browser-local, and do not change firewall
   settings automatically. No cloud LLM APIs, remote services or external accounts.
 - Use `uv` for any Python environment work; never `pip` directly.

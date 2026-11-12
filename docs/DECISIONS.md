@@ -5,6 +5,7 @@ context are in history/DECISIONS-pre-astra.md. Source/tests take precedence.
 
 | Decision | Reason / constraint |
 |---|---|
+| Launcher console owns the server process | Owner explicitly rejected hidden/background reuse. Every launch binds its own foreground server, refuses occupied ports, and stops hosting when its console closes. |
 | Mouse capture during painting, free cursor in menus | Owner's mouse escaped the window and broke aiming. Gesture-triggered native pointer lock confines it; relative movement preserves aim, Escape releases/pauses, unsupported browsers retain absolute input. |
 | LAN-enabled double-click launcher | Owner explicitly superseded loopback-only hosting. Bind 0.0.0.0:8767, show LAN URLs, retain the runtime-file allowlist and local saves; no automatic firewall changes or multiplayer. |
 | Original melodic soundtrack inspired by classic adventure-game warmth | Owner requested a complete music remake with classic MapleStory inspiration. Compose original melodies and longer arrangements, synthesize locally, and give every region/guardian its own identity. |

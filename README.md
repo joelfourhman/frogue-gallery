@@ -18,9 +18,9 @@ on your network open one of those addresses in their browsers. If Windows
 Firewall prompts, allow Node on your private network. Each browser keeps its
 own saves; this shares the game, not a multiplayer session.
 
-Keep the launcher window open when it starts a new server; Ctrl+C stops it.
-It reuses a matching LAN server. If an older local-only preview already owns
-port 8767, stop that preview's server terminal first, then relaunch. It finds
+The launcher window **is the server**: closing it or pressing Ctrl+C stops
+hosting. It never reuses a background server. If port 8767 is already occupied,
+close the other server window first, then relaunch. It finds
 installed Node or Codex's bundled Node automatically. Chrome must be installed.
 
 With Node.js 22 or newer installed, run from this directory:

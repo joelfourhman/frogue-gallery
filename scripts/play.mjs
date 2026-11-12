@@ -1,11 +1,12 @@
 // Windows double-click launcher. The server stays in this console; Chrome is
-// independent. Reusing the preview's origin also preserves browser-local saves.
+// independent. Never reuse another process: closing this console stops hosting.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { networkInterfaces } from 'node:os';
-import { createServer, ROOT } from './dev.mjs';
+import { connect } from 'node:net';
+import { createServer } from './dev.mjs';
 
 export async function findChrome(env = process.env) {
   const roots = [env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.LOCALAPPDATA].filter(Boolean);
@@ -24,40 +25,28 @@ async function openChrome(executable, url) {
 
 export async function launchGame({ port = 8767, open = async () => {} } = {}) {
   const server = createServer();
-  const occupied = () => new Error(`Port ${port} is in use by another server. Stop it, then launch again.`);
-  const existingGame = async () => {
-    let response;
-    try {
-      response = await fetch(`http://127.0.0.1:${port}/src/game.js`, { signal: AbortSignal.timeout(2500) });
-    } catch (error) {
-      if (error.cause?.code === 'ECONNREFUSED') return false;
-      throw occupied();
-    }
-    const local = await fs.readFile(path.join(ROOT, 'src', 'game.js'), 'utf8');
-    if (!response.ok || await response.text() !== local) throw occupied();
-    if (response.headers.get('x-frogue-bind') !== '0.0.0.0')
-      throw new Error(`The game on port ${port} is an older or local-only preview. Stop its server terminal (Ctrl+C), then double-click Launch Game.cmd again to enable LAN play.`);
-    return true;
-  };
+  const occupied = () => new Error(`Port ${port} is already in use. Close the existing server window, then launch again. This window must own the server so closing it stops hosting.`);
   // Windows may allow a wildcard listener alongside a loopback listener.
-  // Check first, rather than relying on EADDRINUSE to protect the local URL.
-  let reused = port > 0 ? await existingGame() : false;
-  if (!reused) {
-    try {
-      await new Promise((resolve, reject) => {
-        server.once('error', reject);
-        server.listen(port, '0.0.0.0', resolve);
-      });
-    } catch (error) {
-      if (error.code !== 'EADDRINUSE') throw error;
-      if (!await existingGame()) throw occupied();
-      reused = true;
-    }
+  // Refuse every occupied local port, including matching/older game servers.
+  if (port > 0 && await new Promise(resolve => {
+    const socket = connect({host:'127.0.0.1',port});
+    const done = occupied => { socket.destroy(); resolve(occupied); };
+    socket.once('connect',()=>done(true));
+    socket.once('error',error=>done(error.code!=='ECONNREFUSED'));
+    socket.setTimeout(1500,()=>done(true));
+  })) throw occupied();
+  try {
+    await new Promise((resolve,reject)=>{
+      server.once('error',reject);server.listen(port,'0.0.0.0',resolve);
+    });
+  } catch(error) {
+    if(error.code==='EADDRINUSE')throw occupied();
+    throw error;
   }
-  const url = `http://127.0.0.1:${reused ? port : server.address().port}`;
+  const url = `http://127.0.0.1:${server.address().port}`;
   try { await open(url); }
-  catch (error) { if (!reused) await new Promise(resolve => server.close(resolve)); throw error; }
-  return { url, lanUrls: lanUrls(reused ? port : server.address().port), reused, server: reused ? null : server };
+  catch (error) { await new Promise(resolve => server.close(resolve)); throw error; }
+  return { url, lanUrls: lanUrls(server.address().port), server };
 }
 
 export function lanUrls(port, interfaces = networkInterfaces()) {
@@ -71,12 +60,16 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     // --no-browser supports a launch check without opening a user tab.
     const chrome = process.argv.includes('--no-browser') ? null : await findChrome();
-    const result = await launchGame({ open: chrome ? url => openChrome(chrome, url) : undefined });
+    const portIndex=process.argv.indexOf('--port');
+    const port=portIndex<0?8767:Number(process.argv[portIndex+1]);
+    if(!Number.isInteger(port)||port<0||port>65535)throw new Error('Use --port 0..65535');
+    const result = await launchGame({port, open: chrome ? url => openChrome(chrome, url) : undefined });
     console.log(`Frogue Gallery: ${result.url}`);
-    console.log('Listening on all IPv4 interfaces (0.0.0.0:8767).');
+    console.log(`Listening on all IPv4 interfaces (0.0.0.0:${result.server.address().port}).`);
     for (const url of result.lanUrls) console.log(`LAN players: ${url}`);
     if (!result.lanUrls.length) console.log('No LAN IPv4 address found. Connect this computer to your network, then launch again.');
-    console.log(result.reused ? 'Using the LAN game server already running.' : 'Keep this window open while playing. Ctrl+C stops the game server.');
-    if (result.server) process.once('SIGINT', () => result.server.close(() => process.exit(0)));
+    console.log('This window is the game server. Closing it or pressing Ctrl+C stops hosting.');
+    const stop=()=>{result.server.close(()=>process.exit(0));result.server.closeAllConnections();};
+    process.once('SIGINT',stop);process.once('SIGTERM',stop);
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

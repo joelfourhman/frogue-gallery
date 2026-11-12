@@ -1,4 +1,25 @@
-# Project state — Captured mouse aiming and LAN launcher (2026-11-12)
+# Project state — Foreground launcher owns hosting (2026-11-12)
+
+Owner clarified: closing Launch Game.cmd must end the server, with no hidden
+server reuse. Removed all reuse paths; every successful launch owns the listener
+in its foreground console. Existing ports are refused without opening Chrome or
+stopping other processes. The wrapper invokes Node synchronously; only Chrome
+is detached. Closing the CMD console or Ctrl+C stops hosting.
+
+Stopped the verified background launcher PID 22404 that the previous pass left
+running. No persistent server remains. Double-click Launch Game.cmd to host;
+friend's current Ethernet URL is http://192.168.50.115:8767 while it is open.
+Binding remains 0.0.0.0 and the local browser save origin remains unchanged.
+
+Verification: all 15 standard required gates passed (smoke, retained pacing,
+campaign, balance, UI/audio, package/launcher). Launcher tests verify no reuse
+even for matching games, occupied-port refusal, LAN HTTP, ready-before-Chrome,
+and a real child-process exit releasing its listener. A separate actual Windows
+CMD console-close test served HTTP on port 18767, sent WM_CLOSE to that console,
+and confirmed the port closed. No game runtime changes; browser journeys were
+not repeated for this launcher-only correction.
+
+# Previous checkpoint — Captured mouse aiming and LAN launcher (2026-11-12)
 
 Owner reported the mouse leaving the game and explicitly requested all-interface
 LAN hosting, superseding the old launcher loopback-only boundary.

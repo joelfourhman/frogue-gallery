@@ -19,6 +19,7 @@ try {
         }
     }
     if (-not $nodePath) { throw 'Node.js was not found. Install Node.js or run this launcher from the Codex terminal.' }
+    # Synchronous child shares this console. Closing the console ends hosting.
     & $nodePath (Join-Path $PSScriptRoot 'play.mjs') @args
     exit $LASTEXITCODE
 } catch {

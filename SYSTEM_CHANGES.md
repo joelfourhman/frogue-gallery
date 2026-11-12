@@ -1,5 +1,17 @@
 # Environment and tool changes
 
+## Foreground launcher ownership — 2026-11-12
+
+Stopped the verified background scripts/play.mjs process PID 22404 at the
+owner's request. No persistent server remains. Launcher stays synchronous in
+its CMD/PowerShell console and refuses any occupied port rather than reusing
+another process. No firewall, package or machine-setting changes.
+
+Verified actual Launch Game.cmd on temporary port 18767: served HTTP, sent
+WM_CLOSE to its isolated console, then confirmed the listener disappeared.
+The test console/server were closed. Evidence: .cache/console-close-test.log.
+Confirmed physical Ethernet address 192.168.50.115; normal port remains 8767.
+
 ## Captured aim and LAN launcher — 2026-11-12
 
 Owner explicitly authorized all-interface hosting. No packages or firewall
