@@ -37,3 +37,4 @@ try {
   assert.equal((await fetch(base + '/', { method: 'POST' })).status, 405);
   console.log(`PACKAGE CHECKS PASSED: ${manifest.files.length} runtime files, reproducible ZIP, static server allowlist.`);
 } finally { await new Promise(resolve => server.close(resolve)); }
+await import('./launcher.mjs');

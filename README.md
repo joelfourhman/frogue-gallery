@@ -10,6 +10,12 @@ The compatibility identifiers remain game 1.0.0 / save schema 12.
 
 ## Play locally
 
+On Windows, double-click **Launch Game.cmd** in this folder. It starts the
+local server and opens Google Chrome at http://127.0.0.1:8767, reusing the
+existing preview if available. Keep the launcher window open when it starts
+a new server; Ctrl+C stops that server. It finds installed Node or Codex's
+bundled Node automatically. Chrome must be installed.
+
 With Node.js 22 or newer installed, run from this directory:
 
 ```sh

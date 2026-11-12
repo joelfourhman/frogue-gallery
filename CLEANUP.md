@@ -2,6 +2,10 @@
 
 ## Stop development servers
 
+`Launch Game.cmd` keeps a newly started server in its console: Ctrl+C stops it.
+If it reports that it reused an existing server, that server remains owned by
+its original terminal/process; the launcher does not stop unrelated processes.
+
 Press Ctrl+C in the terminal running `node scripts/dev.mjs` (or the older
 Python server). Stop only the server process belonging to this project.
 Do not kill every Node/Python process on the machine.

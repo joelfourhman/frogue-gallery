@@ -1,4 +1,17 @@
-# Project state — Twenty delights (2026-11-11)
+# Project state — Double-click Chrome launcher (2026-11-11)
+
+Added root `Launch Game.cmd`, backed by scripts/launch.ps1 and play.mjs.
+Finds installed or Codex-bundled Node and Chrome; starts the loopback server
+before opening Chrome at the existing save origin, 127.0.0.1:8767. Reuses a
+matching preview, rejects unrelated occupied ports, and keeps a newly started
+server in the launcher console with Ctrl+C shutdown. No game tuning changed.
+
+Launcher regression assertions run with the package gate: ready-before-open,
+loopback-only, matching-server reuse, unrelated-server refusal and missing
+Chrome diagnostics. The actual CMD/PowerShell wrapper also passed with Node
+removed from PATH, verifying the Explorer/Codex runtime fallback.
+
+# Previous checkpoint — Twenty delights (2026-11-11)
 
 Owner asked for 20 improvement ideas and their implementation. All 20 are
 mapped to shipped behavior in docs/ROADMAP.md, Milestone 4. Three agents owned

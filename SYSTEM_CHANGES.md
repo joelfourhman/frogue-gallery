@@ -1,5 +1,14 @@
 # Environment and tool changes
 
+## Double-click launcher — 2026-11-11
+
+Added project-local CMD, PowerShell and Node launcher scripts; no installation
+or machine setting change. PowerShell's execution-policy bypass applies only
+to the launched process. Tested the wrapper with a minimal PATH and reused the
+existing preview; no additional persistent server was left running. Launcher
+tests own and close temporary loopback servers. Chrome and the Codex-bundled
+Node already exist on this machine.
+
 ## Twenty delights — 2026-11-11
 
 No environment, dependency or service changes. Existing Node/Chromium tooling
