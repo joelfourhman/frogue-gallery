@@ -1,4 +1,22 @@
-# Project state — Foreground launcher owns hosting (2026-11-12)
+# Project state — Internet deployment runbook (2026-11-12)
+
+Owner requested an executable deployment plan, including costs and security.
+Added root deployment.md recommending Cloudflare Pages Free Direct Upload with
+a $0 hosting default, optional separately approved domain, and no home-network
+exposure. Current provider documentation is linked alongside pricing and limits.
+
+The runbook specifies future CSP/bootstrap/artifact hardening, reproducible
+release commands, account authentication, public preview and production checks,
+origin-specific save transfer, update and rollback procedures, and an execution
+record. Those hardening changes are planned, not implemented. No hosting account,
+DNS, credentials, paid service or public deployment was changed. Await the owner's
+instruction to execute the plan before publishing.
+
+Verification: all 15 standard required gates passed; deployment PowerShell
+examples parse without execution. Documentation-only change, so browser journeys
+were not repeated. Runtime, balance and local/LAN hosting behavior are unchanged.
+
+# Previous checkpoint — Foreground launcher owns hosting (2026-11-12)
 
 Owner clarified: closing Launch Game.cmd must end the server, with no hidden
 server reuse. Removed all reuse paths; every successful launch owns the listener
