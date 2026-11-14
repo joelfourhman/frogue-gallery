@@ -11,7 +11,13 @@ combat, charge timing and gameplay pigment coverage retain their existing rules.
 All 20 gates passed in Chrome, including smoke, pacing, source/dist browser
 journeys, 36 frames and performance. The paint scenes now use actual attacks
 and sample ground coverage after the swipe or splash. Centered frames are in
-tests/.out/brush-redesign/. Publish after verifying the Cloudflare branch preview.
+tests/.out/brush-redesign/. Runtime commit 358ef10 passed the Cloudflare branch
+preview and is live on https://frogue-gallery.pages.dev with hosted Chrome checks
+passing. Both Pages and https://frogue.gallery serve the verified 26 game assets.
+The custom domain now resolves and serves valid HTTPS, but sets a four-hour
+browser cache on scripts and the hosted probe observed a script policy violation.
+Use the verified Pages address while those custom-domain differences remain.
+Frozen release: .cache/releases/358ef10db0be044d0ca14d95eb019f2fb1e5a655/.
 
 # Previous checkpoint — Green hit healing fix (2026-11-14)
 

@@ -3,8 +3,9 @@
 Owner authorized publication on **2026-11-14**, then selected a **public GitHub
 repository with Cloudflare hosting**. This supersedes the earlier Direct Upload
 plan (preserved in Git history). The game is live at https://frogue-gallery.pages.dev.
-Owner subsequently purchased frogue.gallery and authorized connecting it. Its
-DNS and HTTPS activation are pending; paid hosting has not been enabled.
+Owner subsequently purchased frogue.gallery and authorized connecting it. Public
+DNS and HTTPS are active. Use the Pages link for fully verified releases while
+the custom domain's cache and script policy differences remain.
 
 ## Architecture and cost
 
@@ -31,7 +32,7 @@ Saves remain browser-local and origin-specific; this is single-player.
 | Output directory | `dist/frogue-gallery` |
 | Node | 22 or newer; record actual provider version |
 | Git deployments | main publishes production; other enabled branches produce public previews |
-| Domain | frogue.gallery (activating); pages.dev remains available |
+| Domain | frogue.gallery active; pages.dev is the verified release address |
 
 The build command runs the full smoke suite before building; failure blocks
 deployment. Full pacing/browser gates run locally before pushing a release.
