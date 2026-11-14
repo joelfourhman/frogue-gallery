@@ -2,7 +2,9 @@
 
 Owner authorized publication on **2026-11-14**, then selected a **public GitHub
 repository with Cloudflare hosting**. This supersedes the earlier Direct Upload
-plan (preserved in Git history). No paid services or custom domain.
+plan (preserved in Git history). The game is live at https://frogue-gallery.pages.dev.
+Owner subsequently requested frogue.gallery; availability/pricing is being checked.
+No domain has been purchased and no paid service enabled.
 
 ## Architecture and cost
 
@@ -120,14 +122,18 @@ tested migration is approved.
 | Authorization | 2026-11-14: execute plan; public GitHub + Cloudflare selected |
 | Repository | https://github.com/joelfourhman/frogue-gallery |
 | Cloudflare account | Owner's signed-in personal account |
-| Plan / spending | Free intended; no paid purchase authorized |
-| Canonical URL / deployment ID | Pending build and verification |
-| Release commit / ZIP SHA-256 | Pending final gates |
+| Plan / spending | Account UI confirms Free ($0); no paid purchase |
+| Canonical URL | https://frogue-gallery.pages.dev |
+| First successful production | 2a41a360-1607-41b4-9678-0e67f77fc76e, 2026-11-14 |
+| Runtime release commit | 6ecff4b33b5ae8eebccadebbe636158cd0b6cdf5 |
+| ZIP SHA-256 | 4cbbeeb2512b916748dd4e9e15acb9846cb955c00dc5f1d36c24deead7878848 |
 | Local Node | 24.22.1; Wrangler not used (Git integration) |
-| Browser checks | Local Chrome 157.0.8103.52 and Edge 157.0.4341.46 public-mode probes passed |
+| Browser checks | Local and live Chrome 157.0.8103.52 / Edge 157.0.4341.46 probes passed |
 | Local gates | All 20 passed; .cache/checks/report.json |
-| Backup | Frozen release pending; GitHub source after push |
-| Rollback target | None before first production |
-| Hosted headers / save / PNG / capture | Pending deployment |
-| External-network check | Pending deployment |
+| Backup | .cache/releases/6ecff4b33b5ae8eebccadebbe636158cd0b6cdf5/; full source/history on GitHub |
+| Rollback target for subsequent releases | Initial production 2a41a360-1607-41b4-9678-0e67f77fc76e |
+| Hosted headers / save / PNG / capture | Passed in Chrome and Edge; 26 served asset hashes match frozen release |
+| External-network check | Owner replied "lgtm" to external/cellular load request |
+| Secret-pattern review | 1,149 historical Git blobs scanned; no common credential matches |
+| Custom domain | Owner requests frogue.gallery; not owned; pricing check in progress |
 | Limits | Firefox unavailable locally; mobile/touch not tested; no cloud saves |

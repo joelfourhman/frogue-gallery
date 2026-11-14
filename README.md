@@ -11,6 +11,7 @@ The compatibility identifiers remain game 1.0.0 / save schema 12.
 
 ## Play locally
 
+Play online: **[Frogue Gallery](https://frogue-gallery.pages.dev)**.
 Public source: [joelfourhman/frogue-gallery](https://github.com/joelfourhman/frogue-gallery).
 Cloudflare hosting setup and release procedures are in [deployment.md](deployment.md).
 

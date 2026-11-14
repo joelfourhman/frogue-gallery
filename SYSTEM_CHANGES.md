@@ -7,7 +7,11 @@ Owner signed into Cloudflare and authorized its GitHub integration. Reused
 installed Git Credential Manager, Node 24.22.1, playwright-core, Chrome and Edge.
 No npm/Wrangler installation, game dependencies, firewall or LAN server changes.
 Release probes own/close their isolated browsers and free-port loopback servers.
-Cloudflare publication remains pending the prepared release push/configuration.
+Pushed main with history. Cloudflare Pages project frogue-gallery is live at
+https://frogue-gallery.pages.dev, with main automatic deployments, build command
+node scripts/cloudflare-build.mjs and output dist/frogue-gallery. Account plan
+verified Free ($0). Owner granted Cloudflare access only to frogue-gallery.
+No domain purchased yet; owner subsequently requested frogue.gallery pricing.
 
 ## Foreground launcher ownership — 2026-11-12
 

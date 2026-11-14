@@ -1,4 +1,27 @@
-# Project state — GitHub / Cloudflare release prepared (2026-11-14)
+# Project state — Live on GitHub and Cloudflare (2026-11-14)
+
+Live: https://frogue-gallery.pages.dev . Public source and full history:
+https://github.com/joelfourhman/frogue-gallery . Runtime release is
+6ecff4b33b5ae8eebccadebbe636158cd0b6cdf5; initial successful production deployment
+2a41a360-1607-41b4-9678-0e67f77fc76e. Main auto-deploys through the Node smoke/build
+command, publishing dist/frogue-gallery. Cloudflare's account UI confirms Free
+($0); no Functions, paid services, domain or network changes were added.
+
+All 26 served assets match the frozen manifest; _headers is verified as response
+policy. Production Chrome 157.0.8103.52 and Edge 157.0.4341.46 pass hosted UI,
+HTTPS/redirect, MIME/CSP/privacy/cache headers, restricted-path 404s, native
+clipboard save transfer, audio, capture/fallback, PNG and persistence checks.
+The owner responded "lgtm" to the requested external/cellular load check.
+No third-party runtime requests or data uploads were observed. Frozen release:
+.cache/releases/6ecff4b33b5ae8eebccadebbe636158cd0b6cdf5/; ZIP SHA-256
+4cbbeeb2512b916748dd4e9e15acb9846cb955c00dc5f1d36c24deead7878848.
+Scanned 1,149 historical Git blobs for common credential patterns: no matches.
+
+Owner now requests frogue.gallery and confirms it is not yet owned. Checking
+availability and registration/renewal price; purchase is not authorized at a
+quoted amount yet. Existing pages.dev game remains live during this setup.
+
+# Release preparation (2026-11-14)
 
 Owner authorized execution, then selected public GitHub source and Cloudflare
 hosting. Created joelfourhman/frogue-gallery; origin points to that repository.
