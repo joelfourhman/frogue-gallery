@@ -117,6 +117,17 @@ tested migration is approved.
 
 ## Execution record
 
+Latest runtime release (2026-11-14): green hit-healing fix
+72c29a3cb53e513b43533cf5cd6aa9f4f92c0b2b. All 20 local gates and postcommit smoke
+passed. Preview f9bed17c-9b3e-4ef0-971b-1a4a38810b4d passed Chrome hosted checks
+and asset hashes before merging to main. Production
+fedd792d-4e50-4170-a82c-14bb95ced027 passes Chrome 157 / Edge 157 hosted probes;
+all 26 served assets match the frozen release under .cache/releases/72c29a3cb53e513b43533cf5cd6aa9f4f92c0b2b/.
+ZIP SHA-256: e99454e306345c5f1c4a55bfa139d7182a7796cb87a4d1ddc88e55a093ede2a5.
+Cloudflare reports frogue.gallery Active; local DNS still returns ENOENT, so
+custom-domain browser verification is pending. The following table records the
+initial launch and its recovery target.
+
 | Item | Result |
 | --- | --- |
 | Authorization | 2026-11-14: execute plan; public GitHub + Cloudflare selected |

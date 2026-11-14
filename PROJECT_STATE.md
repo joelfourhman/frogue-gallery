@@ -17,7 +17,17 @@ Balance telemetry is byte-identical to the before-fix report, with no flags.
 All 20 release gates pass in installed Chrome 157, including source/dist browser
 journeys, public-mode checks, 36 frames and performance. The bundled browser's
 first attempt timed out on mouse recapture; installed Chrome passes that check.
-Next: verify Cloudflare branch preview, merge to main, verify production.
+Published runtime commit 72c29a3cb53e513b43533cf5cd6aa9f4f92c0b2b after verifying
+preview f9bed17c-9b3e-4ef0-971b-1a4a38810b4d. Main production deployment:
+fedd792d-4e50-4170-a82c-14bb95ced027. Chrome 157 and Edge 157 hosted probes pass
+on https://frogue-gallery.pages.dev; all 26 served hashes match the frozen
+.cache/releases/72c29a3cb53e513b43533cf5cd6aa9f4f92c0b2b/ artifact. ZIP SHA-256:
+e99454e306345c5f1c4a55bfa139d7182a7796cb87a4d1ddc88e55a093ede2a5.
+Cloudflare now marks frogue.gallery Active, but this machine's resolver still
+returns ENOENT, so custom-domain browser verification remains pending. No local
+DNS settings were changed. The pages.dev production URL is fully verified.
+Next: owner playtest of green recovery; complete custom-domain verification when
+local DNS resolves, then update the canonical link.
 
 # Deployment checkpoint — Live on GitHub and Cloudflare (2026-11-14)
 
