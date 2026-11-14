@@ -17,9 +17,16 @@ No third-party runtime requests or data uploads were observed. Frozen release:
 4cbbeeb2512b916748dd4e9e15acb9846cb955c00dc5f1d36c24deead7878848.
 Scanned 1,149 historical Git blobs for common credential patterns: no matches.
 
-Owner now requests frogue.gallery and confirms it is not yet owned. Checking
-availability and registration/renewal price; purchase is not authorized at a
-quoted amount yet. Existing pages.dev game remains live during this setup.
+Owner requests frogue.gallery and approved preparing one-year registration at
+$22.20 plus checkout tax (renewal currently $22.20/year). Cloudflare reports it
+available; checkout is prepared with auto-renew OFF. Owner must finish contact,
+payment and agreement acceptance. Privacy comparison supplied: Cloudflare free
+redaction hides name/email/street address but leaves state/country; GoDaddy's
+eligible-domain proxy privacy can hide those too. No purchase confirmed yet.
+Next: verify registration, associate frogue.gallery in Pages Custom domains,
+activate its DNS, wait for certificate, test live headers/assets/UI at the domain.
+The pages.dev game remains live. Documentation push 1599d74 auto-deployed as
+85bce632-2bf8-42e6-beeb-4f20e36407ad with matching runtime asset hashes.
 
 # Release preparation (2026-11-14)
 

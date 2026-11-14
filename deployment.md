@@ -135,5 +135,18 @@ tested migration is approved.
 | Hosted headers / save / PNG / capture | Passed in Chrome and Edge; 26 served asset hashes match frozen release |
 | External-network check | Owner replied "lgtm" to external/cellular load request |
 | Secret-pattern review | 1,149 historical Git blobs scanned; no common credential matches |
-| Custom domain | Owner requests frogue.gallery; not owned; pricing check in progress |
+| Custom domain | frogue.gallery available; owner approved one year at $22.20 + tax; renewal quote $22.20/year. Checkout prepared, auto-renew off; owner purchase pending |
+
+Cloudflare's free WHOIS redaction hides name/email/street address but retains
+state/province and country. GoDaddy includes proxy privacy for eligible domains,
+with all contact info hidden in its On setting. Both still collect real registrant
+details privately. Owner asked about this difference before completing payment.
+[Cloudflare redaction](https://developers.cloudflare.com/registrar/account-options/whois-redaction/),
+[GoDaddy privacy](https://www.godaddy.com/help/what-is-domain-privacy-41145).
+
+After registration, add frogue.gallery in Pages → Custom domains and confirm the
+proposed CNAME to frogue-gallery.pages.dev. Do not overwrite unrelated records.
+Wait for domain/certificate Active, then run the hosted UI and hash verification
+on https://frogue.gallery. Leave pages.dev available for origin-specific save
+exports. Update the canonical URL only after successful verification.
 | Limits | Firefox unavailable locally; mobile/touch not tested; no cloud saves |
