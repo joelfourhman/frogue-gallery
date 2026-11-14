@@ -5434,7 +5434,7 @@ export class Game {
     const pig = [
       ['1', PIGMENTS.red.color, 'Red — burn', 'Burn bugs. In the clearing, blue then red makes the red hit stronger.'],
       ['2', PIGMENTS.blue.color, 'Blue — stop', 'Stop flying bugs and slow ground bugs. Use it to interrupt a charge.'],
-      ['3', PIGMENTS.green.color, 'Green — heal', 'Hold ground bugs in place. Stand in fresh green paint to heal.'],
+      ['3', PIGMENTS.green.color, 'Green — heal', 'Hit enemies to heal with light damage. Moss roots ground bugs.'],
     ];
     pig.forEach((r, i) => {
       const y = y0 + 34 + i * 58;

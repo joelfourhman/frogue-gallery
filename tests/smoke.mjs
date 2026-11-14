@@ -6263,5 +6263,7 @@ const { testPointerCapture } = await import('./pointer-capture.mjs');
 console.log(await testPointerCapture());
 console.log('== stage 136: deployment bootstrap and public debug boundary ==');
 await import('./deployment.mjs');
+console.log('== stage 137: green hits restore health with light damage ==');
+await import('./green-healing.mjs');
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

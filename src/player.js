@@ -2,7 +2,7 @@
 'use strict';
 import { TAU, clamp, lerp, dist, traceBlob, wobble } from './math.js';
 import { INK, sat } from './ui.js';
-import { PIGMENTS, MOVEMENT, movementVelocity, hopLift, inGravityPocket, floodedWaterFactor, REEDS_POCKETS, REEDS_FLOOD_FLOOR, crossingSpeedFactor, inCrossingZone } from './logic.js';
+import { PIGMENTS, MOVEMENT, movementVelocity, hopLift, inGravityPocket, floodedWaterFactor, REEDS_POCKETS, REEDS_FLOOD_FLOOR, crossingSpeedFactor, inCrossingZone, restoreHealth } from './logic.js';
 
 export class Player {
   constructor(x, y, tuning) {
@@ -177,9 +177,13 @@ export class Player {
 
     // fresh-paint residual: standing in green paint heals slowly.
     const cell = world.pigmentAt(this.x, this.y);
-    if (cell.green > 0.4 && this.hp < this.maxHp) this._healAcc = (this._healAcc || 0) + dt * (tuning.greenHeal);
-    else this._healAcc = (this._healAcc || 0) - dt * 2;
-    if (this._healAcc >= 1) { this._healAcc = 0; this.hp = Math.min(this.maxHp, this.hp + 1); }
+    this._healAcc = Math.max(0, this._healAcc || 0);
+    if (this.alive && this.hp < this.maxHp && cell.green > 0.4) {
+      this._healAcc += dt * tuning.greenHeal;
+      const whole = Math.floor(this._healAcc);
+      if (whole > 0) { restoreHealth(this, whole); this._healAcc -= whole; }
+    } else this._healAcc = Math.max(0, this._healAcc - dt * 2);
+    if (!this.alive || this.hp >= this.maxHp) this._healAcc = 0;
     return this;
   }
 

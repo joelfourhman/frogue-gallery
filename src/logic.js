@@ -718,6 +718,14 @@ export function physicalDamage(base, enemy, tuning, dmgReduce) {
   return Math.max(1, Math.round(d));
 }
 
+// Returns the health actually restored; dead frogs cannot be revived by paint.
+export function restoreHealth(player, amount) {
+  if (player.alive === false || player.hp <= 0 || amount <= 0) return 0;
+  const restored = Math.max(0, Math.min(amount, player.maxHp - player.hp));
+  player.hp += restored;
+  return restored;
+}
+
 // Paint damage: base * pigment * power * painting bonus * status bonus, armor applied
 // unless the pigment ignores it (burn/DoT bypass; direct paint partially bypasses).
 export function paintDamage(base, pigmentId, tuning, opts = {}) {
@@ -835,10 +843,9 @@ export function makeTuning(upgrades = {}, loadout = [], difficulty = 'normal') {
     // P4: green mends 3 HP per paint — meaningful early, still slow to
     // refill a full pool (keeps the heron fight from being a free medkit).
     greenHeal: 3,
-    // v1.4 color rework (Joel): painting an enemy with green also heals the
-    // frog a little (1 hp per ~2 green hits) — green = minimal damage + heal,
-    // not just "stand in green paint."
-    greenHealOnPaint: 0.5,
+    // A landed green action heals immediately, once even when it hits a crowd.
+    // Keep hit healing independent of the ground-paint accumulator.
+    greenHealOnPaint: 1,
     // economy
     pickupValue: 1,
     pickupMagnet: 70,

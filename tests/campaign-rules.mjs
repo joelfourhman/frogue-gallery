@@ -19,7 +19,7 @@ const paint = new Paint(player, world, tuning, () => {}, particles);
 player._healAcc = 0;
 const enemy = new Enemy('beetle', 30, 0, tuning);
 paint._applyHits([enemy], 'green', 'swipe');
-assert.equal(player._healAcc, tuning.greenHealOnPaint, 'green direct paint heals despite an obsolete plume field');
+assert.equal(player.hp, 6 + tuning.greenHealOnPaint, 'green direct paint heals immediately despite an obsolete plume field');
 
 const boss = pinned => ({ hp: 1000, maxHp: 1000, pinned, awakened: false,
   hue: { red: 0, blue: 0, green: 0 }, awakenedT: 0 });

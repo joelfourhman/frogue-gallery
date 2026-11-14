@@ -3,7 +3,7 @@
 // world paint layer and applies pigment damage + statuses to anything it touches.
 'use strict';
 import { TAU, clamp, dist, dist2 } from './math.js';
-import { PIGMENTS, brushHitsCircle, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus, REEDS_FLOOD_FLOOR, mothPaint, clearingCombo } from './logic.js';
+import { PIGMENTS, brushHitsCircle, paintDamage, paintStatusFor, stepStatus, paintBoss, frontDeflectFactor, cragSleepBonus, REEDS_FLOOD_FLOOR, mothPaint, clearingCombo, restoreHealth } from './logic.js';
 import { UI, uiFont } from './ui.js';
 
 // S1 (v1.9): the creatures with a DEDICATED per-creature hit sting (the 6
@@ -27,6 +27,7 @@ export class Paint {
     this.particles = particles;
     this.swipeCd = 0;
     this.splashCd = 0;
+    this._actionHealed = false;
     this.trails = [];   // transient stroke ribbons (visual only)
     this.hitNotes = []; // floating status notes ("burning", "frozen", ...)
     // J1 (v1.4): short-lived "wet" residue marks left on surfaces. Draw-only
@@ -268,6 +269,7 @@ export class Paint {
   trySwipe(enemies) {
     const p = this.player;
     if (p.swipeT > 0 || this.swipeCd > 0) return null;
+    this._actionHealed = false;
     const pig = p.pigment;
     this.swipeCd = this.tuning.swipeCooldown;
     p.swipeT = 0.14;
@@ -343,6 +345,7 @@ export class Paint {
   trySplash(enemies) {
     const p = this.player;
     if (this.splashCd > 0 || p.splashCharge < 1) return null;
+    this._actionHealed = false;
     this.splashCd = this.tuning.splashCooldown;
     p.splashCharge = 0;
     const R = this.tuning.splashRadius;
@@ -488,15 +491,15 @@ export class Paint {
       this.particles.splatter(e.x, e.y, PIGMENTS[pig].color, 6, 160);
       if (e.hp <= 0 && !e.dead) e.onDeath && e.onDeath();
     }
-    // v1.4 color rework (Joel): painting enemies with GREEN heals the frog a
-    // little — the heal is per ACTION (not per enemy) so a big green splash
-    // is not a free medkit. The float is drained by player.update.
-    if (pig === 'green' && hits.length && p.hp < p.maxHp) {
-      p._healAcc = (p._healAcc || 0) + (this.tuning.greenHealOnPaint || 0.5);
+    if (hits.length) this._healOnHit(pig);
+  }
+
+  _healOnHit(pig) {
+    if (pig !== 'green' || this._actionHealed) return;
+    this._actionHealed = true;
+    const p = this.player;
+    if (restoreHealth(p, this.tuning.greenHealOnPaint ?? 1) > 0) {
       this.note(p.x, p.y - p.r - 14, 'heal', 'green', p);
-      // S1 (v1.9): the heal chime — fires the instant a green stroke actually
-      // lands a heal.
-      // Presentation-only (sfx-bus; no-op in headless smoke).
       this.sfx('heal');
     }
   }
@@ -511,6 +514,7 @@ export class Paint {
     if (res) this._restoreAcc = (this._restoreAcc || 0) + 0.012;
     this.particles.splatter(heron.x, heron.y - (heron.diveH || 0), PIGMENTS[pig].color, 5, 140);
     if (res && pig !== 'dry') {
+      this._healOnHit(pig);
       // J3 (v1.9): remember the last pigment that painted the boss so its KILL
       // ink-burst dissolves into the palette it was painted with (the world
       // remembers). Draw-only field; never read by logic/save/pacing.

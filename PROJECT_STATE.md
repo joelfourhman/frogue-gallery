@@ -1,4 +1,25 @@
-# Project state — Live on GitHub and Cloudflare (2026-11-14)
+# Project state — Green hit healing fix (2026-11-14)
+
+Owner reported that green attacks did not restore health. Hit healing shared a
+ground-paint accumulator that decayed below zero while off moss, creating an
+unbounded healing deficit and showing heal feedback without changing HP.
+Green now restores 1 HP immediately per landed swipe/splash (previously 0.5
+credit subject to decay), including guardian hits. A crowd or minion + guardian
+in one action heals once; misses and full/dead players do not produce heal
+feedback. Kind moss retains its 35% bonus. Ground healing stays 3 HP/s with a
+nonnegative accumulator and retained fractional remainder.
+
+Damage remains the existing low green damage: base unarmored swipe 4 vs red 11,
+splash 36 vs red 96; root and combat pacing are unchanged. The field guide now
+states hit healing. Smoke stage 137 reproduces the long-walk failure and checks
+hits, misses, crowds, bosses, caps, gifts, ground recovery and no resurrection.
+Balance telemetry is byte-identical to the before-fix report, with no flags.
+All 20 release gates pass in installed Chrome 157, including source/dist browser
+journeys, public-mode checks, 36 frames and performance. The bundled browser's
+first attempt timed out on mouse recapture; installed Chrome passes that check.
+Next: verify Cloudflare branch preview, merge to main, verify production.
+
+# Deployment checkpoint — Live on GitHub and Cloudflare (2026-11-14)
 
 Live: https://frogue-gallery.pages.dev . Public source and full history:
 https://github.com/joelfourhman/frogue-gallery . Runtime release is
