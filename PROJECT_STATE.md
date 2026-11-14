@@ -5,7 +5,8 @@ https://github.com/joelfourhman/frogue-gallery . Runtime release is
 6ecff4b33b5ae8eebccadebbe636158cd0b6cdf5; initial successful production deployment
 2a41a360-1607-41b4-9678-0e67f77fc76e. Main auto-deploys through the Node smoke/build
 command, publishing dist/frogue-gallery. Cloudflare's account UI confirms Free
-($0); no Functions, paid services, domain or network changes were added.
+($0); no Functions or paid hosting services were added. Domain registration is
+separately paid as recorded below; local network settings are unchanged.
 
 All 26 served assets match the frozen manifest; _headers is verified as response
 policy. Production Chrome 157.0.8103.52 and Edge 157.0.4341.46 pass hosted UI,
@@ -17,14 +18,15 @@ No third-party runtime requests or data uploads were observed. Frozen release:
 4cbbeeb2512b916748dd4e9e15acb9846cb955c00dc5f1d36c24deead7878848.
 Scanned 1,149 historical Git blobs for common credential patterns: no matches.
 
-Owner requests frogue.gallery and approved preparing one-year registration at
-$22.20 plus checkout tax (renewal currently $22.20/year). Cloudflare reports it
-available; checkout is prepared with auto-renew OFF. Owner must finish contact,
-payment and agreement acceptance. Privacy comparison supplied: Cloudflare free
-redaction hides name/email/street address but leaves state/country; GoDaddy's
-eligible-domain proxy privacy can hide those too. No purchase confirmed yet.
-Next: verify registration, associate frogue.gallery in Pages Custom domains,
-activate its DNS, wait for certificate, test live headers/assets/UI at the domain.
+Owner purchased frogue.gallery after approving one year at $22.20 plus checkout
+tax. Registration is Active through 2027-11-14. Saved auto-renew is ON, scheduled
+for 2027-10-15 at the current $22.20/year price; preserved the owner's final
+checkout setting. Cloudflare free redaction hides name/email/street address but
+leaves state/country. Added Pages custom domain and proxied apex CNAME targeting
+frogue-gallery.pages.dev, TTL Auto. Cloudflare authoritative DNS answers correctly;
+public DNS and certificate verification are still pending.
+Next: wait for domain/certificate Active, test live headers/assets/UI and hashes,
+then update the canonical URL to https://frogue.gallery.
 The pages.dev game remains live. Documentation push 1599d74 auto-deployed as
 85bce632-2bf8-42e6-beeb-4f20e36407ad with matching runtime asset hashes.
 

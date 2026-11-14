@@ -11,7 +11,13 @@ Pushed main with history. Cloudflare Pages project frogue-gallery is live at
 https://frogue-gallery.pages.dev, with main automatic deployments, build command
 node scripts/cloudflare-build.mjs and output dist/frogue-gallery. Account plan
 verified Free ($0). Owner granted Cloudflare access only to frogue-gallery.
-No domain purchased yet; owner subsequently requested frogue.gallery pricing.
+Owner purchased frogue.gallery through Cloudflare on 2026-11-14 after approving
+one year at $22.20 plus checkout tax. Registration is Active through 2027-11-14.
+The saved registration has auto-renew ON, scheduled for 2027-10-15 at the current
+$22.20/year price; preserved the owner's checkout setting. Added the domain to
+Pages and its proposed proxied apex CNAME to frogue-gallery.pages.dev (TTL Auto).
+Cloudflare authoritative nameservers answer; public DNS/certificate verification
+is pending. No local DNS, router or firewall settings changed.
 
 ## Foreground launcher ownership — 2026-11-12
 

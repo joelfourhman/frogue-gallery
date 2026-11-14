@@ -3,8 +3,8 @@
 Owner authorized publication on **2026-11-14**, then selected a **public GitHub
 repository with Cloudflare hosting**. This supersedes the earlier Direct Upload
 plan (preserved in Git history). The game is live at https://frogue-gallery.pages.dev.
-Owner subsequently requested frogue.gallery; availability/pricing is being checked.
-No domain has been purchased and no paid service enabled.
+Owner subsequently purchased frogue.gallery and authorized connecting it. Its
+DNS and HTTPS activation are pending; paid hosting has not been enabled.
 
 ## Architecture and cost
 
@@ -31,7 +31,7 @@ Saves remain browser-local and origin-specific; this is single-player.
 | Output directory | `dist/frogue-gallery` |
 | Node | 22 or newer; record actual provider version |
 | Git deployments | main publishes production; other enabled branches produce public previews |
-| Domain | Assigned pages.dev address; no purchase |
+| Domain | frogue.gallery (activating); pages.dev remains available |
 
 The build command runs the full smoke suite before building; failure blocks
 deployment. Full pacing/browser gates run locally before pushing a release.
@@ -122,7 +122,7 @@ tested migration is approved.
 | Authorization | 2026-11-14: execute plan; public GitHub + Cloudflare selected |
 | Repository | https://github.com/joelfourhman/frogue-gallery |
 | Cloudflare account | Owner's signed-in personal account |
-| Plan / spending | Account UI confirms Free ($0); no paid purchase |
+| Plan / spending | Hosting Free ($0); owner separately purchased the domain |
 | Canonical URL | https://frogue-gallery.pages.dev |
 | First successful production | 2a41a360-1607-41b4-9678-0e67f77fc76e, 2026-11-14 |
 | Runtime release commit | 6ecff4b33b5ae8eebccadebbe636158cd0b6cdf5 |
@@ -135,7 +135,8 @@ tested migration is approved.
 | Hosted headers / save / PNG / capture | Passed in Chrome and Edge; 26 served asset hashes match frozen release |
 | External-network check | Owner replied "lgtm" to external/cellular load request |
 | Secret-pattern review | 1,149 historical Git blobs scanned; no common credential matches |
-| Custom domain | frogue.gallery available; owner approved one year at $22.20 + tax; renewal quote $22.20/year. Checkout prepared, auto-renew off; owner purchase pending |
+| Custom domain | Owner purchased frogue.gallery, Active through 2027-11-14; approved $22.20 + tax. Renewal quote $22.20/year; saved auto-renew ON for 2027-10-15 |
+| Limits | Firefox unavailable locally; mobile/touch not tested; no cloud saves |
 
 Cloudflare's free WHOIS redaction hides name/email/street address but retains
 state/province and country. GoDaddy includes proxy privacy for eligible domains,
@@ -144,9 +145,10 @@ details privately. Owner asked about this difference before completing payment.
 [Cloudflare redaction](https://developers.cloudflare.com/registrar/account-options/whois-redaction/),
 [GoDaddy privacy](https://www.godaddy.com/help/what-is-domain-privacy-41145).
 
-After registration, add frogue.gallery in Pages → Custom domains and confirm the
-proposed CNAME to frogue-gallery.pages.dev. Do not overwrite unrelated records.
-Wait for domain/certificate Active, then run the hosted UI and hash verification
-on https://frogue.gallery. Leave pages.dev available for origin-specific save
-exports. Update the canonical URL only after successful verification.
-| Limits | Firefox unavailable locally; mobile/touch not tested; no cloud saves |
+Added frogue.gallery in Pages → Custom domains and confirmed its proposed proxied
+apex CNAME to frogue-gallery.pages.dev, TTL Auto. Cloudflare authoritative DNS
+answers; public DNS and certificate activation are pending. Wait for Active,
+then run hosted UI and hash verification on https://frogue.gallery. Leave
+pages.dev available for origin-specific save exports. Update the canonical URL
+only after successful verification. The owner completed checkout with auto-renew
+ON; this differs from the prepared checkout and was preserved.
