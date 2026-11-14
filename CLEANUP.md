@@ -26,6 +26,11 @@ it with `Stop-Process -Id 44136`; process IDs can be reused after exit.
 
 ## Generated directories
 
+Deployment evidence: tests/.out/hosted/ contains isolated browser reports and
+screenshots. .cache/audit-history.mjs is the temporary pre-publication secret
+pattern scanner. .cache/releases/<commit>/ stores frozen runtime folders, ZIPs
+and manifests: retain these as recovery artifacts rather than routine cache.
+
 These are ignored by Git and may be regenerated:
 - dist/: runtime folder, upload ZIP and manifest; `node scripts/build.mjs`.
 - .cache/checks/: text logs and JSON check report.

@@ -6261,5 +6261,7 @@ testCreativePaintGame(Game, makeCanvas);
 console.log('== stage 135: confined mouse aiming and safe release ==');
 const { testPointerCapture } = await import('./pointer-capture.mjs');
 console.log(await testPointerCapture());
+console.log('== stage 136: deployment bootstrap and public debug boundary ==');
+await import('./deployment.mjs');
 console.log('\nALL SMOKE TESTS PASSED');
 process.exit(0);

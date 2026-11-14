@@ -9,6 +9,7 @@ const tests = ['smoke', 'campaign', 'campaignpace', 'pace', 'humance', 'bosspace
 const browserArgs = {
   'browser-source': ['tests/vertical-slice.mjs'],
   'browser-dist': ['tests/vertical-slice.mjs', '--dist'],
+  'browser-public': ['tests/hosted.mjs'],
   frames: ['tests/frames.mjs', '--out', 'tests/frames/astra', '--min', '36'],
   perf: ['tests/perf.mjs'],
 };

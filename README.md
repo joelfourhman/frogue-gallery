@@ -11,6 +11,9 @@ The compatibility identifiers remain game 1.0.0 / save schema 12.
 
 ## Play locally
 
+Public source: [joelfourhman/frogue-gallery](https://github.com/joelfourhman/frogue-gallery).
+Cloudflare hosting setup and release procedures are in [deployment.md](deployment.md).
+
 On Windows, double-click **Launch Game.cmd** in this folder. It starts the
 LAN server on all IPv4 interfaces (`0.0.0.0:8767`) and opens Google Chrome at
 http://127.0.0.1:8767. The launcher prints **LAN players** URLs: other computers

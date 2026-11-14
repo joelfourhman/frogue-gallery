@@ -58,7 +58,15 @@ export async function creativePaintBrowser({ page, tick, out, report }) {
   await page.evaluate(() => {
     const g = window.__game; g._beginExpedition(false, { campaignFloor: 1 });
     g.enemies = []; g.spawnT = 999; g.banners = []; g._tut = null; g.player.iframes = 999;
-    g._creativeProp = g.studio.garden.props.find(p => p.kind === 'lanterns');
+    // The first generated lantern can have solid reeds to its left. Staging
+    // the frog there lets collision move it before the stroke, beyond reach.
+    // Select a real lantern with clear brush positions for all three panels.
+    g._creativeProp = g.studio.garden.props.find(p => p.kind === 'lanterns' && p.parts.every(part => {
+      const x = p.x + part.x - g.tuning.swipeRange, y = p.y + part.y;
+      const [cx, cy] = g.world.collideCircle(x, y, g.player.r);
+      return Math.hypot(cx - x, cy - y) < .001;
+    }));
+    if (!g._creativeProp) throw new Error('No lantern with clear test brush positions');
   });
   await paintPart(0, 'red'); await paintPart(1, 'green'); await paintPart(2, 'blue');
   const lanternState=await page.evaluate(()=>{const g=window.__game;return {parts:g._creativeProp.parts.map(p=>p.pigment),paused:g.paused,locked:g.input.pointerLocked,mouse:g.input.mouse,player:{x:g.player.x,y:g.player.y,a:g.player.aimA,pigment:g.player.pigment},prop:{x:g._creativeProp.x,y:g._creativeProp.y},strokes:g.studio.strokes.slice(-3)};});

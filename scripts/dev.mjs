@@ -6,18 +6,19 @@ import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.json': 'application/json', '.svg': 'image/svg+xml' };
-export function createServer(root = ROOT) {
+export function createServer(root = ROOT, { headers = {}, notFound = 'Not found' } = {}) {
   const server = http.createServer(async (req, res) => {
+    for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
     try {
       if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405); res.end(); return; }
       const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
       const name = pathname === '/' ? '/index.html' : pathname;
       // Serve only the distributable game, never Git, docs, logs, or dotfiles.
-      if (!/^\/(index\.html|favicon\.svg|src\/[a-z0-9_-]+\.js)$/.test(name)) { res.writeHead(404); res.end('Not found'); return; }
+      if (!/^\/(index\.html|404\.html|favicon\.svg|src\/[a-z0-9_-]+\.js)$/.test(name)) { res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(notFound); return; }
       const data = await fs.readFile(path.join(root, name));
-      res.writeHead(200, { 'Content-Type': mime[path.extname(name)] || 'application/octet-stream', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Frogue-Bind': server.address()?.address || '' });
+      res.writeHead(200, { 'Content-Type': mime[path.extname(name)] || 'application/octet-stream', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Frogue-Bind': server.address()?.address || '', ...headers });
       res.end(req.method === 'HEAD' ? undefined : data);
-    } catch { res.writeHead(404); res.end('Not found'); }
+    } catch { res.writeHead(404); res.end(notFound); }
   });
   return server;
 }

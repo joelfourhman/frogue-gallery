@@ -1,5 +1,10 @@
 # Distribution and deployment
 
+**Current owner-selected deployment (2026-11-14): public GitHub source with
+Cloudflare Pages Git integration. See [the active runbook](../deployment.md).**
+The older distribution alternatives below are historical. The shipped framing
+policy blocks iframe embedding; itch.io would require a separate policy review.
+
 The game is a static website: HTML, SVG favicon and JavaScript modules.
 There is no backend, remote API, login, database or runtime package install.
 

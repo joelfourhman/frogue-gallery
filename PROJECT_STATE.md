@@ -1,4 +1,34 @@
-# Project state — Internet deployment runbook (2026-11-12)
+# Project state — GitHub / Cloudflare release prepared (2026-11-14)
+
+Owner authorized execution, then selected public GitHub source and Cloudflare
+hosting. Created joelfourhman/frogue-gallery; origin points to that repository.
+Cloudflare Git integration replaces the earlier Direct Upload plan. The owner
+completed sign-in and GitHub consent. No paid services, custom domain or network
+settings were changed. Publication and hosted verification are the next actions.
+
+Externalized bootstrap to src/boot.js with exact loopback-only debug access and
+unchanged error fallback. Added CSP/cache/privacy headers and custom 404. Builder
+uses an explicit 27-file allowlist, rejects symlinks/unexpected output, verifies
+file/ZIP hashes, and normalizes text line endings for identical Windows/Linux
+artifacts. Added reusable artifact verification, policy preview, Cloudflare smoke
+build entrypoint and a public-safe browser probe. Game/save versions and all
+combat tuning are unchanged. Procedural art and original synthesized score only.
+
+Diagnosed the intermittent lantern browser fixture: its staged frog position
+overlapped solid reeds, which moved the frog out of brush range before painting.
+It now chooses a real lantern with clear brush positions for all three panels;
+painting assertions are unchanged. No gameplay collision changes.
+
+Verification: ALL REQUIRED CHECKS PASSED (20 gates), including smoke stage 136,
+all pacing/balance bands, source (28.6s), policy-enforced dist (25.9s), public-mode
+UI (7.3s), 36 frames and performance. Package tests include actual symlink and
+tamper rejection. Installed Chrome 157.0.8103.52 and Edge 157.0.4341.46 also pass
+the public-mode probe: native clipboard save transfer, audio gesture/mute/volume,
+mouse capture/release and fallback, PNG export, and persistence after reload.
+Firefox is not installed; touch/mobile is not tested. Logs: .cache/checks/ and
+tests/.out/hosted/. See deployment.md for the active release/rollback procedure.
+
+# Previous checkpoint — Internet deployment runbook (2026-11-12)
 
 Owner requested an executable deployment plan, including costs and security.
 Added root deployment.md recommending Cloudflare Pages Free Direct Upload with

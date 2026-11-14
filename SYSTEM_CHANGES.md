@@ -1,5 +1,14 @@
 # Environment and tool changes
 
+## GitHub / Cloudflare preparation — 2026-11-14
+
+Created public joelfourhman/frogue-gallery and added its HTTPS URL as Git origin.
+Owner signed into Cloudflare and authorized its GitHub integration. Reused
+installed Git Credential Manager, Node 24.22.1, playwright-core, Chrome and Edge.
+No npm/Wrangler installation, game dependencies, firewall or LAN server changes.
+Release probes own/close their isolated browsers and free-port loopback servers.
+Cloudflare publication remains pending the prepared release push/configuration.
+
 ## Foreground launcher ownership — 2026-11-12
 
 Stopped the verified background scripts/play.mjs process PID 22404 at the

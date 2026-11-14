@@ -6,10 +6,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createServer, ROOT } from '../scripts/dev.mjs';
 import { browserPath } from '../scripts/browser.mjs';
+import { createPreview } from '../scripts/preview.mjs';
 
 const out = path.join(ROOT, 'tests', '.out', 'astra');
 await fs.mkdir(out, { recursive: true });
-const server = createServer(process.argv.includes('--dist') ? path.join(ROOT, 'dist', 'frogue-gallery') : ROOT);
+const server = process.argv.includes('--dist') ? await createPreview() : createServer(ROOT);
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const browser = await chromium.launch({ executablePath: browserPath(), headless: true });
 const errors = [], report = [];
