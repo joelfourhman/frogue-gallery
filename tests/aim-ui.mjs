@@ -17,8 +17,9 @@ const ctx = new Proxy({}, {
 const view = { x: 5, y: 7, scale: 0.6 };
 const before = JSON.stringify(g);
 drawCombatReadout(g, ctx, view);
-assert(calls.some(([name, x, y]) => name === 'translate' && Math.abs(x - 80) < 1e-8 && y === 90 + g.tuning.swipeRange), 'brush tip follows exact reach through world transform');
-assert(calls.some(([name]) => name === 'ellipse'), 'ordinary aim is a paintbrush tip');
+assert(calls.some(([name, x, y]) => name === 'translate' && Math.abs(x - 80) < 1e-8 && y === 90 + g.tuning.swipeRange), 'aim mark follows exact reach through world transform');
+assert(calls.some(([name, x, y]) => name === 'ellipse' && x === 0 && y === 0), 'pigment dot is centered at the landing point');
+assert.equal(calls.filter(([name]) => name === 'quadraticCurveTo').length, 2, 'open brackets frame the landing point');
 assert(!calls.some(([name]) => name === 'arc'), 'ordinary aim has no crosshair, targeting circles or permanent readiness ring');
 assert.equal(JSON.stringify(g), before, 'aim rendering never changes state');
 
@@ -36,4 +37,4 @@ for (const overlay of ['paused', 'help', '_bookOpen', '_atlasOpen', '_cine', 'dy
   g[overlay] = true; calls.length = 0; drawCombatReadout(g, ctx, view); g[overlay] = false;
   assert.equal(calls.length, 0, `${overlay} hides the in-world brush`);
 }
-console.log('Brush UI: one reachable brush tip, clear charge states and pure rendering PASS');
+console.log('Brush UI: one reachable aim mark, clear charge states and pure rendering PASS');

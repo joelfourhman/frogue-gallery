@@ -1,4 +1,19 @@
-# Project state — Green hit healing fix (2026-11-14)
+# Project state — Brush, aim and ground paint (2026-11-14)
+
+Replaced the duplicate brush marker with a pigment dot and open brackets at
+swipe reach. The frog's brush pivots at the paw and has a tapered wooden handle,
+brass ferrule and flat tinted bristles. Swipes lay a continuous watercolor wash
+from the frog through the stroke, with visible brush lines and a wet edge.
+Charged splashes leave a broad puddle under the frog. Both use the existing
+fading ground canvas. Removed the round grid-cell rims. Terrain interactions,
+combat, charge timing and gameplay pigment coverage retain their existing rules.
+
+All 20 gates passed in Chrome, including smoke, pacing, source/dist browser
+journeys, 36 frames and performance. The paint scenes now use actual attacks
+and sample ground coverage after the swipe or splash. Centered frames are in
+tests/.out/brush-redesign/. Publish after verifying the Cloudflare branch preview.
+
+# Previous checkpoint — Green hit healing fix (2026-11-14)
 
 Owner reported that green attacks did not restore health. Hit healing shared a
 ground-paint accumulator that decayed below zero while off moss, creating an

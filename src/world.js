@@ -3,7 +3,7 @@
 import { traceBlob, wobble, clamp, dist2, TAU, mulberry32 } from './math.js';
 import { INK, sat, mixColor, centerText, uiFont } from './ui.js';
 import { PondLife } from './wildlife.js';
-import { REEDS_WIDTH, REEDS_DARK_WIDTH, REEDS_POCKETS, REEDS_FLOOD_FLOOR, REEDS_FLOOD_FACTOR, REEDS_DARK_POCKETS, REEDS_DARK_FLOOD_FLOOR, REEDS_DARK_FLOOD_FACTOR, REEDS_DARK_BESTIARY_DENSITY, CROSSING, crossingTransition, crossingSolids, MOTH_NOOK, strokeTouches } from './logic.js';
+import { PIGMENTS, REEDS_WIDTH, REEDS_DARK_WIDTH, REEDS_POCKETS, REEDS_FLOOD_FLOOR, REEDS_FLOOD_FACTOR, REEDS_DARK_POCKETS, REEDS_DARK_FLOOD_FLOOR, REEDS_DARK_FLOOD_FACTOR, REEDS_DARK_BESTIARY_DENSITY, CROSSING, crossingTransition, crossingSolids, MOTH_NOOK, strokeTouches } from './logic.js';
 
 const WSCALE = 0.5; // paint layer resolution factor
 
@@ -125,16 +125,12 @@ export function swampLightCounts(w, view) {
 // L2 (v1.4 "Make It Amazing"): the layered watercolor render pass. Pure
 // draw-time + a bake-once cache — no new per-frame state, so P10 (off-screen
 // culling) and the pacing probes (runT) are untouched.
-//   (a) wet rim  — freshly painted pigment cells grow a darker "wet edge"
-//                  (the watercolor bloom) that lightens and dries over ~5s,
-//                  derived from the EXISTING pigment-cell `age`/amount (no new
-//                  persistence).
-//   (b) stroke texture — short directional brush strokes baked ONCE into a
+//   Stroke texture — short directional brush strokes baked ONCE into a
 //                  per-zone offscreen canvas at world.build() (seeded via
 //                  math.js mulberry32/wobble), drawn as ONE cached image per
 //                  zone per frame (the budget trick: one drawImage, not
 //                  thousands of strokes).
-//   (c) prop outlines — rocks & bushes get a second low-alpha offset "watercolor
+//   Prop outlines — rocks & bushes get a second low-alpha offset "watercolor
 //                  double-stroke" (a soft ink echo) on top of the existing edge.
 // The zone accents mirror game.js ZONES (kept here so world.js has no
 // dependency on game.js — no circular import).
@@ -148,22 +144,6 @@ export const ZONE_TEXTURES = [
 // light; they are drawn scaled up over the floor, so the soft wash is
 // resolution-independent).
 const TEXTURE_SCALE = 0.25;
-
-// Wet-rim alpha (0..~0.4): a fresh cell (amount ~3) carries the strongest rim,
-// which lightens as the pigment decays (amount -> 0 over ~5s). Pure +
-// deterministic (the smoke stage asserts the decay).
-export function wetRimAlpha(amount) {
-  const m = clamp(amount || 0, 0, 3);
-  return (m / 3) * 0.4;
-}
-// Wet-rim stroke radius (world px) — a touch larger than the cell so it reads as
-// a soft edge halo, not a hard line.
-export function wetRimRadius(cell) {
-  return cell * 0.66;
-}
-// Cap on the wet rims drawn per frame (the grid can hold many fresh cells after
-// a long painting run; bounding the draw keeps the per-frame cost flat).
-export const WET_RIM_CAP = 96;
 
 export class World {
   constructor(rng, seed, opts = {}) {
@@ -495,8 +475,36 @@ export class World {
     return c;
   }
 
-  // Player paints a swipe: arc of splat points from origin toward aim.
-  paintSwipe(x0, y0, aimA, range, pigment) {
+  // Lay down a continuous wash before the individual drops and interactions.
+  paintSwipe(x0, y0, aimA, range, pigment, arc = 1.25) {
+    const c = this.pctx, col = PIGMENTS[pigment];
+    const width = range * Math.sin(arc / 2) * 0.86;
+    c.save();
+    c.scale(WSCALE, WSCALE);
+    c.translate(x0, y0);
+    c.rotate(aimA);
+    c.beginPath();
+    c.moveTo(-12, 0);
+    c.quadraticCurveTo(-7, -15, range * 0.34, -width * 0.53);
+    c.quadraticCurveTo(range * 0.62, -width, range * 0.84, -width * 0.8);
+    c.quadraticCurveTo(range * 1.16, -width * 0.24, range * 0.94, width * 0.59);
+    c.quadraticCurveTo(range * 0.82, width, range * 0.53, width * 0.66);
+    c.quadraticCurveTo(range * 0.15, 17, -2, 13);
+    c.quadraticCurveTo(-15, 9, -12, 0);
+    c.closePath();
+    c.fillStyle = col.color; c.globalAlpha = pigment === 'dry' ? 0.16 : 0.56;
+    c.fill();
+    c.strokeStyle = col.color; c.globalAlpha *= 0.55;
+    c.lineWidth = 2; c.stroke();
+    // Open brush lines let the terrain show through between the layers.
+    c.lineCap = 'round';
+    c.strokeStyle = col.light; c.globalAlpha = pigment === 'dry' ? 0.10 : 0.32;
+    c.lineWidth = 5;
+    c.beginPath();
+    c.moveTo(1, -2); c.quadraticCurveTo(range * 0.48, -width * 0.58, range * 0.81, -width * 0.45);
+    c.moveTo(range * 0.18, 8); c.quadraticCurveTo(range * 0.65, 3, range * 0.87, width * 0.39);
+    c.stroke();
+    c.restore();
     for (let d = 14; d <= range; d += 16) {
       const x = x0 + Math.cos(aimA) * d + (Math.random() - 0.5) * 14;
       const y = y0 + Math.sin(aimA) * d + (Math.random() - 0.5) * 14;
@@ -505,6 +513,17 @@ export class World {
   }
 
   paintSplash(x, y, radius, pigment) {
+    const c = this.pctx, col = PIGMENTS[pigment];
+    const seed = (x | 0) * 37 + (y | 0) * 53;
+    c.save();
+    c.scale(WSCALE, WSCALE);
+    c.fillStyle = col.color; c.globalAlpha = pigment === 'dry' ? 0.18 : 0.57;
+    traceBlob(c, x, y, radius * 0.97, seed, 0.07, 18); c.fill();
+    c.strokeStyle = col.color; c.globalAlpha *= 0.60;
+    c.lineWidth = 2; c.stroke();
+    c.fillStyle = col.light; c.globalAlpha = pigment === 'dry' ? 0.10 : 0.30;
+    traceBlob(c, x - radius * 0.13, y + radius * 0.08, radius * 0.59, seed + 7, 0.22, 13); c.fill();
+    c.restore();
     for (let i = 0; i < 14; i++) {
       const a = Math.random() * TAU, d = Math.random() * radius;
       this.splat(x + Math.cos(a) * d, y + Math.sin(a) * d, pigment, 5 + Math.random() * 6, false);
@@ -1055,39 +1074,6 @@ export class World {
       ctx.ellipse(s.x, s.y, s.r, s.r * 0.6, 0, 0, TAU);
       ctx.fill();
     }
-    // L2 (a) — wet rim: freshly painted pigment cells carry a darker edge that
-    // dries out (derived from the existing grid `age`/amount; no new state).
-    this.drawWetRims(ctx, inView);
-  }
-
-  // L2 (a): draw the wet-edge rims over the paint layer. Pure draw-time; reuses
-  // the pigment grid's `amount` (which decays with `age` over ~5s) so a fresh
-  // cell reads wet (strong rim) and dries to nothing. View-culled + capped for P10.
-  drawWetRims(ctx, inView) {
-    if (!this.pigmentGrid || this.pigmentGrid.size === 0) return;
-    const rimR = wetRimRadius(this.cell);
-    let drawn = 0;
-    ctx.save();
-    ctx.lineCap = 'round';
-    for (const [key, c] of this.pigmentGrid) {
-      if (drawn >= WET_RIM_CAP) break;
-      const [cx, cy] = key.split(',');
-      const x = (+cx + 0.5) * this.cell, y = (+cy + 0.5) * this.cell;
-      if (!inView(x, y)) continue;
-      const amount = Math.max(c.red, c.blue, c.green);
-      const a = wetRimAlpha(amount);
-      if (a < 0.02) continue; // fully dried
-      // the freshest pigment color dictates the rim hue
-      const hex = c.red >= c.blue && c.red >= c.green ? '#8a3420' : c.blue >= c.green ? '#2c5a9a' : '#3f6d28';
-      ctx.globalAlpha = a;
-      ctx.strokeStyle = hex;
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.ellipse(x, y, rimR, rimR * 0.9, 0, 0, TAU);
-      ctx.stroke();
-      drawn++;
-    }
-    ctx.restore();
   }
 
   drawProps(ctx, view, colorSat, now, px, py) {

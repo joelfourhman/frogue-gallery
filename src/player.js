@@ -368,49 +368,41 @@ export class Player {
     ctx.fill();
     ctx.restore();
 
-    // brush arm — oversized paintbrush toward aim, with swing animation
-    const swing = this.swipeT > 0 ? Math.sin((1 - this.swipeT / 0.14) * Math.PI) * 0.9 : 0;
+    // Swing the brush around the paw so the grip stays attached.
+    const stroke = clamp(1 - this.swipeT / 0.14, 0, 1);
+    const swing = Math.sin(Math.PI * stroke) * Math.cos(Math.PI * stroke) * 1.3;
     ctx.save();
-    ctx.rotate(this.aimA + swing * 0.4);
-    const bx = this.r * 0.6;
-    // arm
+    ctx.rotate(this.aimA);
     ctx.strokeStyle = bodyCol;
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 6;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(bx - 4, 2);
-    ctx.lineTo(bx + 10, 4);
+    ctx.moveTo(7, 5);
+    ctx.quadraticCurveTo(13, 9, 19, 4);
     ctx.stroke();
-    // brush handle
-    ctx.strokeStyle = '#8a5a33';
-    ctx.lineWidth = 5.5;
+    ctx.translate(19, 4);
+    ctx.rotate(swing - 0.10);
+    // Tapered wood handle, brass ferrule and a flat bundle of bristles.
     ctx.beginPath();
-    ctx.moveTo(bx + 8, 4);
-    ctx.lineTo(bx + 34, 0);
-    ctx.stroke();
+    ctx.moveTo(-9, -1.5); ctx.lineTo(21, -3);
+    ctx.lineTo(21, 3); ctx.lineTo(-9, 1.5); ctx.closePath();
+    ctx.fillStyle = '#9a6138'; ctx.fill();
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(bx + 8, 2.6);
-    ctx.lineTo(bx + 34, -1.4);
-    ctx.stroke();
-    // ferrule + bristles in current pigment color
+    ctx.lineWidth = 1.3; ctx.stroke();
+    ctx.fillStyle = INK; ctx.fillRect(18, -4.5, 8, 9);
+    ctx.fillStyle = '#c8a76b'; ctx.fillRect(19, -3.5, 7, 7);
+    ctx.fillStyle = '#f1d49a'; ctx.fillRect(19, -3, 6, 1.5);
     const pcol = PIGMENTS[this.pigment];
-    ctx.fillStyle = '#c9c0b2';
-    ctx.fillRect(bx + 32, -3.4, 6, 7);
-    ctx.fillStyle = pcol.color;
-    traceBlob(ctx, bx + 42, 0, 6.5, 91, 0.25, 8);
-    ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.6;
-    traceBlob(ctx, bx + 42, 0, 6.5, 91, 0.25, 8);
-    ctx.stroke();
-    // bristle tip highlight
-    ctx.fillStyle = pcol.light;
     ctx.beginPath();
-    ctx.ellipse(bx + 45, -1.4, 3.4, 2, 0.4, 0, TAU);
-    ctx.fill();
-    ctx.restore();
+    ctx.moveTo(26, -4);
+    ctx.quadraticCurveTo(32, -6, 39, -4);
+    ctx.quadraticCurveTo(44, 0, 39, 4);
+    ctx.quadraticCurveTo(32, 6, 26, 4);
+    ctx.closePath(); ctx.fillStyle = pcol.color; ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = pcol.light; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(28, -2); ctx.quadraticCurveTo(34, -4, 39, -2); ctx.stroke();
+    ctx.fillStyle = bodyCol;
+    ctx.beginPath(); ctx.ellipse(0, 1, 4, 3.5, 0, 0, TAU); ctx.fill();
 
     // ---- L2 (v1.9): the CHARGED-PAINT GLOW — a soft radial bloom on the brush
     // while the splash is charging (splashCharge > 0) and brighter as it nears
@@ -422,7 +414,7 @@ export class Player {
     // idle hot path.
     if (this.splashCharge > 0.02 && this.alive) {
       const chg = Math.min(1, this.splashCharge);          // 0..1
-      const gx = bx + 45;                                  // the bristle tip
+      const gx = 40;                                       // the bristle tip
       const R = 26 + 34 * chg;                             // grows with charge
       const pulse = 0.85 + 0.15 * Math.sin(now * 7);       // a gentle breathing
       const g = ctx.createRadialGradient(gx, 0, 2, gx, 0, R);
@@ -438,6 +430,7 @@ export class Player {
       ctx.restore();
     }
 
+    ctx.restore(); // brush and paw
     ctx.restore();
   }
 }

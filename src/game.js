@@ -5446,7 +5446,7 @@ export class Game {
       this._wrapHelp(c, r[3], colL + 32, y + 16, colW - 32, 14);
     });
     c.font = uiFont(UI.sizes.label); c.fillStyle = 'rgba(43,35,32,0.7)'; c.textAlign = 'left'; c.textBaseline = 'middle';
-    this._wrapHelp(c, 'Hold left mouse: paint near the brush tip. Move closer to reach things. Q/E or wheel: change color. Space: dodge. Hold right mouse until the ring fills, then release for a splash. Pale plants accept any color; 4 erases their paint.', colL, y0 + 34 + 3 * 58 + 6, colW, 14);
+    this._wrapHelp(c, 'Hold left mouse to paint toward the aim mark. Move closer to reach things. Q/E or wheel: change color. Space: dodge. Hold right mouse until the ring fills, then release for a splash. Pale plants accept any color; 4 erases their paint.', colL, y0 + 34 + 3 * 58 + 6, colW, 14);
 
     // ---- right column: counterplay + the heron ----
     c.save(); c.font = uiFont(UI.sizes.sub, { weight: 700 }); c.fillStyle = INK; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('Know your quarry', colR, y0); c.restore();

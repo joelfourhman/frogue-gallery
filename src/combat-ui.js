@@ -11,20 +11,21 @@ export function drawCombatReadout(g, ctx, view) {
   ctx.save(); ctx.translate(-view.x * view.scale, -view.y * view.scale); ctx.scale(view.scale, view.scale);
 
   const charging = p.splashCharge > 0 && g.input.mouse.rDown;
-  // One paintbrush, at actual reach. A remote crosshair implied that strokes
-  // would hit distant things, while the fan and target rings competed with it.
-  // The tip is anchored to the same aim/range used by the swipe; no auto-aim.
+  // A small pigment mark shows where the middle of the swipe lands.
   if (!charging) {
     const tipX = p.x + Math.cos(p.aimA) * t.swipeRange;
     const tipY = p.y + Math.sin(p.aimA) * t.swipeRange;
     ctx.save(); ctx.translate(tipX, tipY); ctx.rotate(p.aimA);
-    ctx.globalAlpha = 0.95; ctx.lineCap = 'round';
-    ctx.strokeStyle = '#fff8e7'; ctx.lineWidth = 6;
-    ctx.beginPath(); ctx.moveTo(-21, 0); ctx.lineTo(-7, 0); ctx.stroke();
-    ctx.strokeStyle = '#72503a'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(-21, 0); ctx.lineTo(-7, 0); ctx.stroke();
-    ctx.fillStyle = color; ctx.strokeStyle = '#fff8e7'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(-5, 0, 5, 4, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-5, -12);
+    ctx.quadraticCurveTo(3, -9, 5, -4);
+    ctx.moveTo(5, 4);
+    ctx.quadraticCurveTo(3, 9, -5, 12);
+    ctx.strokeStyle = '#29362f'; ctx.lineWidth = 4.5; ctx.stroke();
+    ctx.strokeStyle = '#fff8e7'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = color; ctx.strokeStyle = '#fff8e7'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(0, 0, 3.5, 2.6, 0, 0, TAU); ctx.fill(); ctx.stroke();
     ctx.restore();
   } else {
     const full = p.splashCharge >= 1;

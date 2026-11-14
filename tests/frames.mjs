@@ -214,22 +214,40 @@ await page.addInitScript(() => {
   function paintRun(G, pig, surf) {
     beginRun(G, null, { wander: false });
     G.enemies = []; G.orbs = [];
-    G.player.pigment = pig;
-    G.player.aimA = surf === 'water' ? -0.4 : (surf === 'vegetation' ? 0.3 : 0.1);
-    const P = G.paint, w = G.world;
-    P.trails = [];
-    P.trails.push({ ring: false, x0: G.player.x - 60, y0: G.player.y + 30,
-      x1: G.player.x + 90, y1: G.player.y - 40, w: 20, t: 0.26, max: 0.35, pig, seed: 0.7 });
-    P._addWet(G.player.x + 60, G.player.y - 30, 30, pig, 3);
-    P._addWet(G.player.x + 100, G.player.y - 50, 22, pig, 3);
-    P._addWet(G.player.x - 20, G.player.y + 10, 26, pig, 3);
+    const p = G.player, paint = G.paint, ground = G.world.pctx;
     // surface: nudge the player to a representative spot (soil / water / veg)
     if (surf === 'water') { G.player.y = 1250; G.player.x = 900; }
     else if (surf === 'vegetation') { G.player.y = 900; G.player.x = 1600; }
-    else { G.player.y = 750; G.player.x = 700; }
-    G.player.aimA = surf === 'water' ? -0.4 : (surf === 'vegetation' ? 0.3 : 0.1);
+    else { G.player.y = 840; G.player.x = 1130; }
+    G.cam.x = p.x;
+    G.cam.y = p.y;
+    p.pigment = pig;
+    p.aimA = surf === 'water' ? -0.4 : (surf === 'vegetation' ? 0.3 : 0.1);
+    G.input.mouse.rDown = false;
+    const alphaAt = (x, y) => ground.getImageData(Math.floor(x / 2), Math.floor(y / 2), 1, 1).data[3];
+    const splash = surf === 'water';
+    if (splash) {
+      p.splashCharge = 1;
+      paint.trySplash([]);
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        const r = G.tuning.splashRadius * 0.65;
+        if (alphaAt(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r) < 70) throw new Error('Gap in splash wash');
+      }
+    } else {
+      paint.trySwipe([]);
+      const minAlpha = pig === 'dry' ? 25 : 70;
+      for (const [along, side] of [[0, 0], [24, 8], [45, -15], [54, 17], [66, 0]]) {
+        const x = p.x + Math.cos(p.aimA) * along - Math.sin(p.aimA) * side;
+        const y = p.y + Math.sin(p.aimA) * along + Math.cos(p.aimA) * side;
+        if (alphaAt(x, y) < minAlpha) throw new Error('Gap in swipe wash');
+      }
+    }
+    // Let the ribbon and airborne spray settle so the screenshot shows ground paint.
+    paint.update(0.55);
+    p.swipeT = 0;
     G.now = 4.5;
-    return { note: `paint in flight: ${pig} on ${surf}` };
+    return { note: `settled ground paint: ${pig} ${splash ? 'splash' : 'swipe'} on ${surf}` };
   }
   S['paint-red'] = (G) => paintRun(G, 'red', 'soil');
   S['paint-blue'] = (G) => paintRun(G, 'blue', 'soil');

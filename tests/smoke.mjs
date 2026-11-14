@@ -2817,8 +2817,6 @@ console.log('== stage 63: v1.4 L1 — living world (swaying reeds / drifting mis
 // ======================================================================
 // L2 (v1.4 "Make It Amazing") — layered watercolor render pass.
 // Pure draw-time + a bake-once cache:
-//   (a) wet rim — freshly painted pigment cells carry a darker edge that dries
-//       out over ~5s, derived from the existing pigment-grid `age`/amount.
 //   (b) stroke texture — short directional brush strokes baked ONCE per zone
 //       into an offscreen canvas at build(); drawn as ONE cached image per
 //       zone per frame (the budget trick: ~4 drawImages, not thousands).
@@ -2826,14 +2824,13 @@ console.log('== stage 63: v1.4 L1 — living world (swaying reeds / drifting mis
 // Acceptance asserted here:
 //   - offscreen canvases are created once per zone and the count is STABLE
 //     across frames (no re-bake),
-//   - the wet-rim alpha decays over time (fresh > after decay),
 //   - the per-frame draw cost is bounded by the cached path: drawBackground
 //     issues a bounded number of drawImage calls (one per zone), not raw
 //     stroke counts (P10-safe — the cached path, not the raw one, is taken).
 // ======================================================================
-console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached offscreens + wet rim + double-stroke) ==');
+console.log('== stage 64: layered watercolor render pass and pigment decay ==');
 {
-  const { World, wetRimAlpha, wetRimRadius, WET_RIM_CAP, ZONE_TEXTURES } = await import('../src/world.js');
+  const { World, ZONE_TEXTURES } = await import('../src/world.js');
   // counting 2d context (mirrors stage 24/63's helper) — tracks drawImage + stroke separately.
   function countingCtx() {
     const counter = { n: 0, drawImage: 0, stroke: 0 };
@@ -2882,28 +2879,9 @@ console.log('== stage 64: v1.4 L2 — layered watercolor render pass (cached off
     assert(counterB.drawImage <= 8, `L2: the per-frame drawImage count stays bounded on the CACHED path (got ${counterB.drawImage} <= 8), not raw stroke counts (P10-safe)`);
   }
 
-  // ---- (a) wet-rim alpha decays over time (fresh cell dries out) ----
-  // a fresh strong splat puts the cell near full amount (~3); as it ages the
-  // pigment decays toward 0, so the rim alpha must fall monotonically.
-  const freshAlpha = wetRimAlpha(3);
-  const midAlpha = wetRimAlpha(1.5);
-  const dryAlpha = wetRimAlpha(0.1);
-  assert(freshAlpha > 0 && freshAlpha <= 0.45, `L2: a fresh cell carries a strong wet rim (alpha ${freshAlpha.toFixed(3)} in (0, 0.45])`);
-  assert(freshAlpha > midAlpha && midAlpha > dryAlpha, `L2: the wet-rim alpha DECAYS over time (fresh ${freshAlpha.toFixed(3)} > mid ${midAlpha.toFixed(3)} > dry ${dryAlpha.toFixed(3)})`);
-  // and a fully-dried cell produces no rim (the draw path skips it).
-  assert(wetRimAlpha(0) < 0.02, `L2: a fully-dried cell produces no rim (alpha ${wetRimAlpha(0).toFixed(3)} < 0.02 skip threshold)`);
-  // the wet rim is bounded (a touch larger than the cell so it reads as a halo).
-  const rimR = wetRimRadius(60);
-  assert(rimR > 0 && rimR <= 60, `L2: the wet-rim radius is bounded (got ${rimR.toFixed(1)} px, <= cell)`);
-  // the wet-rim draw is capped so a long painting run can't grow the per-frame cost.
-  assert(WET_RIM_CAP > 0 && WET_RIM_CAP <= 128, `L2: the wet-rim draw count is bounded (cap=${WET_RIM_CAP})`);
-
-  // a fresh paint actually produces a wet rim that later dries (end-to-end):
-  // splat, draw (rim present), age the grid, draw again (rim gone).
+  // Retained pigment expires independently of the ground visuals.
   const world2 = new World(rng(), 7);
   world2.splat(300, 400, 'blue', 12, true);
-  const [ctxC] = countingCtx();
-  world2.drawBackground(ctxC, { x: 0, y: 0, scale: 1, w: 1280, h: 800 }, 1.0);
   // advance the world so the pigment fully decays (age drives down + delete)
   world2.update(6.0);
   assert(world2.pigmentGrid.size === 0 || [...world2.pigmentGrid.values()].every(c => c.red < 0.1 && c.blue < 0.1 && c.green < 0.1), 'L2: the pigment decays over ~5s (wet cell dries out after 6s)');
@@ -5504,8 +5482,7 @@ console.log('== stage 108: v1.9 J4 — the frog\'s liveness (idle breathe / hurt
   assert(p._staggerT === 0, `J4: the hurt stagger decays to 0 on its own (after its lifetime)`);
 
   // ---- (4) LOW-HP TREMBLE — a DRAW-ONLY worried brow, gated below ~30% HP ----
-  // The brow is the ONLY quadraticCurveTo the frog draw emits, so counting it
-  // on a stub ctx is a clean, deterministic draw-only probe.
+  // The two brows add curves to the regular frog and brush drawing.
   const view = { x: p.x, y: p.y, scale: 1 };
   p._staggerT = 0; p._victoryHopT = 0; p.iframes = 0; p.hurtT = 0; p.squash = 1;
   p.maxHp = gL.tuning.maxHp;
@@ -5513,19 +5490,19 @@ console.log('== stage 108: v1.9 J4 — the frog\'s liveness (idle breathe / hurt
   p.hp = Math.round(p.maxHp * 0.5);
   countingCtx._q = 0;
   p.draw(countingCtx, view, 1.0);
-  assert(countingCtx._q === 0, `J4: at 50% HP the frog shows NO desperate brow (0 quadraticCurveTo, the brow is gated below ~30%)`);
+  const normalCurves = countingCtx._q;
   // BELOW the 30% line -> the worried brow appears (desperate eyes)
   p.hp = Math.round(p.maxHp * 0.15);
   countingCtx._q = 0;
   p.draw(countingCtx, view, 1.0);
-  assert(countingCtx._q === 2, `J4: at 15% HP the frog shows the desperate brow (2 quadraticCurveTo — one per eye) + the faint tremble; draw-only`);
+  assert(countingCtx._q === normalCurves + 2, `J4: at 15% HP the frog adds a worried brow curve over each eye`);
   // and the tremble is FAINT (the low-HP offset is sub-pixel-ish, <= ~1.4px)
   // — proven by the draw reading it from `now` with a bounded amplitude; here we
   // confirm the desperation RAMP is 0 at 50% (no brow) and > 0 at 15% (brow on).
   p.hp = Math.round(p.maxHp * 0.31);   // just above 30% -> still no brow
   countingCtx._q = 0;
   p.draw(countingCtx, view, 1.0);
-  assert(countingCtx._q === 0, `J4: just above 30% HP (31%) the desperate brow is OFF (the fade-out is at the 30% line)`);
+  assert(countingCtx._q === normalCurves, `J4: just above 30% HP (31%) the desperate brow is OFF (the fade-out is at the 30% line)`);
 
   // ---- (5) VICTORY POSE — set by the REAL boss-defeat handoff, decays on its own ----
   p._victoryHopT = 0;

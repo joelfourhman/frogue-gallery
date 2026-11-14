@@ -281,7 +281,7 @@ export class Paint {
     this._restoreAcc = (this._restoreAcc || 0) + (pig === 'dry' ? 0.010 : 0.009);
 
     // write the stroke into the world paint layer (environmental residue)
-    this.world.paintSwipe(p.x, p.y, a, R, pig);
+    this.world.paintSwipe(p.x, p.y, a, R, pig, this.tuning.swipeArc);
     this.onStroke?.({ kind: 'swipe', x: p.x, y: p.y, a, range: R, pigment: pig });
     // visual ribbon — J2 (v1.9): a tapered wet-stroke swipe that bows into a
     // curve and lingers ~0.4s (up from 0.28s) so the brush reads as wet. The
