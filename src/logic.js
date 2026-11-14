@@ -12,12 +12,8 @@ export const PIGMENTS = {
   // world-restorer + status cleanse.
   red:   { id: 'red',   name: 'Crimson', color: '#c8452c', light: '#e8836b', dmgMult: 1.6,  status: 'burn'  },
   blue:  { id: 'blue',  name: 'Cobalt',  color: '#3a6fd8', light: '#8fb0f0', dmgMult: 1.0,  status: 'freeze' },
-  green: { id: 'green', name: 'Moss',    color: '#5a9e3d', light: '#9ed483', dmgMult: 0.6,  status: 'root'  },
-  // v1.10 B2: dry is the SAFE CLEAR — weak, no status, the fallback, not a
-  // competitor. Its damage is cut well below green (0.5 -> 0.35) so it is
-  // never tied with the other paints in the TTK table (it is always the
-  // slowest kill): a player reaches for dry to finish a straggler or clear
-  // a swarm without spending a colored paint, NOT because it hits hard.
+  green: { id: 'green', name: 'Moss',    color: '#5a9e3d', light: '#9ed483', fixedDamage: 1, status: 'root' },
+  // Dry brush clears statuses and offers modest damage without pigment.
   dry:   { id: 'dry',   name: 'Dry Brush', color: '#9a8f80', light: '#c9c0b2', dmgMult: 0.35, status: null   },
 };
 export const PIGMENT_ORDER = ['red', 'blue', 'green', 'dry'];
@@ -730,6 +726,7 @@ export function restoreHealth(player, amount) {
 // unless the pigment ignores it (burn/DoT bypass; direct paint partially bypasses).
 export function paintDamage(base, pigmentId, tuning, opts = {}) {
   const p = PIGMENTS[pigmentId] || PIGMENTS.dry;
+  if (p.fixedDamage !== undefined) return p.fixedDamage;
   const enemy = opts.enemy || {};
   let d = base * p.dmgMult * (tuning.power || 1) * (opts.paintingMult || 1);
   // status amplifiers

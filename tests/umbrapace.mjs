@@ -103,8 +103,8 @@ while (umbra.hp > 0 && !umbra.sinking && guard < 60 * 1800) {
   if (umbra.phase === 'surfaced') surfacedAcc += 1 / 60;
   if (umbra.hp / umbra.maxHp <= UMBRA_WYRM.deepDarkPhase) deepDarkAcc += 1 / 60;
   cph += 1 / 60;
-  if (cph >= 2.5) { cph = 0; idx = (idx + 1) % 3; p.pigment = cycleOrder[idx]; }
-  p.pigment = cycleOrder[idx];
+  if (cph >= 2.5) { cph = 0; idx = (idx + 1) % 3; }
+  p.pigment = umbra.awakened ? 'red' : cycleOrder[idx];
   game.input.mouse.lDown = true;
   // keep brush range of the Umbral Wyrm's CURRENT position (it slithers between
   // maw points; a human repositions to its breach points + stands clear of the

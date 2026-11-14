@@ -1,4 +1,17 @@
-# Project state — Brush, aim and ground paint (2026-11-14)
+# Project state — Moss deals one damage (2026-11-14)
+
+Owner requested 1 damage from the healing brush. Moss swipes now deal 1
+damage per target (previously 4 to an unarmored target), as do charged splashes
+(previously 36) and guardian hits, even during awakening. The heal is still 1 HP
+per landed action before gifts. Stage 137 checks regular hits, splash targets,
+awakening, power and the damage readout alongside the healing cases.
+Continuous Moss beetle time-to-kill in the balance probe rose from 2.4s to 7.2s.
+The probe now uses actual paint damage for its mixed-pigment estimates and flags
+no imbalance. Guardian pacing probes model using red in awakened windows after
+building all three hues. All 20 release checks pass in Chrome, including all
+seven retained pacing bands. Preview branch: codex/moss-one-damage.
+
+# Previous checkpoint — Brush, aim and ground paint (2026-11-14)
 
 Replaced the duplicate brush marker with a pigment dot and open brackets at
 swipe reach. The frog's brush pivots at the paw and has a tapered wooden handle,

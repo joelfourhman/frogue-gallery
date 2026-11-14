@@ -107,6 +107,8 @@ let ECON = null;
 // Enemy kinds to measure: the 3 base archetypes + the Reeds bestiary trio.
 const ENEMY_KINDS = ['beetle', 'mosquito', 'toad', 'wisp', 'serpent', 'leech'];
 const PIGMENTS = ['red', 'blue', 'green', 'dry'];
+const meanHit = (base, tuning) =>
+  PIGMENTS.reduce((total, pigment) => total + L.paintDamage(base, pigment, tuning), 0) / PIGMENTS.length;
 
 // ------------------------------------------------------------------ setup
 const game = new Game(makeCanvas());
@@ -220,13 +222,8 @@ const ELITE_HP = 1.9; // game.js ELITE.hp
 function zonePressure(level) {
   const ups = { capacity: 0, power: level, vitality: 0 };
   const tun = L.makeTuning(ups, [], 'normal');
-  // Sustained human paint DPS (swipe rate × damage × power × avg pigment mult).
-  // A competent human cycles pigments; we use the AVERAGE dmgMult across the
-  // 4 pigments (red 1.6, blue 1.0, green 0.6, dry 0.5 → mean 0.925) as the
-  // representative single-target damage per hit.
-  const avgMult = (1.6 + 1.0 + 0.6 + 0.5) / 4;
-  const swipeRate = 1 / tun.swipeCooldown; // swipes per second
-  const godDps = swipeRate * tun.swipeDamage * tun.power * avgMult;
+  // Use the mean direct hit across all four brushes as a rough DPS estimate.
+  const godDps = meanHit(tun.swipeDamage, tun) / tun.swipeCooldown;
   const humanDps = godDps * HUMAN_DPS_FRAC;
   const rows = [];
   for (let zi = 0; zi < ZONES.length; zi++) {
@@ -291,14 +288,13 @@ for (const level of [0, 1, 3]) {
 // swipe's single-target DPS.
 {
   const tun = L.makeTuning({}, [], 'normal');
-  const avgMult = (1.6 + 1.0 + 0.6 + 0.5) / 4;
-  const swipeDps = (1 / tun.swipeCooldown) * tun.swipeDamage * tun.power * avgMult;
+  const swipeDps = meanHit(tun.swipeDamage, tun) / tun.swipeCooldown;
   // One charged splash hits everything in splashRadius. Vs a SINGLE target it
   // deals splashDamage once per (charge+cooldown) cycle; vs a GROUP it scales
   // with how many enemies fit in the radius. We report both the single-target
   // DPS and the "group" DPS assuming N targets in the radius.
   const splashCycle = tun.splashCharge + tun.splashCooldown;
-  const splashSingleDps = (tun.splashDamage * tun.power * avgMult) / splashCycle;
+  const splashSingleDps = meanHit(tun.splashDamage, tun) / splashCycle;
   // How many enemy radii fit in the splash radius (rough group factor).
   const groupFactor = Math.max(1, Math.floor((tun.splashRadius / 16) ** 2 / 4)); // rough packing
   const splashGroupDps = splashSingleDps * groupFactor;
@@ -376,9 +372,8 @@ const flags = [];
 // (c) Charged splash: is it dead weight (single-target ratio << 1 and group small)?
 {
   const tun = L.makeTuning({}, [], 'normal');
-  const avgMult = (1.6 + 1.0 + 0.6 + 0.5) / 4;
-  const swipeDps = (1 / tun.swipeCooldown) * tun.swipeDamage * tun.power * avgMult;
-  const splashSingleDps = (tun.splashDamage * tun.power * avgMult) / (tun.splashCharge + tun.splashCooldown);
+  const swipeDps = meanHit(tun.swipeDamage, tun) / tun.swipeCooldown;
+  const splashSingleDps = meanHit(tun.splashDamage, tun) / (tun.splashCharge + tun.splashCooldown);
   const ratio = splashSingleDps / swipeDps;
   if (ratio < 0.6) flags.push(`charged splash single-target DPS ${splashSingleDps.toFixed(1)} is only ${ratio.toFixed(2)}× the swipe's ${swipeDps.toFixed(1)} — charging rarely pays off vs a single target`);
 }

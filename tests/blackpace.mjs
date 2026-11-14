@@ -135,8 +135,8 @@ let idx = 0, cph = 0, guard2 = 0;
 while (umbra.hp > 0 && !umbra.sinking && guard2 < 60 * 1800) {
   frames(1); guard2++;
   cph += 1 / 60;
-  if (cph >= 2.5) { cph = 0; idx = (idx + 1) % 3; p.pigment = cycleOrder[idx]; }
-  p.pigment = cycleOrder[idx];
+  if (cph >= 2.5) { cph = 0; idx = (idx + 1) % 3; }
+  p.pigment = umbra.awakened ? 'red' : cycleOrder[idx];
   game.input.mouse.lDown = true;
   p.x = umbra.x; p.y = umbra.y;
   p.iframes = 99;

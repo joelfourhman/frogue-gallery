@@ -104,7 +104,7 @@ function wardenFight(seed) {
     frames(1); guard++;
     cph += 1 / 60;
     if (cph >= 2.5) { cph = 0; idx = (idx + 1) % 3; }   // cycle pigments every 2.5s (like reedspace)
-    p.pigment = cycleOrder[idx];
+    p.pigment = h.awakened ? 'red' : cycleOrder[idx];
     g.input.mouse.lDown = true;
     p.x = h.x; p.y = h.y;   // keep brush range of the maw point
     p.iframes = 99;

@@ -510,6 +510,7 @@ export class Paint {
     const d = dist(p.x, p.y, heron.x, heron.y - (heron.diveH || 0));
     if (d > this.swipeRange + 30) return null;
     this._bossNote = true;
+    const hpBefore = heron.hp;
     const res = (pig === 'dry') ? null : this._bossPaint(heron, pig, amount);
     if (res) this._restoreAcc = (this._restoreAcc || 0) + 0.012;
     this.particles.splatter(heron.x, heron.y - (heron.diveH || 0), PIGMENTS[pig].color, 5, 140);
@@ -519,9 +520,7 @@ export class Paint {
       // ink-burst dissolves into the palette it was painted with (the world
       // remembers). Draw-only field; never read by logic/save/pacing.
       heron._lastPig = pig;
-      let d = paintDamage(this.tuning.swipeDamage, pig, this.tuning, { enemy: heron });
-      if (heron.awakened) d *= 2;
-      this.note(heron.x, heron.y - 150, '-' + Math.round(d), pig, heron, 'damage');
+      this.note(heron.x, heron.y - 150, '-' + (hpBefore - heron.hp), pig, heron, 'damage');
     }
     return res;
   }
@@ -529,7 +528,7 @@ export class Paint {
   _bossPaint(h, pig, amount) {
     // direct paint damage while painting the boss
     let dmg = paintDamage(this.tuning.swipeDamage, pig, this.tuning, { enemy: h });
-    if (h.awakened) dmg *= 2; // the shimmer window: double paint damage (see bossStep)
+    if (h.awakened && PIGMENTS[pig]?.fixedDamage === undefined) dmg *= 2;
     h.hp -= dmg;
     const res = paintBoss(h, pig, amount, this.tuning);
     if (res === 'awaken') return 'awaken';

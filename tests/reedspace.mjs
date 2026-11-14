@@ -156,8 +156,9 @@ guard = 0;
 while (wyrm.hp > 0 && !wyrm.sinking && guard < 60 * 1200) {
   frames(1); guard++;
   cph += 1 / 60;
-  if (cph >= 2.5) { cph = 0; idx = (idx + 1) % 3; p.pigment = cycleOrder[idx]; }
-  p.pigment = cycleOrder[idx];
+  if (cph >= 2.5) { cph = 0; idx = (idx + 1) % 3; }
+  // Cycle hues to awaken the guardian, then use red during the damage window.
+  p.pigment = wyrm.awakened ? 'red' : cycleOrder[idx];
   game.input.mouse.lDown = true;
   // keep brush range of the wyrm's CURRENT position (it slithers between
   // surface points; a human repositions to its breach points).
